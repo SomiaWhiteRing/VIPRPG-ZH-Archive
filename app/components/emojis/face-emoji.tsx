@@ -167,6 +167,13 @@ export function FaceEmojiView({
                   const favorite = data.emojis.find((item) => item.id === emoji.id);
                   if (!favorite || !emojiInGroup(favorite, groupId))
                     await emojiRequest("/api/emojis", { op: "add", cells: emojiCells([emoji]), groupId });
+                  const first = data.emojis[0];
+                  if (favorite && first && first.id !== emoji.id)
+                    await emojiRequest("/api/emojis", {
+                      op: "reorder",
+                      id: emoji.id,
+                      beforeId: first.id,
+                    });
                   setAddedId(emoji.id);
                 } catch (error) {
                   collecting.current = false;

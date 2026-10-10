@@ -42,8 +42,8 @@ export function EmojiSourcePicker({
     mode === "showcase" ? "/api/account/showcase" : "/api/emojis";
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
-  const composing = useRef(false);
+  const searchQuery = query.trim();
+  const [composing, setComposing] = useState(false);
   const [categories, setCategories] = useState<EmojiCategory[] | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -79,41 +79,54 @@ export function EmojiSourcePicker({
     return () => controller.abort();
   }, [open, categories, retry, endpoint]);
   useEffect(() => {
-    if (!open || !submittedQuery) return;
+    if (!open || !searchQuery || composing) return;
     const controller = new AbortController();
     setSearching(true);
-    void emojiRequest<CharacterPage>(
-      `${endpoint}?op=characters&q=${encodeURIComponent(submittedQuery)}&offset=${offset}`,
-      undefined,
-      controller.signal,
-    )
-      .then((page) => {
-        if (controller.signal.aborted) return;
-        setResults((current) => ({
-          ...page,
-          query: submittedQuery,
-          items:
-            offset && current.query === submittedQuery
-              ? [
-                  ...new Map(
-                    [...current.items, ...page.items].map((item) => [
-                      item.id,
-                      item,
-                    ]),
-                  ).values(),
-                ]
-              : page.items,
-        }));
-        setError("");
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) setError(String(error));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setSearching(false);
-      });
-    return () => controller.abort();
-  }, [open, submittedQuery, offset, retry, endpoint]);
+    const timer = setTimeout(() => {
+      void emojiRequest<CharacterPage>(
+        `${endpoint}?op=characters&q=${encodeURIComponent(searchQuery)}&offset=${offset}`,
+        undefined,
+        controller.signal,
+      )
+        .then((page) => {
+          if (controller.signal.aborted) return;
+          setResults((current) => ({
+            ...page,
+            query: searchQuery,
+            items:
+              offset && current.query === searchQuery
+                ? [
+                    ...new Map(
+                      [...current.items, ...page.items].map((item) => [
+                        item.id,
+                        item,
+                      ]),
+                    ).values(),
+                  ]
+                : page.items,
+          }));
+          setError("");
+        })
+        .catch((error) => {
+          if (!controller.signal.aborted) setError(String(error));
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setSearching(false);
+        });
+    }, 200);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [open, searchQuery, composing, offset, retry, endpoint]);
+
+  function changeQuery(value: string) {
+    setQuery(value);
+    if (value.trim() === searchQuery) return;
+    setOffset(0);
+    setSearching(Boolean(value.trim()));
+    setError("");
+  }
 
   async function loadBranch(id: string, append = false) {
     if (pending.current.has(id)) return;
@@ -152,7 +165,6 @@ export function EmojiSourcePicker({
     onSelect(item);
     setOpen(false);
     setQuery("");
-    setSubmittedQuery("");
     setOffset(0);
     setSearching(false);
   }
@@ -307,27 +319,22 @@ export function EmojiSourcePicker({
             />
             <Input
               aria-label="搜索角色"
-              placeholder="回车搜索中文名、日文名或别名"
+              placeholder="搜索中文名、日文名或别名"
               enterKeyHint="search"
               className="pl-9"
               value={query}
               maxLength={100}
-              onChange={(event) => setQuery(event.target.value)}
-              onCompositionStart={() => { composing.current = true; }}
-              onCompositionEnd={() => { composing.current = false; }}
+              onChange={(event) => changeQuery(event.target.value)}
+              onCompositionStart={() => setComposing(true)}
+              onCompositionEnd={(event) => {
+                setComposing(false);
+                changeQuery(event.currentTarget.value);
+              }}
               onKeyDown={(event) => {
-                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || composing.current) return;
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || composing) return;
                 if (event.key === "Enter") {
                   event.preventDefault();
                   event.stopPropagation();
-                  if (event.repeat) return;
-                  const next = query.trim();
-                  if (searching && next === submittedQuery && offset === 0) return;
-                  setSubmittedQuery(next);
-                  setOffset(0);
-                  setSearching(Boolean(next));
-                  setError("");
-                  if (next && next === submittedQuery && offset === 0) setRetry((current) => current + 1);
                   return;
                 }
                 if (event.key === "ArrowDown") {
@@ -392,7 +399,6 @@ export function EmojiSourcePicker({
                     onHot();
                     setOpen(false);
                     setQuery("");
-                    setSubmittedQuery("");
                     setOffset(0);
                     setSearching(false);
                   }}
@@ -404,8 +410,8 @@ export function EmojiSourcePicker({
                 <div className="mb-1 border-t border-border" />
               </>
             ) : null}
-            {submittedQuery ? (
-              results.query === submittedQuery ? (
+            {searchQuery ? (
+              results.query === searchQuery ? (
                 results.items.map((item) => characterRow(item))
               ) : null
             ) : (
@@ -424,21 +430,21 @@ export function EmojiSourcePicker({
               </>
             )}
           </div>
-          {(!submittedQuery && !categories && !error) ||
-          (submittedQuery && (searching || results.query !== submittedQuery) && !error) ? (
+          {(!searchQuery && !categories && !error) ||
+          (searchQuery && (searching || results.query !== searchQuery) && !error) ? (
             <p role="status" className="p-2 text-sm text-muted">
               加载中…
             </p>
           ) : null}
-          {submittedQuery &&
-          results.query === submittedQuery &&
+          {searchQuery &&
+          results.query === searchQuery &&
           !searching &&
           !results.items.length ? (
             <p role="status" className="p-2 text-sm text-muted">
               没有匹配的角色
             </p>
           ) : null}
-          {submittedQuery && results.query === submittedQuery && results.more ? (
+          {searchQuery && results.query === searchQuery && results.more ? (
             <Button
               type="button"
               variant="ghost"
