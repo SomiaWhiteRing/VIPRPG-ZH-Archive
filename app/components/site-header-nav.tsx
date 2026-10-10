@@ -255,7 +255,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
           />
           <span className="sr-only min-[360px]:not-sr-only">
             VIPRPG.org
-            {inAdmin ? <span className="hidden sm:inline"> 控制台</span> : null}
+            {inAdmin ? <span className="viprpg-header-label"> 控制台</span> : null}
           </span>
         </Link>
 
@@ -297,7 +297,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
         {/* 中等宽度起保留完整搜索框。 */}
         {!inAdmin ? (
           <form
-            className="hidden h-10 w-[clamp(170px,18vw,260px)] shrink-0 overflow-hidden rounded-full border border-border bg-card focus-within:border-primary md:flex"
+            className="viprpg-header-search h-10 w-[clamp(170px,18vw,260px)] shrink-0 overflow-hidden rounded-full border border-border bg-card focus-within:border-primary"
             action="/search"
             method="get"
             role="search"
@@ -357,7 +357,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
           ) : (
             <>
               <Link
-                className="hidden min-h-8 items-center rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-muted/15 sm:inline-flex"
+                className="viprpg-header-action min-h-8 items-center rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-muted/15"
                 to="/register"
               >
                 注册
@@ -459,10 +459,10 @@ function UserMenu({
                 />
               ) : null}
             </span>
-            <span className="hidden max-w-28 truncate sm:inline">
+            <span className="viprpg-header-label max-w-28 truncate">
               {session.displayName}
             </span>
-            <ChevronDown aria-hidden className="hidden text-muted sm:block" />
+            <ChevronDown aria-hidden className="viprpg-header-chevron text-muted" />
           </Button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>

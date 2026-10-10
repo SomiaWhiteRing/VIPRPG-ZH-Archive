@@ -3,6 +3,34 @@
 @import "./shared.css";
 @source "../lib";
 
+/* Website header: avoid generic .hidden, which browser extensions may override
+   with !important. Keep these breakpoints aligned with the header controls. */
+@layer components {
+  .viprpg-header-desktop-nav,
+  .viprpg-header-desktop-menu,
+  .viprpg-header-search,
+  .viprpg-header-label,
+  .viprpg-header-chevron,
+  .viprpg-header-action {
+    display: none;
+  }
+
+  @media (min-width: 40rem) {
+    .viprpg-header-label { display: inline; }
+    .viprpg-header-chevron { display: block; }
+    .viprpg-header-action { display: inline-flex; }
+  }
+
+  @media (min-width: 48rem) {
+    .viprpg-header-search { display: flex; }
+  }
+
+  @media (min-width: 80rem) {
+    .viprpg-header-desktop-nav { display: flex; }
+    .viprpg-header-desktop-menu { display: block; }
+  }
+}
+
 /* Website dark utilities also respect the Android system appearance override. */
 @custom-variant dark {
   &:where(:root[data-theme="dark"], :root[data-theme="dark"] *, :root[data-theme="system"][data-system-theme="dark"], :root[data-theme="system"][data-system-theme="dark"] *) {

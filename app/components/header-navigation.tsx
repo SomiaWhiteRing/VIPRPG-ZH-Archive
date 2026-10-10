@@ -76,7 +76,7 @@ export function HeaderNavigation({
     <>
       <nav
         aria-label={ariaLabel}
-        className="hidden min-w-0 flex-1 items-center gap-1 xl:flex"
+        className="viprpg-header-desktop-nav min-w-0 flex-1 items-center gap-1"
       >
         {entries.map((entry) =>
           "links" in entry ? (
@@ -110,7 +110,7 @@ export function HeaderNavigation({
                 <DropdownMenu.Content
                   align="start"
                   aria-label={entry.label}
-                  className="z-50 hidden max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto rounded-md border border-border bg-card p-1 text-foreground shadow-surface xl:block"
+                  className="viprpg-header-desktop-menu z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto rounded-md border border-border bg-card p-1 text-foreground shadow-surface"
                   collisionPadding={16}
                   onCloseAutoFocus={(event) => {
                     // Radix restores focus asynchronously after unmounting.
