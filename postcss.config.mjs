@@ -1,7 +1,6 @@
-const postcssConfig = {
-  plugins: {
-    "@tailwindcss/postcss": {},
-  },
-};
+import tailwind from "@tailwindcss/postcss";
+import { styleNamespaceCss } from "./scripts/style-namespace.mjs";
 
-export default postcssConfig;
+export default {
+  plugins: [tailwind(), styleNamespaceCss()],
+};
