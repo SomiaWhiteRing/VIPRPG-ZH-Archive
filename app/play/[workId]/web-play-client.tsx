@@ -27,6 +27,7 @@ import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { createPlayerSession } from "./web-play-player";
 import type { PlayerLogLevel, PlayerSession } from "./web-play-player";
 import { WebPlaySurface } from "./web-play-surface";
+import { WebPlayControlsHelp } from "./web-play-controls-help";
 import { useWebPlayControlsPreferences } from "./web-play-controls-preferences";
 import type { DisplayOrientation } from "./web-play-controls-preferences";
 import { WebPlayScreenshotGallery } from "./web-play-screenshot-gallery";
@@ -150,6 +151,7 @@ export function WebPlayClient({
   const failed = installation?.status === "failed";
   const playerBusy = running || playerStarting;
   const immersive = nativeFullscreen || pageFullscreen;
+  const desktopControlsHelp = clientEnvironment === "browser" && !mobileControls;
   const captureDisabled = !running || playerStopping || loadingScreenshots || capturing;
 
   useEffect(() => {
@@ -961,121 +963,124 @@ export function WebPlayClient({
 
                 {engagement}
 
-                <details
-                  className="border-t border-border pt-3"
-                  onToggle={(event) => {
-                    const open = event.currentTarget.open;
-                    if (open && !installSessionActive) setBrowserStorage(null);
-                    setDiagnosticsOpen(open);
-                  }}
-                >
-                  <summary className="cursor-pointer text-sm font-semibold text-muted hover:text-foreground">
-                    本地数据与诊断
-                  </summary>
-                  <div className="mt-3 grid gap-3">
-                    <dl className="grid gap-2 text-xs">
-                      <DiagnosticRow
-                        label="归档内容"
-                        value={`${formatBytes(metadata.totalSizeBytes)} / ${metadata.totalFiles.toLocaleString("zh-CN")} 文件`}
-                      />
-                      <DiagnosticRow
-                        label="安装内容"
-                        value={`${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`}
-                      />
-                      {storageSummary?.map((item) => (
+                <div className="relative">
+                  <details
+                    className="border-t border-border pt-3"
+                    onToggle={(event) => {
+                      const open = event.currentTarget.open;
+                      if (open && !installSessionActive) setBrowserStorage(null);
+                      setDiagnosticsOpen(open);
+                    }}
+                  >
+                    <summary className={desktopControlsHelp ? "cursor-pointer pr-28 text-sm font-semibold text-muted hover:text-foreground" : "cursor-pointer text-sm font-semibold text-muted hover:text-foreground"}>
+                      本地数据与诊断
+                    </summary>
+                    <div className="mt-3 grid gap-3">
+                      <dl className="grid gap-2 text-xs">
                         <DiagnosticRow
-                          key={item.label}
-                          label={item.label}
-                          info={item.info}
-                          value={item.value}
+                          label="归档内容"
+                          value={`${formatBytes(metadata.totalSizeBytes)} / ${metadata.totalFiles.toLocaleString("zh-CN")} 文件`}
                         />
-                      ))}
-                    </dl>
+                        <DiagnosticRow
+                          label="安装内容"
+                          value={`${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`}
+                        />
+                        {storageSummary?.map((item) => (
+                          <DiagnosticRow
+                            key={item.label}
+                            label={item.label}
+                            info={item.info}
+                            value={item.value}
+                          />
+                        ))}
+                      </dl>
 
-                    {installation && !activeInstalling ? (
-                      <InstallProgress installation={installation} compact />
-                    ) : null}
-
-                    <div className="flex flex-wrap gap-2">
-                      {running ? (
-                        <Button
-                          disabled={playerStarting || playerStopping}
-                          onClick={() => void stopPlayer()}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          {playerStopping ? "正在停止…" : "停止游戏"}
-                        </Button>
+                      {installation && !activeInstalling ? (
+                        <InstallProgress installation={installation} compact />
                       ) : null}
-                      <WebPlaySaveExport key={metadata.workId} playKey={metadata.playKey} playerBusy={playerBusy} active={diagnosticsOpen} title={metadata.title} workId={metadata.workId} />
-                      {installation ? (
-                        <Button
-                          aria-controls="uninstall-game-dialog"
-                          aria-expanded={deleteDialogOpen}
-                          aria-haspopup="dialog"
-                          ref={deleteButtonRef}
-                          disabled={playerBusy}
-                          onClick={() => setDeleteDialogOpen(true)}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          卸载游戏
-                        </Button>
-                      ) : null}
-                    </div>
 
-                    <div className="border-t border-border pt-3 font-mono text-xs">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <strong>运行日志 · {logs.length}</strong>
-                        {logs.length ? (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              disabled={copyingLogs}
-                              onClick={() => void copyLogs()}
-                              size="sm"
-                              type="button"
-                              variant="ghost"
-                            >
-                              {copyingLogs ? "复制中…" : "复制"}
-                            </Button>
-                            <Button
-                              disabled={copyingLogs}
-                              onClick={() => {
-                                setLogs([]);
-                                pendingLogs.current = [];
-                              }}
-                              size="sm"
-                              type="button"
-                              variant="ghost"
-                            >
-                              清空
-                            </Button>
-                          </div>
+                      <div className="flex flex-wrap gap-2">
+                        {running ? (
+                          <Button
+                            disabled={playerStarting || playerStopping}
+                            onClick={() => void stopPlayer()}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            {playerStopping ? "正在停止…" : "停止游戏"}
+                          </Button>
+                        ) : null}
+                        <WebPlaySaveExport key={metadata.workId} playKey={metadata.playKey} playerBusy={playerBusy} active={diagnosticsOpen} title={metadata.title} workId={metadata.workId} />
+                        {installation ? (
+                          <Button
+                            aria-controls="uninstall-game-dialog"
+                            aria-expanded={deleteDialogOpen}
+                            aria-haspopup="dialog"
+                            ref={deleteButtonRef}
+                            disabled={playerBusy}
+                            onClick={() => setDeleteDialogOpen(true)}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            卸载游戏
+                          </Button>
                         ) : null}
                       </div>
-                      {logs.length ? (
-                        <ol className="m-0 grid max-h-64 list-none gap-1 overflow-y-auto p-0">
-                          {logs.map((log) => (
-                            <li
-                              className={`${logTone(log.level)} whitespace-pre-wrap wrap-anywhere`}
-                              key={log.id}
-                            >
-                              {formatLog(log)}
-                            </li>
-                          ))}
-                        </ol>
-                      ) : (
-                        <EmptyState
-                          title="暂无日志。"
-                          variant="plain"
-                          className="text-xs"
-                        />
-                      )}
+
+                      <div className="border-t border-border pt-3 font-mono text-xs">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <strong>运行日志 · {logs.length}</strong>
+                          {logs.length ? (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                disabled={copyingLogs}
+                                onClick={() => void copyLogs()}
+                                size="sm"
+                                type="button"
+                                variant="ghost"
+                              >
+                                {copyingLogs ? "复制中…" : "复制"}
+                              </Button>
+                              <Button
+                                disabled={copyingLogs}
+                                onClick={() => {
+                                  setLogs([]);
+                                  pendingLogs.current = [];
+                                }}
+                                size="sm"
+                                type="button"
+                                variant="ghost"
+                              >
+                                清空
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                        {logs.length ? (
+                          <ol className="m-0 grid max-h-64 list-none gap-1 overflow-y-auto p-0">
+                            {logs.map((log) => (
+                              <li
+                                className={`${logTone(log.level)} whitespace-pre-wrap wrap-anywhere`}
+                                key={log.id}
+                              >
+                                {formatLog(log)}
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <EmptyState
+                            title="暂无日志。"
+                            variant="plain"
+                            className="text-xs"
+                          />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </details>
+                  </details>
+                  {desktopControlsHelp ? <WebPlayControlsHelp /> : null}
+                </div>
 
                 <InstallDiagnosticsPanel />
 
