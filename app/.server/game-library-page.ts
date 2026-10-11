@@ -15,7 +15,7 @@ const PAGE_SIZE = 20;
 export async function loadGameLibrary(
   runtime: AppRuntime,
   params: Record<string, string | string[] | undefined>,
-  userList?: { userId: number; kind: "favorite" | "played" },
+  userList?: { userId: number; kind: "favorite" | "played"; publicOnly?: boolean },
 ) {
   if (userList) params = { page: params.page, tag: userList.kind === "favorite" ? params.tag : undefined };
   const tag = normalizeEntityName(stringParam(params.tag));
@@ -74,14 +74,14 @@ export async function loadGameLibrary(
         ? listCombinedTags(runtime, { name: tag, limit: 1 }).then((tags) => tags[0] ?? null)
         : tagSource === "user"
         ? (userList
-          ? listUserTags(runtime, { name: tag, userId: userList.userId, limit: 1 })
+          ? listUserTags(runtime, { name: tag, userId: userList.userId, publicOnly: userList.publicOnly, limit: 1 })
           : listCombinedTags(runtime, { name: tag, source: "user", limit: 1 })).then((tags) => tags[0] ?? null)
         : getPublicTagSummary(runtime, tag)
         : Promise.resolve(null),
       character
         ? getPublicCharacterSummary(runtime, character)
         : Promise.resolve(null),
-      userList?.kind === "favorite" ? listUserTags(runtime, { userId: userList.userId, limit: 60 }) : Promise.resolve([]),
+      userList?.kind === "favorite" ? listUserTags(runtime, { userId: userList.userId, publicOnly: userList.publicOnly, limit: 60 }) : Promise.resolve([]),
       uploader ? findPublicUserById(runtime, uploader) : Promise.resolve(null),
     ]);
   const activeParams = {

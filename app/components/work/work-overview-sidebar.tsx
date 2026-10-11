@@ -25,13 +25,13 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
   return (
     <WorkSidebar
       engagement={
-        publicWork ? <WorkEngagementActions
+        <WorkEngagementActions
           onSaved={onFavoriteSaved}
           summary={favoriteSummary}
           currentUserId={currentUser?.id ?? null}
           initialFavorited={community.favoritedByMe}
           workId={work.id}
-        /> : null
+        />
       }
       extras={
         <>
@@ -47,7 +47,7 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
                   编辑信息
                 </Link>
               ) : data.maintainerApplication ? <MaintainerApplicationButton workId={work.id} initialApplication={data.maintainerApplication} /> : null}
-              {publicWork ? <CatalogAddDialog catalogs={userCatalogs} workId={work.id} /> : null}
+              <CatalogAddDialog catalogs={userCatalogs} workId={work.id} />
             </div>
           ) : null}
           {containingCatalogs.length ? (
@@ -111,7 +111,7 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
         <WorkCommunityStats
           commentCount={community.commentCount}
           favoriteCount={community.favoriteCount}
-          collectionHref={publicWork ? `/games/${work.id}/collections` : undefined}
+          collectionHref={`/games/${work.id}/collections`}
           playerCount={community.playerCount}
           viewCount={community.viewCount}
         />

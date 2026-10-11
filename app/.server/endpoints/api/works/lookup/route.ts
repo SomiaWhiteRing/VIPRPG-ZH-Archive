@@ -1,5 +1,6 @@
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { getD1 } from "@/app/.server/db/d1";
+import { workReadCondition } from "@/app/.server/db/work-visibility";
 import { parsePositiveId } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
@@ -43,6 +44,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
     }
 
     const like = `%${escapeLike(title)}%`;
+    const access = workReadCondition(url.searchParams.get("scope") === "catalog" ? auth.user : null);
     const works = await getD1(runtime)
       .prepare(
         `SELECT DISTINCT
@@ -79,9 +81,10 @@ export async function GET(runtime: AppRuntime, request: Request) {
             ) OR ? = 1 THEN 1
             ELSE 0
           END AS can_edit
-        FROM public_works w
+        FROM works w
         LEFT JOIN work_titles wt ON wt.work_id = w.id
         WHERE w.id NOT IN (SELECT value FROM json_each(?))
+          AND ${access.sql}
           AND (
             w.original_title LIKE ? ESCAPE '\\'
             OR w.chinese_title LIKE ? ESCAPE '\\'
@@ -102,6 +105,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
         auth.user.id,
         auth.user.permissionKeys.includes("work.distribution.update_any") ? 1 : 0,
         JSON.stringify(excludedWorkIds),
+        ...access.binds,
         like,
         like,
         like,

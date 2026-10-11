@@ -8,6 +8,7 @@ import { Timestamp } from "@/app/components/ui/timestamp";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
+import { useVisibleWorkItems } from "@/app/components/work/use-visible-work-items";
 import { TopicTags } from "@/app/discussions/shared";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -60,6 +61,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 
 export default function RakuenPage() {
   const { items, type, page, pageSize, total } = useLoaderData<typeof loader>();
+  const visibleItems = useVisibleWorkItems(items);
   const desktop = useSyncExternalStore(subscribeDesktop, desktopSnapshot, serverSnapshot);
   const [frameCreated, setFrameCreated] = useState(false);
   const [activePath, setActivePath] = useState("");
@@ -98,7 +100,7 @@ export default function RakuenPage() {
         </div>
         {items.length ? (
           <ul className="divide-y divide-border/50">
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <li
                 key={`${item.kind}:${item.id}`}
                 className={`flex items-start gap-3 pl-2.5 py-1 hover:bg-muted/10 ${activePath === item.entryHref ? "bg-primary/5" : "even:bg-muted/5"}`}

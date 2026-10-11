@@ -14,6 +14,7 @@ import type {
 } from "@/lib/dto/db/creator-library";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { HttpError } from "@/lib/http";
+import type { WorkAudience } from "@/lib/work-visibility";
 
 type CreatorRow = {
   id: number;
@@ -28,6 +29,7 @@ type CreatorRow = {
 };
 type CreditRow = {
   work_id: number;
+  audience: WorkAudience;
   work_title: string;
   work_original_title: string;
   display_name: string;
@@ -421,10 +423,10 @@ async function listCredits(
   includeNonPublic: boolean,
   pagination?: { page: number; pageSize: number },
 ): Promise<CreatorWorkCredit[]> {
-  const status = includeNonPublic ? "1=1" : "w.id IN (SELECT id FROM public_works)";
+  const status = includeNonPublic ? "1=1" : "w.id IN (SELECT id FROM member_works)";
   const rows = await getD1(runtime)
     .prepare(
-      `SELECT w.id AS work_id,
+      `SELECT w.id AS work_id,w.audience,
           COALESCE(w.chinese_title, w.original_title) AS work_title,
           w.original_title AS work_original_title,
           ws.display_name,
@@ -469,6 +471,7 @@ async function listCredits(
     .all<CreditRow>();
   return (rows.results ?? []).map((row) => ({
     workId: row.work_id,
+    audience: row.audience,
     workTitle: row.work_title,
     workOriginalTitle: row.work_original_title,
     displayName: row.display_name,
@@ -496,14 +499,14 @@ function summarySql(includeLatest = true): string {
         FROM work_staff ws
         JOIN works w ON w.id = ws.work_id
         WHERE ws.creator_id = c.id
-          AND w.id IN (SELECT id FROM public_works)
+          AND w.id IN (SELECT id FROM member_works)
       ) AS work_credit_count,
       ${includeLatest ? `(
         SELECT MAX(COALESCE(w.original_release_date, w.published_at, w.created_at))
         FROM work_staff ws
         JOIN works w ON w.id = ws.work_id
         WHERE ws.creator_id = c.id
-          AND w.id IN (SELECT id FROM public_works)
+          AND w.id IN (SELECT id FROM member_works)
       )` : "NULL"} AS latest_work_credit_at`;
 }
 function mapSummary(row: CreatorRow): PublicCreatorSummary {

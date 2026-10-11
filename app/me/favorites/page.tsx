@@ -23,7 +23,7 @@ export async function loader(args: LoaderFunctionArgs) {
     return `/me/favorites?${params}`;
   };
   return {
-    ...await loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "favorite" }), currentUserId: user.id,
+    ...await loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "favorite", publicOnly: false }), currentUserId: user.id,
     unavailable,
     unavailablePrevious: unavailable.page > 1 ? unavailablePageUrl(unavailable.page - 1) : null,
     unavailableNext: unavailable.page * unavailable.pageSize < unavailable.total ? unavailablePageUrl(unavailable.page + 1) : null,

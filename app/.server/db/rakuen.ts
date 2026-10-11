@@ -8,25 +8,27 @@ import {
   type CharacterPortraitRow,
 } from "./character-portrait-library";
 import { getD1 } from "./d1";
+import type { WorkAudience } from "@/lib/work-visibility";
 
 const queries = {
   topic: `SELECT 'topic' AS kind,t.id,t.title,t.reply_count AS count,
-    MAX(t.created_at,t.last_activity_at) AS activeAt FROM forum_public_topics t`,
+    MAX(t.created_at,t.last_activity_at) AS activeAt,'public' AS audience FROM forum_public_topics t`,
   work: `SELECT 'work' AS kind,w.id,COALESCE(w.chinese_title,w.original_title) AS title,
-    COUNT(*) AS count,MAX(c.created_at) AS activeAt
-    FROM comments c JOIN public_works w ON w.id=c.work_id GROUP BY w.id`,
+    COUNT(*) AS count,MAX(c.created_at) AS activeAt,w.audience
+    FROM comments c JOIN member_works w ON w.id=c.work_id GROUP BY w.id`,
   creator: `SELECT 'creator' AS kind,cr.id,cr.name AS title,
-    COUNT(*) AS count,MAX(c.created_at) AS activeAt
+    COUNT(*) AS count,MAX(c.created_at) AS activeAt,'public' AS audience
     FROM comments c JOIN creators cr ON cr.id=c.creator_id
     WHERE cr.public_at IS NOT NULL GROUP BY cr.id`,
   character: `SELECT 'character' AS kind,ch.id,ch.primary_name AS title,
-    COUNT(*) AS count,MAX(c.created_at) AS activeAt
+    COUNT(*) AS count,MAX(c.created_at) AS activeAt,'public' AS audience
     FROM comments c JOIN characters ch ON ch.id=c.character_id GROUP BY ch.id`,
 };
 
 type Kind = keyof typeof queries;
 type Row = CharacterPortraitRow & {
   kind: Kind;
+  audience: WorkAudience;
   id: number;
   title: string;
   count: number;
@@ -52,7 +54,7 @@ export async function listRakuenPages(
     ? (requestedType as Kind)
     : "all";
   // ponytail: read existing history instead of maintaining another activity table.
-  // Counts and times include removed comments; only the source page must be public.
+  // Counts and times include removed comments; member works are hidden by the UI for guests.
   const query = type === "all"
     ? Object.values(queries).join(" UNION ALL ")
     : queries[type];
@@ -99,6 +101,7 @@ export async function listRakuenPages(
       const entryHref = `/${paths[row.kind]}/${row.id}`;
       return {
         kind: row.kind,
+        audience: row.audience,
         id: row.id,
         title: row.title,
         count: row.count,

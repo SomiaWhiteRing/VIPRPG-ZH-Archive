@@ -1,7 +1,8 @@
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { requireUser } from "@/app/.server/auth/guards";
 import { sha256Hex } from "@/lib/sha256";
-import { assertPublicCommentTarget } from "@/app/.server/db/work-community";
+import { assertReadableCommentTarget } from "@/app/.server/db/work-community";
+import { commentTargetReadCondition } from "@/app/.server/db/comment-visibility";
 import { readForumBody } from "@/app/.server/forum/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { putImmutableImage } from "@/app/.server/storage/immutable-image";
@@ -117,7 +118,7 @@ export async function uploadCommentImage(runtime: AppRuntime, request: Request) 
     } else {
       if ((kind !== "work" && kind !== "creator" && kind !== "character") || !Number.isSafeInteger(id) || id <= 0)
         throw new HttpError(400, "评论目标无效。");
-      await assertPublicCommentTarget(runtime, { kind, id });
+      await assertReadableCommentTarget(runtime, { kind, id });
     }
     if (!(file instanceof File) || typeof clientId !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(clientId))
       throw new HttpError(400, "图片或上传标识无效。");
@@ -186,7 +187,11 @@ export async function readCommentImage(runtime: AppRuntime, id: string) {
       const user = await getCurrentUser(runtime);
       const draft = row.comment_id === null && row.timeline_event_id === null && row.timeline_reply_id === null;
       const canManage = row.timeline_event_id === null && row.timeline_reply_id === null && hasPermission(user, "comment.manage_any");
-      if (!user || !(canManage || (draft && row.user_id === user.id)))
+      const access = commentTargetReadCondition(user);
+      const canRead = user && row.comment_id !== null && await runtime.db.prepare(
+        `SELECT c.id FROM published_comments c WHERE c.id=? AND ${access.sql}`,
+      ).bind(row.comment_id, ...access.binds).first();
+      if (!user || !(canRead || canManage || (draft && row.user_id === user.id)))
         throw new HttpError(404, "图片不可用。");
     }
     const object = await runtime.bucket.get(row.object_key);

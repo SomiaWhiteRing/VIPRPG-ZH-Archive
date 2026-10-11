@@ -1,5 +1,7 @@
 import { readValidatedImage } from "@/app/.server/storage/work-images";
 import { getD1 } from "@/app/.server/db/d1";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { workReadCondition } from "@/app/.server/db/work-visibility";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type {
   CatalogDetail,
@@ -8,6 +10,7 @@ import type {
 } from "@/lib/dto/db/catalogs";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
+import type { WorkAudience } from "@/lib/work-visibility";
 
 export async function listCatalogs(
   runtime: AppRuntime,
@@ -244,17 +247,19 @@ export async function addCatalogItem(
   await ownedCatalog(runtime, catalogId, actor, "catalog.reorder_own");
   if (!Number.isSafeInteger(workId) || workId <= 0)
     throw new HttpError(400, "目录项目不合法");
+  const access = workReadCondition(actor);
   const work = await getD1(runtime)
-    .prepare(`SELECT id FROM public_works WHERE id=? LIMIT 1`)
-    .bind(workId)
+    .prepare(`SELECT id FROM works w WHERE w.id=? AND ${access.sql} LIMIT 1`)
+    .bind(workId, ...access.binds)
     .first<{ id: number }>();
-  if (!work) throw new HttpError(400, "目录只能收录已发布游戏");
+  if (!work) throw new HttpError(400, "目录只能收录有权访问的已发布游戏");
   await getD1(runtime).batch([
     getD1(runtime)
       .prepare(
-        `INSERT OR IGNORE INTO catalog_items(catalog_id,work_id,note) VALUES(?,?,?)`,
+        `INSERT OR IGNORE INTO catalog_items(catalog_id,work_id,note)
+         SELECT ?,w.id,? FROM works w WHERE w.id=? AND ${access.sql}`,
       )
-      .bind(catalogId, workId, clean(note)),
+      .bind(catalogId, clean(note), workId, ...access.binds),
     getD1(runtime)
       .prepare(`UPDATE catalogs SET updated_at=CURRENT_TIMESTAMP WHERE id=?`)
       .bind(catalogId),
@@ -286,15 +291,18 @@ async function loadCatalogDetail(
   runtime: AppRuntime,
   id: number,
 ): Promise<CatalogDetail | null> {
+  const viewer = await getCurrentUser(runtime);
   const row = await getD1(runtime)
     .prepare(`${CATALOG_SUMMARY_SELECT} AND c.id=? LIMIT 1`)
     .bind(id)
     .first<Row>();
   if (!row) return null;
+  const access = workReadCondition(viewer);
   const items = await getD1(runtime)
     .prepare(
       `SELECT
          ci.work_id,
+         w.audience,
          w.original_title,
          w.chinese_title,
          w.original_release_date,
@@ -312,16 +320,17 @@ async function loadCatalogDetail(
          ci.note
        FROM catalog_items ci
        JOIN works w ON w.id = ci.work_id
-       WHERE ci.catalog_id = ? AND w.id IN (SELECT id FROM public_works)
+       WHERE ci.catalog_id = ? AND (w.id IN (SELECT id FROM member_works) OR (?=1 AND ${access.sql}))
        ORDER BY ci.sort_order ASC, ci.work_id DESC`,
     )
-    .bind(row.id)
+    .bind(row.id, viewer?.id === row.owner_user_id ? 1 : 0, ...access.binds)
     .all<ItemRow>();
   return {
     ...mapSummary(row),
     ownerProfileShowsCatalogs: row.owner_profile_show_catalogs === 1,
     items: (items.results ?? []).map((item) => ({
       workId: item.work_id,
+      audience: item.audience,
       title: item.chinese_title || item.original_title,
       originalTitle: item.original_title,
       chineseTitle: item.chinese_title,
@@ -452,6 +461,7 @@ type Row = {
 };
 type ItemRow = {
   work_id: number;
+  audience: WorkAudience;
   original_title: string;
   chinese_title: string | null;
   original_release_date: string | null;
@@ -474,7 +484,7 @@ const CATALOG_SUMMARY_SELECT = `
       SELECT COUNT(*)
       FROM catalog_items ci
       JOIN works cw ON cw.id = ci.work_id
-      WHERE ci.catalog_id = c.id AND cw.id IN (SELECT id FROM public_works)
+      WHERE ci.catalog_id = c.id AND cw.id IN (SELECT id FROM member_works)
     ) AS item_count,
     c.cover_blob_sha256 AS custom_cover_blob_sha256,
     COALESCE(c.cover_blob_sha256, (

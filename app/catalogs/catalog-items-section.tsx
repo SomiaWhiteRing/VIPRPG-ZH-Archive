@@ -11,6 +11,7 @@ import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import { WorkListItem } from "@/app/components/work/work-list-item";
+import { useVisibleWorkItems } from "@/app/components/work/use-visible-work-items";
 import type { CatalogDetail, CatalogItem } from "@/lib/dto/db/catalogs";
 import { formatNumber } from "@/lib/format";
 import { EllipsisVertical } from "lucide-react";
@@ -39,6 +40,7 @@ export function CatalogItemsSection({
   onSaved: (catalog: CatalogDetail) => void;
 }) {
   const toast = useToast();
+  const visibleItems = useVisibleWorkItems(items);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const editReturnFocusRef = useRef<HTMLElement | null>(null);
   const removeReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -82,7 +84,7 @@ export function CatalogItemsSection({
     setAddMessage(null);
     try {
 
-      const body = (await requestJson(`/api/works/lookup?title=${encodeURIComponent(query.trim())}`, { credentials: "same-origin" })) as {
+      const body = (await requestJson(`/api/works/lookup?scope=catalog&title=${encodeURIComponent(query.trim())}`, { credentials: "same-origin" })) as {
         works?: Candidate[];
         detail?: string;
       };
@@ -213,7 +215,7 @@ export function CatalogItemsSection({
       </header>
       {items.length ? (
         <ol className="divide-y divide-border border-b border-border">
-          {items.map((item, index) => (
+          {visibleItems.map((item, index) => (
             <WorkListItem
               index={index}
               item={item}

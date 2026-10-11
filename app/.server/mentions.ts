@@ -1,6 +1,7 @@
 import { json as jsonResponse, HttpError } from "@/lib/http";
 import { getCurrentUser } from "./auth/current-user";
 import { getD1 } from "./db/d1";
+import { commentRecipientReadSql } from "./db/comment-visibility";
 import type { AppRuntime } from "./runtime";
 
 import { MENTION_LIMIT, mentions, type MentionSearchUser } from "@/lib/mentions";
@@ -41,7 +42,7 @@ export function mentionNotification(db: D1Database, actorId: number, body: strin
   const old = new Set(mentions(previous).map((user) => user.id));
   const ids = [...new Set(mentions(body).map((user) => user.id))].filter((id) => !old.has(id));
   const ordinary = kind === "comment";
-  const table = ordinary ? "public_comments" : kind === "post" ? "forum_public_posts" : "forum_public_comments";
+  const table = ordinary ? "published_comments" : kind === "post" ? "forum_public_posts" : "forum_public_comments";
   const fields = ordinary ? "work_comment_id" : "forum_topic_id,forum_post_id,forum_comment_id";
   const values = ordinary ? "s.id" : kind === "post" ? "s.topic_id,s.id,NULL" : "s.topic_id,s.post_id,s.id";
   const sameContent = ordinary
@@ -51,7 +52,7 @@ export function mentionNotification(db: D1Database, actorId: number, body: strin
   return db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,metadata_json,${fields})
     SELECT '${ordinary ? "system_notice" : "forum_reply"}',?,u.id,'','','mention:${kind}:'||s.id||':'||u.id,'{"mention":true}',${values}
     FROM ${table} s JOIN users u ON u.id IN (SELECT value FROM json_each(?)) AND u.status='active'
-    WHERE s.id IN (${source}) AND u.id<>? AND NOT EXISTS
+    WHERE s.id IN (${source}) AND u.id<>? ${ordinary ? `AND ${commentRecipientReadSql("s", "u.id")}` : ""} AND NOT EXISTS
       (SELECT 1 FROM inbox_items i WHERE i.recipient_user_id=u.id AND ${sameContent})
     ON CONFLICT(event_key) DO NOTHING`).bind(actorId, JSON.stringify(ids), ...args, actorId);
 }

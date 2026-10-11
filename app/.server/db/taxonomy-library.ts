@@ -876,13 +876,13 @@ function characterSql(publicPortrait = false, groupedWorkCounts = false, fields:
   const counts = groupedWorkCounts
     ? `WITH character_work_counts AS MATERIALIZED (
         SELECT character_id,COUNT(DISTINCT work_id) AS work_count
-        FROM work_characters WHERE work_id IN (SELECT id FROM public_works)
+        FROM work_characters WHERE work_id IN (SELECT id FROM member_works)
         GROUP BY character_id
       ) `
     : "";
   const workCount = groupedWorkCounts
     ? "COALESCE(work_counts.work_count,0)"
-    : "(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.id IN (SELECT id FROM public_works))";
+    : "(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.id IN (SELECT id FROM member_works))";
   return `${counts}SELECT ch.id,ch.primary_name,ch.original_name,${fields === "summary" ? "ch.description,ch.extra_json,ch.updated_at," : ""}${CHARACTER_PORTRAIT_COLUMNS},${workCount} AS work_count FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""}${groupedWorkCounts ? " LEFT JOIN character_work_counts work_counts ON work_counts.character_id=ch.id" : ""}`;
 }
 function tagSql(): string {

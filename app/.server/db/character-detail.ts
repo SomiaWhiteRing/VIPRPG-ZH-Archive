@@ -33,7 +33,7 @@ async function readPublicCharacter(
       `SELECT ch.id,ch.primary_name AS primaryName,
     ch.original_name AS originalName,${CHARACTER_PORTRAIT_COLUMNS},
     (SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc
-      WHERE wc.character_id=ch.id AND wc.work_id IN (SELECT id FROM public_works)) AS workCount
+      WHERE wc.character_id=ch.id AND wc.work_id IN (SELECT id FROM member_works)) AS workCount
     FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}
       AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}
     WHERE ch.id=? LIMIT 1`,
@@ -146,7 +146,7 @@ function characterWorksStatement(
   offset: number,
 ) {
   return db.prepare(
-    `SELECT w.id,wc.id AS creditId,COALESCE(w.chinese_title,w.original_title) AS title,w.original_title AS originalTitle,
+    `SELECT w.id,w.audience,wc.id AS creditId,COALESCE(w.chinese_title,w.original_title) AS title,w.original_title AS originalTitle,
       wc.display_name AS displayName,wc.role_key AS roleKey,wc.spoiler_level AS spoilerLevel,wc.notes,
       w.original_release_date AS releaseDate,w.engine_family AS engineFamily,w.language,
       COALESCE((SELECT group_concat(author_name,'、') FROM (
@@ -160,7 +160,7 @@ function characterWorksStatement(
       FROM work_characters wc JOIN works w ON w.id=wc.work_id
       WHERE wc.character_id=? AND w.id IN (
         SELECT w.id FROM works w
-        WHERE w.id IN (SELECT id FROM public_works) AND EXISTS (
+        WHERE w.id IN (SELECT id FROM member_works) AND EXISTS (
           SELECT 1 FROM work_characters credit WHERE credit.work_id=w.id AND credit.character_id=?
         )
         ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,w.original_title ASC,w.id DESC

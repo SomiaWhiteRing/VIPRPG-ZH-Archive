@@ -1,7 +1,9 @@
 import type { CreatorLink } from "@/lib/creator-links";
+import type { WorkAudience } from "@/lib/work-visibility";
 
 export type CreatorWorkCredit = {
   workId: number;
+  audience: WorkAudience;
   workTitle: string;
   workOriginalTitle: string;
   displayName: string;

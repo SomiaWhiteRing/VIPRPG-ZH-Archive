@@ -1,5 +1,6 @@
 import { Badge } from "@/app/components/ui/badge";
 import { WorkListRow } from "@/app/components/work/work-list-row";
+import { useVisibleWorkItems } from "@/app/components/work/use-visible-work-items";
 import { CHARACTER_ROLE_LABELS } from "@/lib/character-names";
 import type {
   CharacterWork,
@@ -15,9 +16,10 @@ export function CharacterWorkList({
   characterName: string;
   standalone?: boolean;
 }) {
+  const visibleWorks = useVisibleWorkItems(works);
   return (
     <ul className={`m-0 list-none divide-y divide-border p-0 ${standalone ? "border-b border-border" : ""}`}>
-      {works.map((work) => (
+      {visibleWorks.map((work) => (
         <li key={work.id}>
           <WorkListRow
             href={`/games/${work.id}`}

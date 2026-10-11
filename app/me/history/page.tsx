@@ -18,7 +18,7 @@ export async function loader(args: LoaderFunctionArgs) {
     runtime,
     `/me/history${url.search}`,
   );
-  return loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "played" });
+  return loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "played", publicOnly: false });
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>

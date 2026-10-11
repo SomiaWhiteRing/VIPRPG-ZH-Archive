@@ -1,8 +1,10 @@
 import type { CharacterRoleKey } from "@/lib/character-names";
+import type { WorkAudience } from "@/lib/work-visibility";
 
 export type CharacterWorkCredit = {
   creditId: number;
   id: number;
+  audience: WorkAudience;
   title: string;
   originalTitle: string;
   displayName: string;

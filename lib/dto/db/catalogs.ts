@@ -1,5 +1,8 @@
+import type { WorkAudience } from "@/lib/work-visibility";
+
 export type CatalogItem = {
   workId: number;
+  audience: WorkAudience;
   title: string;
   originalTitle: string;
   chineseTitle: string | null;

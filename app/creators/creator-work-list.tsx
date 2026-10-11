@@ -1,5 +1,6 @@
 import { Badge } from "@/app/components/ui/badge";
 import { WorkListRow } from "@/app/components/work/work-list-row";
+import { useVisibleWorkItems } from "@/app/components/work/use-visible-work-items";
 import type { CreatorWorkCredit } from "@/lib/dto/db/creator-library";
 import { creatorRoleLabel } from "@/lib/labels";
 
@@ -8,9 +9,10 @@ export function CreatorWorkList({ works, creatorName, standalone = false }: {
   creatorName: string;
   standalone?: boolean;
 }) {
+  const visibleWorks = useVisibleWorkItems(works);
   return (
     <ul className={`m-0 divide-y divide-border border-border p-0 ${standalone ? "border-b" : "border-t"}`}>
-      {works.map((work) => (
+      {visibleWorks.map((work) => (
         <li key={work.workId}>
           <WorkListRow
             href={`/games/${work.workId}`}

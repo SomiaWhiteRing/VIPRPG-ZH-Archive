@@ -344,6 +344,7 @@ export async function searchUserWorks(
   input: {
     userId: number;
     kind: "favorite" | "played";
+    publicOnly?: boolean;
     tag?: string;
     page?: number;
     pageSize?: number;
@@ -359,17 +360,19 @@ export async function searchUserWorks(
   const column = input.kind === "favorite" ? "favorited_at" : "last_played_at";
   const tag = input.kind === "favorite" ? normalizeEntityName(input.tag ?? "") : "";
   const tagFilter = tag ? "AND EXISTS(SELECT 1 FROM user_work_tags t WHERE t.work_id=e.work_id AND t.user_id=e.user_id AND t.name=?)" : "";
-  const binds: Array<string | number> = [input.userId, ...(tag ? [tag] : [])];
+  const viewer = await getCurrentUser(runtime);
+  const access = workReadCondition(input.publicOnly === false && viewer?.id === input.userId ? viewer : null);
+  const binds: Array<string | number> = [input.userId, ...access.binds, ...(tag ? [tag] : [])];
   const database = getD1(runtime);
   const [countResult, rowsResult] = await database.batch([
     database
       .prepare(
-        `SELECT COUNT(*) AS count FROM user_work_entries e JOIN works w ON w.id=e.work_id WHERE e.user_id=? AND e.${column} IS NOT NULL AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id) ${tagFilter}`,
+        `SELECT COUNT(*) AS count FROM user_work_entries e JOIN works w ON w.id=e.work_id WHERE e.user_id=? AND e.${column} IS NOT NULL AND ${access.sql} ${tagFilter}`,
       )
       .bind(...binds),
     database
       .prepare(
-        `SELECT ${summarySql()},e.${column} AS occurred_at,${input.kind === "favorite" ? "e.favorite_note" : "''"} AS favorite_note FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id) ${tagFilter} GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`,
+        `SELECT ${summarySql()},e.${column} AS occurred_at,${input.kind === "favorite" ? "e.favorite_note" : "''"} AS favorite_note FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND ${access.sql} ${tagFilter} GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`,
       )
       .bind(...binds, pageSize, (page - 1) * pageSize),
   ]);
@@ -541,7 +544,7 @@ export async function getGameWorkDetail(
     counts[row.id],
     plays[row.id],
   );
-  runtime.memo.set(`work-public-stats:${row.id}`, {
+  runtime.memo.set(`work-stats:${row.id}`, {
     viewCount: summary.viewCount,
     playerCount: summary.playerCount,
     commentCount: summary.commentCount,
@@ -1537,7 +1540,7 @@ function legacyPlayCountSql(): string {
 
 function workCountsSql(): string {
   return `${legacyPlayCountSql()},
-    (SELECT COUNT(*) FROM public_comments c WHERE c.work_id=w.id) AS comment_count,
+    (SELECT COUNT(*) FROM published_comments c WHERE c.work_id=w.id) AS comment_count,
     (SELECT COUNT(*) FROM user_work_entries e JOIN users u ON u.id=e.user_id
      WHERE e.work_id=w.id AND e.favorited_at IS NOT NULL AND u.status='active') AS favorite_count`;
 }

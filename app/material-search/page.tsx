@@ -4,6 +4,7 @@ import type { MetaFunction } from "react-router";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 import { WorkCard } from "@/app/components/work/work-card";
+import { useVisibleWorkItems } from "@/app/components/work/use-visible-work-items";
 import type { MaterialSearchResponse, MaterialSearchResult } from "@/lib/dto/db/material-search";
 import { MAX_IMAGE_BYTES } from "@/lib/image-format";
 import { sha256Hex } from "@/lib/sha256";
@@ -28,6 +29,7 @@ const ACCEPT = ".png,.bmp,.xyz,.jpg,.jpeg,.gif,.ico,.webp";
 
 export default function MaterialSearchPage() {
   const [view, setView] = useState<View>(INITIAL_VIEW);
+  const visibleWorks = useVisibleWorkItems(view.works);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const page = useRef<HTMLElement>(null);
@@ -237,14 +239,14 @@ export default function MaterialSearchPage() {
           </p>
           {view.status === "found" ? <>
             <div className="material-search-cards" aria-label="包含这张素材的作品">
-              {view.works.map((work) => <div key={work.id} className="material-search-card">
+              {visibleWorks.map((work) => <div key={work.id} className="material-search-card">
                 <WorkCard href={`/games/${work.id}`} title={work.chineseTitle || work.originalTitle} originalTitle={work.originalTitle}
                   coverBlobSha256={work.coverBlobSha256} titleAs="h2" />
               </div>)}
             </div>
             {view.nextCursor !== null ? <Button type="button" variant="ghost" className="material-search-more" disabled={view.loadingMore}
               onClick={() => void loadMore()}>{view.loadingMore ? "正在加载…" : view.moreError ? "加载失败，请点击重试" : "加载更多"}</Button> : null}
-            <span className="sr-only" role="status">{view.loadingMore ? "正在加载更多作品" : view.moreError ? "加载失败" : `已显示 ${view.works.length} 个作品`}</span>
+            <span className="sr-only" role="status">{view.loadingMore ? "正在加载更多作品" : view.moreError ? "加载失败" : `已找到 ${view.works.length} 个作品`}</span>
           </> : null}
         </div> : null}
       </div>

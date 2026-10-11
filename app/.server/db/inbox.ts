@@ -1,5 +1,6 @@
 import { emojiText } from "@/lib/face-emojis";
 import { getD1 } from "@/app/.server/db/d1";
+import { commentRecipientReadSql } from "@/app/.server/db/comment-visibility";
 import { getForumRuntime } from "@/app/.server/forum/context";
 import { forumLocation } from "@/app/.server/forum/location";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -466,14 +467,15 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
       COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.primary_name) AS target_title,
       sender.id AS sender_id,sender.display_name,sender.status AS sender_status,
       (SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count
-    FROM inbox_items i JOIN public_comments c ON c.id=COALESCE(i.like_comment_id,i.reply_comment_id,i.work_comment_id)
-    LEFT JOIN public_works w ON w.id=c.work_id
+    FROM inbox_items i JOIN published_comments c ON c.id=COALESCE(i.like_comment_id,i.reply_comment_id,i.work_comment_id)
+    LEFT JOIN works w ON w.id=c.work_id
     LEFT JOIN creators cr ON cr.id=c.creator_id
     LEFT JOIN characters ch ON ch.id=c.character_id
     JOIN users sender ON sender.id=i.sender_user_id AND sender.status IN ('active','deleted')
     WHERE i.id IN (SELECT value FROM json_each(?))
+      AND ${commentRecipientReadSql("c", "i.recipient_user_id")}
       AND (i.reply_comment_id IS NULL OR EXISTS (
-        SELECT 1 FROM public_comments target WHERE target.id=COALESCE(c.reply_to_comment_id,c.root_comment_id)
+        SELECT 1 FROM published_comments target WHERE target.id=COALESCE(c.reply_to_comment_id,c.root_comment_id)
       ))`)
     .bind(JSON.stringify(ids)).all<{
       id: number; mention: number | null; body: string; reply_comment_id: number | null; like_comment_id: number | null; root_comment_id: number | null;

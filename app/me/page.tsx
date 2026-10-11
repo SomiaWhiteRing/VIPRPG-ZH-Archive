@@ -43,11 +43,13 @@ export async function loader(args: LoaderFunctionArgs) {
       searchUserWorks(runtime, {
         userId: user.id,
         kind: "played",
+        publicOnly: false,
         pageSize: 4,
       }),
       searchUserWorks(runtime, {
         userId: user.id,
         kind: "favorite",
+        publicOnly: false,
         pageSize: 4,
       }),
       searchCatalogsForOwner(runtime, { userId: user.id, pageSize: 3 }),

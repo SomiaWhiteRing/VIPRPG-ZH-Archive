@@ -2,6 +2,7 @@ import { mentionNotification, validateMentions } from "@/app/.server/mentions";
 import { timelineStatement } from "@/app/.server/db/timeline";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { workReadCondition } from "@/app/.server/db/work-visibility";
+import { commentRecipientReadSql, commentTargetQuery, commentTargetReadCondition } from "@/app/.server/db/comment-visibility";
 import { commentImageGuard, commentImageStatements, commentImagesById, parseCommentImageIds } from "@/app/.server/comments/images";
 import { sha256Hex } from "@/lib/sha256";
 import type { CommentImage } from "@/lib/comment-images";
@@ -131,6 +132,7 @@ export async function setWorkFavorite(
   const tags = tagInput === undefined ? undefined : parseUserTags(tagInput);
   const note = noteInput === undefined ? undefined : parseFavoriteNote(noteInput);
   const database = getD1(runtime);
+  const access = workReadCondition(await getCurrentUser(runtime));
   const results = await database.batch([
     timelineStatement(database, { userId, kind: "favorite", action: "收藏了作品", workId,
       predicate: "EXISTS(SELECT 1 FROM public_works WHERE id=?) AND NOT EXISTS(SELECT 1 FROM user_work_entries WHERE work_id=? AND user_id=? AND favorited_at IS NOT NULL)", args: [workId, workId, userId] }),
@@ -138,35 +140,35 @@ export async function setWorkFavorite(
       .prepare(
         `INSERT INTO user_work_entries(work_id, user_id, favorited_at, favorite_note, updated_at)
          SELECT id,?,CASE WHEN ?=1 THEN CURRENT_TIMESTAMP ELSE NULL END,?,CURRENT_TIMESTAMP
-         FROM public_works WHERE id=?
+         FROM works w WHERE w.id=? AND ${access.sql}
          ON CONFLICT(work_id, user_id) DO UPDATE SET
            favorited_at = CASE WHEN excluded.favorited_at IS NULL THEN NULL ELSE COALESCE(user_work_entries.favorited_at,excluded.favorited_at) END,
            favorite_note = CASE WHEN excluded.favorited_at IS NULL THEN '' WHEN ?=1 THEN excluded.favorite_note ELSE user_work_entries.favorite_note END,
            updated_at = CURRENT_TIMESTAMP`,
       )
-      .bind(userId, favorited ? 1 : 0, favorited ? note ?? "" : "", workId, note !== undefined ? 1 : 0),
+      .bind(userId, favorited ? 1 : 0, favorited ? note ?? "" : "", workId, ...access.binds, note !== undefined ? 1 : 0),
     ...(favorited && tags !== undefined ? [
       database.prepare(`DELETE FROM user_work_tags WHERE work_id=? AND user_id=?
-        AND EXISTS(SELECT 1 FROM public_works WHERE id=?) AND name NOT IN (SELECT value FROM json_each(?))`)
-        .bind(workId, userId, workId, JSON.stringify(tags)),
+        AND EXISTS(SELECT 1 FROM works w WHERE w.id=? AND ${access.sql}) AND name NOT IN (SELECT value FROM json_each(?))`)
+        .bind(workId, userId, workId, ...access.binds, JSON.stringify(tags)),
       database.prepare(
         `INSERT INTO user_work_tags(work_id,user_id,name,sort_order)
          SELECT e.work_id,e.user_id,t.value,CAST(t.key AS INTEGER)
          FROM user_work_entries e JOIN json_each(?) t
          WHERE e.work_id=? AND e.user_id=? AND e.favorited_at IS NOT NULL
-           AND EXISTS(SELECT 1 FROM public_works WHERE id=?)
+           AND EXISTS(SELECT 1 FROM works w WHERE w.id=? AND ${access.sql})
          ON CONFLICT(work_id,user_id,name) DO UPDATE SET sort_order=excluded.sort_order
          WHERE user_work_tags.sort_order IS NOT excluded.sort_order`,
-      ).bind(JSON.stringify(tags), workId, userId, workId),
+      ).bind(JSON.stringify(tags), workId, userId, workId, ...access.binds),
     ] : []),
     database
       .prepare(
         `DELETE FROM user_work_entries
          WHERE work_id = ? AND user_id = ?
            AND last_played_at IS NULL AND favorited_at IS NULL
-           AND EXISTS(SELECT 1 FROM public_works WHERE id=?)`,
+           AND EXISTS(SELECT 1 FROM works w WHERE w.id=? AND ${access.sql})`,
       )
-      .bind(workId, userId, workId),
+      .bind(workId, userId, workId, ...access.binds),
   ]);
   if ((results[1].meta.changes ?? 0) < 1)
     throw new HttpError(404, "作品不存在");
@@ -177,8 +179,8 @@ export async function getWorkCommunitySummary(
   workId: number,
   userId: number | null,
 ): Promise<WorkCommunitySummary> {
-  // The public detail query already supplies these numbers in this request.
-  const known = runtime.memo.get(`work-public-stats:${workId}`) as Omit<WorkCommunitySummary, "favoritedByMe"> | undefined;
+  // The authorized detail query already supplies these numbers in this request.
+  const known = runtime.memo.get(`work-stats:${workId}`) as Omit<WorkCommunitySummary, "favoritedByMe"> | undefined;
   if (known) {
     const favorite = userId === null ? null : await getD1(runtime).prepare(
       "SELECT 1 FROM user_work_entries WHERE work_id=? AND user_id=? AND favorited_at IS NOT NULL",
@@ -190,7 +192,7 @@ export async function getWorkCommunitySummary(
     .prepare(
       `SELECT
          (SELECT COUNT(*) FROM user_work_entries WHERE work_id = w.id AND last_played_at IS NOT NULL) AS legacy_player_count,
-         (SELECT COUNT(*) FROM public_comments c WHERE c.work_id=w.id) AS comment_count,
+         (SELECT COUNT(*) FROM published_comments c WHERE c.work_id=w.id) AS comment_count,
          (SELECT COUNT(*) FROM user_work_entries e JOIN users u ON u.id=e.user_id
           WHERE e.work_id=w.id AND e.favorited_at IS NOT NULL AND u.status='active') AS favorite_count,
          EXISTS(SELECT 1 FROM user_work_entries ue
@@ -220,13 +222,14 @@ export async function getWorkCommunitySummary(
 
 export async function listWorkCollections(runtime: AppRuntime, workId: number, requestedPage: number) {
   const database = getD1(runtime);
+  const access = workReadCondition(await getCurrentUser(runtime));
   // Counts can include private collections; named entries and notes cannot.
   const where = `e.work_id=? AND e.favorited_at IS NOT NULL
     AND u.status='active' AND u.profile_show_favorites=1
-    AND EXISTS(SELECT 1 FROM public_works WHERE id=?)`;
+    AND EXISTS(SELECT 1 FROM works w WHERE w.id=? AND ${access.sql})`;
   const count = await database.prepare(
     `SELECT COUNT(*) AS total FROM user_work_entries e JOIN users u ON u.id=e.user_id WHERE ${where}`,
-  ).bind(workId, workId).first<{ total: number }>();
+  ).bind(workId, workId, ...access.binds).first<{ total: number }>();
   const total = count?.total ?? 0;
   const pageSize = 20;
   const page = Math.min(Math.max(1, requestedPage), Math.max(1, Math.ceil(total / pageSize)));
@@ -235,7 +238,7 @@ export async function listWorkCollections(runtime: AppRuntime, workId: number, r
             e.favorited_at AS favoritedAt,e.favorite_note AS note
      FROM user_work_entries e JOIN users u ON u.id=e.user_id WHERE ${where}
      ORDER BY e.favorited_at DESC,e.user_id DESC LIMIT ? OFFSET ?`,
-  ).bind(workId, workId, pageSize, (page - 1) * pageSize).all<WorkCollection>();
+  ).bind(workId, workId, ...access.binds, pageSize, (page - 1) * pageSize).all<WorkCollection>();
   return { items: rows.results, total, page, pageSize };
 }
 
@@ -264,12 +267,13 @@ export async function pinComment(
     throw new HttpError(400, "只能置顶游戏主楼评论");
   if (!(await canPinWorkComments(runtime, comment.target.id, user)))
     throw new HttpError(403, "只有游戏上传者和管理员可以置顶评论");
+  const access = commentTargetReadCondition(user);
   const result = await getD1(runtime).prepare(`UPDATE comments SET pinned_at=CASE WHEN ?=1 THEN COALESCE(pinned_at,CURRENT_TIMESTAMP) ELSE NULL END
-    WHERE id=? AND id IN (SELECT id FROM public_comments)
+    WHERE id=? AND id IN (SELECT c.id FROM published_comments c WHERE ${access.sql})
       AND (?=1 OR EXISTS(SELECT 1 FROM work_uploaders WHERE work_id=comments.work_id AND user_id=?))
       AND (?=0 OR NOT EXISTS(SELECT 1 FROM comments other
         WHERE other.work_id=comments.work_id AND other.pinned_at IS NOT NULL AND other.id<>comments.id))`)
-    .bind(pinned ? 1 : 0, id, hasPermission(user, "comment.manage_any") ? 1 : 0, user.id, pinned ? 1 : 0).run();
+    .bind(pinned ? 1 : 0, id, ...access.binds, hasPermission(user, "comment.manage_any") ? 1 : 0, user.id, pinned ? 1 : 0).run();
   if (result.meta.changes !== 1) throw new HttpError(pinned ? 409 : 404, "评论不可用");
   return requiredComment(runtime, id, user.id);
 }
@@ -287,14 +291,16 @@ export async function listRootComments(
   const descending = target.kind === "work";
   const direction = descending ? "DESC" : "ASC";
   const comparison = descending ? "<" : ">";
+  const user = await getCurrentUser(runtime);
+  const access = commentTargetReadCondition(user);
   const clauses = [
     `c.${targetColumn} = ?`,
     "c.root_comment_id IS NULL",
     "c.status IN ('published','deleted')",
     "u.status IN ('active','deleted')",
-    publicCommentTargetSql("c"),
+    access.sql,
   ];
-  const binds: Array<string | number> = [target.id];
+  const binds: Array<string | number> = [target.id, ...access.binds];
   if (parsed) {
     clauses.push(`(c.created_at ${comparison} ? OR (c.created_at = ? AND c.id ${comparison} ?))`);
     binds.push(parsed.createdAt, parsed.createdAt, parsed.id);
@@ -322,8 +328,9 @@ export async function listRootComments(
           : [...binds, pinned ? -1 : size + 1]),
       );
   const knownPublic = runtime.memo.get(`public-target:${target.kind}:${target.id}`) === true;
+  const targetQuery = commentTargetQuery(target, user);
   const results = await database.batch([
-    ...(!knownPublic ? [publicTargetStatement(database, target)] : []),
+    ...(!knownPublic ? [database.prepare(targetQuery.sql).bind(...targetQuery.binds)] : []),
     rootStatement(false),
   ]);
   const rowsResult = results[results.length - 1];
@@ -356,6 +363,7 @@ export async function listRootComments(
           database,
           comment.id,
           currentUserId,
+          user,
           COMMENT_REPLY_PREVIEW_SIZE,
         ),
       ),
@@ -382,6 +390,8 @@ export async function listReplies(
   commentId?: number,
 ): Promise<CommentReplyPage> {
   const database = getD1(runtime);
+  const user = await getCurrentUser(runtime);
+  const access = commentTargetReadCondition(user);
   const [rootResult, countResult, positionResult] = await database.batch([
     database
       .prepare(
@@ -389,10 +399,10 @@ export async function listReplies(
          FROM comments c JOIN users u ON u.id=c.user_id
          WHERE c.id=? AND c.root_comment_id IS NULL
            AND c.status IN ('published','deleted') AND u.status IN ('active','deleted')
-           AND ${publicCommentTargetSql("c")}
+           AND ${access.sql}
          LIMIT 1`,
       )
-      .bind(rootCommentId),
+      .bind(rootCommentId, ...access.binds),
     database
       .prepare(
         `SELECT COUNT(*) AS total FROM comments c LEFT JOIN users u ON u.id=c.user_id
@@ -427,6 +437,7 @@ export async function listReplies(
       database,
       rootCommentId,
       currentUserId,
+      user,
       COMMENT_REPLY_PAGE_SIZE,
       (page - 1) * COMMENT_REPLY_PAGE_SIZE,
     ),
@@ -437,6 +448,7 @@ export async function listReplies(
         database,
         rootCommentId,
         currentUserId,
+        user,
         COMMENT_REPLY_PREVIEW_SIZE,
       ),
     );
@@ -466,13 +478,15 @@ function replyRowsStatement(
   database: D1Database,
   rootCommentId: number,
   currentUserId: number | null,
+  user: ArchiveUser | null,
   limit: number,
   offset = 0,
 ): D1PreparedStatement {
+  const access = commentTargetReadCondition(user);
   return database
     .prepare(
       `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
-          (SELECT target.display_name FROM public_comments target_comment
+          (SELECT target.display_name FROM published_comments target_comment
            JOIN users target ON target.id=target_comment.user_id
            WHERE target_comment.id=c.reply_to_comment_id) AS reply_to_display_name,
           root.status AS root_status,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
@@ -486,13 +500,13 @@ function replyRowsStatement(
        JOIN users root_user ON root_user.id=root.user_id
        WHERE c.root_comment_id=? AND ${visibleReplySql("c", "u")}
          AND root.status IN ('published','deleted') AND root_user.status IN ('active','deleted')
-         AND ${publicCommentTargetSql("c")}
+         AND ${access.sql}
        ORDER BY c.created_at ASC,c.id ASC LIMIT ? OFFSET ?`,
     )
     .bind(
       ...(currentUserId
-        ? [currentUserId, rootCommentId, limit, offset]
-        : [rootCommentId, limit, offset]),
+        ? [currentUserId, rootCommentId, ...access.binds, limit, offset]
+        : [rootCommentId, ...access.binds, limit, offset]),
     );
 }
 
@@ -512,16 +526,18 @@ export async function searchUserComments(
 }> {
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
   const page = Math.max(1, Math.floor(input.page ?? 1));
+  const access = commentTargetReadCondition(await getCurrentUser(runtime));
   // Push the author predicate into the public view instead of enumerating every
   // visible comment. The view retains author, root and target visibility rules.
   const base = input.publicOnly ? "FROM public_comments c" : "FROM comments c JOIN users u ON u.id=c.user_id";
   const where = input.publicOnly ? "WHERE c.user_id=?"
-    : `WHERE c.user_id=? AND c.status<>'deleted' AND ${publicCommentTargetSql("c")}`;
+    : `WHERE c.user_id=? AND c.status<>'deleted' AND ${access.sql}`;
+  const binds = [input.userId, ...(input.publicOnly ? [] : access.binds)];
   const from = `${base} LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id
     ${DEFAULT_CHARACTER_PORTRAIT_JOINS} AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION} ${where}`;
   const database = getD1(runtime);
   const [countResult, rowsResult] = await database.batch([
-    database.prepare(`SELECT COUNT(*) AS count ${base} ${where}`).bind(input.userId),
+    database.prepare(`SELECT COUNT(*) AS count ${base} ${where}`).bind(...binds),
     database
       .prepare(
         `SELECT c.id,c.work_id,c.creator_id,c.character_id,CASE WHEN c.work_id IS NOT NULL THEN COALESCE(w.chinese_title,w.original_title) WHEN c.creator_id IS NOT NULL THEN cr.name ELSE ch.primary_name END AS target_title,
@@ -529,7 +545,7 @@ export async function searchUserComments(
         cr.avatar_blob_sha256,${CHARACTER_PORTRAIT_COLUMNS},
         COALESCE(c.body,'') AS body,(SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count,c.status,c.updated_at,(SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
       )
-      .bind(input.userId, pageSize, (page - 1) * pageSize),
+      .bind(...binds, pageSize, (page - 1) * pageSize),
   ]);
   const rows = (rowsResult.results ?? []) as Array<{
     id: number;
@@ -576,7 +592,8 @@ export async function createComment(
   imagesInput?: unknown,
   requestKeyInput?: unknown,
 ): Promise<CommentDto> {
-  await assertPublicCommentTarget(runtime, target);
+  await assertReadableCommentTarget(runtime, target);
+  const targetQuery = commentTargetQuery(target, await getCurrentUser(runtime));
   const body = normalizeCommentBody(bodyInput);
   let rootCommentId: number | null = null;
   let replyToId: number | null = null;
@@ -632,17 +649,17 @@ export async function createComment(
   try {
     const results = await db.batch([
       db.prepare(`INSERT INTO comments(work_id,creator_id,character_id,user_id,root_comment_id,reply_to_comment_id,body,status,request_key,request_hash)
-        VALUES(?,?,?,?,?,?,CASE WHEN ${guard.sql} THEN ? ELSE NULL END,'published',?,?) RETURNING id`)
+        VALUES(?,?,?,?,?,?,CASE WHEN ${guard.sql} AND EXISTS(${targetQuery.sql}) THEN ? ELSE NULL END,'published',?,?) RETURNING id`)
         .bind(target.kind === "work" ? target.id : null, target.kind === "creator" ? target.id : null,
           target.kind === "character" ? target.id : null, userId, rootCommentId, replyToId,
-          ...guard.args, body, requestKey, requestHash),
+          ...guard.args, ...targetQuery.binds, body, requestKey, requestHash),
       ...contentEmojiStatements(db, "comment", source, [userId, requestKey], body, userId, true),
       ...commentImageStatements(db, ids, userId, source, [userId, requestKey]),
       // Same transaction as publication; retries return the existing comment above.
       db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,work_comment_id)
         SELECT 'system_notice',c.user_id,recipient.id,'','',
           'work-comment:'||c.id||':'||recipient.id,c.id
-        FROM public_comments c
+        FROM published_comments c
         JOIN users recipient ON recipient.id IN (
           SELECT user_id FROM work_uploaders WHERE work_id=c.work_id
         )
@@ -650,15 +667,17 @@ export async function createComment(
           AND c.root_comment_id IS NULL
           AND recipient.id<>c.user_id AND recipient.status='active'
           AND recipient.notify_uploaded_work_comments=1
+          AND ${commentRecipientReadSql("c", "recipient.id")}
         ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
       db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,reply_comment_id)
         SELECT 'system_notice',c.user_id,recipient.id,'','',
           'comment-reply:'||c.id||':'||recipient.id,c.id
-        FROM public_comments c
-        JOIN public_comments target ON target.id=COALESCE(c.reply_to_comment_id,c.root_comment_id)
+        FROM published_comments c
+        JOIN published_comments target ON target.id=COALESCE(c.reply_to_comment_id,c.root_comment_id)
         JOIN users recipient ON recipient.id=target.user_id
         WHERE c.user_id=? AND c.request_key=? AND c.root_comment_id IS NOT NULL
           AND recipient.id<>c.user_id AND recipient.status='active'
+          AND ${commentRecipientReadSql("c", "recipient.id")}
         ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
       mentionNotification(db, userId, body, "", "comment", source, [userId, requestKey]),
     ]);
@@ -669,8 +688,9 @@ export async function createComment(
     if (committed) return requiredComment(runtime, committed.id, userId);
     const valid = await db.prepare(`SELECT 1 AS ok WHERE ${guard.sql}`).bind(...guard.args).first();
     if (!valid) throw new HttpError(409, "图片不可用或已被其他评论使用，请移除后重新选择。");
-    if (rootCommentId !== null && !(await db.prepare(`SELECT id FROM public_comments
-      WHERE id=? AND (? IS NULL OR EXISTS(SELECT 1 FROM public_comments target WHERE target.id=?))`)
+    await assertReadableCommentTarget(runtime, target);
+    if (rootCommentId !== null && !(await db.prepare(`SELECT id FROM published_comments
+      WHERE id=? AND (? IS NULL OR EXISTS(SELECT 1 FROM published_comments target WHERE target.id=?))`)
       .bind(rootCommentId, replyToId, replyToId).first()))
       throw new HttpError(409, "回复目标不可用");
     throw error;
@@ -688,17 +708,19 @@ export async function updateComment(
   const db = getD1(runtime);
   const actor = await findUserById(runtime, userId);
   if (!actor || actor.status !== "active") throw new HttpError(403, "账号不可用");
+  const access = commentTargetReadCondition(await getCurrentUser(runtime), "comments");
   const previous = await db
     .prepare(
-      "SELECT body FROM comments WHERE id=? AND user_id=? AND status IN('published','hidden')",
+      `SELECT body FROM comments WHERE id=? AND user_id=? AND status IN('published','hidden') AND ${access.sql}`,
     )
-    .bind(id, userId)
+    .bind(id, userId, ...access.binds)
     .first<{ body: string }>();
   if (!previous) throw new HttpError(404, "评论不存在或不可编辑");
   await validateBodyEmojis(db, body, previous.body);
   await validateMentions(db, body, previous.body);
   const source =
-    "SELECT id FROM comments WHERE id=? AND user_id=? AND status IN('published','hidden')";
+    `SELECT id FROM comments WHERE id=? AND user_id=? AND status IN('published','hidden') AND ${access.sql}`;
+  const sourceBinds = [id, userId, ...access.binds];
   const ids = imagesInput === undefined ? undefined : parseCommentImageIds(imagesInput);
   const guard = ids === undefined ? { sql: "1", args: [] } : commentImageGuard(ids, userId, id);
   if (!(await db.prepare(`SELECT 1 WHERE ${guard.sql}`).bind(...guard.args).first()))
@@ -707,20 +729,20 @@ export async function updateComment(
     db
       .prepare(
         `UPDATE comments SET body=CASE WHEN ${guard.sql} THEN ? ELSE NULL END,updated_at=CURRENT_TIMESTAMP,edited_at=CURRENT_TIMESTAMP
-      WHERE id=? AND user_id=? AND status IN('published','hidden')`,
+      WHERE id=? AND user_id=? AND status IN('published','hidden') AND ${access.sql}`,
       )
-      .bind(...guard.args, body, id, userId),
-    mentionNotification(db, userId, body, previous.body, "comment", `${source} AND changes()=1`, [id, userId]),
+      .bind(...guard.args, body, ...sourceBinds),
+    mentionNotification(db, userId, body, previous.body, "comment", `${source} AND changes()=1`, sourceBinds),
     ...contentEmojiStatements(
       db,
       "comment",
       source,
-      [id, userId],
+      sourceBinds,
       body,
       userId,
       false,
     ),
-    ...(ids === undefined ? [] : commentImageStatements(db, ids, userId, source, [id, userId])),
+    ...(ids === undefined ? [] : commentImageStatements(db, ids, userId, source, sourceBinds)),
   ], { actor, eventType: "comment_edit", targets: [{ type: "comment", id }], snapshot: commentAuditSnapshot(id),
     permission: null, authorizationBasis: "content_author", source: "owned", operation: "edit" });
   if ((results[0].meta.changes ?? 0) !== 1)
@@ -762,9 +784,10 @@ export async function moderateComment(
   actor: ArchiveUser,
   status: "published" | "hidden",
 ): Promise<CommentDto> {
+  const access = commentTargetReadCondition(actor, "comments");
   const current = await getD1(runtime)
-    .prepare(`SELECT id,user_id,status FROM comments WHERE id=? LIMIT 1`)
-    .bind(id)
+    .prepare(`SELECT id,user_id,status FROM comments WHERE id=? AND ${access.sql} LIMIT 1`)
+    .bind(id, ...access.binds)
     .first<{ id: number; user_id: number; status: string }>();
   if (!current || current.status === "deleted")
     throw new HttpError(404, "评论不存在或不可恢复");
@@ -772,9 +795,9 @@ export async function moderateComment(
   await database.batch([
     database
       .prepare(
-        `UPDATE comments SET status=?,pinned_at=CASE WHEN ?='hidden' THEN NULL ELSE pinned_at END,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('published','hidden')`,
+        `UPDATE comments SET status=?,pinned_at=CASE WHEN ?='hidden' THEN NULL ELSE pinned_at END,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('published','hidden') AND ${access.sql}`,
       )
-      .bind(status, status, id),
+      .bind(status, status, id, ...access.binds),
     database
       .prepare(
         `INSERT INTO auth_audit_logs(user_id,email,event_type,detail_json)
@@ -795,17 +818,19 @@ export async function likeComment(
   id: number,
   userId: number,
 ): Promise<void> {
-  await publicCommentIdentity(runtime, id);
+  const access = commentTargetReadCondition(await getCurrentUser(runtime));
   const db = getD1(runtime);
+  if (!await db.prepare(`SELECT c.id FROM published_comments c WHERE c.id=? AND ${access.sql}`)
+    .bind(id, ...access.binds).first()) throw new HttpError(404, "评论不存在");
   await db.batch([
     db.prepare(`INSERT OR IGNORE INTO comment_likes(comment_id,user_id)
-      SELECT id,? FROM public_comments WHERE id=?
+      SELECT c.id,? FROM published_comments c WHERE c.id=? AND ${access.sql}
         AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')`)
-      .bind(userId, id, userId),
+      .bind(userId, id, ...access.binds, userId),
     db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,like_comment_id)
       SELECT 'system_notice',?,c.user_id,'','','comment-like:'||?||':'||c.id||':'||c.user_id,c.id
-      FROM public_comments c JOIN users recipient ON recipient.id=c.user_id AND recipient.status='active'
-      WHERE c.id=? AND c.user_id<>? AND changes()=1
+      FROM published_comments c JOIN users recipient ON recipient.id=c.user_id AND recipient.status='active'
+      WHERE c.id=? AND c.user_id<>? AND changes()=1 AND ${commentRecipientReadSql("c", "recipient.id")}
       ON CONFLICT(event_key) DO NOTHING`).bind(userId, userId, id, userId),
   ]);
 }
@@ -821,30 +846,17 @@ export async function unlikeComment(
     .run();
 }
 
-async function publicCommentIdentity(
-  runtime: AppRuntime,
-  id: number,
-): Promise<{ id: number }> {
-  const row = await getD1(runtime)
-    .prepare(
-      `SELECT id FROM public_comments WHERE id=? LIMIT 1`,
-    )
-    .bind(id)
-    .first<{ id: number }>();
-  if (!row) throw new HttpError(404, "评论不存在");
-  return row;
-}
-
 async function requiredComment(
   runtime: AppRuntime,
   id: number,
   viewerId: number | null,
 ): Promise<CommentDto> {
+  const access = commentTargetReadCondition(await getCurrentUser(runtime));
   const row = await getD1(runtime)
     .prepare(
       `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
           ${commentFloorSql()} AS floor_number,
-          (SELECT target.display_name FROM public_comments target_comment
+          (SELECT target.display_name FROM published_comments target_comment
            JOIN users target ON target.id=target_comment.user_id
            WHERE target_comment.id=c.reply_to_comment_id) AS reply_to_display_name,
           COALESCE(root.status,c.status) AS root_status,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
@@ -854,19 +866,20 @@ async function requiredComment(
        FROM comments c
        LEFT JOIN users u ON u.id=c.user_id
        LEFT JOIN comments root ON root.id=c.root_comment_id
-       WHERE c.id=? LIMIT 1`,
+       WHERE c.id=? AND ${access.sql} LIMIT 1`,
     )
-    .bind(...(viewerId ? [viewerId, id] : [id]))
+    .bind(...(viewerId ? [viewerId, id] : [id]), ...access.binds)
     .first<CommentRow>();
   if (!row) throw new HttpError(404, "评论不存在");
   return mapComment(row, viewerId, await emojiMap(runtime, [row]), await commentImagesById(getD1(runtime), [row.id]));
 }
 
-export async function assertPublicCommentTarget(
+export async function assertReadableCommentTarget(
   runtime: AppRuntime,
   target: CommentTarget,
 ): Promise<void> {
-  const row = await publicTargetStatement(getD1(runtime), target).first<{
+  const query = commentTargetQuery(target, await getCurrentUser(runtime));
+  const row = await getD1(runtime).prepare(query.sql).bind(...query.binds).first<{
     id: number;
   }>();
   if (!row)
@@ -878,39 +891,6 @@ export async function assertPublicCommentTarget(
           ? "作者不存在"
           : "角色不存在",
     );
-}
-
-function publicTargetStatement(
-  database: D1Database,
-  target: CommentTarget,
-): D1PreparedStatement {
-  if (target.kind === "character")
-    return database
-      .prepare("SELECT id FROM characters WHERE id=? LIMIT 1")
-      .bind(target.id);
-  return target.kind === "work"
-    ? database
-        .prepare(
-          `SELECT id FROM public_works WHERE id=? LIMIT 1`,
-        )
-        .bind(target.id)
-    : database
-        .prepare(
-          `SELECT c.id FROM creators c
-           WHERE c.id=? AND c.public_at IS NOT NULL LIMIT 1`,
-        )
-        .bind(target.id);
-}
-
-function publicCommentTargetSql(alias: string): string {
-  return `(
-    EXISTS (SELECT 1 FROM public_works public_work WHERE public_work.id=${alias}.work_id)
-    OR EXISTS (
-      SELECT 1 FROM creators public_creator
-      WHERE public_creator.id=${alias}.creator_id AND public_creator.public_at IS NOT NULL
-    )
-    OR EXISTS (SELECT 1 FROM characters public_character WHERE public_character.id=${alias}.character_id)
-  )`;
 }
 
 function targetMatchesRow(

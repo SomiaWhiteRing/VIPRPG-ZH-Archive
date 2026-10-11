@@ -67,16 +67,15 @@ export async function loader(args: LoaderFunctionArgs) {
   if (!record || record.workId !== work.id) throwNotFound();
 
   const currentUser = await getCurrentUser(runtime);
-  const publicWork = work.status === "published" && work.audience === "public";
 
   const [community, comments] = await Promise.all([
     getWorkCommunitySummary(runtime, work.id, currentUser?.id ?? null),
-    publicWork ? listRootComments(
+    listRootComments(
       runtime,
       { kind: "work", id: work.id },
       currentUser?.id ?? null,
       null,
-    ) : Promise.resolve({ items: [], nextCursor: null }),
+    ),
   ]);
 
   const metadata: WebPlayMetadata = {
@@ -128,7 +127,6 @@ export default function WebPlayPage() {
     useLoaderData<typeof loader>();
   const favorite = useWorkFavorite(initialCommunity);
   const { community } = favorite;
-  const publicWork = work.status === "published" && work.audience === "public";
   const native = useSyncExternalStore(subscribeEnvironment, isAndroidClient, () => false);
   if (native) return <DetailPageShell>
     <WorkPageHeader chineseTitle={work.chineseTitle} originalTitle={work.originalTitle}
@@ -152,30 +150,30 @@ export default function WebPlayPage() {
         tabs={[
           { href: `/games/${work.id}`, label: "概览" },
           { href: `/play/${work.id}`, label: "在线游玩", active: true },
-          ...(publicWork ? [{
+          {
             href: "#sec-comments",
             label: "评论",
             count: community.commentCount,
-          }, { href: `/games/${work.id}/collections`, label: "收藏与吐槽" }] : []),
+          }, { href: `/games/${work.id}/collections`, label: "收藏与吐槽" },
         ]}
       />
       <WebPlayClient
         comments={
-          publicWork ? <CommentPanel
+          <CommentPanel
             currentUserId={currentUser?.id ?? null}
             initialComments={comments.items}
             initialNextCursor={comments.nextCursor}
             target={{ kind: "work", id: work.id }}
-          /> : null
+          />
         }
         engagement={
-          publicWork ? <WorkFavoriteButton
+          <WorkFavoriteButton
             summary="counts"
             onSaved={favorite.onSaved}
             currentUserId={currentUser?.id ?? null}
             initialFavorited={community.favoritedByMe}
             workId={work.id}
-          /> : null
+          />
         }
         metadata={metadata}
         notice={
@@ -195,7 +193,7 @@ export default function WebPlayPage() {
           <WorkCommunityStats
             commentCount={community.commentCount}
             favoriteCount={community.favoriteCount}
-            collectionHref={publicWork ? `/games/${work.id}/collections` : undefined}
+            collectionHref={`/games/${work.id}/collections`}
             playerCount={community.playerCount}
             viewCount={community.viewCount}
           />
