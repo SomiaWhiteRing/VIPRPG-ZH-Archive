@@ -13,6 +13,7 @@ export async function loadWorkOverviewSidebar(
   runtime: AppRuntime,
   workId: number,
   currentUser: ArchiveUser | null,
+  publicWork: boolean,
 ): Promise<WorkOverviewSidebarData> {
   const [community, userCatalogs, containingCatalogs, capabilities, canEditOwnWork] = await Promise.all([
     getWorkCommunitySummary(runtime, workId, currentUser?.id ?? null),
@@ -23,7 +24,7 @@ export async function loadWorkOverviewSidebar(
   ]);
   const editInfoHref = canEditOwnWork ? `/me/uploads/${workId}?from=game`
     : hasPermission(currentUser, 'work.metadata.update_any') || hasPermission(currentUser, 'work.distribution.update_any') ? `/admin/works/${workId}` : null;
-  const maintainerApplication = currentUser && !editInfoHref && hasPermission(currentUser, 'work.update_own')
+  const maintainerApplication = publicWork && currentUser && !editInfoHref && hasPermission(currentUser, 'work.update_own')
     ? await getMaintainerApplication(runtime, workId, currentUser) : null;
   return {
     currentUser: pickPageFields(currentUser, ["id"]),

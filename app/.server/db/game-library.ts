@@ -1,4 +1,7 @@
 import { timelineStatement } from "@/app/.server/db/timeline";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { listedWorksSource, workReadCondition } from "@/app/.server/db/work-visibility";
+import { constrainWorkVisibility, legacyWorkVisibilityInput, parseWorkVisibility, workStatusFromLegacyInput, workVisibilityFormInput, type WorkAudience, type WorkVisibilityInput } from "@/lib/work-visibility";
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { parseWorkReferenceDuration } from "@/app/.server/http/work-reference-duration";
 import { normalizeWorkReferenceDuration, WORK_REFERENCE_DURATIONS } from "@/lib/work-reference-duration";
@@ -69,7 +72,6 @@ import type {
 } from "@/lib/dto/db/game-library";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { normalizeEntityName } from "@/lib/entity-name";
-import { NON_VIPRPG_TAG } from "@/lib/user-tags";
 import type { TagSource } from "@/lib/user-tags";
 import { HttpError } from "@/lib/http";
 import {
@@ -95,7 +97,8 @@ type Filters = {
   referenceDuration?: (typeof WORK_REFERENCE_DURATIONS)[number] | "custom";
   tag?: string;
   tagSource?: TagSource;
-  excludeTag?: string;
+  workSource?: "public_works" | "member_works";
+  homeOnly?: boolean;
   character?: number;
   uploader?: number;
   isOriginal?: boolean;
@@ -110,6 +113,8 @@ type ListInput = Filters & {
   offset?: number;
 };
 type SummaryRow = {
+  audience: WorkAudience;
+  show_on_home: number;
   id: number;
   original_title: string;
   chinese_title: string | null;
@@ -141,6 +146,8 @@ type CardRow = Pick<SummaryRow, "id" | "original_title" | "chinese_title" | "ori
   "download_link_count" | "legacy_player_count" | "comment_count" | "favorite_count">;
 type LibraryRow = CardRow & Pick<SummaryRow, "external_download_url">;
 type WorkRow = {
+  audience: WorkAudience;
+  show_on_home: number;
   extra_json: string;
   id: number;
   original_title: string;
@@ -179,7 +186,7 @@ type ArchiveEditRow = {
   uploader_name: string | null;
   source_url: string | null;
 };
-type WorkEditInput = {
+type WorkEditInput = WorkVisibilityInput & {
   referenceDuration?: string | null;
   usesUnsupportedManiac: boolean;
   moreInfo: WorkMoreInfo[];
@@ -225,6 +232,7 @@ export async function listGameWorks(
   runtime: AppRuntime,
   input: ListInput = {},
 ): Promise<GameLibrarySummary[]> {
+  input = { ...input, workSource: await listedWorksSource(runtime) };
   const columns = `${cardColumnsSql()},
     (SELECT url FROM work_external_links WHERE work_id=w.id AND link_type='download_page'
      ORDER BY id LIMIT 1) AS external_download_url`;
@@ -260,16 +268,17 @@ export async function listGameWorks(
 
 export async function listHomeGameWorks(runtime: AppRuntime) {
   const db = getD1(runtime);
+  const workSource = await listedWorksSource(runtime);
   const columns = cardColumnsSql();
   const [recent, original, random, recommended] = await db.batch<CardRow>([
-    gameWorksListStatement(db, { limit: 12, excludeTag: NON_VIPRPG_TAG }, columns),
-    gameWorksListStatement(db, { limit: 4, isOriginal: true, excludeTag: NON_VIPRPG_TAG }, columns),
-    randomGameWorksStatement(db, columns),
+    gameWorksListStatement(db, { limit: 12, homeOnly: true, workSource }, columns),
+    gameWorksListStatement(db, { limit: 4, isOriginal: true, homeOnly: true, workSource }, columns),
+    randomGameWorksStatement(db, columns, workSource),
     db.prepare(`SELECT ${columns}
-      FROM home_recommendations r JOIN public_works w ON w.id=r.work_id
+      FROM home_recommendations r JOIN ${workSource} w ON w.id=r.work_id
       LEFT JOIN archive_versions av
         ON av.work_id=w.id AND av.status='published' AND av.is_current=1
-      GROUP BY w.id ORDER BY r.sort_order,r.work_id LIMIT 4`),
+      WHERE w.show_on_home=1 GROUP BY w.id ORDER BY r.sort_order,r.work_id LIMIT 4`),
   ]);
   const cards = await hydrateCards(runtime, [...recent.results, ...original.results, ...random.results, ...recommended.results]);
   const originalStart = recent.results.length;
@@ -284,12 +293,12 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
 }
 
 export async function listRandomGameWorks(runtime: AppRuntime): Promise<GameCardSummary[]> {
-  const rows = await randomGameWorksStatement(getD1(runtime), cardColumnsSql()).all<CardRow>();
+  const rows = await randomGameWorksStatement(getD1(runtime), cardColumnsSql(), await listedWorksSource(runtime)).all<CardRow>();
   return hydrateCards(runtime, rows.results);
 }
 
-function randomGameWorksStatement(db: D1Database, columns: string) {
-  const { where, binds } = buildWhere({ excludeTag: NON_VIPRPG_TAG });
+function randomGameWorksStatement(db: D1Database, columns: string, workSource: Filters["workSource"]) {
+  const { where, binds } = buildWhere({ homeOnly: true, workSource });
   return db.prepare(
     `SELECT ${columns}
      FROM works w
@@ -458,7 +467,7 @@ export async function countGameWorks(
   runtime: AppRuntime,
   input: Filters = {},
 ): Promise<number> {
-  const row = await gameWorksCountStatement(getD1(runtime), input).first<{
+  const row = await gameWorksCountStatement(getD1(runtime), { ...input, workSource: await listedWorksSource(runtime) }).first<{
     count: number;
   }>();
   return row?.count ?? 0;
@@ -500,14 +509,15 @@ export async function getGameWorkDetail(
   runtime: AppRuntime,
   id: number,
 ): Promise<GameWorkDetail | null> {
+  const access = workReadCondition(await getCurrentUser(runtime));
   const row = await getD1(runtime)
     .prepare(
-      `SELECT ${summarySql()}, w.extra_json FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id) GROUP BY w.id LIMIT 1`,
+      `SELECT ${summarySql()}, w.extra_json FROM works w LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE w.id=? AND ${access.sql} GROUP BY w.id LIMIT 1`,
     )
-    .bind(id)
+    .bind(id, ...access.binds)
     .first<SummaryRow & { extra_json: string }>();
   if (!row) return null;
-  runtime.memo.set(`public-target:work:${row.id}`, true);
+  if (row.status === "published" && row.audience === "public") runtime.memo.set(`public-target:work:${row.id}`, true);
   const [collections, playerSize, counts, plays] = await Promise.all([
     loadWorkCollections(runtime, row.id),
     sharedPlayerSize(runtime, [row]),
@@ -544,6 +554,8 @@ export async function getGameWorkDetail(
       : null);
   return {
     ...summary,
+    audience: row.audience,
+    showOnHome: row.show_on_home === 1,
     maintainers,
     moreInfo: normalizeWorkMoreInfo(JSON.parse(row.extra_json).moreInfo),
     referenceDuration: normalizeWorkReferenceDuration(JSON.parse(row.extra_json).referenceDuration) ?? null,
@@ -709,6 +721,8 @@ export async function getWorkForAdminEdit(
     isTranslation: row.is_translation === 1,
     language: row.language,
     status: row.status as AdminWorkEdit["status"],
+    audience: row.audience,
+    showOnHome: row.show_on_home === 1,
     hasUsableDistribution: await hasUsableDistribution(runtime, workId),
     moreInfo: normalizeWorkMoreInfo(JSON.parse(row.extra_json).moreInfo),
     referenceDuration: normalizeWorkReferenceDuration(JSON.parse(row.extra_json).referenceDuration) ?? null,
@@ -794,6 +808,7 @@ export async function updateOwnedWork(
 ): Promise<void> {
   if (before.id !== input.workId)
     throw new Error("Owned work snapshot does not match update target");
+  const visibility = parseWorkVisibility(legacyWorkVisibilityInput(input), input.tags, before);
   const moreInfo = JSON.stringify(parseWorkMoreInfo(input.moreInfo));
   const referenceDuration = parseWorkReferenceDuration(input.referenceDuration) ?? null;
   const originalTitle = input.originalTitle.trim();
@@ -803,7 +818,7 @@ export async function updateOwnedWork(
   const releaseDate = parseOriginalReleaseDate(input.originalReleaseDate);
   if (!releaseDate)
     throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
-  if (!(["published", "hidden"] as const).includes(input.status)) {
+  if (input.status !== undefined && input.status !== "published" && input.status !== "hidden") {
     throw new HttpError(400, "作品状态不合法");
   }
   if (
@@ -861,10 +876,10 @@ export async function updateOwnedWork(
   }
 
   assertStableDistribution({
-    status: input.status,
+    status: "published",
     engineFamily: input.engineFamily,
     hasCurrentArchive: input.distribution === "archive" && before.hasCurrentArchive,
-    allowMissing: input.status === "hidden" || input.status === before.status,
+    allowMissing: visibility.audience === "maintainers" || before.status === "published",
     downloadLinkCount: downloadUrl ? 1 : 0,
   });
 
@@ -902,7 +917,9 @@ export async function updateOwnedWork(
         `UPDATE works
          SET original_title=?,chinese_title=?,description=?,genre=CASE WHEN ? THEN genre ELSE ? END,extra_json=json_set(extra_json,'$.moreInfo',json(?),'$.referenceDuration',CASE WHEN ? THEN json_extract(extra_json,'$.referenceDuration') ELSE ? END,'$.usesUnsupportedManiac',json(?)),original_release_date=?,
            original_release_precision=?,engine_family=?,
-           is_original=?,is_translation=?,language=?,status=?,updated_at=CURRENT_TIMESTAMP,
+           is_original=?,is_translation=?,language=?,
+           audience=CASE WHEN ?='public' AND (audience<>'public' OR status<>'published') THEN 'maintainers' ELSE ? END,
+           show_on_home=?,status=?,updated_at=CURRENT_TIMESTAMP,
            published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END
          WHERE id=? AND status<>'deleted'`,
       )
@@ -922,8 +939,11 @@ export async function updateOwnedWork(
         input.isOriginal ? 1 : 0,
         input.isTranslation ? 1 : 0,
         input.language,
-        input.status,
-        input.status,
+        visibility.audience,
+        visibility.audience,
+        visibility.showOnHome ? 1 : 0,
+        "published",
+        "published",
         input.workId,
       ),
     database
@@ -989,6 +1009,10 @@ export async function updateOwnedWork(
     })),
   );
   statements.push(...workMediaStatements(database, input.workId, media.coverBlobSha256, media.previewBlobSha256s));
+  // Publish only the final media/staff set, never private references removed by this edit.
+  if (visibility.audience === "public") statements.push(
+    database.prepare("UPDATE works SET audience='public' WHERE id=? AND audience<>'public'").bind(input.workId),
+  );
   if (downloadUrl) {
     statements.push(
       database
@@ -1015,6 +1039,8 @@ export async function updateWorkForAdmin(
   }
   const current = await getWorkForAdminEdit(runtime, input.workId);
   if (!current) throw new HttpError(404, "作品不存在");
+  const lifecycleRequested = Boolean(input.status);
+  input = { ...input, ...legacyWorkVisibilityInput(input), status: workStatusFromLegacyInput(input.status, current.status) };
   // Ignore fields outside the actor's grant and never rewrite their tables.
   if (!canUpdateMetadata) {
     input = { ...input, chineseTitle: current.chineseTitle, description: current.description,
@@ -1030,6 +1056,7 @@ export async function updateWorkForAdmin(
     input = { ...input, externalLinks: current.externalLinks, distribution: undefined, archiveSourceUrl: undefined };
   }
   const canUpdateStatus = hasPermission(actor, "work.status.update_any");
+  const canChangeLifecycle = canUpdateStatus && lifecycleRequested;
   if (current.status === "deleted" && !canUpdateStatus)
     throw new HttpError(403, "已删除作品须由有状态管理权限的账户恢复");
   if (
@@ -1040,6 +1067,10 @@ export async function updateWorkForAdmin(
     throw new HttpError(403, "没有调整作品状态的权限");
   }
   if (!canUpdateStatus) input.status = current.status;
+  const visibility = parseWorkVisibility(input, input.tags, current);
+  const constrainedCurrent = constrainWorkVisibility(current, input.tags);
+  if (!canUpdateStatus && (visibility.audience !== constrainedCurrent.audience || visibility.showOnHome !== constrainedCurrent.showOnHome))
+    throw new HttpError(403, "没有调整作品可见性的权限");
   assertPublicationDeclarations(input.isOriginal, input.isTranslation);
   if (
     !input.isTranslation &&
@@ -1067,10 +1098,10 @@ export async function updateWorkForAdmin(
   );
   assertEnum(
     input.status,
-    ["processing", "published", "hidden", "deleted"],
+    ["processing", "published", "deleted"],
     "状态",
   );
-  if (input.status === "processing") {
+  if (input.status === "processing" && current.status !== "processing") {
     throw new HttpError(400, "processing 只能由上传提交流程创建");
   }
   if (!isLanguageCode(input.language)) throw new Error("语言不合法");
@@ -1083,7 +1114,7 @@ export async function updateWorkForAdmin(
     status: input.status,
     engineFamily: input.engineFamily,
     hasCurrentArchive: input.distribution !== "external" && distributionState.hasCurrentArchive,
-    allowMissing: input.status === "hidden" || input.status === current.status,
+    allowMissing: visibility.audience === "maintainers" || input.status === current.status,
     downloadLinkCount: externalLinks.filter(
       (link) => link.linkType === "download_page",
     ).length,
@@ -1097,7 +1128,7 @@ export async function updateWorkForAdmin(
     input.workId,
     input.language,
   );
-  const media = normalizeWorkMedia(input.coverBlobSha256, input.previewBlobSha256s, input.status === "published");
+  const media = normalizeWorkMedia(input.coverBlobSha256, input.previewBlobSha256s, input.status === "published" && visibility.audience !== "maintainers");
   await validateWorkMedia(runtime, [media.coverBlobSha256, ...media.previewBlobSha256s].filter(Boolean));
   const aliases = uniqueText(input.aliases);
   const tags = normalizeWorkTags(input.tags);
@@ -1132,7 +1163,8 @@ export async function updateWorkForAdmin(
          is_original = ?,
          is_translation = ?,
          language = ?,
-         ${canUpdateStatus ? "status = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END," : ""}
+         ${canUpdateStatus ? "audience = CASE WHEN ?='public' AND (audience<>'public' OR status<>'published') THEN 'maintainers' ELSE ? END, show_on_home = ?," : ""}
+         ${canChangeLifecycle ? "status = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END," : ""}
          updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       )
@@ -1151,7 +1183,8 @@ export async function updateWorkForAdmin(
         input.isOriginal ? 1 : 0,
         input.isTranslation ? 1 : 0,
         input.language,
-        ...(canUpdateStatus ? [input.status, input.status] : []),
+        ...(canUpdateStatus ? [visibility.audience, visibility.audience, visibility.showOnHome ? 1 : 0] : []),
+        ...(canChangeLifecycle ? [input.status, input.status] : []),
         input.workId,
       ),
     database
@@ -1168,8 +1201,10 @@ export async function updateWorkForAdmin(
   );
   if (!canUpdateMetadata) {
     statements.push(database.prepare(`UPDATE works SET updated_at=CURRENT_TIMESTAMP
-      ${canUpdateStatus ? ", status=?, published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END" : ""}
-      WHERE id=?`).bind(...(canUpdateStatus ? [input.status, input.status] : []), input.workId));
+      ${canUpdateStatus ? ", audience=?, show_on_home=?" : ""}
+      ${canChangeLifecycle ? ", status=?, published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END" : ""}
+      WHERE id=?`).bind(...(canUpdateStatus ? [visibility.audience, visibility.showOnHome ? 1 : 0] : []),
+      ...(canChangeLifecycle ? [input.status, input.status] : []), input.workId));
   }
   if (canUpdateDistribution) {
     statements.push(database.prepare(`DELETE FROM work_external_links WHERE work_id=?`).bind(input.workId));
@@ -1200,6 +1235,9 @@ export async function updateWorkForAdmin(
       })),
     );
     statements.push(...workMediaStatements(database, input.workId, media.coverBlobSha256, media.previewBlobSha256s));
+    if (canUpdateStatus && visibility.audience === "public") statements.push(
+      database.prepare("UPDATE works SET audience='public' WHERE id=? AND audience<>'public'").bind(input.workId),
+    );
   }
   if (canUpdateDistribution) for (const link of externalLinks) {
     statements.push(
@@ -1220,6 +1258,7 @@ export async function createExternalWork(
   runtime: AppRuntime,
   input: ExternalWorkInput,
 ): Promise<{ workId: number }> {
+  const visibility = parseWorkVisibility(input, input.tags);
   const moreInfo = parseWorkMoreInfo(input.moreInfo);
   const referenceDuration = parseWorkReferenceDuration(input.referenceDuration) ?? null;
   if (!isEngineFamily(input.engineFamily)) {
@@ -1270,8 +1309,8 @@ export async function createExternalWork(
       `INSERT INTO works (
         original_title, chinese_title, description, genre, is_original, is_translation, language,
         original_release_date, original_release_precision, engine_family, status,
-        extra_json, created_by_user_id, published_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, CURRENT_TIMESTAMP)`,
+        audience, show_on_home, extra_json, created_by_user_id, published_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
     )
     .bind(
       originalTitle,
@@ -1284,6 +1323,8 @@ export async function createExternalWork(
       releaseDate.value,
       releaseDate.precision,
       input.engineFamily,
+      visibility.audience,
+      visibility.showOnHome ? 1 : 0,
       JSON.stringify({
         moreInfo,
         referenceDuration,
@@ -1470,6 +1511,7 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     workStaff: parseWorkStaffJson(form.get("work_staff")),
     language: String(form.get("language") ?? "zh-CN"),
     status: String(form.get("status") ?? ""),
+    ...workVisibilityFormInput(form),
     aliases: lines(form.get("aliases")),
     tags: lines(form.get("tags")),
     characters: parseCharacterSelectionsJson(form.get("characters")),
@@ -1526,6 +1568,8 @@ function summarySql(): string {
     w.is_translation,
     w.language,
     w.status,
+    w.audience,
+    w.show_on_home,
     ${workCountsSql()},
     (
       SELECT ma.blob_sha256
@@ -1672,8 +1716,8 @@ function buildWhere(input: Filters, orderedList = false): {
           ? "1=1"
           : "w.status <> 'deleted'"
         : input.genre || orderedList
-          ? "EXISTS(SELECT 1 FROM public_works pw WHERE pw.id=w.id)"
-          : `w.id IN (SELECT id FROM public_works)`,
+          ? `EXISTS(SELECT 1 FROM ${input.workSource ?? "public_works"} pw WHERE pw.id=w.id)`
+          : `w.id IN (SELECT id FROM ${input.workSource ?? "public_works"})`,
     ],
     binds: Array<string | number> = [];
   if (input.query) {
@@ -1731,10 +1775,7 @@ function buildWhere(input: Filters, orderedList = false): {
       binds.push(tag);
     }
   }
-  if (input.excludeTag) {
-    clauses.push("NOT EXISTS(SELECT 1 FROM work_tags wt WHERE wt.work_id=w.id AND wt.tag_name=?)");
-    binds.push(normalizeEntityName(input.excludeTag));
-  }
+  if (input.homeOnly) clauses.push("w.show_on_home=1");
   if (input.character) {
     clauses.push(
       "EXISTS(SELECT 1 FROM work_characters wc JOIN characters c ON c.id=wc.character_id WHERE wc.work_id=w.id AND c.id=?)",

@@ -10,6 +10,8 @@ import {
 } from "../lib/archive/web-play-local-policy.ts";
 import { webPlayDownloadProfile, legacyWebPlayDownloadProfile, shouldSkipWebPlayDownloadFile } from "../lib/archive/web-play-download-policy.ts";
 import { hotDownloadCache, readDownloadCache, createCachedDownloadStream } from "./download-cache.mjs";
+import { loadRequestSession } from "../app/.server/auth/request-auth.ts";
+import { workReadCondition } from "../app/.server/db/work-visibility.ts";
 
 const manifestSchema = "viprpg-archive.manifest.v1";
 const textEncoder = new TextEncoder();
@@ -34,9 +36,16 @@ const productionOrigin = "https://viprpg.org";
 const downloadExposedHeaders = "Accept-Ranges, Content-Disposition, Content-Length, Content-Range, ETag, X-Archive-Version-Id, X-Manifest-SHA256, X-Estimated-R2-Get-Count, X-Download-Cache, X-Download-Cache-Tier, X-Download-Zip-Builder, X-Player-SHA256";
 
 export async function maybeHandleArchiveDownload(request, env, ctx) {
-  const response = await handleArchiveDownload(request, env, ctx);
+  const access = { restricted: false };
+  const response = await handleArchiveDownload(request, env, ctx, access);
+  if (response && access.restricted) {
+    response.headers.set("Cache-Control", "private, no-store, no-transform");
+    response.headers.set("Vary", "Cookie");
+    response.headers.delete("Access-Control-Allow-Origin");
+    response.headers.delete("Access-Control-Expose-Headers");
+  }
   if (response && (response.status === 200 || response.status === 206) &&
-      env.APP_ORIGIN === productionOrigin) {
+      !access.restricted && env.APP_ORIGIN === productionOrigin) {
     const url = new URL(request.url);
     if (url.origin === productionOrigin && /^\/api\/archive-versions\/\d+\/download\/?$/.test(url.pathname)) {
       // Every response here already passed the public publication check.
@@ -48,7 +57,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
   return response;
 }
 
-async function handleArchiveDownload(request, env, ctx) {
+async function handleArchiveDownload(request, env, ctx, access) {
   const startedAt = Date.now();
   const url = new URL(request.url);
   const match = /^\/api\/archive-versions\/(\d+)\/(download|kai-import)\/?$/.exec(url.pathname);
@@ -86,7 +95,8 @@ async function handleArchiveDownload(request, env, ctx) {
   };
 
   try {
-    record = await getDownloadRecord(env.DB, Number(match[1]));
+    record = await getDownloadRecord(env.DB, Number(match[1]), request);
+    access.restricted = record?.restricted === true;
 
     if (!record) {
       return request.method === "HEAD"
@@ -293,7 +303,7 @@ async function handleArchiveDownload(request, env, ctx) {
   }
 }
 
-async function getDownloadRecord(db, archiveVersionId) {
+async function getDownloadRecord(db, archiveVersionId, request) {
   if (!Number.isSafeInteger(archiveVersionId) || archiveVersionId <= 0) {
     return null;
   }
@@ -312,6 +322,7 @@ async function getDownloadRecord(db, archiveVersionId) {
         w.original_title AS work_original_title,
         w.chinese_title AS work_chinese_title,
         w.engine_family,
+        w.status AS work_status,w.audience,
         (SELECT ma.blob_sha256 FROM work_media_assets wma
          JOIN media_assets ma ON ma.id = wma.media_asset_id
          WHERE wma.work_id = w.id AND wma.role = 'cover' LIMIT 1) AS cover_blob_sha256
@@ -330,7 +341,16 @@ async function getDownloadRecord(db, archiveVersionId) {
     return null;
   }
 
+  const restricted = row.work_status !== "published" || row.audience !== "public";
+  if (restricted) {
+    const session = await loadRequestSession(db, request.headers.get("cookie"));
+    const access = workReadCondition(session?.user ?? null);
+    if (!await db.prepare(`SELECT 1 FROM works w WHERE w.id=? AND ${access.sql}`)
+      .bind(row.work_id, ...access.binds).first()) return null;
+  }
+
   return {
+    restricted,
     id: row.id,
     workId: row.work_id,
     coverBlobSha256: row.cover_blob_sha256,
@@ -979,7 +999,7 @@ function downloadHeaders(record, cacheStatus, contentLength, profile) {
   headers.set("Accept-Ranges", "bytes");
   headers.set("Content-Length", String(contentLength));
   headers.set("Content-Disposition", contentDisposition(downloadFileName(record)));
-  headers.set("Cache-Control", record.playerSha256 ? "no-store, no-transform" : "public, max-age=31536000, immutable");
+  headers.set("Cache-Control", record.restricted ? "private, no-store, no-transform" : record.playerSha256 ? "no-store, no-transform" : "public, max-age=31536000, immutable");
   if (record.playerSha256) headers.set("X-Player-SHA256", record.playerSha256);
   headers.set("ETag", downloadEtag(record, profile));
   headers.set("X-Archive-Version-Id", String(record.id));

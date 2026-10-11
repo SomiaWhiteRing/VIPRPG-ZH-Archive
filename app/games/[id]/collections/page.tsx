@@ -26,11 +26,11 @@ export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const id = parsePositiveId(args.params.id ?? "", "work id");
   const work = await getGameWorkDetail(runtime, id);
-  if (!work) throwNotFound();
+  if (!work || work.status !== "published" || work.audience !== "public") throwNotFound();
   const currentUser = await getCurrentUser(runtime);
   const page = parseAccountPage(new URL(args.request.url).searchParams.get("page") ?? undefined);
   const [sidebar, collections] = await Promise.all([
-    loadWorkOverviewSidebar(runtime, id, currentUser),
+    loadWorkOverviewSidebar(runtime, id, currentUser, true),
     listWorkCollections(runtime, id, page),
   ]);
   return { work, sidebar, collections };

@@ -116,7 +116,10 @@ export type ArchiveCommitMetadata = {
     language: string;
     coverBlobSha256: string;
     previewBlobSha256s: string[];
-    status: "processing" | "published" | "hidden";
+    // Accepted only for already-issued upload requests; new clients use audience.
+    status?: "processing" | "published" | "hidden";
+    audience?: "public" | "members" | "maintainers";
+    showOnHome?: boolean;
     extra: Record<string, unknown> & {
       referenceDuration?: string | null;
       moreInfo?: WorkMoreInfo[];
@@ -129,7 +132,8 @@ export type ArchiveCommitMetadata = {
   };
   // Optional console settings, validated separately from the public manifest.
   admin?: {
-    status: "published" | "hidden" | "deleted";
+    // Older console requests may carry a lifecycle operation here.
+    status?: "published" | "hidden" | "deleted";
     externalLinks: Array<{ label: string; url: string; linkType: string }>;
   };
   archiveVersion: {

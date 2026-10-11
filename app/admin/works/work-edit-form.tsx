@@ -17,7 +17,6 @@ export function WorkEditForm({ work, currentUser, suggestions, canUpdateStatus, 
     suggestions={suggestions}
     adminOptions={{
       canUpdateStatus,
-      status: work.status === "processing" ? "hidden" : work.status,
       externalLinks: work.externalLinks,
       footer: children,
     }}

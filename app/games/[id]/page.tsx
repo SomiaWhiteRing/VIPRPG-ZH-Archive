@@ -32,10 +32,11 @@ export async function loader(args: LoaderFunctionArgs) {
   const id = parsePositiveId((await params).id, "work id");
   const work = await getGameWorkDetail(runtime, id);
   if (!work) throwNotFound();
+  const publicWork = work.status === "published" && work.audience === "public";
   const currentUser = await getCurrentUser(runtime);
   const [sidebar, comments, tags, canPinComments] = await Promise.all([
-    loadWorkOverviewSidebar(runtime, id, currentUser),
-    listRootComments(runtime, { kind: "work", id }, currentUser?.id ?? null, null),
+    loadWorkOverviewSidebar(runtime, id, currentUser, publicWork),
+    publicWork ? listRootComments(runtime, { kind: "work", id }, currentUser?.id ?? null, null) : Promise.resolve({ items: [], nextCursor: null }),
     listWorkTagSummaries(runtime, id),
     canPinWorkComments(runtime, id, currentUser),
   ]);
@@ -61,6 +62,7 @@ export default function GameDetailPage() {
   const favorite = useWorkFavorite(sidebar.community, initialTags);
   const { community, tags } = favorite;
   const { currentUser } = sidebar;
+  const publicWork = work.status === "published" && work.audience === "public";
   const relationGroups = new Map<string, typeof relationCards>();
   for (const relation of relationCards) {
     const group = relationGroups.get(relation.type);
@@ -109,12 +111,11 @@ export default function GameDetailPage() {
                 },
               ]
             : []),
-          {
+          ...(publicWork ? [{
             href: "#sec-comments",
             label: "评论",
             count: community.commentCount,
-          },
-          { href: `/games/${work.id}/collections`, label: "收藏与吐槽" },
+          }, { href: `/games/${work.id}/collections`, label: "收藏与吐槽" }] : []),
         ]}
       />
 
@@ -286,7 +287,7 @@ export default function GameDetailPage() {
               </section>
             ) : null}
 
-            <section
+            {publicWork ? <section
               aria-labelledby="comments-title"
               className="scroll-mt-28 border-t border-border py-4.5"
               id="sec-comments"
@@ -306,7 +307,7 @@ export default function GameDetailPage() {
                 initialNextCursor={comments.nextCursor}
                 target={{ kind: "work", id: work.id }}
               />
-            </section>
+            </section> : null}
           </>
         }
         sidebar={<WorkOverviewSidebar work={work} data={{ ...sidebar, community }} onFavoriteSaved={favorite.onSaved} favoriteSummary="tags" />}

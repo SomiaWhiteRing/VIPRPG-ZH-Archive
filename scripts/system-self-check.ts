@@ -9,12 +9,14 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
 } from "node:fs";
 import { rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import type { Browser, BrowserContext, Page } from "playwright";
 import { chromium } from "playwright";
@@ -299,6 +301,7 @@ async function run(): Promise<void> {
       400,
     );
   }
+  await verifyWorkLifecycleContracts(origin, adminCookie);
   await verifyPageContracts(origin, adminCookie);
   if (testMode === "contract") return;
 
@@ -1172,6 +1175,96 @@ async function verifyPageContracts(origin: string, adminCookie: string) {
   assert.ok(!(await player.text()).includes("__reactRouter"));
 }
 
+async function verifyWorkLifecycleContracts(origin: string, adminCookie: string): Promise<void> {
+  stage("exercise work lifecycle and visibility contracts");
+  const d1Root = join(persistRoot, "v3", "d1");
+  const sqlitePath = readdirSync(d1Root, { recursive: true, encoding: "utf8" }).find((path) => path.endsWith(".sqlite"));
+  assert.ok(sqlitePath, "isolated D1 database exists");
+  const db = new DatabaseSync(join(d1Root, sqlitePath), { readOnly: true });
+  const readWork = (id: number) => {
+    const row = db.prepare("SELECT status,audience,show_on_home FROM works WHERE id=?").get(id);
+    return row ? { ...row } : undefined;
+  };
+  const auditCount = () => Number(db.prepare("SELECT COUNT(*) AS count FROM auth_audit_logs WHERE event_type='admin_work_lifecycle'").get()!.count);
+  const lifecycle = (operation: string, expectedStatus: string, cookie = adminCookie) =>
+    formMutation(origin, cookie, { operation, expected_status: expectedStatus }, true);
+  try {
+    for (const id of [301, 302, 303, 304]) {
+      const before = readWork(id)!;
+      const response = await fetch(`${origin}/api/admin/works/${id}/lifecycle`, lifecycle("delete", String(before.status)));
+      assert.deepEqual(readWork(id), { ...before, status: "deleted" }, "delete persists without changing visibility");
+      assert.equal(response.status, 200, `delete must report its committed result: ${await response.text()}`);
+      await expectStatus("deleted work is unreadable", origin, `/games/${id}`, { headers: { cookie: adminCookie } }, 404);
+      const deletedAuditCount = auditCount();
+      await expectStatus("stale delete conflicts", origin, `/api/admin/works/${id}/lifecycle`, lifecycle("delete", String(before.status)), 409);
+      assert.equal(auditCount(), deletedAuditCount, "a stale operation creates no edit history");
+      await jsonResponse("restore work", origin, `/api/admin/works/${id}/lifecycle`, lifecycle("restore", "deleted"), 200);
+      assert.deepEqual(readWork(id), before, "restore preserves visibility and incomplete work stays processing");
+      assert.equal(auditCount(), deletedAuditCount + 1);
+    }
+    const memberCookie = await login(origin, "user@example.test");
+    for (const [id, anonymous, member] of [[301, 200, 200], [302, 404, 200], [303, 404, 404], [304, 404, 404]]) {
+      await expectStatus("anonymous work visibility", origin, `/games/${id}`, {}, anonymous);
+      await expectStatus("member work visibility", origin, `/games/${id}`, { headers: { cookie: memberCookie } }, member);
+    }
+    await expectStatus("admin can read maintainer-only work", origin, "/games/303", { headers: { cookie: adminCookie } }, 200);
+    const unchanged = readWork(301);
+    const unchangedAudits = auditCount();
+    await expectStatus("member cannot delete", origin, "/api/admin/works/301/lifecycle", lifecycle("delete", "published", memberCookie), 403);
+    await expectStatus("anonymous cannot delete", origin, "/api/admin/works/301/lifecycle", lifecycle("delete", "published", ""), 401);
+    await expectStatus("missing work conflicts", origin, "/api/admin/works/999999/lifecycle", lifecycle("delete", "published"), 409);
+    await expectStatus("invalid restore fails", origin, "/api/admin/works/301/lifecycle", lifecycle("restore", "published"), 400);
+    await expectStatus("stale restore conflicts", origin, "/api/admin/works/301/lifecycle", lifecycle("restore", "deleted"), 409);
+    await expectStatus("committing work cannot be deleted", origin, "/api/admin/works/305/lifecycle", lifecycle("delete", "published"), 409);
+    assert.deepEqual(readWork(301), unchanged);
+    assert.equal(readWork(305)!.status, "published");
+    assert.equal(auditCount(), unchangedAudits, "rejected operations leave no false edit history");
+
+    // Use the same multipart metadata endpoint as the editor, without the retired status field.
+    const save = async (values: Record<string, string>) => {
+      const body = new FormData();
+      for (const [key, value] of Object.entries({
+        work_id: "301", original_release_date: "2026-10-11", engine_family: "rpg_maker_mv",
+        language: "ja", work_staff: "[]", characters: "[]", more_info: "[]",
+        external_links: "Download|https://example.test/lifecycle|download_page", ...values,
+      })) body.set(key, value);
+      body.set("cover", new File([coverBytes], "cover.png", { type: "image/png" }));
+      return jsonResponse<{ work: { status: string; audience: string; showOnHome: boolean } }>(
+        "save work visibility", origin, "/api/admin/works/301/update",
+        { method: "POST", headers: { origin, cookie: adminCookie, accept: "application/json" }, body }, 200,
+      );
+    };
+    for (const [audience, requestedHome, tags, actualHome] of [
+      ["public", true, "", true],
+      ["members", true, "", true],
+      ["members", false, "", false],
+      ["maintainers", true, "", false],
+      ["public", true, "非VIPRPG", false],
+    ] as const) {
+      const { work } = await save({ audience, show_on_home: String(requestedHome), tags });
+      assert.equal(work.status, "published");
+      assert.equal(work.audience, audience);
+      assert.equal(work.showOnHome, actualHome);
+      assert.deepEqual(readWork(301), { status: "published", audience, show_on_home: Number(actualHome) });
+      for (const cookie of ["", memberCookie]) {
+        const readable = audience === "public" || (audience === "members" && Boolean(cookie));
+        await expectStatus("saved visibility controls access", origin, "/games/301", { headers: { cookie } }, readable ? 200 : 404);
+        const random = await jsonResponse<{ works: { id: number }[] }>("homepage visibility", origin,
+          "/api/works/random", { headers: { cookie } }, 200);
+        if (!readable || !actualHome) assert.ok(random.works.every((item) => item.id !== 301));
+      }
+    }
+    const { work } = await save({ tags: "" });
+    assert.equal(work.showOnHome, false, "removing the non-VIPRPG tag does not re-enable homepage discovery");
+    await expectStatus("delete before editing metadata", origin, "/api/admin/works/301/lifecycle", lifecycle("delete", "published"), 200);
+    assert.equal((await save({ chinese_title: "Edited while deleted" })).work.status, "deleted", "saving metadata does not restore a deleted work");
+    await expectStatus("restore after editing metadata", origin, "/api/admin/works/301/lifecycle", lifecycle("restore", "deleted"), 200);
+    assert.deepEqual(readWork(301), { status: "published", audience: "public", show_on_home: 0 });
+  } finally {
+    db.close();
+  }
+}
+
 function writeTestFiles(origin: string): void {
   const workerImport = modulePath(
     relative(tempDir, resolve(projectRoot, "worker/archive-download.mjs")),
@@ -1292,6 +1385,18 @@ VALUES (${catalogWorkIds[0]}, 'Download', 'https://example.test/a', 'download_pa
        (${catalogWorkIds[1]}, 'Download', 'https://example.test/b', 'download_page');
 INSERT INTO work_uploaders (work_id, user_id)
 VALUES (${catalogWorkIds[0]}, 2), (${catalogWorkIds[1]}, 2);
+INSERT INTO works(id,original_title,status,audience,show_on_home,engine_family,genre,created_by_user_id,published_at)
+VALUES (301,'Lifecycle public','published','public',0,'rpg_maker_mv','Lifecycle contract',2,CURRENT_TIMESTAMP),
+       (302,'Lifecycle members','published','members',1,'rpg_maker_mv','Lifecycle contract',2,CURRENT_TIMESTAMP),
+       (303,'Lifecycle maintainers','published','maintainers',0,'rpg_maker_mv','Lifecycle contract',2,CURRENT_TIMESTAMP),
+       (304,'Lifecycle incomplete','processing','maintainers',0,'rpg_maker_mv',NULL,2,NULL),
+       (305,'Lifecycle committing','published','public',1,'rpg_maker_mv',NULL,2,CURRENT_TIMESTAMP);
+INSERT INTO work_external_links(work_id,label,url,link_type)
+SELECT id,'Download','https://example.test/lifecycle','download_page' FROM works WHERE id IN (301,302,303,305);
+INSERT INTO work_uploaders(work_id,user_id) SELECT id,2 FROM works WHERE id BETWEEN 301 AND 305;
+INSERT INTO tags(name) VALUES('Lifecycle contract');
+INSERT INTO work_tags(work_id,tag_name) VALUES(301,'Lifecycle contract'),(302,'Lifecycle contract'),(303,'Lifecycle contract');
+INSERT INTO import_jobs(work_id,uploader_id,status) VALUES(305,2,'committing');
 ${
   testMode === "flow"
     ? `
@@ -1299,9 +1404,9 @@ INSERT INTO works (id, original_title, status, created_by_user_id, published_at)
 VALUES (103, 'Relation target C', 'published', 2, CURRENT_TIMESTAMP);
 UPDATE works SET engine_family='rpg_maker_mv' WHERE id=103;
 INSERT INTO work_external_links(work_id,label,url,link_type) VALUES(103,'Download','https://example.test/c','download_page');
-INSERT INTO works (id, original_title, status, created_by_user_id)
-VALUES (201, 'Editor Archive Work A', 'hidden', 2),
-       (202, 'Editor Archive Work B', 'hidden', 2);
+INSERT INTO works (id, original_title, status, audience, show_on_home, created_by_user_id)
+VALUES (201, 'Editor Archive Work A', 'published', 'maintainers', 0, 2),
+       (202, 'Editor Archive Work B', 'published', 'maintainers', 0, 2);
 INSERT INTO archive_versions (id, work_id, source_name, source_url,
   manifest_sha256, file_policy_version, packer_version, source_type, status)
 VALUES (201, 201, 'Editor Archive A', 'https://example.test/editor-a',

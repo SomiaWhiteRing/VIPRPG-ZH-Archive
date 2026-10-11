@@ -12,6 +12,7 @@ import type { SharedPlayerReplacement } from "@/lib/archive/shared-player";
 import type { EasyRpgConfig } from "@/lib/archive/easyrpg-config";
 import type { StaffRow } from "./staff-editor";
 import type { MoreInfoRow } from "@/app/components/work/work-more-info-editor";
+import type { WorkVisibility } from "@/lib/work-visibility";
 
 export type UploadSuggestions = {
   tags: UploadTaxonomySuggestion[];
@@ -20,7 +21,7 @@ export type UploadSuggestions = {
   creators: CreatorSuggestion[];
 };
 
-export type UploadFormMetadata = {
+export type UploadFormMetadata = WorkVisibility & {
   usesUnsupportedManiac: boolean;
   originalTitle: string;
   chineseTitle: string;
@@ -42,7 +43,6 @@ export type UploadFormMetadata = {
   language: string;
   archiveSourceUrl: string;
   externalDownloadUrl: string;
-  status: "published" | "hidden";
 };
 
 export type UploadImageSelections = {
@@ -60,7 +60,7 @@ export type UploadAssociationDefaults = {
 };
 
 export type UploadFormDraft = {
-  form: UploadFormMetadata;
+  form: UploadFormMetadata & { status?: "published" | "hidden" };
   associationDefaults: UploadAssociationDefaults;
   imageSelections: UploadImageSelections;
   characterFaceSheetFiles: Record<number, File[]>;

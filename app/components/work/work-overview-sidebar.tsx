@@ -18,25 +18,26 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
   favoriteSummary?: "counts" | "tags";
 }) {
   const { currentUser, community, containingCatalogs, userCatalogs, showRelationEditor, editInfoHref } = data;
+  const publicWork = work.status === "published" && work.audience === "public";
   const current = work.archiveVersions[0] ?? null;
   const externalDownload = work.externalLinks.find((link) => link.linkType === "download_page") ?? null;
   const externalLinks = work.externalLinks.filter((link) => link.linkType !== "download_page");
   return (
     <WorkSidebar
       engagement={
-        <WorkEngagementActions
+        publicWork ? <WorkEngagementActions
           onSaved={onFavoriteSaved}
           summary={favoriteSummary}
           currentUserId={currentUser?.id ?? null}
           initialFavorited={community.favoritedByMe}
           workId={work.id}
-        />
+        /> : null
       }
       extras={
         <>
           {currentUser ? (
             <div aria-label="条目补充操作" className="order-2 flex items-center gap-1 px-2 max-[980px]:w-full">
-              {showRelationEditor ? (
+              {publicWork && showRelationEditor ? (
                 <Link className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline" to={`/games/${work.id}/relations`}>
                   编辑关联
                 </Link>
@@ -46,7 +47,7 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
                   编辑信息
                 </Link>
               ) : data.maintainerApplication ? <MaintainerApplicationButton workId={work.id} initialApplication={data.maintainerApplication} /> : null}
-              <CatalogAddDialog catalogs={userCatalogs} workId={work.id} />
+              {publicWork ? <CatalogAddDialog catalogs={userCatalogs} workId={work.id} /> : null}
             </div>
           ) : null}
           {containingCatalogs.length ? (
@@ -88,6 +89,7 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
       mobilePrimaryFirst
       primary={
         <WorkActionBar
+          restricted={!publicWork}
           title={work.chineseTitle || work.originalTitle}
           coverBlobSha256={work.coverBlobSha256}
           engineFamily={work.engineFamily}
@@ -109,7 +111,7 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
         <WorkCommunityStats
           commentCount={community.commentCount}
           favoriteCount={community.favoriteCount}
-          collectionHref={`/games/${work.id}/collections`}
+          collectionHref={publicWork ? `/games/${work.id}/collections` : undefined}
           playerCount={community.playerCount}
           viewCount={community.viewCount}
         />

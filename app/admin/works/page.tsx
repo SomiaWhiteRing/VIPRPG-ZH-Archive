@@ -36,7 +36,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const query = searchParam(params.q);
   const status = allowed(
     searchParam(params.status),
-    ["all", "published", "processing", "hidden", "deleted"],
+    ["all", "published", "processing", "deleted"],
     "all",
   );
   const sort = allowed(
@@ -74,7 +74,7 @@ export default function AdminWorksPage() {
       <PageHeader
         compact
         title="作品资料维护"
-        subtitle="维护作品发布状态、分发方式和关联资料。"
+        subtitle="维护作品可见性、分发方式和关联资料。"
       />
       <AdminListControls
         action="/admin/works"
@@ -91,7 +91,6 @@ export default function AdminWorksPage() {
           { value: "all", label: "全部状态" },
           { value: "published", label: "已发布" },
           { value: "processing", label: "处理中" },
-          { value: "hidden", label: "隐藏" },
           { value: "deleted", label: "已删除" },
         ]}
         pageSize={PAGE_SIZE}

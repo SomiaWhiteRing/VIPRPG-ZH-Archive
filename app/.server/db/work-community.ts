@@ -1,5 +1,7 @@
 import { mentionNotification, validateMentions } from "@/app/.server/mentions";
 import { timelineStatement } from "@/app/.server/db/timeline";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { workReadCondition } from "@/app/.server/db/work-visibility";
 import { commentImageGuard, commentImageStatements, commentImagesById, parseCommentImageIds } from "@/app/.server/comments/images";
 import { sha256Hex } from "@/lib/sha256";
 import type { CommentImage } from "@/lib/comment-images";
@@ -74,9 +76,10 @@ export async function recordWorkPlayed(
   userId: number | null,
 ): Promise<void> {
   const database = getD1(runtime);
+  const access = workReadCondition(await getCurrentUser(runtime));
   const work = await database.prepare(`SELECT
     (SELECT COUNT(*) FROM user_work_entries WHERE work_id=w.id AND last_played_at IS NOT NULL) AS count
-    FROM public_works w WHERE w.id=?`).bind(workId).first<{ count: number }>();
+    FROM works w WHERE w.id=? AND ${access.sql}`).bind(workId, ...access.binds).first<{ count: number }>();
   if (!work) throw new HttpError(404, "作品不存在");
   const [counter] = await Promise.allSettled([recordWorkPlay(runtime, workId, work.count)]);
   // Personal history must still update when the public counter is unavailable.
@@ -86,19 +89,19 @@ export async function recordWorkPlayed(
       database.prepare(`INSERT INTO user_work_first_plays(user_id,work_id,first_observed_at)
         SELECT ?,w.id,CASE WHEN EXISTS(SELECT 1 FROM user_work_entries
           WHERE work_id=w.id AND user_id=? AND last_played_at IS NOT NULL) THEN NULL ELSE CURRENT_TIMESTAMP END
-        FROM public_works w WHERE w.id=? AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')
-        ON CONFLICT(user_id,work_id) DO NOTHING`).bind(userId, userId, workId, userId),
+        FROM works w WHERE w.id=? AND ${access.sql} AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')
+        ON CONFLICT(user_id,work_id) DO NOTHING`).bind(userId, userId, workId, ...access.binds, userId),
       timelineStatement(database, { userId, kind: "play", action: "初次游玩", eventKey: `first-play:${userId}:${workId}`, workId,
-        predicate: "changes()=1 AND EXISTS(SELECT 1 FROM user_work_first_plays WHERE user_id=? AND work_id=? AND first_observed_at IS NOT NULL)", args: [userId, workId] }),
+        predicate: "changes()=1 AND EXISTS(SELECT 1 FROM public_works WHERE id=?) AND EXISTS(SELECT 1 FROM user_work_first_plays WHERE user_id=? AND work_id=? AND first_observed_at IS NOT NULL)", args: [workId, userId, workId] }),
       database.prepare(
         `INSERT INTO user_work_entries(work_id, user_id, last_played_at, updated_at)
-         SELECT id,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
-         FROM public_works WHERE id=?
+         SELECT w.id,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+         FROM works w WHERE w.id=? AND ${access.sql}
          ON CONFLICT(work_id, user_id) DO UPDATE SET
            last_played_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP`,
       )
-      .bind(userId, workId),
+      .bind(userId, workId, ...access.binds),
     ]);
     if ((result.meta.changes ?? 0) !== 1) throw new HttpError(404, "作品不存在");
   }
@@ -182,6 +185,7 @@ export async function getWorkCommunitySummary(
     ).bind(workId, userId).first();
     return { ...known, favoritedByMe: favorite !== null };
   }
+  const access = workReadCondition(await getCurrentUser(runtime));
   const row = await getD1(runtime)
     .prepare(
       `SELECT
@@ -191,9 +195,9 @@ export async function getWorkCommunitySummary(
           WHERE e.work_id=w.id AND e.favorited_at IS NOT NULL AND u.status='active') AS favorite_count,
          EXISTS(SELECT 1 FROM user_work_entries ue
           WHERE ue.work_id = w.id AND ue.user_id = ? AND ue.favorited_at IS NOT NULL) AS favorited_by_me
-       FROM works w WHERE w.id = ? AND EXISTS (SELECT 1 FROM public_works pw WHERE pw.id=w.id) LIMIT 1`,
+       FROM works w WHERE w.id = ? AND ${access.sql} LIMIT 1`,
     )
-    .bind(userId ?? 0, workId)
+    .bind(userId ?? 0, workId, ...access.binds)
     .first<{
       legacy_player_count: number;
       comment_count: number;

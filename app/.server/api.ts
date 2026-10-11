@@ -7,6 +7,7 @@ import { timelineApi } from "./timeline/api";
 import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
 import * as genresEndpoint from "@/app/.server/endpoints/api/genres/route";
 import * as homeRecommendationsEndpoint from "@/app/.server/endpoints/api/admin/home-recommendations/route";
+import * as workLifecycleEndpoint from "@/app/.server/endpoints/api/admin/works/[workId]/lifecycle/route";
 import * as auditReportExportEndpoint from "@/app/.server/endpoints/api/admin/audit/reports/[date]/export/route";
 import * as genreMergeEndpoint from "@/app/.server/endpoints/api/admin/genres/merge/route";
 import * as showcaseEndpoint from "@/app/.server/endpoints/api/account/showcase/route";
@@ -121,6 +122,11 @@ export const api = new Hono<{
   Variables: { runtime: AppRuntime };
 }>();
 api.onError((error) => jsonError("请求失败", error));
+api.post("/api/admin/works/:workId/lifecycle", (c) => workLifecycleEndpoint.POST(c.get("runtime"), c.req.raw,
+  { params: { workId: c.req.param("workId") } }));
+api.options("/api/admin/works/:workId/lifecycle", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
+api.all("/api/admin/works/:workId/lifecycle", (_c) => jsonResponse({ ok: false, error: "Method not allowed" },
+  { status: 405, headers: { Allow: "POST, OPTIONS" } }));
 api.get("/api/material-search", (c) => materialSearchEndpoint.GET(c.get("runtime"), c.req.raw));
 api.options("/api/material-search", (c) => c.body(null, 204, { Allow: "GET, OPTIONS" }));
 api.all("/api/material-search", (_c) => jsonResponse({ ok: false, error: "Method not allowed" },

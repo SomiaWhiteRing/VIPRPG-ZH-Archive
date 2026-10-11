@@ -78,9 +78,9 @@ export const PERMISSIONS = {
   },
   "work.status.update_any": {
     category: "work",
-    label: "调整所有作品状态",
-    scope: "全部作品状态",
-    description: "发布、隐藏或删除任意作品。",
+    label: "调整所有作品可见性及状态",
+    scope: "全部作品的可见性与生命周期",
+    description: "调整任意作品的访问范围与首页展示，以及删除、恢复作品。",
   },
   "work.maintainer.manage_any": {
     category: "work",

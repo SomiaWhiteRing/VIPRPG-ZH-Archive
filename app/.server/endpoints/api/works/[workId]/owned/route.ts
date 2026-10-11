@@ -26,6 +26,7 @@ import {
   storeWorkPreviews,
 } from "@/app/.server/storage/work-images";
 import { HttpError, json, jsonError } from "@/lib/http";
+import { workVisibilityFormInput } from "@/lib/work-visibility";
 
 export async function POST(
   runtime: AppRuntime,
@@ -84,8 +85,8 @@ export async function POST(
 }
 
 function parseMetadata(form: FormData) {
-  const status = readRequiredString(form.get("status"), "status");
-  if (status !== "published" && status !== "hidden") {
+  const status = form.get("status");
+  if (status !== null && status !== "published" && status !== "hidden") {
     throw new HttpError(400, "status 不合法");
   }
   const distribution = readRequiredString(
@@ -96,6 +97,7 @@ function parseMetadata(form: FormData) {
     throw new HttpError(400, "distribution 不合法");
   }
   return {
+    ...workVisibilityFormInput(form),
     distribution: distribution as "archive" | "external",
     originalTitle: readRequiredString(
       form.get("original_title"),
@@ -115,7 +117,7 @@ function parseMetadata(form: FormData) {
     isTranslation: form.has("is_translation"),
     usesUnsupportedManiac: form.has("uses_unsupported_maniac"),
     language: readRequiredString(form.get("language"), "language"),
-    status: status as "published" | "hidden",
+    status: status === null ? undefined : status as "published" | "hidden",
     aliases: readList(form.get("aliases")),
     tags: readList(form.get("tags")),
     characters: parseCharacterSelectionsJson(form.get("characters")),

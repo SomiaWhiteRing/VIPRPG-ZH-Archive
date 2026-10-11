@@ -301,7 +301,7 @@ await check("favorite transitions, no-op saves, privacy and atomic rollback", as
   f.sqlite.exec("CREATE TRIGGER reject_favorite BEFORE INSERT ON user_work_entries WHEN NEW.work_id=3 BEGIN SELECT RAISE(ABORT,'fixture rejection'); END");
   await assert.rejects(setWorkFavorite(f.runtime, 3, 1, true));
   assert.equal(f.count("favorite"), 1, "failed business mutation rolls back its event");
-  f.sqlite.exec("DROP TRIGGER reject_favorite; UPDATE works SET status='hidden' WHERE id=2");
+  f.sqlite.exec("DROP TRIGGER reject_favorite; UPDATE works SET audience='maintainers',show_on_home=0 WHERE id=2");
   assert.equal((await f.page()).items.length, 0);
 });
 
@@ -370,9 +370,9 @@ await check("work/creator/character main comments and current source visibility"
   assert.equal(f.count("comment"), 3);
   await updateComment(f.runtime, workRoot, 1, "Changed work comment");
   assert.equal(f.count("comment"), 3);
-  f.sqlite.exec("UPDATE works SET status='hidden' WHERE id=2");
+  f.sqlite.exec("UPDATE works SET audience='maintainers',show_on_home=0 WHERE id=2");
   assert.equal((await f.page()).items.length, 2);
-  f.sqlite.exec("UPDATE works SET status='published' WHERE id=2; UPDATE users SET profile_show_comments=0 WHERE id=1");
+  f.sqlite.exec("UPDATE works SET audience='public' WHERE id=2; UPDATE users SET profile_show_comments=0 WHERE id=1");
   assert.equal((await f.page()).items.length, 0);
   f.sqlite.exec("UPDATE users SET profile_show_comments=1 WHERE id=1");
   f.sqlite.prepare("UPDATE comments SET status='hidden' WHERE id=?").run(workRoot);
@@ -543,11 +543,11 @@ await check("first-play off-period consumption, retry races and rollback", async
   await recordWorkPlayed(f.runtime, 2, 1);
   assert.equal(f.count("play"), 0, "reenabling does not regenerate consumed first plays");
   await f.enable(1, false);
-  f.sqlite.exec("UPDATE works SET status='hidden' WHERE id=5");
+  f.sqlite.exec("UPDATE works SET audience='maintainers',show_on_home=0 WHERE id=5");
   await assert.rejects(recordWorkPlayed(f.runtime, 5, 1), { status: 404 });
   assert.equal(f.number("SELECT COUNT(*) FROM user_work_first_plays WHERE user_id=1 AND work_id=5"), 0,
     "unavailable works follow the same public boundary as recent-play reports");
-  f.sqlite.exec("UPDATE works SET status='published' WHERE id=5");
+  f.sqlite.exec("UPDATE works SET audience='public' WHERE id=5");
   await recordWorkPlayed(f.runtime, 5, 1);
   await f.enable();
   await recordWorkPlayed(f.runtime, 5, 1);
@@ -1143,7 +1143,7 @@ await check("profile comment pagination retains public visibility and private hi
     (204,1,1,'Deleted later','published','2026-01-01'),
     (205,2,1,'Hidden target','published','2026-01-01'),
     (206,1,2,'Other author','published','2026-01-01');
-    UPDATE works SET status='hidden' WHERE id=2;
+    UPDATE works SET audience='maintainers',show_on_home=0 WHERE id=2;
     INSERT INTO comments(id,work_id,user_id,body,status,root_comment_id,updated_at) VALUES
     (207,1,1,'Reply to hidden root','published',203,'2026-01-01'),
     (208,1,1,'Reply to deleted root','published',204,'2026-01-01'),
@@ -1226,7 +1226,7 @@ await check("directory revision invalidates settled snapshots on edits and casca
 });
 
 await check("ordered work cards filter publication before pagination and preserve sorting", async (f) => {
-  f.sqlite.exec("UPDATE works SET status='hidden' WHERE id=4");
+  f.sqlite.exec("UPDATE works SET audience='maintainers',show_on_home=0 WHERE id=4");
   const request = () => ({ ...f.runtime, memo: new Map<string, unknown>() });
   const first = await listGameWorks(request(), { limit: 2 });
   const second = await listGameWorks(request(), { limit: 2, offset: 2 });

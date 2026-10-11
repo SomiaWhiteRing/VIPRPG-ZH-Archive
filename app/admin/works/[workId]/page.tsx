@@ -90,14 +90,14 @@ export default function AdminWorkEditPage() {
         actions={<BackLink href="/admin/works" label="返回游戏维护" />}
       />
       <WorkEditForm work={work} currentUser={adminUser} suggestions={suggestions} canUpdateStatus={canUpdateStatus}>
-        {!work.hasUsableDistribution ? <p className="text-sm text-muted">缺少可用下载来源。已发布的作品资料仍公开展示，恢复来源后可重新下载。</p> : null}
+        {!work.hasUsableDistribution ? <p className="text-sm text-muted">缺少可用下载来源。已发布的作品资料仍按可见性展示，恢复来源后可重新下载。</p> : null}
         <StickySaveBar>
           {work.status === "published" && work.hasUsableDistribution ? (
             <Link
               className={buttonVariants({ variant: "outline" })}
               to={`/games/${work.id}`}
             >
-              查看公开页
+              查看作品页
             </Link>
           ) : null}
           {hasPermission(adminUser, "archive_version.read_private") ? (
@@ -110,6 +110,19 @@ export default function AdminWorkEditPage() {
           ) : null}
         </StickySaveBar>
       </WorkEditForm>
+      {canUpdateStatus ? (
+        <Pane heading="作品管理">
+          <ConfirmingForm action={`/api/admin/works/${workId}/lifecycle`} confirmField="operation"
+            title={work.status === "deleted" ? "确认恢复作品？" : "确认删除作品？"}
+            description={work.status === "deleted" ? "恢复后沿用保存的可见性；未完成上传的作品仍保持处理中。" : "作品将停止展示，资料与归档保留，可在后台恢复。"}>
+            <input type="hidden" name="operation" value={work.status === "deleted" ? "restore" : "delete"} />
+            <input type="hidden" name="expected_status" value={work.status} />
+            <Button type="submit" variant={work.status === "deleted" ? "outline" : "destructive"}>
+              {work.status === "deleted" ? "恢复作品" : "删除作品"}
+            </Button>
+          </ConfirmingForm>
+        </Pane>
+      ) : null}
       {hasPermission(adminUser, "work.maintainer.manage_any") ? (
         <WorkMaintainerEditor workId={workId} initialMaintainers={maintainers} canRemove />
       ) : null}

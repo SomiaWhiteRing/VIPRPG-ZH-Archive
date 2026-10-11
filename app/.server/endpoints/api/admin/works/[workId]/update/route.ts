@@ -17,6 +17,7 @@ import {
 import { readWorkImage, storeWorkImages, storeWorkPreviews } from "@/app/.server/storage/work-images";
 import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError, json, jsonError } from "@/lib/http";
+import { workStatusFromLegacyInput } from "@/lib/work-visibility";
 
 type RouteContext = {
   params: {
@@ -52,7 +53,7 @@ export async function POST(
     const current = await getWorkForAdminEdit(runtime, workId);
     if (!current) throw new HttpError(404, "作品不存在");
     if (!hasPermission(auth.user, "work.status.update_any") &&
-      (current.status === "deleted" || (input.status && input.status !== current.status))) {
+      (current.status === "deleted" || workStatusFromLegacyInput(input.status, current.status) !== current.status)) {
       throw new HttpError(403, "没有调整作品状态的权限");
     }
     if (hasPermission(auth.user, "work.metadata.update_any")) {

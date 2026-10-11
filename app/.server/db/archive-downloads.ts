@@ -1,4 +1,6 @@
 import { getD1 } from "@/app/.server/db/d1";
+import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { workReadCondition } from "@/app/.server/db/work-visibility";
 import type { AppRuntime } from "@/app/.server/runtime";
 
 type DownloadRow = {
@@ -39,6 +41,7 @@ export async function getPublishedArchiveDownloadRecord(
   runtime: AppRuntime,
   id: number,
 ): Promise<ArchiveDownloadRecord | null> {
+  const access = workReadCondition(await getCurrentUser(runtime));
   const row = await getD1(runtime)
     .prepare(
       `SELECT av.id,
@@ -60,10 +63,10 @@ export async function getPublishedArchiveDownloadRecord(
        WHERE av.id = ?
          AND av.status = 'published'
          AND av.is_current = 1
-         AND w.status = 'published'
+         AND ${access.sql}
        LIMIT 1`,
     )
-    .bind(id)
+    .bind(id, ...access.binds)
     .first<DownloadRow>();
   if (!row || !row.work_original_title) return null;
   return {

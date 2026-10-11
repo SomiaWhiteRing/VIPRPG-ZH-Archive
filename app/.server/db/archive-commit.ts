@@ -1,4 +1,5 @@
 import { timelineStatement } from "@/app/.server/db/timeline";
+import { constrainWorkVisibility, legacyWorkVisibilityInput, parseWorkVisibility, type WorkAudience } from "@/lib/work-visibility";
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
 import { parseWorkReferenceDuration } from "@/app/.server/http/work-reference-duration";
 import { normalizeWorkMedia, normalizeWorkTags, validateWorkMedia, workMediaStatements, workTagStatements } from "@/app/.server/db/work-metadata";
@@ -114,7 +115,7 @@ export async function commitArchiveImport(
   }
 
   const manifest = parseManifestJson(manifestJson);
-  let metadata: ArchiveCommitMetadata;
+  let metadata: ParsedArchiveCommitMetadata;
   try {
     metadata = normalizeMetadata(input.metadata);
     try {
@@ -843,9 +844,14 @@ function validateCrc32(value: number, path: string): void {
   }
 }
 
+type ParsedArchiveCommitMetadata = Omit<ArchiveCommitMetadata, "game" | "admin"> & {
+  game: Omit<ArchiveCommitMetadata["game"], "status"> & { status: "published" };
+  admin?: Omit<NonNullable<ArchiveCommitMetadata["admin"]>, "status"> & { status?: "published" | "deleted" };
+};
+
 function normalizeMetadata(
   metadata: ArchiveCommitMetadata,
-): ArchiveCommitMetadata {
+): ParsedArchiveCommitMetadata {
   if (
     !isRecord(metadata) ||
     !isRecord(metadata.game) ||
@@ -884,7 +890,7 @@ function normalizeMetadata(
     typeof game.isOriginal !== "boolean" ||
     typeof game.isTranslation !== "boolean" ||
     typeof game.language !== "string" ||
-    !isEnum(game.status, ["processing", "published", "hidden"] as const) ||
+    (game.status !== undefined && !isEnum(game.status, ["processing", "published", "hidden"] as const)) ||
     !isRecord(game.extra) ||
     typeof game.coverBlobSha256 !== "string" ||
     !Array.isArray(game.previewBlobSha256s)
@@ -1036,10 +1042,10 @@ function normalizeMetadata(
   if (!game.originalTitle.trim()) {
     throw new HttpError(400, "游戏原名不能为空");
   }
-  let admin: ArchiveCommitMetadata["admin"];
+  let admin: ParsedArchiveCommitMetadata["admin"];
   if (metadata.admin !== undefined) {
     if (!isRecord(metadata.admin) || target.mode !== "update" ||
-      !isEnum(metadata.admin.status, ["published", "hidden", "deleted"] as const) ||
+      (metadata.admin.status !== undefined && !isEnum(metadata.admin.status, ["published", "hidden", "deleted"] as const)) ||
       !Array.isArray(metadata.admin.externalLinks) || metadata.admin.externalLinks.some((link) =>
         !isRecord(link) || typeof link.label !== "string" || typeof link.url !== "string" || typeof link.linkType !== "string")) {
       throw new HttpError(400, "后台作品设置不合法");
@@ -1048,15 +1054,19 @@ function normalizeMetadata(
     if (externalLinks.some((link) => link.linkType === "download_page")) {
       throw new HttpError(400, "本站归档不能同时填写外部下载地址");
     }
-    admin = { status: metadata.admin.status, externalLinks };
+    admin = { status: metadata.admin.status === "hidden" ? "published" : metadata.admin.status, externalLinks };
   }
 
+  const visibilityInput = legacyWorkVisibilityInput({ ...game, status: metadata.admin?.status ?? game.status });
+  const visibility = parseWorkVisibility(visibilityInput, []);
   return {
     ...metadata,
     admin,
     game: {
       ...metadata.game,
-      status: admin ? (admin.status === "deleted" ? "hidden" : admin.status) : game.status,
+      ...(visibilityInput.audience !== undefined ? { audience: visibility.audience } : {}),
+      ...(visibilityInput.showOnHome !== undefined ? { showOnHome: visibility.showOnHome } : {}),
+      status: "published",
       originalTitle: game.originalTitle.trim(),
       chineseTitle: normalizeNullableWorkText(game.chineseTitle),
       description: normalizeNullableWorkText(game.description),
@@ -1104,7 +1114,7 @@ function metadataImageBlobHashes(metadata: ArchiveCommitMetadata): string[] {
 
 async function resolveTargetWork(
   runtime: AppRuntime,
-  metadata: ArchiveCommitMetadata,
+  metadata: ParsedArchiveCommitMetadata,
   user: ArchiveUser,
   existingJobWorkId: number | null,
   importJobId: number,
@@ -1122,17 +1132,28 @@ async function resolveTargetWork(
       throw new HttpError(403, "已删除作品须从后台维护");
     }
     const adminEdit = Boolean(metadata.admin) || current.is_uploader !== 1 || !hasPermission(user, "work.update_own");
+    const preservedWork = adminEdit && !hasPermission(user, "work.metadata.update_any")
+      ? await getWorkForAdminEdit(runtime, metadata.target.workId) : null;
+    if (adminEdit && !hasPermission(user, "work.metadata.update_any") && !preservedWork)
+      throw new HttpError(404, "作品不存在");
+    if (preservedWork) metadata.tags = preservedWork.tags;
+    const visibility = parseWorkVisibility(game, metadata.tags, { audience: current.audience, showOnHome: current.show_on_home === 1 });
+    const constrainedCurrent = constrainWorkVisibility({ audience: current.audience, showOnHome: current.show_on_home === 1 }, metadata.tags);
+    if (adminEdit && !hasPermission(user, "work.status.update_any") &&
+      (visibility.audience !== constrainedCurrent.audience || visibility.showOnHome !== constrainedCurrent.showOnHome))
+      throw new HttpError(403, "没有调整作品可见性的权限");
+    Object.assign(game, visibility);
     if (adminEdit && (metadata.admin?.status ?? game.status) !== current.status && !hasPermission(user, "work.status.update_any")) {
       throw new HttpError(403, "没有调整作品状态的权限");
     }
     if (adminEdit) game.originalTitle = current.original_title;
-    if (adminEdit && !hasPermission(user, "work.metadata.update_any")) {
-      const work = await getWorkForAdminEdit(runtime, metadata.target.workId);
-      if (!work) throw new HttpError(404, "作品不存在");
+    if (preservedWork) {
+      const work = preservedWork;
       if (game.engineFamily !== work.engineFamily) {
         throw new HttpError(403, "修改游戏引擎需要作品信息编辑权限");
       }
       Object.assign(game, {
+        ...parseWorkVisibility(game, work.tags, work),
         chineseTitle: work.chineseTitle, description: work.description, genre: work.genre,
         isOriginal: work.isOriginal, isTranslation: work.isTranslation, language: work.language,
         originalReleaseDate: work.originalReleaseDate, originalReleasePrecision: work.originalReleasePrecision,
@@ -1155,7 +1176,7 @@ async function resolveTargetWork(
     }
     const identity = await getD1(runtime)
       .prepare(
-        `SELECT original_title,language,is_original,is_translation,status FROM works WHERE id=? LIMIT 1`,
+        `SELECT original_title,language,is_original,is_translation,status,audience,show_on_home FROM works WHERE id=? LIMIT 1`,
       )
       .bind(existingJobWorkId)
       .first<{
@@ -1164,6 +1185,8 @@ async function resolveTargetWork(
         is_original: number;
         is_translation: number;
         status: string;
+        audience: WorkAudience;
+        show_on_home: number;
       }>();
     if (
       !identity ||
@@ -1174,17 +1197,20 @@ async function resolveTargetWork(
       identity.is_translation !== (game.isTranslation ? 1 : 0)
     )
       throw new HttpError(409, "导入任务的游戏身份或语言属性不匹配");
+    Object.assign(game, parseWorkVisibility(game, metadata.tags, { audience: identity.audience, showOnHome: identity.show_on_home === 1 }));
     return existingJobWorkId;
   }
 
   const database = getD1(runtime);
+  const visibility = parseWorkVisibility(game, metadata.tags);
+  Object.assign(game, visibility);
   const result = await database
     .prepare(
       `INSERT INTO works (
         original_title, chinese_title, description, genre, is_original, is_translation, language,
         original_release_date, original_release_precision, engine_family, status, extra_json,
-        created_by_user_id, published_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, NULL)`,
+        audience, show_on_home, created_by_user_id, published_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, NULL)`,
     )
     .bind(
       game.originalTitle,
@@ -1198,6 +1224,8 @@ async function resolveTargetWork(
       game.originalReleasePrecision,
       game.engineFamily,
       jsonText(game.extra),
+      visibility.audience,
+      visibility.showOnHome ? 1 : 0,
       user.id,
     )
     .run();
@@ -1292,7 +1320,7 @@ async function finalizeArchiveCommit(
     workId: number;
     archiveVersionId: number;
     manifest: ArchiveManifest;
-    metadata: ArchiveCommitMetadata;
+    metadata: ParsedArchiveCommitMetadata;
     missingBlobCount: number;
     missingCorePackCount: number;
     excludedFileTypes: ExcludedFileTypeSummary[];
@@ -1301,7 +1329,9 @@ async function finalizeArchiveCommit(
 ): Promise<void> {
   const database = getD1(runtime);
   const game = input.metadata.game;
+  const visibility = parseWorkVisibility(game, input.metadata.tags);
   const status = input.metadata.admin?.status ?? game.status;
+  const keepDeleted = input.metadata.admin && input.metadata.admin.status === undefined ? 1 : 0;
   const characters = input.metadata.characters ?? [];
   const statements: D1PreparedStatement[] = [];
   const canEditOwnWork = !input.metadata.admin && await canEditWork(runtime, input.workId, input.user);
@@ -1324,9 +1354,9 @@ async function finalizeArchiveCommit(
            original_release_date = ?,
            original_release_precision = ?,
            engine_family = ?,
-           ${canUpdateStatus ? "status = ?," : ""}
+           ${canUpdateStatus ? "audience = CASE WHEN ?='public' AND (audience<>'public' OR status<>'published') THEN 'maintainers' ELSE ? END, show_on_home = ?, status = CASE WHEN ?=1 AND status='deleted' THEN status ELSE ? END," : ""}
            extra_json = ?,
-           ${canUpdateStatus ? "published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END," : ""}
+           ${canUpdateStatus ? "published_at = CASE WHEN ? = 'published' AND (?=0 OR status<>'deleted') THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE published_at END," : ""}
            updated_at = CURRENT_TIMESTAMP
          WHERE id = ? AND (status <> 'deleted' OR ?)`,
         )
@@ -1342,9 +1372,9 @@ async function finalizeArchiveCommit(
           game.originalReleaseDate,
           game.originalReleasePrecision,
           game.engineFamily,
-          ...(canUpdateStatus ? [status] : []),
+          ...(canUpdateStatus ? [visibility.audience, visibility.audience, visibility.showOnHome ? 1 : 0, keepDeleted, status] : []),
           jsonText(game.extra),
-          ...(canUpdateStatus ? [status] : []),
+          ...(canUpdateStatus ? [status, keepDeleted] : []),
           input.workId,
           input.metadata.admin && hasPermission(input.user, "work.status.update_any") ? 1 : 0,
         ),
@@ -1396,10 +1426,13 @@ async function finalizeArchiveCommit(
       ...workTagStatements(database, input.workId, input.metadata.tags, input.metadata.admin ? "admin" : "uploader"),
       ...workMediaStatements(database, input.workId, game.coverBlobSha256, game.previewBlobSha256s),
     );
+    if (canUpdateStatus && visibility.audience === "public") statements.push(
+      database.prepare("UPDATE works SET audience='public' WHERE id=? AND audience<>'public'").bind(input.workId),
+    );
   } else {
     statements.push(database.prepare(`UPDATE works SET updated_at=CURRENT_TIMESTAMP
-      ${canUpdateStatus ? ", status=?, published_at=CASE WHEN ?='published' THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END" : ""}
-      WHERE id=?`).bind(...(canUpdateStatus ? [status, status] : []), input.workId));
+      ${canUpdateStatus ? ", audience=?, show_on_home=?, status=CASE WHEN ?=1 AND status='deleted' THEN status ELSE ? END, published_at=CASE WHEN ?='published' AND (?=0 OR status<>'deleted') THEN COALESCE(published_at,CURRENT_TIMESTAMP) ELSE published_at END" : ""}
+      WHERE id=?`).bind(...(canUpdateStatus ? [visibility.audience, visibility.showOnHome ? 1 : 0, keepDeleted, status, status, keepDeleted] : []), input.workId));
   }
   statements.push(database.prepare(`DELETE FROM work_external_links WHERE work_id=?${input.metadata.admin ? "" : " AND link_type='download_page'"}`).bind(input.workId));
   for (const link of input.metadata.admin?.externalLinks ?? []) {

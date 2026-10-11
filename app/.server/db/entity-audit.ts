@@ -156,6 +156,7 @@ export function workAuditSnapshot(id: number, includeRelations = false): AuditSn
     'genre',genre,'referenceDuration',json_extract(extra_json,'$.referenceDuration'),'moreInfo',json_extract(extra_json,'$.moreInfo'),'usesUnsupportedManiac',json_extract(extra_json,'$.usesUnsupportedManiac'),
     'originalReleaseDate',original_release_date,'releasePrecision',original_release_precision,'engineFamily',engine_family,
     'isOriginal',is_original,'isTranslation',is_translation,'language',language,'status',status,
+    'audience',audience,'showOnHome',show_on_home,
     'aliases',json((SELECT json_group_array(title) FROM (SELECT title FROM work_titles WHERE work_id=w.id ORDER BY title))),
     'staff',json((SELECT json_group_array(json_object('creatorId',creator_id,'creatorName',(SELECT name FROM creators WHERE id=creator_id),'displayName',display_name,'roleKey',role_key,'roleLabel',role_label,'notes',notes,'sortOrder',sort_order))
       FROM (SELECT * FROM work_staff WHERE work_id=w.id ORDER BY sort_order,creator_id,role_key))),

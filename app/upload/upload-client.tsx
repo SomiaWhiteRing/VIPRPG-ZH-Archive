@@ -19,9 +19,9 @@ import {
 } from "@/app/components/media/media-picker";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
-import { Label } from "@/app/components/ui/label";
-import { SelectField } from "@/app/components/ui/select";
 import { LanguageField } from "@/app/components/work/language-field";
+import { WorkVisibilityField } from "@/app/components/work/work-visibility-field";
+import { legacyWorkVisibilityInput, parseWorkVisibility, type WorkVisibility } from "@/lib/work-visibility";
 import {
   moreInfoRows,
 } from "@/app/components/work/work-more-info-editor";
@@ -95,7 +95,7 @@ type PreparedCharacterFaceSheets = {
   blobs: MetadataBlobUpload[];
 };
 
-type AdminSettings = NonNullable<ArchiveCommitMetadata["admin"]>;
+type AdminSettings = Pick<NonNullable<ArchiveCommitMetadata["admin"]>, "externalLinks">;
 type AdminEditSubmission = {
   settings: AdminSettings;
   initialWork: UploadInitialWork;
@@ -103,7 +103,7 @@ type AdminEditSubmission = {
   downloadLink?: GameExternalLink;
 };
 
-export type UploadInitialWork = {
+export type UploadInitialWork = WorkVisibility & {
   usesUnsupportedManiac: boolean;
   id: number;
   originalTitle: string;
@@ -116,7 +116,6 @@ export type UploadInitialWork = {
   isOriginal: boolean;
   isTranslation: boolean;
   language: string;
-  status: "published" | "hidden";
   aliases: string[];
   tags: string[];
   characters: CharacterCreditSelection[];
@@ -149,7 +148,6 @@ export function UploadClient({
   saveRedirectTo?: string;
   adminOptions?: {
     canUpdateStatus: boolean;
-    status: AdminSettings["status"];
     externalLinks: GameExternalLink[];
     footer: ReactNode;
   };
@@ -182,7 +180,6 @@ export function UploadClient({
     initialForm(canArchiveUpload, currentUser, initialWork),
   );
   const [adminSettings, setAdminSettings] = useState<AdminSettings | undefined>(() => adminOptions ? {
-    status: adminOptions.status,
     externalLinks: adminOptions.externalLinks.filter((link) => link.linkType !== "download_page"),
   } : undefined);
   const [coverBlobSha256, setCoverBlobSha256] = useState(initialWork?.coverBlobSha256 ?? "");
@@ -725,7 +722,11 @@ export function UploadClient({
     setSourceFaceSheetFiles(draft.formDraft?.sourceFaceSheetFiles ?? []);
     setSourceFaceSheetWarnings(draft.formDraft?.sourceFaceSheetWarnings ?? []);
     if (draft.formDraft) {
-      setForm({ ...draft.formDraft.form, genre: draft.formDraft.form.genre ?? "",
+      const { status: legacyStatus, ...restoredForm } = draft.formDraft.form;
+      setForm({ ...restoredForm, genre: restoredForm.genre ?? "",
+        ...parseWorkVisibility(legacyWorkVisibilityInput({ ...restoredForm,
+          status: draft.formDraft.adminSettings?.status ?? legacyStatus,
+        }), restoredForm.tags, initialWork ?? { audience: "public", showOnHome: true }),
         referenceDuration: draft.formDraft.form.referenceDuration ?? "",
         referenceDurationCustom: draft.formDraft.form.referenceDurationCustom ?? referenceDurationForm(draft.formDraft.form.referenceDuration).referenceDurationCustom,
         ...(adminOptions && initialWork ? { originalTitle: initialWork.originalTitle } : {}),
@@ -737,7 +738,7 @@ export function UploadClient({
       setStaffErrorsVisible(false);
       setMoreInfoErrorsVisible(false);
       if (adminOptions) {
-        if (draft.formDraft.adminSettings) setAdminSettings(draft.formDraft.adminSettings);
+        if (draft.formDraft.adminSettings) setAdminSettings({ externalLinks: draft.formDraft.adminSettings.externalLinks });
         setCoverBlobSha256(draft.formDraft.coverBlobSha256 ?? initialWork?.coverBlobSha256 ?? "");
       }
     } else if (draft.metadata && !initialWork) {
@@ -766,7 +767,7 @@ export function UploadClient({
         ),
       );
     }
-    if (adminOptions && !draft.formDraft && draft.metadata?.admin) setAdminSettings(draft.metadata.admin);
+    if (adminOptions && !draft.formDraft && draft.metadata?.admin) setAdminSettings({ externalLinks: draft.metadata.admin.externalLinks });
     setSourceMode("archive");
     setForm((current) => ({
       ...current,
@@ -1043,9 +1044,6 @@ export function UploadClient({
                 </div>
 
                 <div className="border-b border-border p-4">
-                  <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.12em] text-muted">
-                    准备状态
-                  </p>
                   <ReadinessList
                     archiveMode={archiveMode}
                     metadataConfirmed={upload.metadataConfirmed}
@@ -1072,28 +1070,9 @@ export function UploadClient({
                       value={form.language}
                     />
                   </div>
-                  {initialWork && (!adminOptions || adminOptions.canUpdateStatus) ? (
-                    <div className="grid gap-2">
-                      <Label className="font-bold">{adminOptions ? "状态" : "公开状态"}</Label>
-                      <SelectField
-                        aria-label={adminOptions ? "状态" : "公开状态"}
-                        disabled={formDisabled}
-                        onValueChange={(status) => adminOptions ?
-                          setAdminSettings((current) => current ? { ...current, status: status as AdminSettings["status"] } : current) :
-                          setForm((current) => ({
-                            ...current,
-                            status: status as "published" | "hidden",
-                          }))
-                        }
-                        options={[
-                          { value: "published", label: "已发布" },
-                          { value: "hidden", label: "隐藏" },
-                          ...(adminOptions ? [{ value: "deleted", label: "已删除（仅后台可见）" }] : []),
-                        ]}
-                        value={adminSettings?.status ?? form.status}
-                      />
-                    </div>
-                  ) : null}
+                  <WorkVisibilityField value={form} tags={form.tags}
+                    disabled={formDisabled || (adminOptions ? !adminOptions.canUpdateStatus : !canEditMetadata)}
+                    onChange={(visibility) => setForm((current) => ({ ...current, ...visibility }))} />
                 </fieldset>
 
                 <div className="grid gap-3 p-4">
@@ -1309,22 +1288,22 @@ function ReadinessList({
         },
       ];
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-2">
       {items.map((item) => (
         <div
-          className="grid grid-cols-[10px_minmax(0,1fr)] items-start gap-2.5"
+          className="grid grid-cols-[8px_minmax(0,1fr)] items-start gap-2"
           key={item.label}
         >
           <span
             className={cn(
-              "mt-1.5 size-2.5 rounded-full bg-muted/40",
+              "mt-1.5 size-2 rounded-full bg-muted/40",
               item.tone === "ready" && "bg-emerald-500",
               item.tone === "running" && "animate-pulse bg-primary",
             )}
           />
-          <span>
-            <strong className="block text-sm">{item.label}</strong>
-            <span className="block text-xs text-muted">{item.value}</span>
+          <span className="flex min-w-0 justify-between gap-2 text-xs">
+            <strong className="shrink-0 font-medium">{item.label}</strong>
+            <span className="text-right text-muted">{item.value}</span>
           </span>
         </div>
       ))}
@@ -1402,7 +1381,7 @@ function initialForm(
       language: initialWork.language,
       archiveSourceUrl: initialWork.archiveSourceUrl ?? "",
       externalDownloadUrl: initialWork.externalDownloadUrl ?? "",
-      status: initialWork.status,
+      ...parseWorkVisibility(initialWork, initialWork.tags),
     };
   }
   return {
@@ -1426,7 +1405,8 @@ function initialForm(
     language: "zh-CN",
     archiveSourceUrl: "",
     externalDownloadUrl: "",
-    status: "published",
+    audience: "public",
+    showOnHome: true,
   };
 }
 
@@ -1484,7 +1464,7 @@ function formFromMetadata(metadata: ArchiveCommitMetadata): FlatMetadata {
     language: metadata.game.language,
     archiveSourceUrl: metadata.archiveVersion.sourceUrl ?? "",
     externalDownloadUrl: "",
-    status: metadata.game.status === "hidden" ? "hidden" : "published",
+    ...parseWorkVisibility(legacyWorkVisibilityInput({ ...metadata.game, status: metadata.admin?.status ?? metadata.game.status }), metadata.tags),
   };
 }
 
@@ -1547,7 +1527,8 @@ function buildMetadata(
       isTranslation: form.isTranslation,
       language: form.language,
       ...imageHashes,
-      status: form.status,
+      audience: form.audience,
+      showOnHome: form.showOnHome,
       extra: {
         referenceDuration: normalizeWorkReferenceDuration(form.referenceDuration) ?? null,
         moreInfo: normalizeWorkMoreInfo(form.moreInfo),
@@ -1637,6 +1618,8 @@ async function submitExternalWork(
     body.set("uses_unsupported_maniac", "1");
   }
   body.set("language", form.language);
+  body.set("audience", form.audience);
+  body.set("show_on_home", String(form.showOnHome));
   body.set("aliases", form.aliasTitles.join("\n"));
   body.set("tags", form.tags.join("\n"));
   body.set(
@@ -1690,7 +1673,8 @@ async function submitEditedWork(
   if (form.isOriginal) body.set("is_original", "1");
   if (form.isTranslation) body.set("is_translation", "1");
   body.set("language", form.language);
-  body.set("status", form.status);
+  body.set("audience", form.audience);
+  body.set("show_on_home", String(form.showOnHome));
   if (form.engineFamily === "rpg_maker_2003_maniac" && form.usesUnsupportedManiac) {
     body.set("uses_unsupported_maniac", "1");
   }
@@ -1716,7 +1700,6 @@ async function submitEditedWork(
   );
   if (admin) {
     body.set("work_id", String(workId));
-    body.set("status", admin.settings.status);
     body.set("archive_source_url", distribution === "archive" ? form.archiveSourceUrl.trim() : "");
     body.set("cover_blob_sha256", admin.initialWork.coverBlobSha256);
     body.set("preview_blob_sha256s", admin.initialWork.previewBlobSha256s.join("\n"));

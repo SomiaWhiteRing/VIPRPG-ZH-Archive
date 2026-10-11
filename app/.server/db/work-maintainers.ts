@@ -45,7 +45,7 @@ export async function listPublicWorkMaintainers(runtime: AppRuntime, workId: num
 
 export async function getMaintainerApplication(runtime: AppRuntime, workId: number, actor: ArchiveUser): Promise<MaintainerApplication> {
   const db = getD1(runtime);
-  const work = await db.prepare(`SELECT status FROM works WHERE id=?`).bind(workId).first<{ status: string }>();
+  const work = await db.prepare(`SELECT status FROM public_works WHERE id=?`).bind(workId).first<{ status: string }>();
   if (!work || work.status !== 'published') throw new HttpError(404, '作品不存在或不可申请。');
   const recipients = (await db.prepare(eligibleRecipientsSql).bind(workId).all<MaintainerUser>()).results;
   const request = await db.prepare(`SELECT r.id,r.status,i.id AS inboxItemId,r.resolved_at
@@ -83,7 +83,7 @@ export async function requestWorkMaintainer(runtime: AppRuntime, actor: ArchiveU
   const key = crypto.randomUUID();
   await db.batch([
     db.prepare(`INSERT INTO work_maintainer_requests(work_id,applicant_user_id,submission_key)
-      SELECT w.id,u.id,? FROM works w JOIN users u ON u.id=? WHERE w.id=? AND w.status='published'
+      SELECT w.id,u.id,? FROM public_works w JOIN users u ON u.id=? WHERE w.id=?
         AND u.email_verified_at IS NOT NULL AND u.created_at<=datetime('now','-1 day')
         AND ${userPermissionSql('u.id', 'work.update_own')}
         AND NOT ${userPermissionSql('u.id', ['work.metadata.update_any', 'work.distribution.update_any'])}

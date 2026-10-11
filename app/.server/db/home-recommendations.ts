@@ -6,7 +6,7 @@ import { HttpError } from "@/lib/http";
 
 export async function readHomeRecommendations(runtime: AppRuntime): Promise<HomeRecommendation[]> {
   const rows = await getD1(runtime).prepare(`SELECT w.id,w.original_title,w.chinese_title,
-    EXISTS(SELECT 1 FROM public_works pw WHERE pw.id=w.id) AS is_public
+    EXISTS(SELECT 1 FROM member_works pw WHERE pw.id=w.id AND pw.show_on_home=1) AS is_public
     FROM home_recommendations r JOIN works w ON w.id=r.work_id
     ORDER BY r.sort_order,r.work_id`).all<{
       id: number; original_title: string; chinese_title: string | null; is_public: number;
@@ -27,10 +27,10 @@ export async function saveHomeRecommendations(runtime: AppRuntime, actor: Archiv
 
   const database = getD1(runtime);
   const idsJson = JSON.stringify(workIds);
-  const publicWorks = await database.prepare(`SELECT id FROM public_works
-    WHERE id IN (SELECT value FROM json_each(?))`).bind(idsJson).all<{ id: number }>();
+  const publicWorks = await database.prepare(`SELECT id FROM member_works
+    WHERE show_on_home=1 AND id IN (SELECT value FROM json_each(?))`).bind(idsJson).all<{ id: number }>();
   if (publicWorks.results.length !== workIds.length)
-    throw new HttpError(400, "推荐中有未公开或已删除的游戏，请移除后保存。");
+    throw new HttpError(400, "推荐中有不允许首页展示或已不可访问的游戏，请移除后保存。");
 
   // The audit and full ordered replacement commit together; failed saves retain the old list.
   const beforeIds = `SELECT json_group_array(work_id) FROM

@@ -18,6 +18,7 @@ import type { CharacterCreditSelection } from "@/lib/character-names";
 import type { CreatorSelection } from "@/lib/creator-names";
 import { isArchiveEngineFamily } from "@/lib/labels";
 import { MAX_PUBLIC_TAGS } from "@/lib/user-tags";
+import { constrainWorkVisibility } from "@/lib/work-visibility";
 import { WORK_REFERENCE_DURATIONS, WORK_REFERENCE_DURATION_MAX_LENGTH } from "@/lib/work-reference-duration";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useRef } from "react";
@@ -306,13 +307,13 @@ export function WorkMetadataFields({
             disabled={disabled}
             suggestions={suggestions.tags}
             values={form.tags}
-            onChange={(tags) => setForm((current) => ({ ...current, tags }))}
+            onChange={(tags) => setForm((current) => ({ ...current, tags, ...constrainWorkVisibility(current, tags) }))}
           /> : <TokenPicker
             disabled={disabled}
             id="upload-tags"
             label="标签"
             maxValues={MAX_PUBLIC_TAGS}
-            onChange={(tags) => setForm((current) => ({ ...current, tags }))}
+            onChange={(tags) => setForm((current) => ({ ...current, tags, ...constrainWorkVisibility(current, tags) }))}
             placeholder="搜索或创建标签"
             recommendationLabel="推荐标签"
             sortable

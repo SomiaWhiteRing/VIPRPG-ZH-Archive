@@ -117,12 +117,13 @@ export async function assertWorkCanReceiveArchive(
   runtime: AppRuntime,
   workId: number,
   user: ArchiveUser,
-): Promise<{ original_title: string; status: string; is_uploader: number }> {
+): Promise<{ original_title: string; status: string; audience: import("@/lib/work-visibility").WorkAudience; show_on_home: number; is_uploader: number }> {
   const row = await getD1(runtime)
     .prepare(
       `SELECT
          w.original_title,
          w.status,
+         w.audience,w.show_on_home,
          EXISTS(
            SELECT 1 FROM work_uploaders wu
            WHERE wu.work_id = w.id AND wu.user_id = ?
@@ -135,6 +136,8 @@ export async function assertWorkCanReceiveArchive(
     .first<{
       original_title: string;
       status: string;
+      audience: import("@/lib/work-visibility").WorkAudience;
+      show_on_home: number;
       is_uploader: number;
     }>();
 

@@ -23,6 +23,7 @@ import {
 import type { CharacterCreditSelection } from "@/lib/character-names";
 import type { CreatorSelection } from "@/lib/creator-names";
 import { HttpError, json, jsonError } from "@/lib/http";
+import { workVisibilityFormInput } from "@/lib/work-visibility";
 
 export async function POST(runtime: AppRuntime, request: Request) {
   const auth = await requirePermission(
@@ -80,6 +81,8 @@ export async function POST(runtime: AppRuntime, request: Request) {
 }
 
 function parseMetadata(form: FormData): {
+  audience?: unknown;
+  showOnHome?: unknown;
   originalTitle: string;
   chineseTitle: string | null;
   description: string | null;
@@ -100,6 +103,7 @@ function parseMetadata(form: FormData): {
   translators: CreatorSelection[];
 } {
   return {
+    ...workVisibilityFormInput(form),
     originalTitle: readRequiredString(
       form.get("original_title"),
       "original_title",

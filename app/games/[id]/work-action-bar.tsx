@@ -11,6 +11,7 @@ import { reportWorkPlayed } from "@/lib/browser/work-play";
 import { trackDownloadClick } from "@/lib/browser/site-analytics";
 
 type Props = {
+  restricted?: boolean;
   workId: number;
   title: string;
   coverBlobSha256: string | null;
@@ -32,6 +33,7 @@ export function WorkActionBar({
   externalDownload,
   workId,
   engineFamily,
+  restricted = false,
 }: Props) {
   const native = useSyncExternalStore(subscribeEnvironment, isAndroidClient, () => false);
   const { downloadUrl, downloadSize } = useArchiveDownload();
@@ -58,7 +60,7 @@ export function WorkActionBar({
                 {sizeBytes === null ? "共享播放器暂不可用" : formatBytes(sizeBytes)}
               </span>
             </a>}
-            {["rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac"].includes(engineFamily) &&
+            {!restricted && ["rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac"].includes(engineFamily) &&
               archive.webPlaySizeBytes <= 1024 ** 3 && archive.webPlayFileCount <= 50000 ? (
                 <KaiImportLink archiveVersionId={archive.id} />
               ) : null}

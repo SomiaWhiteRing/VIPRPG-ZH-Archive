@@ -10,6 +10,7 @@ import type { WorkDistribution } from "@/lib/dto/db/work-distribution";
 import type { StaffCredit } from "@/lib/staff-credits";
 import type { WorkMoreInfo } from "@/lib/work-more-info";
 import type { FavoriteDetails } from "@/lib/user-tags";
+import type { WorkVisibility, WorkVisibilityInput } from "@/lib/work-visibility";
 
 export type GameTag = { name: string; namespace: string };
 
@@ -130,7 +131,7 @@ export type GameWorkSummary = {
   distribution: WorkDistribution;
 };
 
-export type GameWorkDetail = GameWorkSummary & {
+export type GameWorkDetail = GameWorkSummary & WorkVisibility & {
   referenceDuration: string | null;
   usesUnsupportedManiac: boolean;
   maintainers: { id: number; displayName: string; avatarBlobSha256: string | null }[];
@@ -145,7 +146,7 @@ export type GameWorkDetail = GameWorkSummary & {
   parallelTranslations: GameTranslationRelation[];
 };
 
-export type AdminWorkEdit = {
+export type AdminWorkEdit = WorkVisibility & {
   referenceDuration: string | null;
   hasUsableDistribution: boolean;
   usesUnsupportedManiac: boolean;
@@ -161,7 +162,7 @@ export type AdminWorkEdit = {
   isOriginal: boolean;
   isTranslation: boolean;
   language: string;
-  status: "processing" | "published" | "hidden" | "deleted";
+  status: "processing" | "published" | "deleted";
   aliases: string[];
   creators: GameCreatorCredit[];
   tags: string[];
@@ -221,7 +222,7 @@ export type AdminArchiveVersionEdit = {
   sourceUrl: string | null;
 };
 
-export type ExternalWorkInput = {
+export type ExternalWorkInput = WorkVisibilityInput & {
   referenceDuration?: string | null;
   usesUnsupportedManiac?: boolean;
   moreInfo: WorkMoreInfo[];
@@ -258,7 +259,7 @@ export type UploaderWorkEdit = AdminWorkEdit & {
   hasCurrentArchive: boolean;
 };
 
-export type UploaderWorkUpdateInput = {
+export type UploaderWorkUpdateInput = WorkVisibilityInput & {
   referenceDuration?: string | null;
   usesUnsupportedManiac: boolean;
   moreInfo: WorkMoreInfo[];
@@ -274,7 +275,8 @@ export type UploaderWorkUpdateInput = {
   isOriginal: boolean;
   isTranslation: boolean;
   language: string;
-  status: "published" | "hidden";
+  // Compatibility input only; persisted works use audience for access control.
+  status?: "published" | "hidden";
   aliases: string[];
   tags: string[];
   characters: CharacterCreditSelection[];

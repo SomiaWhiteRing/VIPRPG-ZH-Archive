@@ -468,7 +468,7 @@ export async function hotEmojis(db: D1Database, offset: number) {
     JOIN comments root ON root.id=COALESCE(c.root_comment_id,c.id)
     JOIN users u ON u.id=c.user_id JOIN users ru ON ru.id=root.user_id
     WHERE c.status='published' AND root.status='published' AND u.status IN('active','deleted') AND ru.status IN('active','deleted')
-      AND (EXISTS(SELECT 1 FROM works w WHERE w.id=c.work_id AND w.status='published')
+      AND (EXISTS(SELECT 1 FROM public_works w WHERE w.id=c.work_id)
       OR EXISTS(SELECT 1 FROM creators cr WHERE cr.id=c.creator_id AND cr.public_at IS NOT NULL)
       OR EXISTS(SELECT 1 FROM characters ch WHERE ch.id=c.character_id))
     UNION ALL SELECT r.emoji_id,p.user_id,p.created_at FROM forum_post_face_emojis r JOIN forum_public_posts p ON p.id=r.content_id
