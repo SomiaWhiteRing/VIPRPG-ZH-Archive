@@ -29,7 +29,7 @@ export function WorkVisibilityField({ value, tags, disabled, onChange }: {
       <Checkbox id="upload-show-on-home" disabled={disabled || homeDisabled}
         checked={value.showOnHome && !homeDisabled}
         onCheckedChange={(checked) => onChange({ ...value, showOnHome: checked === true })} />
-      <Label htmlFor="upload-show-on-home" className="font-normal">允许在首页展示</Label>
+      <Label htmlFor="upload-show-on-home" className="font-normal">推送到首页</Label>
     </div>
   </div>;
 }
