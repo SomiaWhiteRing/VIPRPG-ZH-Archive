@@ -46,6 +46,22 @@ export async function saveWebPlayScreenshot(
   }
 }
 
+export async function deleteWebPlayScreenshots(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      for (const id of ids) store.delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onabort = tx.onerror = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, 1);

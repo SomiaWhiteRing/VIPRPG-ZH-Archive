@@ -140,6 +140,7 @@ export function WebPlayClient({
     loading: loadingScreenshots,
     capturing,
     capture,
+    remove: removeScreenshots,
   } = useWebPlayScreenshots(metadata.workId, metadata.title);
   const captureRef = useRef(capture);
   useEffect(() => { captureRef.current = capture; }, [capture]);
@@ -830,7 +831,7 @@ export function WebPlayClient({
         }
         sidebar={
           <WorkSidebar
-            extras={clientEnvironment === "browser" ? <WebPlayScreenshotGallery screenshots={screenshots} title={metadata.title} /> : null}
+            extras={clientEnvironment === "browser" ? <WebPlayScreenshotGallery onDelete={removeScreenshots} screenshots={screenshots} title={metadata.title} /> : null}
             mobilePrimaryFirst
             notice={notice}
             primary={

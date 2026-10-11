@@ -3,6 +3,7 @@ import type { PlayerScreenshot } from "./web-play-player";
 import { isAndroidClient } from "@/lib/browser/client-environment";
 import { saveAndroidScreenshot } from "@/lib/browser/android-screenshots";
 import {
+  deleteWebPlayScreenshots,
   listWebPlayScreenshots,
   saveWebPlayScreenshot,
   type WebPlayScreenshot,
@@ -90,5 +91,20 @@ export function useWebPlayScreenshots(workId: number, title: string) {
     }
   }, [loading, workId, title]);
 
-  return { screenshots, loading, capturing, capture };
+  const remove = useCallback(async (ids: string[]) => {
+    const signal = lifetimeRef.current?.signal;
+    if (!signal) throw new Error("截图画廊尚未就绪，请重试。");
+    signal.throwIfAborted();
+    const deletedIds = new Set(ids);
+    const removed = screenshots.filter((item) => deletedIds.has(item.id));
+    await deleteWebPlayScreenshots(removed.map((item) => item.id));
+    signal.throwIfAborted();
+    setScreenshots((current) => current.filter((item) => !deletedIds.has(item.id)));
+    for (const item of removed) {
+      URL.revokeObjectURL(item.url);
+      urlsRef.current.delete(item.url);
+    }
+  }, [screenshots]);
+
+  return { screenshots, loading, capturing, capture, remove };
 }

@@ -1,32 +1,37 @@
 import { ImageLightbox } from "@/app/components/media/image-lightbox";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
+import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useToast } from "@/app/components/ui/toast";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
 import { DISPLAY_TIME_ZONE, parseTimestamp } from "@/lib/format";
 import { zipSync, type Zippable } from "fflate";
-import { ChevronLeft, ChevronRight, Download, LoaderCircle, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, LoaderCircle, Trash2, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import LightboxDownload from "yet-another-react-lightbox/plugins/download";
 import type { ScreenshotPreview } from "./web-play-screenshots";
 
 const PAGE_SIZE = 6;
-type DownloadScope = "selected" | "page" | "all";
+type ScreenshotScope = "selected" | "page" | "all";
 
 export function WebPlayScreenshotGallery({
+  onDelete,
   screenshots,
   title,
 }: {
+  onDelete: (ids: string[]) => Promise<void>;
   screenshots: ScreenshotPreview[];
   title: string;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [selectedIds, setSelectedIds] = useState(new Set<string>());
-  const [downloadScope, setDownloadScope] = useState<DownloadScope>("all");
+  const [scope, setScope] = useState<ScreenshotScope>("all");
   const [downloading, setDownloading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const confirm = useConfirm();
   const toast = useToast();
   const downloadRef = useRef<AbortController | null>(null);
   const selectPageId = useId();
@@ -36,9 +41,10 @@ export function WebPlayScreenshotGallery({
   const pageScreenshots = screenshots.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
   const selectedScreenshots = screenshots.filter((item) => selectedIds.has(item.id));
   const pageSelectedCount = pageScreenshots.filter((item) => selectedIds.has(item.id)).length;
-  const downloadScreenshots = downloadScope === "selected"
+  const batchScreenshots = scope === "selected"
     ? selectedScreenshots
-    : downloadScope === "page" ? pageScreenshots : screenshots;
+    : scope === "page" ? pageScreenshots : screenshots;
+  const busy = downloading || deleting;
 
   useEffect(() => () => downloadRef.current?.abort(), []);
 
@@ -51,21 +57,21 @@ export function WebPlayScreenshotGallery({
       }
       return next;
     });
-    setDownloadScope("selected");
+    setScope("selected");
   }
 
   async function downloadBatch() {
-    if (downloadRef.current || !downloadScreenshots.length) return;
+    if (busy || downloadRef.current || !batchScreenshots.length) return;
     const controller = new AbortController();
     downloadRef.current = controller;
     setDownloading(true);
     try {
-      const blob = await createScreenshotZip(downloadScreenshots, controller.signal);
+      const blob = await createScreenshotZip(batchScreenshots, controller.signal);
       controller.signal.throwIfAborted();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `game-${downloadScreenshots[0].workId}-screenshots-${Date.now()}.zip`;
+      link.download = `game-${batchScreenshots[0].workId}-screenshots-${Date.now()}.zip`;
       document.body.appendChild(link);
       try {
         link.click();
@@ -73,13 +79,42 @@ export function WebPlayScreenshotGallery({
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 30_000);
       }
-      toast.success(`已打包 ${downloadScreenshots.length} 张截图。`);
+      toast.success(`已打包 ${batchScreenshots.length} 张截图。`);
     } catch {
       if (!controller.signal.aborted) toast.error("截图打包失败，请重试。");
     } finally {
       downloadRef.current = null;
       if (!controller.signal.aborted) setDownloading(false);
     }
+  }
+
+  async function deleteScreenshots(items: ScreenshotPreview[], description: string) {
+    if (busy || !items.length) return;
+    const ids = new Set(items.map((item) => item.id));
+    await confirm(description, {
+      title: "删除截图",
+      confirmLabel: "删除",
+      destructive: true,
+      action: async () => {
+        setDeleting(true);
+        try {
+          await onDelete([...ids]);
+          setSelectedIds((current) => new Set([...current].filter((id) => !ids.has(id))));
+          if (activeId && ids.has(activeId)) setActiveId(null);
+          setPage(Math.min(currentPage, Math.max(0, Math.ceil((screenshots.length - ids.size) / PAGE_SIZE) - 1)));
+          toast.success(`已删除 ${ids.size} 张截图。`);
+        } catch {
+          throw new Error("截图删除失败，请重试。");
+        } finally {
+          setDeleting(false);
+        }
+      },
+    });
+  }
+
+  function deleteBatch() {
+    const scopeLabel = scope === "selected" ? "所选" : scope === "page" ? "本页" : "全部";
+    return deleteScreenshots(batchScreenshots, `确认删除${scopeLabel} ${batchScreenshots.length} 张截图？删除后无法恢复。`);
   }
 
   if (!screenshots.length) return null;
@@ -139,24 +174,38 @@ export function WebPlayScreenshotGallery({
                   width={screenshot.width}
                 />
               </Button>
-              <div className="mt-1 flex items-center gap-1">
+              <div className="mt-1 flex flex-wrap items-center gap-1">
                 <Checkbox
                   aria-label={`选择截图：${label}`}
                   checked={selectedIds.has(screenshot.id)}
                   onCheckedChange={(checked) => selectScreenshots([screenshot], checked === true)}
                 />
-                <time className="min-w-0 flex-1 break-words text-xs text-muted" dateTime={screenshot.createdAt}>
+                <time className="min-w-0 flex-1 basis-20 break-words text-xs text-muted" dateTime={screenshot.createdAt}>
                   {capturedAt}
                 </time>
-                <a
-                  aria-label={`下载截图：${label}`}
-                  className={buttonVariants({ variant: "ghost", size: "icon" })}
-                  download={screenshotFilename(screenshot)}
-                  href={screenshot.url}
-                  title="下载截图"
-                >
-                  <Download aria-hidden />
-                </a>
+                <div className="ml-auto flex items-center gap-1">
+                  <a
+                    aria-label={`下载截图：${label}`}
+                    className={buttonVariants({ variant: "ghost", size: "icon" })}
+                    download={screenshotFilename(screenshot)}
+                    href={screenshot.url}
+                    title="下载截图"
+                  >
+                    <Download aria-hidden />
+                  </a>
+                  <Button
+                    aria-label={`删除截图：${label}`}
+                    className="text-destructive hover:text-destructive"
+                    disabled={busy}
+                    onClick={() => void deleteScreenshots([screenshot], "确认删除这张截图？删除后无法恢复。")}
+                    size="icon"
+                    title="删除截图"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Trash2 aria-hidden />
+                  </Button>
+                </div>
               </div>
             </li>
           );
@@ -193,22 +242,22 @@ export function WebPlayScreenshotGallery({
       ) : null}
       <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
         <SelectField
-          aria-label="截图批量下载范围"
+          aria-label="截图批量操作范围"
           className="min-w-0 flex-1"
-          disabled={downloading}
+          disabled={busy}
           onValueChange={(value) => {
-            setDownloadScope(value as DownloadScope);
+            setScope(value as ScreenshotScope);
           }}
           options={[
             { value: "selected", label: `所选截图（${selectedScreenshots.length}）` },
             { value: "page", label: `本页截图（${pageScreenshots.length}）` },
             { value: "all", label: `全部截图（${screenshots.length}）` },
           ]}
-          value={downloadScope}
+          value={scope}
         />
         <Button
           aria-label={downloading ? "正在打包截图" : "批量下载截图"}
-          disabled={downloading || !downloadScreenshots.length}
+          disabled={busy || !batchScreenshots.length}
           onClick={() => void downloadBatch()}
           size="icon"
           title="批量下载 ZIP"
@@ -216,6 +265,18 @@ export function WebPlayScreenshotGallery({
           variant="outline"
         >
           {downloading ? <LoaderCircle aria-hidden className="animate-spin" /> : <Download aria-hidden />}
+        </Button>
+        <Button
+          aria-label={deleting ? "正在删除截图" : "批量删除截图"}
+          className="text-destructive hover:border-destructive hover:text-destructive"
+          disabled={busy || !batchScreenshots.length}
+          onClick={() => void deleteBatch()}
+          size="icon"
+          title="批量删除截图"
+          type="button"
+          variant="outline"
+        >
+          {deleting ? <LoaderCircle aria-hidden className="animate-spin" /> : <Trash2 aria-hidden />}
         </Button>
       </div>
       {activeIndex >= 0 ? (
