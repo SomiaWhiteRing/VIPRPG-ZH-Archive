@@ -54,10 +54,7 @@ export async function loader(args: LoaderFunctionArgs) {
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({
-    title: loaderData?.creator.name || "作者详情",
-    description: loaderData ? `${loaderData.creator.name}的作者资料、参与作品与相关评论。` : undefined,
-  }, error);
+  pageMetaDescriptors({ title: loaderData?.creator.name || "作者详情" }, error);
 
 export default function CreatorDetailPage() {
   const { currentUser, creator, comments, works, canEdit } =

@@ -27,7 +27,6 @@ export async function loader(args: LoaderFunctionArgs) {
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({
     title: [loaderData?.title || "游戏", "收录了本条目的目录"],
-    description: loaderData ? `收录了${loaderData.title}的公开目录。` : undefined,
     page: loaderData?.result.page,
   }, error);
 

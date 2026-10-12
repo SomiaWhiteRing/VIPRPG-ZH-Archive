@@ -55,10 +55,7 @@ export async function loader(args: LoaderFunctionArgs) {
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({
-    title: loaderData?.title || "游戏详情",
-    description: loaderData ? `${loaderData.title}的作品介绍、制作人员、登场角色与玩家评论。` : undefined,
-  }, error);
+  pageMetaDescriptors({ title: loaderData?.title || "游戏详情" }, error);
 
 export default function GameDetailPage() {
   const { work, sidebar, canPinComments, title, current, primaryMedia, media, tags: initialTags, comments, relationCards } = useLoaderData<typeof loader>();

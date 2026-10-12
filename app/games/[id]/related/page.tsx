@@ -35,7 +35,6 @@ export async function loader(args: LoaderFunctionArgs) {
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({
     title: [loaderData?.title || "游戏", "关联作品"],
-    description: loaderData ? `${loaderData.title}的关联作品与作品关系。` : undefined,
   }, error);
 
 export default function WorkRelatedPage() {

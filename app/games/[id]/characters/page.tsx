@@ -20,10 +20,7 @@ export async function loader(args: LoaderFunctionArgs) {
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({
-    title: [loaderData?.title || "游戏", "登场角色"],
-    description: loaderData ? `${loaderData.title}的登场角色与角色资料。` : undefined,
-  }, error);
+  pageMetaDescriptors({ title: [loaderData?.title || "游戏", "登场角色"] }, error);
 
 export default function WorkCharactersPage() {
   const { workId, title, characters } = useLoaderData<typeof loader>();

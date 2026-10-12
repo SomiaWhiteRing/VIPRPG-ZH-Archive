@@ -25,7 +25,6 @@ export async function loader(args: LoaderFunctionArgs) {
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({
     title: [loaderData?.creator.name || "作者", "参与作品"],
-    description: loaderData ? `${loaderData.creator.name}参与制作的作品与制作分工。` : undefined,
     page: loaderData?.page,
   }, error);
 
