@@ -10,7 +10,7 @@ import type { AppRuntime } from "../runtime";
 type Input = {
   email: string;
   nextPath: string;
-} & ({ purpose: "register"; passwordHash: string; displayName: string } | { purpose: "password_reset" });
+} & ({ purpose: "register"; passwordHash: string; displayName: string; sourceHash: string | null } | { purpose: "password_reset" });
 
 export function queuePublicEmailChallenge(runtime: AppRuntime, input: Input): void {
   // Account existence, delivery failures and delivery quotas never change the response.
@@ -31,6 +31,7 @@ async function sendChallenge(runtime: AppRuntime, input: Input): Promise<void> {
     ...(input.purpose === "register" ? {
       pendingPasswordHash: input.passwordHash,
       pendingDisplayName: input.displayName,
+      sourceHash: input.sourceHash,
     } : {}),
   });
   try {

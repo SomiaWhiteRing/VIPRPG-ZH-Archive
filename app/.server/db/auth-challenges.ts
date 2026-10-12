@@ -2,6 +2,7 @@ import { timingSafeEqualString } from "@/lib/sha256";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
+import { hashRequestFingerprint } from "@/app/.server/auth/tokens";
 
 export type ChallengePurpose = "register" | "password_reset" | "email_change" | "account_delete";
 
@@ -34,6 +35,44 @@ type ChallengeRow = {
 type CountRow = {
   count: number;
 };
+
+const registrationSourceRecipientLimit = 5;
+const recentRegistrationRecipientsSql = `
+  SELECT email FROM email_verification_challenges
+  WHERE ip_hash=? AND purpose='register' AND created_at>=datetime('now','-1 day')
+  UNION
+  SELECT email FROM auth_audit_logs
+  WHERE ip_hash=? AND event_type='register_code_sent' AND created_at>=datetime('now','-1 day')`;
+
+const unverifiedRegistrationRecipientsSql = `
+  SELECT recent.email FROM (${recentRegistrationRecipientsSql}) recent
+  WHERE NOT EXISTS (
+    SELECT 1 FROM users u
+    WHERE u.email=recent.email AND u.email_verified_at IS NOT NULL
+  )`;
+
+function registrationSourceQuotaError(): HttpError {
+  return new HttpError(429, "当前网络申请注册验证码过于频繁，请稍后重试或联系管理员");
+}
+
+export async function assertRegistrationSourceQuota(
+  runtime: AppRuntime,
+  email: string,
+): Promise<string | null> {
+  // Forwarded headers are caller-controlled. Cloudflare supplies this header at the edge.
+  const sourceHash = await hashRequestFingerprint(runtime, runtime.request.headers.get("cf-connecting-ip"));
+  if (!sourceHash) return null;
+  const row = await getD1(runtime).prepare(`
+    SELECT COUNT(*) AS count,
+      COALESCE(MAX(CASE WHEN recent.email=? THEN 1 ELSE 0 END),0) AS seen
+    FROM (${unverifiedRegistrationRecipientsSql}) recent`)
+    .bind(email, sourceHash, sourceHash).first<{ count: number; seen: number }>();
+  if ((row?.count ?? 0) >= registrationSourceRecipientLimit && !row?.seen) {
+    console.warn("Registration source recipient limit reached");
+    throw registrationSourceQuotaError();
+  }
+  return sourceHash;
+}
 
 export async function assertEmailChallengeQuota(
   runtime: AppRuntime,
@@ -69,9 +108,11 @@ export async function createEmailChallenge(
     codeHash: string;
     pendingPasswordHash?: string | null;
     pendingDisplayName?: string | null;
+    sourceHash?: string | null;
   },
 ): Promise<void> {
-  await getD1(runtime)
+  const isRegistration = input.purpose === "register";
+  const result = await getD1(runtime)
     .prepare(
       `INSERT INTO email_verification_challenges (
         user_id,
@@ -80,8 +121,14 @@ export async function createEmailChallenge(
         code_hash,
         pending_password_hash,
         pending_display_name,
-        expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+10 minutes'))`,
+        expires_at,
+        ip_hash
+      ) SELECT ?, ?, ?, ?, ?, ?, datetime('now', '+10 minutes'), ?
+      WHERE ? IS NULL OR (
+        SELECT COUNT(*) < ${registrationSourceRecipientLimit}
+          OR COALESCE(MAX(CASE WHEN recent.email=? THEN 1 ELSE 0 END),0)=1
+        FROM (${unverifiedRegistrationRecipientsSql}) recent
+      )`,
     )
     .bind(
       input.userId ?? null,
@@ -90,8 +137,17 @@ export async function createEmailChallenge(
       input.codeHash,
       input.pendingPasswordHash ?? null,
       input.pendingDisplayName ?? null,
+      isRegistration ? input.sourceHash ?? null : null,
+      isRegistration ? input.sourceHash ?? null : null,
+      input.email,
+      isRegistration ? input.sourceHash ?? null : null,
+      isRegistration ? input.sourceHash ?? null : null,
     )
     .run();
+  if (isRegistration && Number(result.meta.changes ?? 0) !== 1) {
+    console.warn("Registration source recipient limit reached after concurrent request");
+    throw registrationSourceQuotaError();
+  }
 }
 
 export async function deletePendingEmailChallenge(

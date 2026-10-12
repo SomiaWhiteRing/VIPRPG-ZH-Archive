@@ -4,6 +4,7 @@ import { queuePublicEmailChallenge } from "@/app/.server/auth/public-email-chall
 import { assertAuthEmailRateLimit, assertAuthSourceRateLimit } from "@/app/.server/auth/rate-limit";
 import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
 import { assertDisplayNameAvailable, normalizeDisplayName, normalizeEmail } from "@/app/.server/db/users";
+import { assertRegistrationSourceQuota } from "@/app/.server/db/auth-challenges";
 import { readRequiredFormString, readRequiredPassword, redirectWithParams } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 
@@ -19,9 +20,10 @@ export async function POST(runtime: AppRuntime, request: Request) {
     }
     await assertAuthSourceRateLimit(runtime, "register");
     await assertAuthEmailRateLimit(runtime, `register:${email}`);
+    const sourceHash = await assertRegistrationSourceQuota(runtime, email);
     await assertDisplayNameAvailable(runtime, displayName);
     const passwordHash = await hashPassword(readRequiredPassword(formData, "password"));
-    queuePublicEmailChallenge(runtime, { purpose: "register", email, nextPath, passwordHash, displayName });
+    queuePublicEmailChallenge(runtime, { purpose: "register", email, nextPath, passwordHash, displayName, sourceHash });
     return redirectWithParams(request, "/register", { next: nextPath, email, sent: "1" });
   } catch (error) {
     return redirectWithParams(request, "/register", {
