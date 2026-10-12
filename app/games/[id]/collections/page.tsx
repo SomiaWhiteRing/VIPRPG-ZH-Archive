@@ -39,6 +39,7 @@ export async function loader(args: LoaderFunctionArgs) {
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({
     title: [loaderData?.work.chineseTitle || loaderData?.work.originalTitle || "游戏", "收藏与吐槽"],
+    description: loaderData ? `${loaderData.work.chineseTitle || loaderData.work.originalTitle}的公开收藏与玩家吐槽。` : undefined,
     page: loaderData?.collections.page,
   }, error);
 

@@ -26,6 +26,7 @@ export async function loader(args: LoaderFunctionArgs) {
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({
     title: [loaderData?.character.primaryName || "角色", "登场作品"],
+    description: loaderData ? `${loaderData.character.primaryName}的登场作品与登场身份。` : undefined,
     page: loaderData?.page,
   }, error);
 

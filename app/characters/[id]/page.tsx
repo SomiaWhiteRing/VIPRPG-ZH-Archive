@@ -52,7 +52,10 @@ export async function loader(args: LoaderFunctionArgs) {
     null,
   );
 
-  const pageMetadata = { title: character.primaryName };
+  const pageMetadata = {
+    title: character.primaryName,
+    description: `${character.primaryName}的角色介绍、登场作品、角色素材与相关评论。`,
+  };
   return {
     character,
     user: pickPageFields(user, ["id"]),
