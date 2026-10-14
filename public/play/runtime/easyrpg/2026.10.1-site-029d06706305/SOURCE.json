@@ -1,12 +1,12 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "8e215b5740bb0a528de12de03b389303013d76ce",
-  "version": "2026.9.5-site-28b760323c0d",
-  "build": "github-actions-37328581529",
+  "revision": "c8aab1002e2cb3bc3b9d878844a5a0997de52156",
+  "version": "2026.10.1-site-029d06706305",
+  "build": "github-actions-38650356398",
   "artifact": "EasyRPG-Player-Kai-nightly-web.zip",
-  "archiveSha256": "28b760323c0d4f24f1c5d4e99efff4d7cd26daa7f982bf596b4c9c611fba8d15",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/8e215b5740bb0a528de12de03b389303013d76ce",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/8e215b5740bb0a528de12de03b389303013d76ce/COPYING",
+  "archiveSha256": "029d0670630562faeaf9708657501bd4ca3c503fb90df74f2a2727a43d851375",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/c8aab1002e2cb3bc3b9d878844a5a0997de52156",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/c8aab1002e2cb3bc3b9d878844a5a0997de52156/COPYING",
   "sourceState": "commit",
   "sourceSnapshot": null,
   "sourceSnapshotSha256": null,
@@ -23,24 +23,24 @@
   "patches": [],
   "files": {
     "index.js": {
-      "size": 14049,
-      "sha256": "19c06f472524fd295c2ea07e15177d78e61fddbca7f4d8bdc3758abbd48af778"
+      "size": 34243,
+      "sha256": "782dc242e6b8c34ae151b8a460e276b7191e275bbf3c0097cd5fd9f4c2e27d8c"
     },
     "easyrpg-player.js": {
-      "size": 125364,
-      "sha256": "60b68ad05148a968194d13079505992ce4a0a13ff60f894c2d783a5621baf30a"
+      "size": 149671,
+      "sha256": "abcb6fceb0b1309ce03c7ca0a2a33e6af3180af3b77d6792d3e8365a5437a485"
     },
     "easyrpg-player.wasm": {
-      "size": 9600950,
-      "sha256": "790cd3a87c477aa1f818c501bc0739ad52593eb2e763580afa3bdcee2e2b07e1"
+      "size": 15917323,
+      "sha256": "4a94451503e028a550e7f1b5460a6a45de42d95524c9fb653ce426f66ac19f62"
     },
     "easyrpg-player.data": {
       "size": 7557598,
       "sha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6"
     },
     "player-worker.js": {
-      "size": 6579,
-      "sha256": "490d3793f98ef40dbd15ff8da9a782d6db6cd1b974aeac8edd481b92a776ec49"
+      "size": 9658,
+      "sha256": "39b5aca9330c1c0463e60410929d06dc37eb740855e343ad53ca27e4be147395"
     },
     "player-audio.js": {
       "size": 1858,
@@ -59,8 +59,8 @@
       "sha256": "0c6ad362cb851f51f529ffb891842ae5f696093bbdd6afb69bcf8a5b5756ff45"
     },
     "player-movie.js": {
-      "size": 8085,
-      "sha256": "ec655806cee6e7e55defd58871571caa416ba303a775658ea8edd90670bcb1a2"
+      "size": 8288,
+      "sha256": "d3f391f2ae48163c4329a637e50ff780c58e06f28f285907d29e47f6e036ed91"
     },
     "player-movie-worker.js": {
       "size": 1837,

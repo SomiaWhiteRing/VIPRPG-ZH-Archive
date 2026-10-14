@@ -5,6 +5,7 @@ import { easyRpgConfigArguments } from "@/lib/archive/easyrpg-config";
 import { hasGameResources, readGamePackages } from "./web-play-opfs";
 import { interceptPlayerDownloads } from "./web-play-player-download";
 import { seedBundledWebPlaySaves } from "./web-play-bundled-saves";
+import { playerConfigDirectory, preparePlayerConfig } from "./web-play-player-config";
 import { acquireGameResourceReadLock, acquireGameSaveLock } from "./web-play-locks";
 import { getWebPlayInstallation, markWebPlayLastPlayed } from "./web-play-db";
 import { gameResourceExpiresAt, renewGameBucket } from "./web-play-storage";
@@ -192,6 +193,7 @@ export function createPlayerSession(
       );
       await seedBundledWebPlaySaves(metadata.workId, packages, lifetime.signal);
     }
+    await preparePlayerConfig(lifetime.signal, nativeResources);
     await load(frame, lifetime.signal, () => {
       // Preserve the runtime's existing URL options (e.g. load-game-id).
       frame.src = `/play/player.html${window.location.search}`;
@@ -231,6 +233,7 @@ export function createPlayerSession(
     });
     const args = metadata.easyRpg ? easyRpgConfigArguments(metadata.easyRpg) : [];
     if (!metadata.easyRpg && metadata.engineFamily === "rpg_maker_2003_maniac") args.push("--patch-maniac");
+    args.push("--config-path", playerConfigDirectory);
     const loadId = new URLSearchParams(window.location.search).get("load-game-id");
     if (loadId && /^\d+$/.test(loadId)) args.push("--load-game-id", loadId);
     runtimeCreation = playerWindow.createEasyRpgPlayer({

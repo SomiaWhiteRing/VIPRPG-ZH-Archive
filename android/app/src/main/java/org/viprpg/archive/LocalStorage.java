@@ -76,7 +76,27 @@ final class LocalStorage {
         if (found) throw new IOException("存档文件损坏，已保留原文件，请检查目录。");
         return new JSONObject();
     }
-    synchronized JSONObject loadSaves(long workId) throws Exception { JSONObject files = loadGeneration(workId).optJSONObject("files"); return files == null ? new JSONObject() : files; }
+    synchronized JSONObject loadSaves(long workId) throws Exception {
+        JSONObject files = loadGeneration(workId).optJSONObject("files");
+        if (files == null) files = new JSONObject();
+        Uri shared = child(root(), "player-config.json", "application/json", false);
+        if (shared != null) {
+            JSONObject config = json(shared);
+            // Shared settings supersede historical per-game config snapshots.
+            for (String path : toKeys(files)) if (isPlayerConfig(path)) files.remove(path);
+            Iterator<String> paths = config.keys();
+            while (paths.hasNext()) {
+                String path = paths.next();
+                if (!isPlayerConfig(path)) throw new IOException("播放器配置路径无效。");
+                files.put(path, config.getString(path));
+            }
+        }
+        return files;
+    }
+    private static boolean isPlayerConfig(String path) { return path.startsWith("/home/web_user/.config/"); }
+    private static List<String> toKeys(JSONObject object) {
+        List<String> keys = new ArrayList<>(); object.keys().forEachRemaining(keys::add); return keys;
+    }
     // Seed on launch so already-installed archives also gain their bundled saves after an APK update.
     synchronized JSONObject seedBundledSaves(long workId, Uri gameZip, JSONArray gameFiles) throws Exception {
         JSONObject saves = loadSaves(workId);
@@ -126,6 +146,14 @@ final class LocalStorage {
         Uri target = child(folder, name, "application/json", true);
         write(target, bytes);
         if (!Arrays.equals(bytes, read(target, bytes.length))) throw new IOException("存档写入校验失败。");
+        JSONObject config = new JSONObject();
+        Iterator<String> configPaths = files.keys();
+        while (configPaths.hasNext()) {
+            String path = configPaths.next();
+            if (isPlayerConfig(path)) config.put(path, files.getString(path));
+        }
+        // Keep old generations for recovery, but load the latest config for every Work.
+        if (config.length() > 0) write(child(root(), "player-config.json", "application/json", true), config.toString().getBytes(StandardCharsets.UTF_8));
         List<String> names = new ArrayList<>(children(folder).keySet()); names.sort(Collections.reverseOrder());
         int retained = 0;
         for (String old : names) if (old.matches("[0-9]{13}-[a-f0-9]{64}\\.json") && ++retained > 2) {

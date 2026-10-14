@@ -1,11 +1,11 @@
 {
-  "version": "2026.9.5-site-28b760323c0d",
-  "revision": "8e215b5740bb0a528de12de03b389303013d76ce",
-  "build": "github-actions-37328581529",
+  "version": "2026.10.1-site-029d06706305",
+  "revision": "c8aab1002e2cb3bc3b9d878844a5a0997de52156",
+  "build": "github-actions-38650356398",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "commit",
-  "archiveSha256": "28b760323c0d4f24f1c5d4e99efff4d7cd26daa7f982bf596b4c9c611fba8d15",
+  "archiveSha256": "029d0670630562faeaf9708657501bd4ca3c503fb90df74f2a2727a43d851375",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
