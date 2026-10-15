@@ -4,6 +4,7 @@
 
 # Runtime bundles and their recorded hashes must retain the imported bytes.
 public/play/runtime/easyrpg/** -text
+scripts/runtime-patches/*.patch text eol=lf
 
 # Seed objects are original R2 bytes, including extensionless JSON/text files.
 data/local-seed/objects/* -text
