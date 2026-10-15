@@ -1,11 +1,11 @@
 {
-  "version": "2026.10.1-site-029d06706305",
-  "revision": "c8aab1002e2cb3bc3b9d878844a5a0997de52156",
-  "build": "github-actions-38650356398",
+  "version": "2026.10.1-site-2c84f07fee58-console2",
+  "revision": "72d307a298b4709ff7c08295ba5a36b176c0f21c",
+  "build": "github-actions-38659415850",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "commit",
-  "archiveSha256": "029d0670630562faeaf9708657501bd4ca3c503fb90df74f2a2727a43d851375",
+  "archiveSha256": "2c84f07fee58419eeb95d8f585182f32a385da9ed1b16bcc4be70d07310d23e9",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
@@ -14,5 +14,14 @@
     "source": "https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz",
     "sourceSha256": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f",
     "licenseSha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
-  }
+  },
+  "patches": [
+    {
+      "file": "player-host.js",
+      "path": "scripts/runtime-patches/console-scrollback.patch",
+      "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
+      "beforeSha256": "077640cf2f48e9cc5ce06e075554554ebd5a36a3b094241b62f3d61bd844018a",
+      "afterSha256": "add66c5886952901678905eecbecdda407647a3c21bebf14962d87dbb0939afe"
+    }
+  ]
 }

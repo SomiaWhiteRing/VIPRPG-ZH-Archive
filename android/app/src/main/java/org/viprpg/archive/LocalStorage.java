@@ -16,6 +16,7 @@ import org.json.*;
 /** App-owned persistent storage. Old selected trees are intentionally untouched. */
 final class LocalStorage {
     private final File base;
+    private boolean warnedSharedConfig;
     LocalStorage(Context context) { base = new File(context.getFilesDir(), "local-" + Uri.parse(BuildConfig.SITE_ORIGIN).getHost()); }
     File file(Uri uri) throws IOException {
         if (uri == null || !"file".equals(uri.getScheme())) throw new IOException("文件路径无效。");
@@ -79,19 +80,38 @@ final class LocalStorage {
     synchronized JSONObject loadSaves(long workId) throws Exception {
         JSONObject files = loadGeneration(workId).optJSONObject("files");
         if (files == null) files = new JSONObject();
-        Uri shared = child(root(), "player-config.json", "application/json", false);
-        if (shared != null) {
-            JSONObject config = json(shared);
-            // Shared settings supersede historical per-game config snapshots.
-            for (String path : toKeys(files)) if (isPlayerConfig(path)) files.remove(path);
-            Iterator<String> paths = config.keys();
-            while (paths.hasNext()) {
-                String path = paths.next();
-                if (!isPlayerConfig(path)) throw new IOException("播放器配置路径无效。");
-                files.put(path, config.getString(path));
+        // openRead also restores AtomicFile's .bak when the base is absent.
+        File shared = new File(file(root()), "player-config.json");
+        if (shared.exists() || new File(shared.getPath() + ".bak").exists()) {
+            try {
+                JSONObject config;
+                try (InputStream in = new android.util.AtomicFile(shared).openRead()) {
+                    config = new JSONObject(new String(GameStore.readStream(in, 64 * 1024 * 1024), StandardCharsets.UTF_8));
+                }
+                // Validate the complete object before replacing any generation settings.
+                for (String path : toKeys(config)) {
+                    if (!isPlayerConfig(path) || Arrays.asList(path.split("/")).contains("..")
+                        || Arrays.asList(path.split("/")).contains(".") || !(config.get(path) instanceof String))
+                        throw new IOException("播放器配置无效。");
+                    android.util.Base64.decode(config.getString(path), android.util.Base64.NO_WRAP);
+                }
+                // Shared settings supersede historical per-game config snapshots.
+                for (String path : toKeys(files)) if (isPlayerConfig(path)) files.remove(path);
+                for (String path : toKeys(config)) files.put(path, config.getString(path));
+            } catch (IOException | JSONException | IllegalArgumentException invalidConfig) {
+                // Keep the validated generation (or defaults for a new Work), and retain
+                // the damaged shared file until a later successful atomic write replaces it.
+                warnSharedConfig();
             }
         }
         return files;
+    }
+    private void warnSharedConfig() {
+        // At most once per store lifetime; never log configuration contents or stack traces.
+        if (!warnedSharedConfig) {
+            warnedSharedConfig = true;
+            android.util.Log.w("LocalStorage", "播放器共享配置不可用，作品存档已保留；使用作品配置或默认设置。");
+        }
     }
     private static boolean isPlayerConfig(String path) { return path.startsWith("/home/web_user/.config/"); }
     private static List<String> toKeys(JSONObject object) {
@@ -153,7 +173,13 @@ final class LocalStorage {
             if (isPlayerConfig(path)) config.put(path, files.getString(path));
         }
         // Keep old generations for recovery, but load the latest config for every Work.
-        if (config.length() > 0) write(child(root(), "player-config.json", "application/json", true), config.toString().getBytes(StandardCharsets.UTF_8));
+        if (config.length() > 0) {
+            try {
+                // Do not precreate the base: a failed first AtomicFile write must leave
+                // no empty config behind. The durable generation already contains it.
+                write(Uri.fromFile(new File(file(root()), "player-config.json")), config.toString().getBytes(StandardCharsets.UTF_8));
+            } catch (IOException unavailableConfig) { warnSharedConfig(); }
+        }
         List<String> names = new ArrayList<>(children(folder).keySet()); names.sort(Collections.reverseOrder());
         int retained = 0;
         for (String old : names) if (old.matches("[0-9]{13}-[a-f0-9]{64}\\.json") && ++retained > 2) {

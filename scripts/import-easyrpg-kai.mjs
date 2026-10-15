@@ -11,6 +11,8 @@ import {
 } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
 import { unzipSync } from "fflate";
 import runtime from "../lib/archive/easyrpg-runtime.json" with { type: "json" };
 
@@ -48,7 +50,27 @@ if (sha256(license) !== licenseSha256)
 if (sha256(files["movie-decoder.LICENSE.txt"]) !== runtime.movieDecoder.licenseSha256)
   throw new Error("Movie decoder license does not match the pinned digest");
 
-// Runtime source owns the site API and Work-based saves; import preserves every byte.
+// Preserve upstream bytes except for explicitly pinned, reproducible host patches.
+const patches = runtime.patches ?? [];
+for (const patch of patches) {
+  if (patch.file !== "player-host.js" || !/^scripts\/runtime-patches\/[a-z0-9.-]+\.patch$/.test(patch.path))
+    throw new Error("Unsupported runtime patch target or path");
+  const patchPath = resolve(root, patch.path);
+  if (sha256(readFileSync(patchPath)) !== patch.sha256 || sha256(files[patch.file]) !== patch.beforeSha256)
+    throw new Error("Runtime patch or its upstream input does not match the pinned digest");
+  const scratch = mkdtempSync(resolve(tmpdir(), "viprpg-runtime-patch-"));
+  try {
+    writeFileSync(resolve(scratch, patch.file), files[patch.file]);
+    execFileSync("git", ["-c", "core.autocrlf=false", "apply", "--check", patchPath], { cwd: scratch, stdio: "pipe" });
+    execFileSync("git", ["-c", "core.autocrlf=false", "apply", patchPath], { cwd: scratch, stdio: "pipe" });
+    const patched = readFileSync(resolve(scratch, patch.file));
+    if (sha256(patched) !== patch.afterSha256)
+      throw new Error("Patched runtime does not match the pinned digest");
+    files[patch.file] = patched;
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
 const output = {
   "index.js": files["player-host.js"],
   ...Object.fromEntries(runtimeFiles.map(name => [name, files[name]])),
@@ -71,7 +93,7 @@ const source =
       emscriptenVersion: runtime.emscriptenVersion ?? null,
       buildscriptsRevision: runtime.buildscriptsRevision ?? null,
       movieDecoder: runtime.movieDecoder,
-      patches: [],
+      patches,
       files: Object.fromEntries(
         Object.entries(output).map(([name, bytes]) => [name, { size: bytes.length, sha256: sha256(bytes) }]),
       ),
