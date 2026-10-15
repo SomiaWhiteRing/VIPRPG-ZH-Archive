@@ -272,7 +272,7 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。当前运行包来自 Player 仓库的 GitHub Actions，按固定提交构建，记录 `sourceState: commit`；`build` 记录构建任务编号。下载 Web 产物后核对 GitHub artifact 摘要、包内宿主源码、音色库与许可证，再固定 Web ZIP 摘要并导入；运行目录内的 `SOURCE.json` 记录源码链接和各文件摘要。
 
-导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont、Player 与解码器随包许可证的摘要，保留构建字节，只将入口文件重命名为 `index.js`；不在压缩后的生成代码中做字符串补丁，也不依赖联网下载许可证。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。
+导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont、Player 与解码器随包许可证的摘要，只将入口文件重命名为 `index.js`。默认保留构建字节；如运行时配置声明 `patches`，仅对未压缩的 `player-host.js` 应用仓库内固定的统一差异补丁，并校验补丁文件、输入和输出的 SHA-256。导入需要 Git；补丁及摘要同时写入 `SOURCE.json`，上游 ZIP 摘要仍指向原始构建包。不会修改压缩后的生成代码或 WASM，也不依赖联网下载许可证。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。
 
 视频优先走浏览器原生播放；媒体格式失败时才加载独立 FFmpeg/WASM Worker，补充 DivX/Xvid、Microsoft Video 1、MPEG-1/2 等旧编码。解码器按本地 Blob 切片读取，逐帧解码，并用当前 AudioContext 调度声音；不修改游戏 pack，也不改变安装键或存档目录。源码版本、上游下载摘要和解码器许可证摘要记录在运行时配置及 `SOURCE.json` 的 `movieDecoder` 字段中。具体格式子集、内存限制见随包 `web-movies.md`。
 
@@ -392,3 +392,7 @@ const persisted = await navigator.storage.persist();
 - MDN `StorageManager.persist()`: https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist
 - MDN Cache API: https://developer.mozilla.org/en-US/docs/Web/API/Cache
 - Emscripten File System API / IDBFS: https://emscripten.org/docs/api_reference/Filesystem-API.html
+
+### 控制台历史上限
+
+宿主控制台保留最多 1,000 行、累计 128 Ki UTF-16 单元（含换行），每行最多 4,096 单元。历史淘汰只移除已完成的旧行；异常超长单个字素使用替代字符，避免组合字符绕过上限。写入和输入回显仍按原顺序同步处理，滚动与布局读取合并到下一动画帧，并在关闭时取消。运行 `node scripts/console-scrollback-check.mjs` 可执行针对实际宿主函数的回归检查；该检查使用计数 DOM，不代表真浏览器性能基准。

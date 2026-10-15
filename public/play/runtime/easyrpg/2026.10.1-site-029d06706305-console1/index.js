@@ -145,17 +145,39 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const panel = consoleWindow;
     consoleWindow = undefined;
     if (!panel) return;
+    cancelAnimationFrame(panel.scrollFrame);
     panel.dialog.remove();
     if (notify) send({type: 'console-closed', generation: panel.generation});
     if (!closed && !stopping) canvas.focus();
   }
+  // Bound both DOM rows and UTF-16 text, including unusually wide/combining lines.
+  const consoleMaxRows = 1000, consoleMaxText = 128 * 1024, consoleMaxRowText = 4096;
+  function trimConsoleHistory(panel) {
+    while (panel.output.children.length > 1 &&
+        (panel.output.children.length > consoleMaxRows || panel.textLength > consoleMaxText)) {
+      const oldest = panel.output.firstElementChild;
+      panel.textLength -= oldest.textContent.length + 1;
+      oldest.nextSibling.remove(); // The newline separating this completed row.
+      oldest.remove();
+    }
+  }
+  function scheduleConsoleScroll(panel) {
+    if (panel.scrollFrame) return;
+    panel.scrollFrame = requestAnimationFrame(() => {
+      panel.scrollFrame = 0;
+      if (consoleWindow === panel && !closed && !stopping)
+        panel.output.scrollTop = panel.output.scrollHeight;
+    });
+  }
   function appendConsoleText(text, foreground, background) {
     const panel = consoleWindow;
     if (!panel || !text) return;
-    const font = getComputedStyle(panel.output);
-    panel.measure.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
-    const space = panel.measure.measureText(' ').width;
-    panel.columns ||= Math.max(1, Math.floor(panel.output.clientWidth / space));
+    if (!panel.columns) {
+      const font = getComputedStyle(panel.output);
+      panel.measure.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+      const space = panel.measure.measureText(' ').width;
+      panel.columns = Math.max(1, Math.min(1024, Math.floor(panel.output.clientWidth / space) || 1));
+    }
     const color = `${foreground}:${background}`;
     const styled = value => {
       const run = document.createElement('span'); run.dataset.color = color;
@@ -178,6 +200,10 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       }
       if (start === before.length) firstColumn = lastColumn = column;
       const left = Math.max(0, panel.column - firstColumn), right = Math.max(0, lastColumn - panel.column - width);
+      // Cursor gaps and half-wide-glyph padding also count toward the row budget.
+      if (before.length - (end - start) + left + value.length + right > consoleMaxRowText) {
+        nextRow(); writeRun(value); return;
+      }
       if (start === before.length && !left) {
         const last = panel.row.lastElementChild;
         if (last?.dataset.color === color) last.firstChild.appendData(value);
@@ -222,11 +248,15 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       }
       panel.cursor = start + left + value.length; panel.column += width;
       panel.rowLength = panel.row.textContent.length;
+      panel.textLength += panel.rowLength - before.length;
+      trimConsoleHistory(panel);
     };
     const nextRow = () => {
       panel.output.append(document.createTextNode('\n'));
       panel.row = document.createElement('span'); panel.output.append(panel.row);
       panel.cursor = panel.rowLength = panel.column = 0;
+      ++panel.textLength;
+      trimConsoleHistory(panel);
     };
     const write = value => {
       const width = panel.columns;
@@ -234,10 +264,16 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       let run = '';
       const glyphs = panel.segmenter ? panel.segmenter.segment(value) : value;
       for (const item of glyphs) {
-        const glyph = item.segment ?? item;
+        // A malicious combining sequence can itself be arbitrarily long. Keep normal
+        // graphemes intact; replace only a single grapheme exceeding the row budget.
+        const segment = item.segment ?? item;
+        const glyph = segment.length > consoleMaxRowText ? '\uFFFD' : segment;
         const advance = glyphColumns(glyph);
         // Filling the last column delays wrapping until the next printable glyph.
-        if (used > 0 && used + advance > width + 0.01) {
+        // Bound the pending run here. writeRun checks the exact resulting row length,
+        // subtracting overwritten glyphs before counting cursor gaps and padding.
+        if ((used > 0 && used + advance > width + 0.01) ||
+            run.length + glyph.length > consoleMaxRowText) {
           if (run) writeRun(run);
           nextRow(); run = ''; used = 0;
         }
@@ -280,7 +316,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     }
     // A page has no OS console bell; coalesce this write into a visual alert.
     if (bell) panel.dialog.animate([{opacity: 0.5}, {opacity: 1}], {duration: 150});
-    panel.output.scrollTop = panel.output.scrollHeight;
+    // Writes stay synchronous (including input echo); only layout/scroll is coalesced.
+    scheduleConsoleScroll(panel);
   }
   function setConsoleColor(foreground, background) {
     const panel = consoleWindow;
@@ -312,7 +349,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     form.append(input, submit, cancel); dialog.append(header, output, form); document.body.append(dialog);
     const row = document.createElement('span'); output.append(row);
     consoleWindow = {dialog, caption, output, form, input, cancel, generation: data.generation,
-      row, cursor: 0, rowLength: 0, column: 0,
+      row, cursor: 0, rowLength: 0, column: 0, textLength: 0, scrollFrame: 0,
       segmenter: typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, {granularity: 'grapheme'}) : null,
       measure: document.createElement('canvas').getContext('2d')};
     setConsoleColor(data.foreground, data.background);

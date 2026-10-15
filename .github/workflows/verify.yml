@@ -22,6 +22,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Verify bounded player console
+        run: node scripts/console-scrollback-check.mjs
       - name: Use isolated local configuration
         run: node scripts/prepare-verification-config.mjs
       - run: npm run check
