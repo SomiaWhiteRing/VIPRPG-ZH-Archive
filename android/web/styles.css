@@ -4,5 +4,7 @@
 @source "./";
 @source "../../app/play/*/web-play-surface.tsx";
 @source "../../app/play/*/web-play-layout-editor.tsx";
+@source "../../app/play/*/web-play-keyboard.tsx";
 @source "../../app/components/ui/button.tsx";
 @source "../../app/components/ui/input.tsx";
+@source "../../app/components/ui/dialog.tsx";

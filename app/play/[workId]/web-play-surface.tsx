@@ -2,7 +2,7 @@ import { Button } from "@/app/components/ui/button";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Camera, Settings2 } from "lucide-react";
 import type { KeyboardEvent, PointerEvent, ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { controlDefinitions, controlIds, defaultControlLayouts } from "./web-play-controls-preferences";
+import { changeCustomKey, defaultControlLayouts, getControlLabel, getLayoutControlIds, isCustomControlId } from "./web-play-controls-preferences";
 import type { ControlId, ControlLayout, ControlPlacement, DisplayOrientation } from "./web-play-controls-preferences";
 import { WebPlayLayoutEditor } from "./web-play-layout-editor";
 import type { PlayerButton, PlayerSession } from "./web-play-player";
@@ -33,7 +33,7 @@ const directions = [
   { key: "right", label: "右", Icon: ArrowRight, className: "col-start-3 row-start-2" },
   { key: "down", label: "下", Icon: ArrowDown, className: "col-start-2 row-start-3" },
 ] as const;
-const buttonKeys: PlayerButton[] = ["up", "left", "right", "down", "decision", "cancel", "shift", "menu", "debug", "log", "fastForward3", "fastForward10"];
+const buttonKeys: PlayerButton[] = ["up", "left", "right", "down", "decision", "cancel", "shift", "menu", "debug", "log", "fastForward3", "fastForward10", "digit1", "digit2", "digit3", "digit4"];
 const clampPosition = (value: number) => Math.max(0, Math.min(1, value));
 type Point = { x: number; y: number };
 type DragTarget = ControlId | "screen";
@@ -70,11 +70,11 @@ export function WebPlaySurface({
       if (!next.has(key)) playerRef.current?.setButtonPressed(key, false);
     }
     for (const key of next) {
-      if (!heldRef.current.has(key)) playerRef.current?.setButtonPressed(key, true);
+      if (!heldRef.current.has(key)) playerRef.current?.setButtonPressed(key, true, isCustomControlId(key) ? layout.customKeys[key] : undefined);
     }
     heldRef.current = next;
     setHeld(next);
-  }, [playerRef]);
+  }, [playerRef, layout.customKeys]);
 
   const releaseInput = useCallback(() => {
     const pointers = [...pointersRef.current.entries()];
@@ -163,7 +163,8 @@ export function WebPlaySurface({
         element.style.setProperty("--control-width", `${controlWidth}px`);
         element.style.setProperty("--control-height", `${controlHeight}px`);
         element.style.setProperty("--control-opacity", String(control.opacity));
-        element.style.setProperty("--control-font-size", `${controlHeight * (pill ? 0.32 : 0.4)}px`);
+        const fontRatio = isCustomControlId(id) ? Math.min(0.4, 0.85 / getControlLabel(positions, id).length) : pill ? 0.32 : 0.4;
+        element.style.setProperty("--control-font-size", `${controlHeight * fontRatio}px`);
       }
     };
     fit();
@@ -314,68 +315,72 @@ export function WebPlaySurface({
         </div>
         {immersive ? placeholder : null}
 
-        {showControls ? controlIds.filter((id) => positions.buttons[id].visible).map((id) => (
-          <div
-            className={`absolute left-(--control-x) top-(--control-y) h-(--control-height) w-(--control-width) ${editing && selected === id ? "z-20" : "z-10"}`}
-            data-play-control={id}
-            key={id}
-          >
-            {id === "dpad" ? (
-              <div
-                aria-label="方向键"
-                className="grid h-full w-full touch-none select-none grid-cols-3 grid-rows-3 opacity-(--control-opacity)"
-                onPointerDown={(event) => {
-                  if (editing || event.button !== 0) return;
-                  event.preventDefault();
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  // Keep the pointer even in the neutral zone so sliding can resume input.
-                  updatePointer(event.pointerId, dpadButtons(event), event.currentTarget, true);
-                }}
-                onPointerMove={(event) => {
-                  if (!editing && event.currentTarget.hasPointerCapture(event.pointerId)) {
+        {showControls ? getLayoutControlIds(positions).filter((id) => positions.buttons[id].visible).map((id) => {
+          const DirectionIcon = directions.find(({ key }) => key === id)?.Icon;
+          const label = getControlLabel(positions, id);
+          return (
+            <div
+              className={`absolute left-(--control-x) top-(--control-y) h-(--control-height) w-(--control-width) ${editing && selected === id ? "z-20" : "z-10"}`}
+              data-play-control={id}
+              key={id}
+            >
+              {id === "dpad" ? (
+                <div
+                  aria-label="方向键"
+                  className="grid h-full w-full touch-none select-none grid-cols-3 grid-rows-3 opacity-(--control-opacity)"
+                  onPointerDown={(event) => {
+                    if (editing || event.button !== 0) return;
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    // Keep the pointer even in the neutral zone so sliding can resume input.
                     updatePointer(event.pointerId, dpadButtons(event), event.currentTarget, true);
-                  }
-                }}
-                onPointerUp={endPointer}
-                onPointerCancel={endPointer}
-                onLostPointerCapture={endPointer}
-                role="group"
-              >
-                {directions.map(({ key, label, Icon, className }) => (
-                  <Button
-                    {...inputProps(key)}
-                    aria-label={label}
-                    className={`${controlButtonClass} rounded-sm ${className}`}
-                    key={key}
-                    onPointerDown={undefined}
-                    type="button"
-                    variant="outline"
-                  ><Icon aria-hidden /></Button>
-                ))}
-                <div aria-hidden className="pointer-events-none col-start-2 row-start-2 bg-zinc-800" />
-              </div>
-            ) : id === "screenshot" ? (
-              <Button
-                aria-label="截取图片"
-                className={`${controlButtonClass} opacity-(--control-opacity)`}
-                disabled={!editing && captureDisabled}
-                onClick={() => { if (!editing) onCaptureScreenshot(); }}
-                tabIndex={editing ? -1 : 0}
-                type="button"
-                variant="outline"
-              ><Camera aria-hidden /></Button>
-            ) : (
-              <Button
-                {...inputProps(id)}
-                aria-label={id === "decision" ? "A 确认" : id === "cancel" ? "B 取消或菜单" : controlDefinitions[id].label}
-                className={`${controlButtonClass} text-(length:--control-font-size) opacity-(--control-opacity)`}
-                type="button"
-                variant="outline"
-              >{controlDefinitions[id].label}</Button>
-            )}
-            {dragHandle(id, controlDefinitions[id].label)}
-          </div>
-        )) : null}
+                  }}
+                  onPointerMove={(event) => {
+                    if (!editing && event.currentTarget.hasPointerCapture(event.pointerId)) {
+                      updatePointer(event.pointerId, dpadButtons(event), event.currentTarget, true);
+                    }
+                  }}
+                  onPointerUp={endPointer}
+                  onPointerCancel={endPointer}
+                  onLostPointerCapture={endPointer}
+                  role="group"
+                >
+                  {directions.map(({ key, label, Icon, className }) => (
+                    <Button
+                      {...inputProps(key)}
+                      aria-label={label}
+                      className={`${controlButtonClass} rounded-sm ${className}`}
+                      key={key}
+                      onPointerDown={undefined}
+                      type="button"
+                      variant="outline"
+                    ><Icon aria-hidden /></Button>
+                  ))}
+                  <div aria-hidden className="pointer-events-none col-start-2 row-start-2 bg-zinc-800" />
+                </div>
+              ) : id === "screenshot" ? (
+                <Button
+                  aria-label="截取图片"
+                  className={`${controlButtonClass} opacity-(--control-opacity)`}
+                  disabled={!editing && captureDisabled}
+                  onClick={() => { if (!editing) onCaptureScreenshot(); }}
+                  tabIndex={editing ? -1 : 0}
+                  type="button"
+                  variant="outline"
+                ><Camera aria-hidden /></Button>
+              ) : (
+                <Button
+                  {...inputProps(id)}
+                  aria-label={id === "decision" ? "A 确认" : id === "cancel" ? "B 取消或菜单" : label}
+                  className={`${controlButtonClass} ${DirectionIcon ? "rounded-sm" : ""} text-(length:--control-font-size) opacity-(--control-opacity)`}
+                  type="button"
+                  variant="outline"
+                >{DirectionIcon ? <DirectionIcon aria-hidden /> : label}</Button>
+              )}
+              {dragHandle(id, label)}
+            </div>
+          );
+        }) : null}
 
         {immersive && (toolbar || showControls) ? (
           <div
@@ -400,9 +405,14 @@ export function WebPlaySurface({
             layout={draft}
             onCancel={() => finishEditing()}
             onChange={updateControl}
+            onCustomKeyChange={(id, code) => setDraft((current) => current && changeCustomKey(current, id, code))}
             onReset={() => { setSelected("decision"); setDraft(defaultControlLayouts[orientation]); }}
             onSave={() => finishEditing(true)}
             onSelect={setSelected}
+            onSplitDpadChange={(splitDpad) => {
+              setDraft((current) => current && { ...current, splitDpad });
+              setSelected(splitDpad ? "up" : "dpad");
+            }}
             onTouchEnabledChange={onTouchEnabledChange}
             orientation={orientation}
             selected={selected}

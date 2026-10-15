@@ -106,82 +106,15 @@
   }
 }
 
-/* Website-only PC keyboard guide: app/play/[workId]/web-play-controls-help.tsx. */
-.web-play-controls-help {
-  --play-help-deck: light-dark(#eeefeb, #18201d);
-  --play-help-key: light-dark(#fafbf9, #2a3630);
-  --play-help-depth: light-dark(#c6cdc7, #111914);
-  --play-help-move: light-dark(#197568, #88decb);
-  --play-help-move-bg: light-dark(#d9eee7, #24463c);
-  --play-help-confirm: light-dark(#315f9b, #a8c9f7);
-  --play-help-confirm-bg: light-dark(#e1ebfa, #2b3c56);
-  --play-help-cancel: light-dark(#974523, #ffc29e);
-  --play-help-cancel-bg: light-dark(#fbe7d9, #53372a);
-  --play-help-engine: light-dark(#755595, #d0b6ea);
-  --play-help-engine-bg: light-dark(#eee6f7, #43334f);
-}
-
-.web-play-help-board {
-  padding: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--play-help-deck);
-}
-
-.web-play-help-function-row { display: flex; gap: 5px; margin-bottom: 12px; }
-.web-play-help-keyboard-lower { display: flex; gap: 12px; }
-.web-play-help-letter-block { display: grid; flex: 1; min-width: 0; gap: 5px; }
-.web-play-help-key-row { display: flex; min-width: 0; gap: 4px; }
-.web-play-help-navigation { display: flex; flex-direction: column; justify-content: space-between; flex-shrink: 0; width: 108px; }
-.web-play-help-navigation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
-
-.web-play-help-key {
-  display: flex;
-  flex: 1 1 0;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  height: 31px;
-  padding: 0 2px;
-  border: 1px solid var(--color-border);
-  border-bottom-color: var(--play-help-depth);
-  border-radius: 5px;
-  background: var(--play-help-key);
-  color: var(--color-muted);
-  box-shadow: 0 2px 0 var(--play-help-depth);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1;
-}
-
-.web-play-help-key[data-key-units="1.25"] { flex-grow: 1.25; }
-.web-play-help-key[data-key-units="1.5"] { flex-grow: 1.5; }
-.web-play-help-key[data-key-units="1.75"] { flex-grow: 1.75; }
-.web-play-help-key[data-key-units="2"] { flex-grow: 2; }
-.web-play-help-key[data-key-units="2.25"] { flex-grow: 2.25; }
-.web-play-help-key[data-key-units="2.75"] { flex-grow: 2.75; }
-.web-play-help-key[data-key-units="6.25"] { flex-grow: 6.25; }
-.web-play-help-key[data-key-group="move"] { background: var(--play-help-move-bg); color: var(--play-help-move); }
-.web-play-help-key[data-key-group="confirm"] { background: var(--play-help-confirm-bg); color: var(--play-help-confirm); }
-.web-play-help-key[data-key-group="cancel"] { background: var(--play-help-cancel-bg); color: var(--play-help-cancel); }
-.web-play-help-key[data-key-group="engine"] { background: var(--play-help-engine-bg); color: var(--play-help-engine); }
-
-.web-play-help-board[data-selected-group="move"] .web-play-help-key:not([data-key-group="move"]),
-.web-play-help-board[data-selected-group="confirm"] .web-play-help-key:not([data-key-group="confirm"]),
-.web-play-help-board[data-selected-group="cancel"] .web-play-help-key:not([data-key-group="cancel"]),
-.web-play-help-board[data-selected-group="engine"] .web-play-help-key:not([data-key-group="engine"]) { opacity: .35; }
-
-.web-play-help-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; margin-top: 12px; }
-.web-play-help-action { display: grid; justify-content: start; gap: 2px; padding: 9px 0; border-bottom: 1px solid var(--color-border); border-radius: 0; text-align: left; font-size: 13px; font-weight: 400; }
-.web-play-help-action:hover { background: transparent; }
-.web-play-help-action-name { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
-.web-play-help-action[aria-pressed="true"] .web-play-help-action-name { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
-.web-play-help-action-keys { padding-left: 15px; color: var(--color-muted); font-size: 11px; }
+/* Website-only PC keyboard guide legend and compact view. */
+.web-play-help-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; margin-top: 12px; }
+.web-play-help-legend-item { display: grid; justify-content: start; gap: 2px; padding: 9px 0; border-bottom: 1px solid var(--color-border); text-align: left; font-size: 13px; font-weight: 400; }
+.web-play-help-legend-name { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
+.web-play-help-legend-keys { padding-left: 15px; color: var(--color-muted); font-size: 11px; }
 .web-play-help-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--play-help-move); }
-.web-play-help-action[data-key-group="confirm"] .web-play-help-dot { background: var(--play-help-confirm); }
-.web-play-help-action[data-key-group="cancel"] .web-play-help-dot { background: var(--play-help-cancel); }
-.web-play-help-action[data-key-group="engine"] .web-play-help-dot { background: var(--play-help-engine); }
+.web-play-help-legend-item[data-key-group="confirm"] .web-play-help-dot { background: var(--play-help-confirm); }
+.web-play-help-legend-item[data-key-group="cancel"] .web-play-help-dot { background: var(--play-help-cancel); }
+.web-play-help-legend-item[data-key-group="engine"] .web-play-help-dot { background: var(--play-help-engine); }
 .web-play-help-narrow-keyboard { display: none; }
 .web-play-help-narrow-group { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 12px; }
 .web-play-help-narrow-group:last-child { margin-bottom: 0; }
@@ -191,7 +124,7 @@
 @media (max-width: 600px) {
   .web-play-help-full-keyboard { display: none; }
   .web-play-help-narrow-keyboard { display: block; }
-  .web-play-help-actions { grid-template-columns: 1fr; }
+  .web-play-help-legend { grid-template-columns: 1fr; }
 }
 
 /* Website work detail introduction, on the page background. */

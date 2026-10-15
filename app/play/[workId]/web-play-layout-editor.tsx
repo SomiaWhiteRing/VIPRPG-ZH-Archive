@@ -1,9 +1,12 @@
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
-import { Check } from "lucide-react";
+import * as Dialog from "@/app/components/ui/dialog";
+import { Check, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
-import { controlDefinitions, controlIds } from "./web-play-controls-preferences";
-import type { ControlId, ControlLayout, ControlPlacement, DisplayOrientation } from "./web-play-controls-preferences";
+import { customControlIds, getControlLabel, getLayoutControlIds, isCustomControlId } from "./web-play-controls-preferences";
+import type { ControlId, ControlLayout, ControlPlacement, CustomControlId, DisplayOrientation } from "./web-play-controls-preferences";
+import { WebPlayKeyboard } from "./web-play-keyboard";
+import { reservedKeyboardCodes } from "./web-play-keyboard-keys";
 
 type Props = {
   orientation: DisplayOrientation;
@@ -12,6 +15,8 @@ type Props = {
   dragging: boolean;
   touchEnabled: boolean;
   onTouchEnabledChange: (enabled: boolean) => void;
+  onSplitDpadChange: (split: boolean) => void;
+  onCustomKeyChange: (id: CustomControlId, code: string) => void;
   onSelect: (id: ControlId) => void;
   onChange: (id: ControlId, change: Partial<ControlPlacement>) => void;
   onReset: () => void;
@@ -21,8 +26,9 @@ type Props = {
 
 const buttonClass = "border-white/40 bg-zinc-900 text-white hover:border-white hover:bg-zinc-700 hover:text-white";
 
-export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, touchEnabled, onTouchEnabledChange, onSelect, onChange, onReset, onCancel, onSave }: Props) {
+export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, touchEnabled, onTouchEnabledChange, onSplitDpadChange, onCustomKeyChange, onSelect, onChange, onReset, onCancel, onSave }: Props) {
   const [propertiesOpen, setPropertiesOpen] = useState(true);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -36,7 +42,8 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
   }, []);
 
   const control = layout.buttons[selected];
-  const definition = controlDefinitions[selected];
+  const label = getControlLabel(layout, selected);
+  const disabledCodes = new Set([...reservedKeyboardCodes, ...customControlIds.filter((id) => id !== selected).map((id) => layout.customKeys[id])]);
   const panelPosition = orientation === "portrait"
     ? control.y < 0.5
       ? "bottom-0 left-0 right-0 mx-auto max-h-[calc(50%-0.5rem)] w-[min(20rem,100%)]"
@@ -62,9 +69,9 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
       </div>
       <div className={propertiesOpen ? `pointer-events-auto absolute ${panelPosition} overflow-y-auto overscroll-contain rounded-lg border border-white/25 bg-zinc-950 p-3 text-white` : "hidden"} id="web-play-layout-properties">
         <div aria-label="选择或添加按钮" className="mb-3 flex flex-wrap gap-1.5" role="group">
-          {controlIds.map((id) => {
+          {getLayoutControlIds(layout).map((id) => {
             const visible = layout.buttons[id].visible;
-            const { label } = controlDefinitions[id];
+            const label = getControlLabel(layout, id);
             return (
               <Button
                 aria-label={visible ? `选择${label}` : `添加${label}`}
@@ -83,11 +90,41 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
           })}
         </div>
         <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold">{definition.label}</span>
-          {definition.optional && control.visible ? (
-            <Button aria-label={`删除${definition.label}`} className={buttonClass} onClick={() => { onChange(selected, { visible: false }); onSelect("decision"); }} size="sm" type="button" variant="outline">删除</Button>
+          <span className="text-sm font-semibold">{label}</span>
+          {control.visible ? (
+            <Button aria-label={`隐藏${label}`} className={buttonClass} onClick={() => onChange(selected, { visible: false })} size="sm" type="button" variant="outline">隐藏</Button>
           ) : null}
         </div>
+        {selected === "dpad" || selected === "up" || selected === "left" || selected === "right" || selected === "down" ? (
+          <Button aria-checked={layout.splitDpad} className={buttonClass} onClick={() => onSplitDpadChange(!layout.splitDpad)} role="checkbox" size="sm" type="button" variant="outline">
+            拆分方向键
+            <span aria-hidden className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-white/70">
+              {layout.splitDpad ? <Check /> : null}
+            </span>
+          </Button>
+        ) : null}
+        {isCustomControlId(selected) ? (
+          <Dialog.Root open={keyboardOpen} onOpenChange={setKeyboardOpen}>
+            <Dialog.Trigger asChild>
+              <Button className={buttonClass} size="sm" type="button" variant="outline">自定义</Button>
+            </Dialog.Trigger>
+            <Dialog.Portal container={editorRef.current}>
+              <Dialog.Overlay className="pointer-events-auto absolute" />
+              <Dialog.Content className="web-play-controls-help pointer-events-auto absolute left-1/2 top-1/2 max-h-[calc(100%-1rem)] w-[calc(100%-1rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg p-3">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <Dialog.Title>自定义按键</Dialog.Title>
+                    <Dialog.Description className="mb-0 mt-1 text-xs text-muted">选择按键；默认功能键和其他三个自定义按键已占用的键不可选。左右滑动可查看完整键盘。</Dialog.Description>
+                  </div>
+                  <Dialog.Close asChild><Button aria-label="关闭键盘" size="icon" type="button" variant="outline"><X aria-hidden /></Button></Dialog.Close>
+                </div>
+                <div className="web-play-help-board overflow-x-auto">
+                  <WebPlayKeyboard disabledCodes={disabledCodes} onSelect={(code) => { onCustomKeyChange(selected, code); setKeyboardOpen(false); }} value={layout.customKeys[selected]} />
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
+        ) : null}
         <LayoutSlider label="大小" value={Math.round(control.size * 100)} min={50} max={200} onChange={(value) => onChange(selected, { size: value / 100 })} />
         <LayoutSlider label="透明度" value={Math.round((1 - control.opacity) * 100)} min={0} max={100} onChange={(value) => onChange(selected, { opacity: 1 - value / 100 })} />
       </div>

@@ -10,6 +10,7 @@ import { acquireGameResourceReadLock, acquireGameSaveLock } from "./web-play-loc
 import { getWebPlayInstallation, markWebPlayLastPlayed } from "./web-play-db";
 import { gameResourceExpiresAt, renewGameBucket } from "./web-play-storage";
 import { notifyGameResourcesChanged } from "./web-play-events";
+import { keyboardKeys } from "./web-play-keyboard-keys";
 import playerStyles from "../player.css?inline";
 
 type PlayerWindow = Window & {
@@ -39,6 +40,10 @@ const playerButtons = {
   log: { key: "`", code: "Backquote", keyCode: 192 },
   fastForward3: { key: "f", code: "KeyF", keyCode: 70 },
   fastForward10: { key: "g", code: "KeyG", keyCode: 71 },
+  digit1: { key: "1", code: "Digit1", keyCode: 49 },
+  digit2: { key: "2", code: "Digit2", keyCode: 50 },
+  digit3: { key: "3", code: "Digit3", keyCode: 51 },
+  digit4: { key: "4", code: "Digit4", keyCode: 52 },
 } as const;
 
 export type PlayerButton = keyof typeof playerButtons;
@@ -55,7 +60,7 @@ const suppressedPlayerLogs = new Set([
 export type PlayerSession = {
   ready: Promise<void>;
   captureScreenshot: () => Promise<PlayerScreenshot>;
-  setButtonPressed: (button: PlayerButton, pressed: boolean) => void;
+  setButtonPressed: (button: PlayerButton, pressed: boolean, code?: string) => void;
   dispose: () => Promise<void>;
 };
 
@@ -82,7 +87,7 @@ export function createPlayerSession(
   let nativeResources: NativePlayerResources | undefined;
   const lifetime = new AbortController();
   const resourceLifetime = new AbortController();
-  const heldButtons = new Set<PlayerButton>();
+  const heldButtons = new Map<PlayerButton, { key: string; code: string; keyCode: number; location?: number }>();
   let disconnectLogs: (() => void) | undefined;
   let restoreWorker: (() => void) | undefined;
   let runtime: Awaited<ReturnType<NonNullable<PlayerWindow["createEasyRpgPlayer"]>>> | undefined;
@@ -119,20 +124,24 @@ export function createPlayerSession(
     });
   }
 
-  function setButtonPressed(button: PlayerButton, pressed: boolean) {
+  function setButtonPressed(button: PlayerButton, pressed: boolean, code?: string) {
     if (lifetime.signal.aborted || heldButtons.has(button) === pressed) return;
     const playerWindow = frame.contentWindow as PlayerWindow | null;
     const canvas = frame.contentDocument?.querySelector("canvas");
     if (!playerWindow || !canvas) return;
-    if (pressed) heldButtons.add(button);
+    const key: { key: string; code: string; keyCode: number; location?: number } | undefined = heldButtons.get(button) ?? (code ? keyboardKeys[code] : playerButtons[button]);
+    if (!key) return;
+    if (pressed) heldButtons.set(button, key);
     else heldButtons.delete(button);
-    const key = playerButtons[button];
+    const modifierHeld = (name: string) => [...heldButtons.values()].some((held) => held.key === name);
     // The host forwards this document's key events to the engine Worker.
     canvas.dispatchEvent(new playerWindow.KeyboardEvent(pressed ? "keydown" : "keyup", {
       ...key,
       which: key.keyCode,
-      location: button === "shift" ? 1 : 0,
-      shiftKey: heldButtons.has("shift"),
+      location: key.location ?? (button === "shift" ? 1 : 0),
+      shiftKey: modifierHeld("Shift"),
+      ctrlKey: modifierHeld("Control"),
+      altKey: modifierHeld("Alt"),
       bubbles: true,
       cancelable: true,
     }));
@@ -140,7 +149,7 @@ export function createPlayerSession(
 
   function dispose(): Promise<void> {
     if (disposing) return disposing;
-    for (const button of heldButtons) setButtonPressed(button, false);
+    for (const button of heldButtons.keys()) setButtonPressed(button, false);
     lifetime.abort();
     disposing = (async () => {
       try {
