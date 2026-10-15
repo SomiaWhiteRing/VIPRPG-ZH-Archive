@@ -523,11 +523,9 @@ export async function editForum(
   target = normalizeTarget(target, row);
   currentPublic(row);
   const topic = await rawTopic(ctx, row.topic_id);
-  if (input.topicRevision !== topic.revision) conflict();
   if (actor.id !== row.user_id)
     throw new HttpError(403, "只能编辑自己的内容。");
   if (topic.locked) throw new HttpError(409, "主题已锁定，不能编辑。");
-  if (row.revision !== input.revision) conflict();
   const images = imageIds(input.images, target.kind === "comment");
   const body = mixedBody(input.body, images, target.kind);
   const attachments = contentGuard(images, actor, body, target.kind, row.id);
@@ -550,16 +548,11 @@ export async function editForum(
   const view =
     target.kind === "comment" ? "forum_public_comments" : "forum_public_posts";
   const statements = [
-    guard(ctx, topic, actor, token, {
-      sql: `${publicTopicSql} AND t.locked=0 AND EXISTS(SELECT 1 FROM ${view} WHERE id=? AND user_id=? AND revision=?) AND ${tagGuard.sql} AND ${attachments.sql}`,
-      args: [
-        row.id,
-        actor.id,
-        row.revision,
-        ...tagGuard.args,
-        ...attachments.args,
-      ],
-    }),
+    ctx.db.prepare(`UPDATE forum_topics AS t SET write_token=?,revision=?,updated_at=CURRENT_TIMESTAMP
+      WHERE t.id=? AND ${forumActorSql()} AND ${publicTopicSql} AND t.locked=0
+      AND EXISTS(SELECT 1 FROM ${view} WHERE id=? AND user_id=?)
+      AND ${tagGuard.sql} AND ${attachments.sql}`)
+      .bind(token, token, topic.id, actor.id, row.id, actor.id, ...tagGuard.args, ...attachments.args),
     ctx.db
       .prepare(
         `UPDATE ${table} SET body=?,revision=?,edited_at=CURRENT_TIMESTAMP WHERE id=? AND ${gate.sql}`,
@@ -593,7 +586,8 @@ export async function editForum(
     snapshot: forumEditAuditSnapshot(target), permission: "forum.use", authorizationBasis: "content_author",
     source: "owned", operation: "edit", context: { topicId: topic.id, target },
   });
-  if (!result[0].meta.changes) conflict();
+  if (!result[0].meta.changes)
+    throw new HttpError(409, "当前内容、权限或附件状态已变化，无法保存。请保留输入后重试。");
   return { target };
 }
 export async function deleteForum(

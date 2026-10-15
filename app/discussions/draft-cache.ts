@@ -77,7 +77,19 @@ export function readForumDraft(key: string) {
 // earlier editor's cleanup cannot invalidate a restored draft's images.
 export function restoreForumDraft(stored: ForumDraft): ForumDraft {
   return {
-    ...stored,
+    cacheKey: stored.cacheKey,
+    collapsed: stored.collapsed,
+    mode: stored.mode,
+    target: stored.target,
+    postId: stored.postId,
+    postNumber: stored.postNumber,
+    replyToId: stored.replyToId,
+    replyName: stored.replyName,
+    title: stored.title,
+    body: stored.body,
+    tags: stored.tags,
+    original: stored.original,
+    requestKey: stored.requestKey,
     editorId: crypto.randomUUID(),
     images: stored.images.map((image) => ({
       ...image,

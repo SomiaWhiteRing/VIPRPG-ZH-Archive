@@ -106,10 +106,9 @@ export type ForumContent = {
   replyTo: { id: number; author: ForumAuthor | null } | null;
   capabilities: ForumCapabilities;
 };
-export type ForumEditVersion = {
+export type ForumEditContent = {
   body: string;
   images: ForumImage[];
-  revision: string;
   topic: ForumTopic;
 };
 export type ForumPage<T> = {

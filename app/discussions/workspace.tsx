@@ -29,7 +29,7 @@ import { deleteForumDraft, forumDraftKey, readForumDraft, restoreForumDraft, sav
 
 import { ForumImages, existingDraftImages, uploadDraftImages } from "./images";
 import { ForumReplyBar } from "./reply-bar";
-import { DiscussionTagLink, ForumAuthorName, ForumBody, PopularTagFilter, TopicStatus, TopicTags, forumRequest, readForumEditVersion, referencedForumEmojis } from "./shared";
+import { DiscussionTagLink, ForumAuthorName, ForumBody, PopularTagFilter, TopicStatus, TopicTags, forumRequest, readForumEditContent, referencedForumEmojis } from "./shared";
 import { useDiscussionVisit } from "./visit";
 let editorModule: Promise<{ default: typeof import("./editor").ForumEditor }> | undefined;
 function preloadEditor() {
@@ -415,7 +415,7 @@ export function DiscussionWorkspace({
         "postNumber" in content && content.kind === "post" && content.postNumber === 1
           ? { kind: "topic", id: content.topicId }
           : { kind: content.kind, id: content.id };
-      const result = await readForumEditVersion(target);
+      const result = await readForumEditContent(target);
       if (sequence !== restoreSequence.current) return;
       const next: Omit<ForumDraft, "original"> = {
         editorId: crypto.randomUUID(),
@@ -427,8 +427,6 @@ export function DiscussionWorkspace({
         body: result.body,
         images: existingDraftImages(result.images),
         tags: result.topic.tags.map((t) => t.name),
-        revision: result.revision,
-        topicRevision: result.topic.revision,
         requestKey: crypto.randomUUID(),
       };
       await restoreDraft({ ...next, original: draftSnapshot(next) });
@@ -439,13 +437,7 @@ export function DiscussionWorkspace({
     }
   }
   async function submitDraft() {
-    if (
-      !draft ||
-      busy ||
-      draft.currentVersion ||
-      (draft.target && requestError?.code === "forum_conflict")
-    )
-      return;
+    if (!draft || busy) return;
     setBusy(true);
     setError("");
     setRequestError(null);
@@ -481,8 +473,6 @@ export function DiscussionWorkspace({
           tags: draft.tags,
           tagsChanged:
             JSON.stringify(draft.original.tags) !== JSON.stringify(draft.tags),
-          revision: draft.revision,
-          topicRevision: draft.topicRevision,
           requestKey: draft.requestKey,
         },
       );
@@ -530,20 +520,6 @@ export function DiscussionWorkspace({
       if (e instanceof ApiResponseError && (e.status === 401 || e.status === 409))
         setError(message);
       if (e instanceof ApiResponseError) setRequestError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function reloadEditor() {
-    if (!draft?.target || busy) return;
-    setBusy(true);
-    try {
-      const result = await readForumEditVersion(draft.target);
-      setError("");
-      setDraft({ ...draft, currentVersion: result });
-      setRequestError(null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "读取失败。");
     } finally {
       setBusy(false);
     }
@@ -710,12 +686,10 @@ export function DiscussionWorkspace({
         onError={setError}
         onCancel={() => void switchDraft(null)}
         onSubmit={() => void submitDraft()}
-        onReload={() => void reloadEditor()}
         busy={busy}
         error={error}
         progress={uploadProgress}
         loginExpired={requestError?.status === 401}
-        conflict={!!draft.target && requestError?.code === "forum_conflict"}
         emojis={currentEmojis}
       />
     </ClientOnly>
@@ -1520,7 +1494,7 @@ function ForumFloorView({
                   ? "正在加载…"
                   : expanded
                     ? "收起回复"
-                    : `查看全部 ${post.comments.total} 条回复`}
+                    : `展开剩余 ${post.comments.total - preview.length} 条回复`}
               </Button>
             ) : null}
             {expanded && comments.total > comments.pageSize ? (

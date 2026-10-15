@@ -1,4 +1,4 @@
-import type { ForumEditVersion, ForumTarget } from "@/lib/forum";
+import type { ForumTarget } from "@/lib/forum";
 import type { DraftImage } from "./images";
 
 export type ForumDraft = {
@@ -16,10 +16,7 @@ export type ForumDraft = {
   images: DraftImage[];
   tags: string[];
   original: ForumDraftSnapshot;
-  revision?: string;
-  topicRevision?: string;
   requestKey: string;
-  currentVersion?: ForumEditVersion;
 };
 
 type ForumDraftSnapshot = {

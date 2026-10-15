@@ -4,15 +4,13 @@ import { AtSign, ChevronDown, Code2, ImagePlus, Maximize2, Minimize2 } from "luc
 import { ForumElementEditor } from "./element-editor";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ForumDraft } from "./draft";
-import { draftSnapshot, forumReplyLauncherClass } from "./draft";
+import { forumReplyLauncherClass } from "./draft";
 
 import { HeightBox } from "@/app/components/ui/height-box";
 import { Button } from "@/app/components/ui/button";
 
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { SelectField } from "@/app/components/ui/select";
-import { Textarea } from "@/app/components/ui/textarea";
 
 import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import {
@@ -21,7 +19,6 @@ import {
   FORUM_POST_BODY_LENGTH,
   FORUM_TITLE_LENGTH,
 } from "@/lib/forum";
-import { ForumImages, existingDraftImages } from "./images";
 import {
   BodyEditor,
   type BodyEditorHandle,
@@ -35,12 +32,10 @@ export function ForumEditor({
   onError,
   onCancel,
   onSubmit,
-  onReload,
   busy: submitting,
   error,
   progress,
   loginExpired,
-  conflict,
   emojis,
   canInsertElements = false,
 }: {
@@ -49,12 +44,10 @@ export function ForumEditor({
   onError: (message: string) => void;
   onCancel: () => void;
   onSubmit: () => void;
-  onReload: () => void;
   busy: boolean;
   error: string;
   progress: string;
   loginExpired: boolean;
-  conflict: boolean;
   emojis: FaceEmoji[];
   canInsertElements?: boolean;
 }) {
@@ -78,7 +71,7 @@ export function ForumEditor({
   const composing = useRef(false);
   const topic = draft.mode === "topic";
   const inline = draft.mode === "comment";
-  const isCollapsed = collapsed && !error && !draft.currentVersion;
+  const isCollapsed = collapsed && !error;
   const limit = inline
     ? FORUM_COMMENT_LENGTH
     : topic
@@ -266,7 +259,7 @@ export function ForumEditor({
         }
         onSubmit={(event) => {
           event.preventDefault();
-          if (!busy && !conflict && !draft.currentVersion && canSubmit)
+          if (!busy && canSubmit)
             onSubmit();
         }}
       >
@@ -280,14 +273,6 @@ export function ForumEditor({
               : "flex max-h-[min(50dvh,calc(var(--reply-viewport,100dvh)-10rem))] flex-col gap-2 overflow-y-auto"
           }
         >
-          {draft.currentVersion ? (
-            <ForumConflictResolver
-              key={`${draft.currentVersion.revision}-${draft.currentVersion.topic.revision}`}
-              draft={draft}
-              current={draft.currentVersion}
-              onChange={onChange}
-            />
-          ) : null}
           {topic ? (
             <>
               <ForumTagEditor
@@ -392,16 +377,6 @@ export function ForumEditor({
                   在新标签页重新登录
                 </a>
               ) : null}
-              {conflict ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={onReload}
-                >
-                  读取当前版本
-                </Button>
-              ) : null}
             </div>
           ) : null}
         </div>
@@ -476,7 +451,7 @@ export function ForumEditor({
                     size="icon"
                     aria-label="收起回复"
                     title="收起回复"
-                    disabled={busy || !!error || !!draft.currentVersion}
+                    disabled={busy || !!error}
                     onClick={() => {
                       if (fullscreen) {
                         setFullscreen?.(false);
@@ -505,7 +480,7 @@ export function ForumEditor({
                 ) : null}
                 <Button
                   ref={submitButton}
-                  disabled={busy || conflict || !!draft.currentVersion || !canSubmit}
+                  disabled={busy || !canSubmit}
                   type="submit"
                   title={`${label}（Ctrl+Enter）`}
                   aria-keyshortcuts="Control+Enter"
@@ -551,180 +526,4 @@ export function ForumEditor({
       </ForumModal>
     );
   return form;
-}
-
-function ForumConflictResolver({
-  draft,
-  current,
-  onChange,
-}: {
-  draft: ForumDraft;
-  current: NonNullable<ForumDraft["currentVersion"]>;
-  onChange: (draft: ForumDraft) => void;
-}) {
-  const [title, setTitle] = useState("current");
-  const [tags, setTags] = useState("current");
-  const [body, setBody] = useState("draft");
-
-  const currentTags = current.topic.tags.map((tag) => tag.name);
-  return (
-    <section
-      className="grid gap-3 border-b border-border pb-3"
-      aria-label="核对编辑冲突"
-    >
-      <h3 className="text-sm font-bold">内容已变化，请核对后继续</h3>
-      {draft.mode === "topic" ? (
-        <>
-          <ConflictField
-            id="conflict-title"
-            label="标题"
-            current={current.topic.title}
-            draft={draft.title}
-            value={title}
-            onChange={setTitle}
-          />
-          <ConflictField
-            id="conflict-tags"
-            label="TAG"
-            current={currentTags.map((tag) => `[${tag}]`).join(" ") || "无 TAG"}
-            draft={draft.tags.map((tag) => `[${tag}]`).join(" ") || "无 TAG"}
-            value={tags}
-            onChange={setTags}
-          />
-        </>
-      ) : null}
-      {draft.mode === "comment" ? (
-        <ConflictField
-          id="conflict-body"
-          label="正文"
-          current={current.body}
-          draft={draft.body}
-          value={body}
-          onChange={setBody}
-        />
-      ) : (
-        <div className="grid gap-2">
-          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-            <div className="max-h-64 overflow-auto">
-              <p className="text-sm font-bold">当前正文</p>
-              <ForumImages body={current.body} images={current.images} interactiveElements={false} />
-            </div>
-            <div className="max-h-64 overflow-auto">
-              <p className="text-sm font-bold">我的正文</p>
-              <ForumImages
-                body={draft.body}
-                interactiveElements={false}
-                images={draft.images.map((image) => ({
-                  id: image.key,
-                  offset: image.offset,
-                  url: image.preview,
-                  thumb: image.preview,
-                  width: image.uploaded?.width ?? 320,
-                  height: image.uploaded?.height ?? 180,
-                  size: image.size,
-                  format: image.uploaded?.format ?? "png",
-                }))}
-              />
-            </div>
-          </div>
-          <Label htmlFor="conflict-body">采用的图文正文</Label>
-          <SelectField
-            id="conflict-body"
-            value={body}
-            onValueChange={setBody}
-            options={[
-              { value: "current", label: "当前版本" },
-              { value: "draft", label: "我的修改" },
-            ]}
-          />
-        </div>
-      )}
-      <Button
-        type="button"
-        variant="outline"
-        className="w-fit"
-        onClick={() => {
-          const baseline = {
-            ...draft,
-            title: current.topic.title,
-            tags: currentTags,
-            body: current.body,
-            images: existingDraftImages(current.images),
-          };
-          onChange({
-            ...baseline,
-            title:
-              draft.mode === "topic" && title === "draft"
-                ? draft.title
-                : baseline.title,
-            tags:
-              draft.mode === "topic" && tags === "draft"
-                ? draft.tags
-                : baseline.tags,
-            body: body === "draft" ? draft.body : baseline.body,
-            images: body === "draft" ? draft.images : baseline.images,
-            original: draftSnapshot(baseline),
-            revision: current.revision,
-            topicRevision: current.topic.revision,
-            currentVersion: undefined,
-          });
-        }}
-      >
-        应用选择，继续编辑
-      </Button>
-    </section>
-  );
-}
-
-function ConflictField({
-  id,
-  label,
-  current,
-  draft,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  current: string;
-  draft: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="grid gap-2">
-      <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-        <div className="min-w-0">
-          <Label htmlFor={`${id}-current`}>当前{label}</Label>
-          <Textarea
-            id={`${id}-current`}
-            className="max-h-36 text-sm"
-            readOnly
-            value={current}
-          />
-        </div>
-        <div className="min-w-0">
-          <Label htmlFor={`${id}-draft`}>我的{label}</Label>
-          <Textarea
-            id={`${id}-draft`}
-            className="max-h-36 text-sm"
-            readOnly
-            value={draft}
-          />
-        </div>
-      </div>
-      <div>
-        <Label htmlFor={id}>采用的{label}</Label>
-        <SelectField
-          id={id}
-          value={value}
-          onValueChange={onChange}
-          options={[
-            { value: "current", label: "当前版本" },
-            { value: "draft", label: "我的修改" },
-          ]}
-        />
-      </div>
-    </div>
-  );
 }

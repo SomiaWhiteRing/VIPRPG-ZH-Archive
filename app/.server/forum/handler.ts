@@ -135,7 +135,6 @@ async function read(runtime: AppRuntime, request: Request) {
       return result({
         body: row.body,
         images: contentImages(row),
-        revision: row.revision,
         topic,
       });
     }

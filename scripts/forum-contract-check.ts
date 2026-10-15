@@ -293,9 +293,6 @@ sqlite.exec(
   "CREATE VIRTUAL TABLE forum_search_index USING fts5(title,body,scope)",
 );
 
-const row = sqlite
-  .prepare("SELECT revision FROM forum_post_comments WHERE id=?")
-  .get(comment.target.id)!;
 const topicRevision = () =>
   sqlite.prepare("SELECT revision FROM forum_topics WHERE id=?").get(topicId)!
     .revision;
@@ -305,8 +302,6 @@ const activity = sqlite
 await editForum(ctx, actor, {
   target: comment.target,
   body: "新的正文",
-  revision: row.revision,
-  topicRevision: topicRevision(),
 });
 assert.equal(
   sqlite
@@ -474,27 +469,19 @@ assert.equal(
     .get(concurrentParent.id)!.revision,
   concurrentParent.revision,
 );
-const revision = sqlite
-  .prepare("SELECT revision FROM forum_topics WHERE id=?")
-  .get(concurrentTopic.target.id)!.revision;
 const editInput = {
   target: concurrentTopic.target,
   body: "Saved body",
   title: "Concurrency",
   tags: [],
-  revision: concurrentRoot.revision,
-  topicRevision: revision,
 };
 await editForum(ctx, concurrentActor, editInput);
-await assert.rejects(
-  editForum(ctx, concurrentActor, { ...editInput, body: "Stale body" }),
-  { code: "forum_conflict" },
-);
+await editForum(ctx, concurrentActor, { ...editInput, body: "Latest body" });
 assert.equal(
   sqlite
     .prepare("SELECT body FROM forum_posts WHERE id=?")
     .get(concurrentRoot.id)!.body,
-  "Saved body",
+  "Latest body",
 );
 assert.deepEqual(sqlite.prepare("PRAGMA foreign_key_check").all(), []);
 await verifyDiscussionHistory();

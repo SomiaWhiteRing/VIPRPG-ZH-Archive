@@ -13,7 +13,7 @@ import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import type { FaceEmoji } from "@/lib/dto/db/work-community";
-import { type ForumAuthor, type ForumEditVersion, type ForumTag, type ForumTarget, type ForumTopic, forumHref, forumTagError, normalizeForumTag } from "@/lib/forum";
+import { type ForumAuthor, type ForumEditContent, type ForumTag, type ForumTarget, type ForumTopic, forumHref, forumTagError, normalizeForumTag } from "@/lib/forum";
 
 import { forumSearchMatches } from "@/lib/forum-search";
 import { type KeyboardEventHandler, type ReactNode, Fragment, useEffect, useRef, useState } from "react";
@@ -30,8 +30,8 @@ export async function forumRequest<T>(
     ...(input ? { headers: { "content-type": "application/json" }, body: JSON.stringify(input) } : {}),
   }, "请求失败");
 }
-export function readForumEditVersion(target: ForumTarget) {
-  return forumRequest<ForumEditVersion>(
+export function readForumEditContent(target: ForumTarget) {
+  return forumRequest<ForumEditContent>(
     forumHref("/api/discussions", { op: "edit", ...target }),
   );
 }
