@@ -126,7 +126,7 @@ final class GameStore {
     }
     synchronized void delete(String key) throws Exception {
         if (key.equals(playingKey)) throw new IOException("请先退出游戏。");
-        JSONObject task = byKey(key); task.put("status", "deleted").remove("resumeRequested"); persist();
+        JSONObject task = byKey(key); task.put("status", "deleted").remove("resumeRequested"); task.remove("lastPlayedAt"); persist();
         if (active.contains(task)) return; // The writer cleans up after it observes cancellation.
         try {
             Uri folder = folder(task, false);
