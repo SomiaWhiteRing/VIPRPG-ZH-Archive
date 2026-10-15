@@ -61,8 +61,8 @@ for (const patch of patches) {
   const scratch = mkdtempSync(resolve(tmpdir(), "viprpg-runtime-patch-"));
   try {
     writeFileSync(resolve(scratch, patch.file), files[patch.file]);
-    execFileSync("git", ["apply", "--check", patchPath], { cwd: scratch, stdio: "pipe" });
-    execFileSync("git", ["apply", patchPath], { cwd: scratch, stdio: "pipe" });
+    execFileSync("git", ["-c", "core.autocrlf=false", "apply", "--check", patchPath], { cwd: scratch, stdio: "pipe" });
+    execFileSync("git", ["-c", "core.autocrlf=false", "apply", patchPath], { cwd: scratch, stdio: "pipe" });
     const patched = readFileSync(resolve(scratch, patch.file));
     if (sha256(patched) !== patch.afterSha256)
       throw new Error("Patched runtime does not match the pinned digest");
