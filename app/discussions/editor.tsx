@@ -296,11 +296,6 @@ export function ForumEditor({
                 values={draft.tags}
                 onChange={(tags) => onChange({ ...draft, tags })}
               />
-              {draft.target ? (
-                <p className="text-xs text-muted">
-                  修改并保存 TAG 时会移除已不可见的标签关联。
-                </p>
-              ) : null}
               <div>
                 <Label htmlFor="forum-title">标题</Label>
                 <Input

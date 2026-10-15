@@ -144,9 +144,6 @@ export default function CreatorDetailPage() {
                 <h2 className="m-0 text-base font-bold" id="comments-title">
                   评论
                 </h2>
-                <span className="font-mono text-xs text-muted">
-                  按发帖时间排序
-                </span>
               </div>
               <CommentPanel
                 currentUserId={currentUser?.id ?? null}
