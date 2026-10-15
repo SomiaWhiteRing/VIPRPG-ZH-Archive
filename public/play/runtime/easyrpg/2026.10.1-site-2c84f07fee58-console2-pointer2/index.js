@@ -22,6 +22,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   let closed = false, started = false, stopping = false, stopPromise;
   let movie, movieId, movieRect, movieLoadTimer;
   let consoleInput, consoleWindow, startupTimer;
+  let mousePosition;
   let fileOutputConfirmation;
   let windowInterpolation = false;
   let windowFit = true, windowZoom = 0, windowFitRequested = false;
@@ -108,6 +109,13 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   // Cancellation can arrive while the audio module is still being fetched.
   void ready.catch(() => {});
   const send = data => { if (!closed) worker.postMessage(data); };
+  // Keep a position even when no physical pointer is hovering the canvas.
+  const mouse = (position, focus = true) => {
+    if (position) mousePosition = position;
+    const current = mousePosition ?? {x: Math.floor(width / 2), y: Math.floor(height / 2)};
+    send({type: 'mouse', ...current, focus});
+    return current;
+  };
   const report = message => {
     closeConsoleWindow(true);
     console.error(message);
@@ -473,6 +481,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   worker.onmessage = ({data}) => {
     if (data.type === 'ready') {
       keys = data.keys; width = data.width; height = data.height;
+      mouse();
       started = true;
       node.port.postMessage({type: 'start'});
       readyResolve();
@@ -595,7 +604,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   listen(document, 'fullscreenchange', applyVideoLayout);
   for (const target of new Set([page, window])) listen(target, 'resize', applyVideoLayout);
   listen(document, 'focusin', focus);
-  listen(canvas, 'pointerleave', () => send({type: 'mouse', x: -1, y: -1, focus: false}));
+  listen(canvas, 'pointerleave', () => mouse(undefined, false));
   listen(canvas, 'wheel', event => {
     const key = keys[event.deltaY < 0 ? 'MOUSE_SCROLLUP' : 'MOUSE_SCROLLDOWN'];
     if (!key) return;
@@ -608,7 +617,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     return {x: Math.floor((event.clientX-rect.left)*width/rect.width), y: Math.floor((event.clientY-rect.top)*height/rect.height)};
   };
   listen(canvas, 'pointermove', event => {
-    send({type: 'mouse', ...pointerPosition(event), focus: true});
+    mouse(pointerPosition(event));
   });
   for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'lostpointercapture']) listen(canvas, type, event => {
     const pressed = type === 'pointerdown';
@@ -616,8 +625,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       event.preventDefault(); canvas.focus(); canvas.setPointerCapture(event.pointerId);
       void context.resume().catch(() => {});
     }
-    const position = pointerPosition(event);
-    send({type: 'mouse', ...position, focus: true});
+    // Capture-loss and cancellation events need not contain usable coordinates.
+    const position = mouse(type === 'pointerdown' || type === 'pointerup' ? pointerPosition(event) : undefined);
     if (event.pointerType === 'touch') {
       send({type: 'touch', ...position, id: event.pointerId, pressed});
     } else if (type === 'pointercancel' || type === 'lostpointercapture') {
