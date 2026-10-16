@@ -465,7 +465,7 @@ function CommentCard({
                   ? "正在加载…"
                   : expanded
                     ? "收起回复"
-                    : `查看全部 ${replyCount} 条回复`}
+                    : `展开剩余 ${replyCount - preview.length} 条回复`}
               </Button>
             ) : null}
             {expanded && replies && replies.total > replies.pageSize ? (
