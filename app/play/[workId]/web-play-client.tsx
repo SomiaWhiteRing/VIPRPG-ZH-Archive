@@ -58,7 +58,6 @@ import {
   Play,
   RectangleHorizontal,
   RectangleVertical,
-  Settings,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -170,15 +169,6 @@ export function WebPlayClient({
     await capture(() => player.captureScreenshot());
     if (playerRef.current === player) focusPlayerCanvas();
   }, [capture, captureDisabled]);
-
-  const openPlayerSettings = useCallback(() => {
-    const player = playerRef.current;
-    if (!player || !running || playerStopping) return;
-    focusPlayerCanvas();
-    player.setButtonPressed("menu", true);
-    // Hold across engine frames so the Worker observes a complete F1 press.
-    setTimeout(() => player.setButtonPressed("menu", false), 100);
-  }, [running, playerStopping]);
 
   const addLog = useCallback(
     (level: WebPlayLog["level"], message: string) => {
@@ -752,20 +742,6 @@ export function WebPlayClient({
                     ) : null}
                     toolbar={immersive ? (
                       <>
-                        {running && !mobileControls ? (
-                          <Button
-                            aria-label="游戏设置（F1）"
-                            className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
-                            disabled={playerStopping}
-                            onClick={openPlayerSettings}
-                            size="icon"
-                            title="游戏设置（F1）"
-                            type="button"
-                            variant="outline"
-                          >
-                            <Settings aria-hidden />
-                          </Button>
-                        ) : null}
                         {mobileControls && running ? (
                           <Button
                             aria-label={`切换为${nextOrientation === "landscape" ? "横屏" : "竖屏"}`}
@@ -899,7 +875,7 @@ export function WebPlayClient({
                       {playerStarting ? "正在启动…" : "启动游戏"}
                     </Rm2kButton>
                   ) : (
-                    <div className={mobileControls ? "grid grid-cols-[minmax(0,1fr)_2.5rem] gap-2" : "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem_2.5rem] gap-2"}>
+                    <div className={mobileControls ? "grid gap-2" : "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2"}>
                       {!mobileControls ? (
                         <Button
                           className="min-w-0 gap-1.5 px-2"
@@ -921,17 +897,6 @@ export function WebPlayClient({
                       >
                         <Expand aria-hidden />
                         全屏幕
-                      </Button>
-                      <Button
-                        aria-label="游戏设置（F1）"
-                        disabled={playerStopping}
-                        onClick={openPlayerSettings}
-                        size="icon"
-                        title="游戏设置（F1）"
-                        type="button"
-                        variant="outline"
-                      >
-                        <Settings aria-hidden />
                       </Button>
                       {!mobileControls ? (
                         <Button

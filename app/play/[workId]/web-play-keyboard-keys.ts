@@ -51,11 +51,11 @@ export const keyboardGroups = [
   { id: "move", label: "移动 / 选择", keysLabel: "方向键 · W A S D", keys: ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"] },
   { id: "confirm", label: "确认 / 对话", keysLabel: "Z · Enter · Space", keys: ["KeyZ", "Enter", "Space"] },
   { id: "cancel", label: "取消 / 打开菜单", keysLabel: "X · Esc", keys: ["KeyX", "Escape"] },
-  { id: "engine", label: "播放器功能", keysLabel: "F2 帧率 · F7 截图 · F9 Debug 菜单 · ` 会话历史", keys: ["F2", "F7", "F9", "Backquote", "KeyF", "KeyG", "ShiftLeft", "ShiftRight"] },
+  { id: "engine", label: "播放器功能", keysLabel: "F1 系统设置 · F2 帧率 · F7 截图 · F9 Debug 菜单 · ` 会话历史", keys: ["F1", "F2", "F7", "F9", "Backquote", "KeyF", "KeyG", "ShiftLeft", "ShiftRight"] },
 ];
 
 // NumpadEnter shares Enter's engine input; reserve it along with the default controls.
-export const reservedKeyboardCodes = new Set([...keyboardGroups.flatMap((group) => group.keys), "F1", "NumpadEnter"]);
+export const reservedKeyboardCodes = new Set([...keyboardGroups.flatMap((group) => group.keys), "NumpadEnter"]);
 
 export function isCustomKeyboardCode(value: unknown): value is string {
   return typeof value === "string" && Object.hasOwn(keyboardKeys, value)

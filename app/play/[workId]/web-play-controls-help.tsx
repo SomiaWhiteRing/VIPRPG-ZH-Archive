@@ -42,7 +42,7 @@ export function WebPlayControlsHelp() {
           <div
             className="web-play-help-board"
             role="img"
-            aria-label="常用键位位置图：方向键或 WASD 移动；Z、Enter、Space 确认；X、Esc 取消；F2 帧率、F7 截图、F9 Debug 菜单、反引号键会话历史；F、G 加速，Shift 为游戏功能。"
+            aria-label="常用键位位置图：方向键或 WASD 移动；Z、Enter、Space 确认；X、Esc 取消；F1 系统设置、F2 帧率、F7 截图、F9 Debug 菜单、反引号键会话历史；F、G 加速，Shift 为游戏功能。"
           >
             <WebPlayKeyboard />
           </div>
@@ -59,7 +59,7 @@ export function WebPlayControlsHelp() {
               </div>
             ))}
           </div>
-          <p className="mb-0 mt-2.5 text-xs text-muted">按住 F / G 加速（默认 3× / 10×）；Shift 功能由游戏决定。Debug模式开闭和加速倍率可在系统设置调整。</p>
+          <p className="mb-0 mt-2.5 text-xs text-muted">游戏启动后，点击游戏画面再按 F1 打开系统设置。按住 F / G 加速（默认 3× / 10×）；Shift 功能由游戏决定。Debug模式开闭和加速倍率可在系统设置调整。</p>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
