@@ -1,11 +1,11 @@
 {
-  "version": "2026.10.3-site-eaf78567b9ab-console2-pointer2",
+  "version": "2026.10.3-site-59048aa4a410-skip-logo1",
   "revision": "4c1e0c4a3586eff11bc8df25a148daf0ea9ef469",
-  "build": "github-actions-38956098585",
+  "build": "local-docker-skip-logo-20261017",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
-  "sourceState": "commit",
-  "archiveSha256": "eaf78567b9abb02df1517883e4dfd82656fccecb9167153a7113db7088e37264",
+  "sourceState": "patched-commit",
+  "archiveSha256": "59048aa4a410da977b67920ff010acaccc9fa81bb0e7a04ee3b7ecdcf2a1a05c",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
@@ -30,5 +30,12 @@
       "beforeSha256": "add66c5886952901678905eecbecdda407647a3c21bebf14962d87dbb0939afe",
       "afterSha256": "0927cf538a1632c0d75d77b2d4b85f2c8c060e1b7cac0e44457e6621235b298d"
     }
-  ]
+  ],
+  "sourcePatches": [
+    {
+      "path": "scripts/runtime-patches/skip-logo.patch",
+      "sha256": "0969ba36a4aaa9363f3fa66b7d37ef2297d806f61cb298d3072fd691b16ae0da"
+    }
+  ],
+  "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8"
 }

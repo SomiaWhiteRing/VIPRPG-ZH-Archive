@@ -1,0 +1,77 @@
+--- a/src/player.cpp
++++ b/src/player.cpp
+@@ -115,6 +115,7 @@
+ 	bool maniac_rshift_message = false;
+ 	bool startup_debug_flag;
+ 	bool hide_title_flag;
++	bool skip_logo_flag;
+ 	int load_game_id;
+ 	int party_x_position;
+ 	int party_y_position;
+@@ -474,6 +475,7 @@
+ 	Game_Clock::SetTargetGameFps(DEFAULT_FPS);
+ 	startup_debug_flag = false;
+ 	hide_title_flag = false;
++	skip_logo_flag = false;
+ 	exit_flag = false;
+ 	reset_flag = false;
+ 	load_game_id = -1;
+@@ -546,6 +548,10 @@
+ 		if (cp.ParseNext(arg, 0, {"testplay", "--test-play"})) {
+ 			// Legacy RPG_RT argument - testplay
+ 			startup_debug_flag = true;
++			continue;
++		}
++		if (cp.ParseNext(arg, 0, "--skip-logo")) {
++			skip_logo_flag = true;
+ 			continue;
+ 		}
+ 		if (cp.ParseNext(arg, 0, {"hidetitle", "--hide-title"})) {
+@@ -1594,6 +1600,7 @@
+                       messages to this file.
+  --new-game           Skip the title scene and start a new game directly.
+  --no-log-color       Disable colors in terminal log.
++ --skip-logo          Skip startup logos without enabling TestPlay mode.
+  --no-rtp             Disable support for the Runtime Package (RTP).
+  --patch-antilag-switch SWITCH
+                       Disables event page refreshing when the switch SWITCH is
+--- a/src/player.h
++++ b/src/player.h
+@@ -352,6 +352,9 @@
+ 	/** Hide Title flag, if true title scene will run without image and music. */
+ 	extern bool hide_title_flag;
+ 
++	/** Skip startup logos without changing game or debug settings. */
++	extern bool skip_logo_flag;
++
+ 	/** The width of the screen */
+ 	extern int screen_width;
+ 
+--- a/src/scene_logo.cpp
++++ b/src/scene_logo.cpp
+@@ -43,7 +43,7 @@
+ Scene_Logo::Scene_Logo() :
+ 	frame_counter(0) {
+ 	type = Scene::Logo;
+-	skip_logos = Player::debug_flag || Game_Battle::battle_test.enabled;
++	skip_logos = Player::skip_logo_flag || Player::debug_flag || Game_Battle::battle_test.enabled;
+ }
+ 
+ Scene_Logo::Scene_Logo(std::vector<std::vector<uint8_t>> logos, unsigned current_logo_index) :
+@@ -72,12 +72,14 @@
+ 			return;
+ 		}
+ 
+-		logos = LoadLogos();
++		if (!skip_logos) {
++			logos = LoadLogos();
++		}
+ 	}
+ 
+ 	++frame_counter;
+ 
+-	if (Input::IsPressed(Input::SHIFT)) {
++	if (!skip_logos && Input::IsPressed(Input::SHIFT)) {
+ 		DrawTextOnLogo(true);
+ 		--frame_counter;
+ 	}

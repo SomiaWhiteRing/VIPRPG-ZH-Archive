@@ -75,6 +75,16 @@ const output = {
   "index.js": files["player-host.js"],
   ...Object.fromEntries(runtimeFiles.map(name => [name, files[name]])),
 };
+// Ship the verified source changes alongside locally rebuilt engine binaries.
+const sourcePatches = runtime.sourcePatches ?? [];
+for (const patch of sourcePatches) {
+  if (!/^scripts\/runtime-patches\/[a-z0-9.-]+\.patch$/.test(patch.path))
+    throw new Error("Unsupported runtime source patch path");
+  const bytes = readFileSync(resolve(root, patch.path));
+  if (sha256(bytes) !== patch.sha256)
+    throw new Error("Runtime source patch does not match the pinned digest");
+  output[basename(patch.path)] = bytes;
+}
 const source =
   JSON.stringify(
     {
@@ -87,6 +97,7 @@ const source =
       source: `https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/${revision}`,
       license: `https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/${revision}/COPYING`,
       sourceState: runtime.sourceState ?? "commit",
+      sourcePatches,
       sourceSnapshot: runtime.sourceSnapshot ?? null,
       sourceSnapshotSha256: runtime.sourceSnapshotSha256 ?? null,
       liblcfRevision: runtime.liblcfRevision ?? null,

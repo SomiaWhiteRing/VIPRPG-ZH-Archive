@@ -271,7 +271,9 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 停止与站内离页须等待 `player.stop()`：先退出引擎，再等待串行 `IDBFS.syncfs(false)`，最后关闭音频、终止 Worker、移除 iframe、释放资源共享锁和 Work 级存档独占锁。写入失败保留 Worker 与锁并允许重试。浏览器强制关页或进程被杀时，异步写入完成没有保证，因此游戏正常保存时也会同步 IDBFS。安装 Worker 在离页时终止；普通页面数据刷新不重建播放器。
 
-当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。当前运行包来自 Player 仓库的 GitHub Actions，按固定提交构建，记录 `sourceState: commit`；`build` 记录构建任务编号。下载 Web 产物后核对 GitHub artifact 摘要、包内宿主源码、音色库与许可证，再固定 Web ZIP 摘要并导入；运行目录内的 `SOURCE.json` 记录源码链接和各文件摘要。
+当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。当前运行包在固定 Player 提交上应用 [skip-logo.patch](../scripts/runtime-patches/skip-logo.patch)，再使用原有 Docker Web 构建入口本地编译；记录 `sourceState: patched-commit`，`build` 标识本地构建。复现时将固定提交导出到独立源码目录，并将文本源码统一为 LF，用 `git apply` 应用该补丁，再运行 `builds/package-docker.ps1 web`；构建工具链与依赖仍由固定提交的构建脚本锁定。核对音色库、许可证和 Web ZIP 摘要后导入，运行目录内的 `SOURCE.json` 记录源码链接、补丁摘要和各文件摘要，并随包提供源码补丁。
+
+网页与 Android 离线页共用的启动会话固定传入 `--skip-logo`，引擎完成游戏检测和初始化后直接进入标题画面，跳过 EasyRPG 与额外启动 Logo。该参数不启用 TestPlay，不跳过游戏标题，也不改变游戏事件自行显示的图片或开场动画。
 
 导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont、Player 与解码器随包许可证的摘要，只将入口文件重命名为 `index.js`。默认保留构建字节；如运行时配置声明 `patches`，仅对未压缩的 `player-host.js` 应用仓库内固定的统一差异补丁，并校验补丁文件、输入和输出的 SHA-256。导入需要 Git；补丁及摘要同时写入 `SOURCE.json`，上游 ZIP 摘要仍指向原始构建包。不会修改压缩后的生成代码或 WASM，也不依赖联网下载许可证。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。
 

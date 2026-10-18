@@ -242,7 +242,7 @@ export function createPlayerSession(
     });
     const args = metadata.easyRpg ? easyRpgConfigArguments(metadata.easyRpg) : [];
     if (!metadata.easyRpg && metadata.engineFamily === "rpg_maker_2003_maniac") args.push("--patch-maniac");
-    args.push("--config-path", playerConfigDirectory);
+    args.push("--skip-logo", "--config-path", playerConfigDirectory);
     const loadId = new URLSearchParams(window.location.search).get("load-game-id");
     if (loadId && /^\d+$/.test(loadId)) args.push("--load-game-id", loadId);
     runtimeCreation = playerWindow.createEasyRpgPlayer({
