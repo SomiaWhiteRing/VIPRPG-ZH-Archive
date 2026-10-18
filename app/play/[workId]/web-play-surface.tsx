@@ -10,6 +10,7 @@ import type { PlayerButton, PlayerSession } from "./web-play-player";
 type Props = {
   mobile: boolean;
   immersive: boolean;
+  running?: boolean;
   orientation: DisplayOrientation;
   rotation: number;
   layout: ControlLayout;
@@ -39,10 +40,62 @@ type Point = { x: number; y: number };
 type DragTarget = ControlId | "screen";
 
 export function WebPlaySurface({
-  mobile, immersive, orientation, rotation, layout, onSaveLayout,
+  mobile, immersive, running = false, orientation, rotation, layout, onSaveLayout,
   playerRef, playerHostRef, toolbar, placeholder, feedback, onCaptureScreenshot, captureDisabled,
   touchEnabled, onTouchEnabledChange,
 }: Props) {
+  const [windowScale, setWindowScale] = useState(0);
+  const [maximumScale, setMaximumScale] = useState(0);
+  const screenRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const value = Number(localStorage.getItem("viprpg:web-play:window-scale"));
+      if (Number.isSafeInteger(value) && value >= 0) setWindowScale(value);
+    } catch { /* Storage may be unavailable. */ }
+  }, []);
+
+  useLayoutEffect(() => {
+    const area = areaRef.current;
+    const screen = screenRef.current;
+    if (!area || !screen || !immersive || mobile || !running) return;
+    let disposed = false;
+    let observer: ResizeObserver | undefined;
+    void playerRef.current?.ready.then(() => {
+      if (disposed) return;
+      const canvas = playerHostRef.current?.querySelector("iframe")?.contentDocument?.querySelector("canvas");
+      if (!canvas) return;
+      const fit = () => {
+        const width = canvas.width;
+        const height = canvas.height;
+        if (!width || !height) return;
+        const maximum = Math.max(0, Math.floor(Math.min(area.clientWidth / width, area.clientHeight / height)));
+        setMaximumScale(maximum);
+        const scale = Math.min(windowScale, maximum);
+        screen.style.width = scale ? `${width * scale}px` : "100%";
+        screen.style.height = scale ? `${height * scale}px` : "100%";
+      };
+      observer = new ResizeObserver(fit);
+      observer.observe(area);
+      observer.observe(canvas);
+      fit();
+    }).catch(() => {});
+    return () => {
+      disposed = true;
+      observer?.disconnect();
+      screen.style.removeProperty("width");
+      screen.style.removeProperty("height");
+    };
+  }, [immersive, mobile, running, windowScale, playerRef, playerHostRef]);
+
+  function cycleWindowScale() {
+    const current = Math.min(windowScale, maximumScale);
+    const next = current >= maximumScale ? 0 : current + 1;
+    setWindowScale(next);
+    try { localStorage.setItem("viprpg:web-play:window-scale", String(next)); } catch { /* Storage may be unavailable. */ }
+    playerHostRef.current?.querySelector("iframe")?.contentDocument?.querySelector("canvas")?.focus({ preventScroll: true });
+  }
+
   const surfaceRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -309,7 +362,7 @@ export function WebPlaySurface({
         onContextMenu={(event) => { if (mobile) event.preventDefault(); }}
         ref={areaRef}
       >
-        <div className={showControls && portrait ? "absolute left-0 top-(--screen-y) z-0 h-(--screen-height) w-full" : "absolute inset-0 z-0"}>
+        <div ref={screenRef} className={showControls && portrait ? "absolute left-0 top-(--screen-y) z-0 h-(--screen-height) w-full" : immersive && !mobile ? "absolute left-1/2 top-1/2 z-0 h-full w-full -translate-x-1/2 -translate-y-1/2" : "absolute inset-0 z-0"}>
           <div className={editing || !touchEnabled ? "pointer-events-none h-full w-full" : "h-full w-full"} id="web-player-host" ref={playerHostRef} />
           {dragHandle("screen", "游戏画面")}
         </div>
@@ -391,6 +444,11 @@ export function WebPlaySurface({
               : "absolute right-3 top-3 z-30 flex flex-wrap justify-end gap-2"}`}
             ref={toolbarRef}
           >
+            {!mobile && running ? (
+              <Button aria-label="切换游戏画面缩放倍率" className={`${overlayButtonClass} min-w-10 px-2`} disabled={!maximumScale} onClick={cycleWindowScale} title="游戏画面缩放：Full → ×1 → ×2 → … → Full" type="button" variant="outline">
+                {windowScale && maximumScale ? `×${Math.min(windowScale, maximumScale)}` : "Full"}
+              </Button>
+            ) : null}
             {toolbar}
             {showControls ? (
               <Button aria-label="调整按钮布局" className={overlayButtonClass} onClick={() => { setSelected("decision"); setDraft(layout); }} size="icon" title="调整布局" type="button" variant="outline">

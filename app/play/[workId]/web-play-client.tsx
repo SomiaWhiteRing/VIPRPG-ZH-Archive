@@ -719,6 +719,7 @@ export function WebPlayClient({
                   <WebPlaySurface
                     captureDisabled={captureDisabled}
                     immersive={immersive}
+                    running={running}
                     layout={controlsPreferences.layouts[surfaceOrientation]}
                     mobile={mobileControls && running}
                     onCaptureScreenshot={() => void captureScreenshot()}
