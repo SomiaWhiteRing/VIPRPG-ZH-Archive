@@ -1,4 +1,5 @@
 import type { WebPlayPackage } from "./web-play-opfs";
+import { compactLsdSave } from "@/lib/archive/lsd-save-upgrade";
 
 /** Seed the player's writable IDBFS directory without replacing existing saves. */
 export async function seedBundledWebPlaySaves(
@@ -10,13 +11,6 @@ export async function seedBundledWebPlaySaves(
     .filter(({ filename }) => /^\/[^/\\]+\.lsd$/i.test(filename))
     .map(({ filename, start, end }) => ({ name: filename.slice(1), blob: blob.slice(start, end) })));
   if (!bundled.length) return;
-
-  const saves: { name: string; contents: Uint8Array }[] = [];
-  for (const file of bundled) {
-    signal.throwIfAborted();
-    saves.push({ name: file.name, contents: new Uint8Array(await file.blob.arrayBuffer()) });
-  }
-  signal.throwIfAborted();
 
   const directory = `/work-saves/${workId}`;
   // Open without a fixed version so existing Emscripten databases stay usable.
@@ -36,6 +30,22 @@ export async function seedBundledWebPlaySaves(
 
   try {
     signal.throwIfAborted();
+    const existing = await new Promise<Set<string>>((resolve, reject) => {
+      const tx = db.transaction("FILE_DATA", "readonly");
+      const request = tx.objectStore("FILE_DATA").getAllKeys();
+      tx.oncomplete = () => resolve(new Set(request.result.map(key => String(key).normalize("NFC").toLowerCase())));
+      tx.onabort = () => reject(tx.error ?? request.error);
+    });
+    const saves: { name: string; contents: Uint8Array }[] = [];
+    for (const file of bundled) {
+      signal.throwIfAborted();
+      const path = `${directory}/${file.name}`.normalize("NFC").toLowerCase();
+      if (existing.has(path)) continue;
+      existing.add(path);
+      saves.push({ name: file.name, contents: compactLsdSave(new Uint8Array(await file.blob.arrayBuffer())) });
+    }
+    signal.throwIfAborted();
+    if (!saves.length) return;
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction("FILE_DATA", "readwrite");
       const store = tx.objectStore("FILE_DATA");

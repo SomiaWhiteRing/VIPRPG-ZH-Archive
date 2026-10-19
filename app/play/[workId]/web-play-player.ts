@@ -5,6 +5,7 @@ import { easyRpgConfigArguments } from "@/lib/archive/easyrpg-config";
 import { hasGameResources, readGamePackages } from "./web-play-opfs";
 import { interceptPlayerDownloads } from "./web-play-player-download";
 import { seedBundledWebPlaySaves } from "./web-play-bundled-saves";
+import { upgradeWebPlaySaves } from "./web-play-save-upgrade";
 import { playerConfigDirectory, preparePlayerConfig } from "./web-play-player-config";
 import { acquireGameResourceReadLock, acquireGameSaveLock } from "./web-play-locks";
 import { getWebPlayInstallation, markWebPlayLastPlayed } from "./web-play-db";
@@ -201,6 +202,7 @@ export function createPlayerSession(
         installation, metadata.archiveVersionId, metadata.manifestSha256, lifetime.signal,
       );
       await seedBundledWebPlaySaves(metadata.workId, packages, lifetime.signal);
+      await upgradeWebPlaySaves(metadata.workId, lifetime.signal);
     }
     await preparePlayerConfig(lifetime.signal, nativeResources);
     await load(frame, lifetime.signal, () => {

@@ -28,6 +28,8 @@
 - 同源 `/play/player.html` iframe 持有播放器 Worker、画布与音频设备；运行时所有权与销毁规则见[运行时](#11-easyrpg-runtime)。安装中、游戏启动中及运行中的站内导航使用 Router blocker，确认离开后才中断安装或停止游戏；游玩时先恢复窗口以显示确认弹窗，取消后继续运行。停止游戏先等待存档写入，写入失败留在当前页。刷新或关页保留浏览器确认。
 - Cache API 不作为游戏文件主存储；EasyRPG runtime 由同源静态资源提供。
 - EasyRPG 存档沿用 Emscripten IDBFS；当前不提供存档云同步。
+
+网页启动在既有 Work 存档锁内、创建引擎之前逐槽升级旧 Player 的完整 Maniac 数值变量副本，转换为存档版本 813 的有效值与逻辑长度。只枚举存档键，再逐个读取和写入，不把所有旧存档集中装入内存；槽位键、文件模式、修改时间及其他字段保持。原 LSD 以 `deflate-raw` 无损压缩保存在独立的 `viprpg_web_play_save_backups` 数据库（版本 1，`files` store，以 `[workId, 原 IDBFS 键]` 定位，`originalSize` 记录解压长度），备份不挂载到引擎文件系统。备份事务持久提交后才在 IDBFS 事务中复核并替换原记录；失败或取消不覆盖当前槽位，已完成槽位可直接读取，重复启动继续处理剩余旧档。Emscripten 的数据库版本和 `FILE_DATA` 结构不变。随包旧档逐个转换，已有同名存档不读取也不覆盖。
 - `rpg_maker_2003_maniac` 作品仍显示在线游玩入口，但提示可能无法用 EasyRPG 正常游玩。
 
 ## 2. 总体流程

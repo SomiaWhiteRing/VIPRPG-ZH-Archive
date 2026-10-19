@@ -284,11 +284,11 @@ async function inflateZipEntry(archive: Uint8Array, entry: ZipEntry, limit: numb
   return bytes;
 }
 
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
-function saveDirectory(workId: number): string {
+export function saveDirectory(workId: number): string {
   if (!Number.isSafeInteger(workId) || workId <= 0) throw new Error("作品编号无效。");
   return `/work-saves/${workId}`;
 }
@@ -308,7 +308,7 @@ function fileAtCursor(directory: string, cursor: IDBCursorWithValue): SaveFile |
     timestamp: entry.timestamp instanceof Date && Number.isFinite(entry.timestamp.getTime()) ? entry.timestamp : undefined };
 }
 
-async function openExistingDatabase(directory: string): Promise<IDBDatabase | null> {
+export async function openExistingDatabase(directory: string): Promise<IDBDatabase | null> {
   return new Promise((resolve, reject) => {
     // IDBFS owns its schema version. Aborting creation keeps reads side-effect free.
     const request = indexedDB.open(directory);
