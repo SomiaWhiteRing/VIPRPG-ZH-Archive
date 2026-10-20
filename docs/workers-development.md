@@ -20,6 +20,8 @@ XML 响应使用 Cloudflare Cache API 与 `public, max-age=86400`，内容发布
 
 允许索引的环境在 `/robots.txt` 声明全站地图入口。`SITE_NOINDEX="true"` 的环境继续禁止抓取，并返回 `X-Robots-Tag: noindex, nofollow`，不声明地图入口。首页输出当前环境 origin 的自引用 canonical。正式发布后，可在 Search Console 的“站点地图”提交 `https://viprpg.org/sitemap.xml`；地图帮助发现内容，不保证抓取或收录。
 
+`lib/crawl-policy.ts` 在创建请求上下文、鉴权、查询数据和 SSR 前执行抓取策略。针对重复抓取的 `meta-externalagent`，按 User-Agent 标识拒绝进入 Worker 的所有方法请求，返回 `403`、`Cache-Control: private, no-store` 和 `X-Robots-Tag: noindex, nofollow`；仅放行 `/robots.txt`，其中以专用分组声明 `Disallow: /`。这项拒绝不要求 Cloudflare 认证，伪装该标识的请求也会被拒绝；其他爬虫仍沿用平台认证类别及现有路径边界。`facebookexternalhit` 分享预览与 `meta-externalfetcher` 不属于这项新增拒绝规则，爬虫标识分类见 [Cloudflare 官方列表](https://developers.cloudflare.com/ai-crawl-control/reference/bots/)。Cloudflare 优先交付的静态资源不经过 Worker 拦截；此策略也不免除已进入 Worker 的调用费用。
+
 ## 本地运行
 
 首次安装 Node 24 后执行 npm ci，将 wrangler.example.jsonc 复制为 wrangler.jsonc，将 .env.example 复制为 .env.local。已有配置不覆盖。填写本地 AUTH_SECRET；远程资源 ID 只存本地配置或 CI secret。

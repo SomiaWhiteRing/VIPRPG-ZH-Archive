@@ -22,12 +22,16 @@ export function gameListCanonicalPath(params: URLSearchParams): string {
 }
 
 export function crawlerResponse(request: Request): Response | null {
-  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  // Deny the declared agent, including unverified or spoofed requests.
+  const metaCrawler = /\bmeta-externalagent\b/i.test(request.headers.get("user-agent") ?? "");
   const cf = (request as Request & { cf?: { verifiedBotCategory?: string } }).cf;
-  if (!bulkCrawlerCategories.has(cf?.verifiedBotCategory ?? "")) return null;
+  const bulkCrawler = (request.method === "GET" || request.method === "HEAD") &&
+    bulkCrawlerCategories.has(cf?.verifiedBotCategory ?? "");
+  if (!metaCrawler && !bulkCrawler) return null;
   const url = new URL(request.url);
   const games = /^\/games(?:\.data)?\/?$/.test(url.pathname);
-  if (/^\/api\/archive-versions\/\d+\/(?:download|kai-import)\/?$/.test(url.pathname) ||
+  if ((metaCrawler && url.pathname !== "/robots.txt") ||
+      /^\/api\/archive-versions\/\d+\/(?:download|kai-import)\/?$/.test(url.pathname) ||
       (games && isFilteredGameList(url.searchParams))) {
     return new Response(request.method === "HEAD" ? null : "This endpoint is not available for automated crawling.", {
       status: 403,
@@ -44,7 +48,8 @@ export function crawlerResponse(request: Request): Response | null {
 }
 
 export function publicRobots(origin: string): string {
-  return ["User-agent: *", "Allow: /",
+  return ["User-agent: meta-externalagent", "Disallow: /", "",
+    "User-agent: *", "Allow: /",
     "Disallow: /api/archive-versions/*/download", "Disallow: /api/archive-versions/*/kai-import",
     ...["/games", "/games.data"].flatMap((path) =>
       gameFilterParams.map((key) => `Disallow: ${path}?*${key}=`)),
