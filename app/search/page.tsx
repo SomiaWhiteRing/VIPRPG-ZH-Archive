@@ -240,7 +240,7 @@ async function listDirectory(
     meta: string;
     character?: Pick<
       CharacterIndexEntry,
-      "id" | "portrait" | "workCount" | "commentCount" | "materialCount"
+      "id" | "portrait" | "description" | "workCount" | "commentCount" | "materialCount"
     >;
     catalog?: CatalogSummary;
     creator?: PublicCreatorSummary;
@@ -280,6 +280,7 @@ async function listDirectory(
       character: {
         id: item.id,
         portrait: item.defaultPortrait,
+        description: item.description,
         workCount: item.workCount,
         commentCount: commentCounts.get(item.id) ?? 0,
         materialCount: materialCounts.get(item.id) ?? 0,

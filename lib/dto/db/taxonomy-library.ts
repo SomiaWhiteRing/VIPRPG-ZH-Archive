@@ -19,7 +19,7 @@ export type AdminCharacterEdit = PublicCharacterSummary & {
 };
 
 export type PublicCharacterIndexEntry = Pick<PublicCharacterSummary,
-  "id" | "primaryName" | "originalName" | "defaultPortrait" | "workCount"
+  "id" | "primaryName" | "originalName" | "defaultPortrait" | "description" | "workCount"
 > & {
   aliases: CharacterAliasSuggestion[];
 };

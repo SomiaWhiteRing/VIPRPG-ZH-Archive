@@ -133,8 +133,8 @@ export const PERMISSIONS = {
   "character.metadata.update_any": {
     category: "character",
     label: "编辑所有游戏角色资料",
-    scope: "全部角色名称与别名",
-    description: "编辑角色中文名、日文名和别名。",
+    scope: "全部角色名称、别名与简介",
+    description: "编辑角色中文名、日文名、别名和简介。",
   },
   "character.merge_any": {
     category: "character",

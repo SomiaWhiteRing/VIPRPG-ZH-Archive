@@ -8,7 +8,7 @@ export type CharacterMembership = { categoryId: string; characterId: number; sor
 export type CharacterNameSelection = { characterId: number; displayName: string; originalName: string };
 export type CharacterIndexEntry = {
   id: number; key: string; primaryName: string; originalName: string; aliases: CharacterAliasSuggestion[];
-  portrait: CharacterPortrait | null; workCount: number; commentCount: number; materialCount: number; sourceUrls: string[];
+  portrait: CharacterPortrait | null; description: string | null; workCount: number; commentCount: number; materialCount: number; sourceUrls: string[];
 };
 export type CharacterIndexData = { categories: CharacterCategory[]; memberships: CharacterMembership[]; characters: CharacterIndexEntry[] };
 export const UNCLASSIFIED_GROUP_ID = "group:unclassified";

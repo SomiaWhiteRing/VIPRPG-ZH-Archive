@@ -58,6 +58,7 @@ export async function POST(
       "original_name",
       "japanese_aliases",
       "chinese_aliases",
+      "description",
     ].some((key) => formData.has(key));
     const portraitRequested =
       formData.has("face_sheet_ids") || formData.has("default_portrait");

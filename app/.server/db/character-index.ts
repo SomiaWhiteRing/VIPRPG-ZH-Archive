@@ -75,6 +75,7 @@ async function loadCharacterIndex(
       originalName: character.originalName,
       aliases: character.aliases,
       portrait: character.defaultPortrait,
+      description: character.description,
       workCount: character.workCount,
       sourceUrls: urlsByCharacter.get(character.id) ?? [],
       commentCount: commentCounts.get(character.id) ?? 0,

@@ -20,6 +20,7 @@ type DetailRow = CharacterPortraitRow & {
   id: number;
   primaryName: string;
   originalName: string;
+  description: string | null;
   workCount: number;
 };
 
@@ -31,7 +32,7 @@ async function readPublicCharacter(
   const row = await db
     .prepare(
       `SELECT ch.id,ch.primary_name AS primaryName,
-    ch.original_name AS originalName,${CHARACTER_PORTRAIT_COLUMNS},
+    ch.original_name AS originalName,ch.description,${CHARACTER_PORTRAIT_COLUMNS},
     (SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc
       WHERE wc.character_id=ch.id AND wc.work_id IN (SELECT id FROM member_works)) AS workCount
     FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}
@@ -46,6 +47,7 @@ async function readPublicCharacter(
     id: row.id,
     primaryName: row.primaryName,
     originalName: row.originalName,
+    description: row.description,
     portrait: mapCharacterPortrait(row),
     workCount: Number(row.workCount),
   };

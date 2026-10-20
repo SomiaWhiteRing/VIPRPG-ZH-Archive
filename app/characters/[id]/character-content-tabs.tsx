@@ -20,6 +20,7 @@ const getDesktop = () => window.matchMedia(desktopQuery).matches;
 const getServerDesktop = () => false;
 
 export function CharacterContentTabs({
+  intro,
   works,
   materials,
   workCount,
@@ -27,6 +28,7 @@ export function CharacterContentTabs({
   sidebar,
   children,
 }: {
+  intro: ReactNode;
   works: ReactNode;
   materials: ReactNode;
   workCount: number;
@@ -80,7 +82,7 @@ export function CharacterContentTabs({
         >
           <TabsList aria-label="角色相关内容">
             {[
-              { value: "works", label: "登场作品", count: workCount },
+              { value: "works", label: intro ? "简介与登场作品" : "登场作品", count: workCount },
               { value: "materials", label: "素材", count: materialCount },
             ].map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
@@ -91,8 +93,15 @@ export function CharacterContentTabs({
               </TabsTrigger>
             ))}
           </TabsList>
-          <TabsContent value="works">{works}</TabsContent>
-          <TabsContent value="materials">{materials}</TabsContent>
+          <TabsContent className="py-0" value="works">
+            {intro}
+            {works}
+          </TabsContent>
+          <TabsContent value="materials">
+            <section aria-label="角色素材" className="scroll-mt-20" id="sec-materials">
+              {materials}
+            </section>
+          </TabsContent>
         </Tabs>
         {children}
       </div>

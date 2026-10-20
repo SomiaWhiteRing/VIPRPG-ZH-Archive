@@ -241,7 +241,7 @@ export function CharacterIndexBrowser({
           : row.depth === 2
             ? 44
             : 36
-        : 144 + (row.continuation ? 36 : 0);
+        : 144 + (row.characters.some(({ character }) => character.description) ? 48 : 0) + (row.continuation ? 36 : 0);
     },
     [rows],
   );
@@ -251,7 +251,7 @@ export function CharacterIndexBrowser({
       if (row.groupEnd) return "group-end";
       return row.node.kind === "category"
         ? `category:${Math.min(row.depth, 3)}`
-        : `characters:plain:${Boolean(row.continuation)}`;
+        : `characters:${row.characters.some(({ character }) => character.description) ? "description" : "plain"}:${Boolean(row.continuation)}`;
     },
     [rows],
   );

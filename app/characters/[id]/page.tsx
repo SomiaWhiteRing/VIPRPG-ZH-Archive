@@ -92,10 +92,19 @@ export default function CharacterDetailPage() {
         </p>
       </header>
       <CharacterContentTabs
+        key={character.id}
         workCount={character.workCount}
         materialCount={character.materials.length}
+        intro={character.description ? (
+          <section aria-labelledby="character-intro-title" className="scroll-mt-20 py-4.5" id="sec-intro">
+            <h2 className="mb-3.5 text-base font-bold" id="character-intro-title">简介</h2>
+            <p className="m-0 whitespace-pre-wrap leading-[1.85] wrap-anywhere">
+              {character.description}
+            </p>
+          </section>
+        ) : null}
         works={
-          <section aria-labelledby="works-title" className="scroll-mt-20" id="sec-works">
+          <section aria-labelledby="works-title" className={`scroll-mt-20 py-4.5 ${character.description ? "border-t border-border" : ""}`} id="sec-works">
             <div className="mb-3.5 flex items-baseline justify-between gap-4">
               <h2 className="m-0 text-base font-bold" id="works-title">
                 登场作品

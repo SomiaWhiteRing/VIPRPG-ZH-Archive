@@ -154,6 +154,7 @@ async function readPublicCharacterIndex(
     primaryName: row.primary_name,
     originalName: row.original_name,
     defaultPortrait: mapCharacterPortrait(row),
+    description: row.description,
     workCount: row.work_count,
     aliases: byCharacter.get(row.id) ?? [],
   }));
@@ -491,6 +492,7 @@ export function parseCharacterEditForm(
     characterId: id,
     primaryName: String(form.get("primary_name") ?? ""),
     originalName: String(form.get("original_name") ?? ""),
+    description: form.has("description") ? clean(form.get("description")) : undefined,
     japaneseAliases: lines(form.get("japanese_aliases")),
     chineseAliases: lines(form.get("chinese_aliases")),
     mergeTargetId: nullablePositive(form.get("merge_target_id")),
@@ -883,7 +885,7 @@ function characterSql(publicPortrait = false, groupedWorkCounts = false, fields:
   const workCount = groupedWorkCounts
     ? "COALESCE(work_counts.work_count,0)"
     : "(SELECT COUNT(DISTINCT wc.work_id) FROM work_characters wc JOIN works w ON w.id=wc.work_id WHERE wc.character_id=ch.id AND w.id IN (SELECT id FROM member_works))";
-  return `${counts}SELECT ch.id,ch.primary_name,ch.original_name,${fields === "summary" ? "ch.description,ch.extra_json,ch.updated_at," : ""}${CHARACTER_PORTRAIT_COLUMNS},${workCount} AS work_count FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""}${groupedWorkCounts ? " LEFT JOIN character_work_counts work_counts ON work_counts.character_id=ch.id" : ""}`;
+  return `${counts}SELECT ch.id,ch.primary_name,ch.original_name,ch.description,${fields === "summary" ? "ch.extra_json,ch.updated_at," : ""}${CHARACTER_PORTRAIT_COLUMNS},${workCount} AS work_count FROM characters ch ${DEFAULT_CHARACTER_PORTRAIT_JOINS}${publicPortrait ? ` AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}` : ""}${groupedWorkCounts ? " LEFT JOIN character_work_counts work_counts ON work_counts.character_id=ch.id" : ""}`;
 }
 function tagSql(): string {
   return `SELECT t.name,t.namespace,t.description,COALESCE((SELECT public_count FROM tag_usage_stats WHERE name=t.name),0) AS work_count,t.updated_at`;

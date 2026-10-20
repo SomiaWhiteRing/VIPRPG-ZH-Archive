@@ -68,8 +68,8 @@ export default function CreatorDetailPage() {
         </h1>
         <SectionNavigation
           items={[
-            { href: "#sec-intro", label: "概览", active: true },
-            { href: "#sec-works", label: "参与作品", count: creator.workCreditCount },
+            ...(creator.bio ? [{ href: "#sec-intro", label: "概览", active: true }] : []),
+            { href: "#sec-works", label: "参与作品", count: creator.workCreditCount, active: !creator.bio },
             { href: "#sec-comments", label: "评论" },
           ]}
         />
@@ -81,15 +81,15 @@ export default function CreatorDetailPage() {
         sidebarLabel="作者资料"
         main={
           <>
-            <section
-              aria-labelledby="intro-title"
-              className="scroll-mt-20 py-4.5"
-              id="sec-intro"
-            >
-              <h2 className="mb-3.5 text-base font-bold" id="intro-title">
-                简介
-              </h2>
-              {creator.bio ? (
+            {creator.bio ? (
+              <section
+                aria-labelledby="intro-title"
+                className="scroll-mt-20 py-4.5"
+                id="sec-intro"
+              >
+                <h2 className="mb-3.5 text-base font-bold" id="intro-title">
+                  简介
+                </h2>
                 <p className="m-0 whitespace-pre-wrap leading-[1.85] wrap-anywhere">
                   {creator.bio
                     .split(new RegExp(`(${AUTO_LINK_PATTERN.source})`, "g"))
@@ -104,14 +104,12 @@ export default function CreatorDetailPage() {
                       ) : part;
                     })}
                 </p>
-              ) : (
-                <p className="m-0 text-sm text-muted">暂无简介。</p>
-              )}
-            </section>
+              </section>
+            ) : null}
 
             <section
               aria-labelledby="works-title"
-              className="scroll-mt-20 border-t border-border py-4.5"
+              className={`scroll-mt-20 py-4.5 ${creator.bio ? "border-t border-border" : ""}`}
               id="sec-works"
             >
               <div className="mb-3.5 flex items-baseline justify-between gap-4">

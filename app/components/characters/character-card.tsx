@@ -22,7 +22,7 @@ export function CharacterCard({
   categoryId?: string | null;
   character: Pick<
     CharacterIndexEntry,
-    "id" | "portrait" | "workCount" | "commentCount" | "materialCount"
+    "id" | "portrait" | "description" | "workCount" | "commentCount" | "materialCount"
   >;
   displayName: string;
   originalName: string;
@@ -93,6 +93,11 @@ export function CharacterCard({
           </p>
         </div>
       </div>
+      {character.description ? (
+        <p className="m-0 line-clamp-2 text-xs leading-relaxed text-muted">
+          {character.description}
+        </p>
+      ) : null}
       <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/70 pt-2 text-xs tabular-nums text-muted">
         <span>{formatNumber(character.workCount)} 部作品</span>
         <span>{formatNumber(character.commentCount)} 条评论</span>
