@@ -53,7 +53,7 @@ export function CharacterCreditManager({
   suggestions: CharacterSuggestion[];
   values: CharacterCreditSelection[];
   faceSheetFiles: Record<number, File[]>;
-  onChange: (values: CharacterCreditSelection[], reorderedIndices?: number[]) => void;
+  onChange: (values: CharacterCreditSelection[], reorderedIndices?: number[]) => CharacterCreditSelection[];
   onRestore: (values: CharacterCreditSelection[], files: Record<number, File[]>) => void;
   onCreate: (query: string, role: CharacterRoleKey) => void;
   onEditPortrait: (index: number, trigger: HTMLButtonElement) => void;
@@ -221,8 +221,9 @@ export function CharacterCreditManager({
 
   const change = useCallback((next: CharacterCreditSelection[], message: string, indices?: number[]) => {
     setUndo({ values, files: { ...faceSheetFiles } });
-    expectedValues.current = next;
-    onChange(next, indices);
+    const sorted = onChange(next, indices);
+    if (pendingScroll.current !== null) pendingScroll.current = sorted.indexOf(next[pendingScroll.current]);
+    expectedValues.current = sorted;
     setNotice(message);
   }, [faceSheetFiles, onChange, values]);
   const finishName = useCallback((save = true, focus = false) => {

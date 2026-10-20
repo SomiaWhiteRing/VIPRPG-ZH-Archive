@@ -25,7 +25,7 @@ import type { CharacterIndexData } from "@/lib/character-index";
 import { inspectCharacterFaceSheetFile } from "@/lib/ui/character-face-sheet";
 import { cn } from "@/lib/ui/cn";
 import { Pencil, X } from "lucide-react";
-import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 
 type ExistingOption = {
@@ -43,6 +43,9 @@ const EMPTY_FILES: File[] = [];
 const EMPTY_WARNINGS: string[] = [];
 const CHARACTER_ROLE_OPTIONS = Object.entries(CHARACTER_ROLE_LABELS).map(
   ([value, label]) => ({ value, label }),
+);
+const CHARACTER_ROLE_ORDER = new Map(
+  CHARACTER_ROLE_OPTIONS.map(({ value }, index) => [value, index]),
 );
 
 export function CharacterPicker({
@@ -86,6 +89,21 @@ export function CharacterPicker({
     value: string;
     roleKey: CharacterRoleKey;
   } | null>(null);
+  const changeValues = useCallback((next: CharacterCreditSelection[], reorderedIndices?: number[]) => {
+    const order = next.map((_, index) => index).sort((a, b) =>
+      CHARACTER_ROLE_ORDER.get(next[a].roleKey)! - CHARACTER_ROLE_ORDER.get(next[b].roleKey)!,
+    );
+    if (order.every((index, position) => index === position)) {
+      onChange(next, reorderedIndices);
+      return next;
+    }
+    // Keep uploads and open editors attached to their credit after grouping by role.
+    const sorted = order.map((index) => next[index]);
+    setPortraitIndex((current) => current === null ? null : order.indexOf(current));
+    setAliasEdit((current) => current === null ? null : { ...current, index: order.indexOf(current.index) });
+    onChange(sorted, order.map((index) => reorderedIndices?.[index] ?? index));
+    return sorted;
+  }, [onChange]);
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
   const createRoleRef = useRef<CharacterRoleKey>("main");
   const portraitReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -186,7 +204,7 @@ export function CharacterPicker({
   function addExisting(
     selection: Extract<CharacterSelection, { kind: "existing" }>,
   ) {
-    onChange([
+    changeValues([
       ...values,
       { selection, roleKey: "main", portrait: null, faceSheetBlobSha256s: [] },
     ]);
@@ -205,7 +223,7 @@ export function CharacterPicker({
         ? null
         : { ...current, index: current.index - 1 };
     });
-    onChange(values.filter((_, itemIndex) => itemIndex !== index));
+    changeValues(values.filter((_, itemIndex) => itemIndex !== index));
   }
 
   function saveAlias(event: FormEvent<HTMLFormElement>) {
@@ -214,7 +232,7 @@ export function CharacterPicker({
     if (disabled || !aliasEdit) return;
     const displayName = normalizeEntityName(aliasEdit.value);
     if (!displayName || !values[aliasEdit.index]) return;
-    onChange(
+    changeValues(
       values.map((credit, index) =>
         index === aliasEdit.index
           ? {
@@ -245,19 +263,19 @@ export function CharacterPicker({
       primaryName: displayName,
       displayName,
     };
-    onChange([
-      ...values,
-      { selection, roleKey: createRoleRef.current, portrait: null, faceSheetBlobSha256s: [] },
-    ]);
+    const credit: CharacterCreditSelection = {
+      selection, roleKey: createRoleRef.current, portrait: null, faceSheetBlobSha256s: [],
+    };
+    const next = changeValues([...values, credit]);
     setQuery("");
     portraitReturnFocusRef.current = document.getElementById(id);
-    setPortraitIndex(values.length);
+    setPortraitIndex(next.indexOf(credit));
   }
 
   function confirmPortrait({ files, portrait, faceSheetBlobSha256s }: PortraitDraft) {
     if (disabled || portraitIndex === null) return;
     onFaceSheetFilesChange?.(portraitIndex, files);
-    onChange(
+    changeValues(
       values.map((item, index) =>
         index === portraitIndex ? { ...item, portrait, faceSheetBlobSha256s } : item,
       ),
@@ -273,7 +291,7 @@ export function CharacterPicker({
       setAliasEdit((current) => current === null ? null : {
         ...current, index: indices.indexOf(current.index),
       });
-      onChange(next, indices);
+      changeValues(next, indices);
     },
     disabled,
   );
@@ -562,7 +580,7 @@ export function CharacterPicker({
             disabled={disabled}
             faceSheetFiles={faceSheetFiles}
             id={id}
-            onChange={onChange}
+            onChange={changeValues}
             onCreate={startCreate}
             onEditPortrait={(index, trigger) => {
               portraitReturnFocusRef.current = trigger;
