@@ -31,7 +31,8 @@ const booleanPatches = {
 } as const;
 const integerPatches = { maniac: "Maniac", antiLagSwitch: "AntiLagSwitch", directMenu: "DirectMenu" } as const;
 
-/** Resolve the native Player's engine/patch rules from the unfiltered archive.
+/** Resolve engine/patch rules from the unfiltered archive. A replacement EXE
+ * must not change the database's 2000/2003 family without an explicit override.
  * PE facts follow EasyRPG's EXEReader; DLL detection uses names and file sizes.
  * With no version evidence or declared encoding, keep the native encoding-based
  * fallback rather than substitute a second charset detector for liblcf/ICU.
@@ -75,20 +76,25 @@ export async function detectEasyRpgConfig(files: readonly SourceFile[]): Promise
   let engine: EasyRpgEngine | null = Object.hasOwn(engineAliases, configured) ? engineAliases[configured]
     : easyRpgEngines.includes(configured as EasyRpgEngine) ? configured as EasyRpgEngine : null;
   let engineSource: EasyRpgConfig["engineSource"] = "config";
+  const databaseInfo = !engine && database ? inspectDatabase(database) : null;
+  let executableConflictsWithDatabase = false;
   if (!engine) {
     const detected = exe ? inspectExecutable(exe) : null;
-    engine = detected?.engine ?? null;
+    executableConflictsWithDatabase = Boolean(databaseInfo && detected?.engine &&
+      databaseInfo.is2003 !== detected.engine.startsWith("rpg2k3"));
+    engine = executableConflictsWithDatabase ? null : detected?.engine ?? null;
     engineSource = "executable";
-    if (!patchOverride && detected?.maniac) patches.maniac = 1;
+    if (!patchOverride && !executableConflictsWithDatabase && detected?.maniac) patches.maniac = 1;
   }
   if (!engine) {
-    const info = database ? inspectDatabase(database) : { is2003: false, english2000: false };
+    const info = databaseInfo ?? { is2003: false, english2000: false };
     const is2003 = info.is2003;
     const english = is2003 ? entries.has("ultimate_rt_eb.dll") : info.english2000;
     engineSource = "database";
     if (english) engine = is2003 ? "rpg2k3e" : "rpg2ke";
     else {
-      const harmony = entries.get("harmony.dll"), runtime = entries.get("rpg_rt.exe");
+      // A cross-family replacement's size is not evidence of a newer database engine.
+      const harmony = entries.get("harmony.dll"), runtime = executableConflictsWithDatabase ? undefined : entries.get("rpg_rt.exe");
       const mp3 = (!harmony || harmony.size === 473600) && files.some(file => /^music\/[^/]+\.mp3$/i.test(file.path));
       if (mp3 || runtime) {
         const updated = mp3 || runtime!.size > (is2003 ? 927000 : 735000);

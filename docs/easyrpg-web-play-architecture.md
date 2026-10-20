@@ -18,7 +18,7 @@
 - 新上传在完整原包上解析 `EasyRPG.ini`、`RPG_RT.exe` 的 PE 版本/LOGO/段信息、LDB 标记和文件特征，将结果保存于 `manifest.archiveVersion.easyRpg`（`easyrpg-config.v1`）。服务器在 source-ready 阶段用已验证的原文件复核配置；配置参与 source manifest 与最终 manifest 哈希，不另存 Work/D1 配置副本。
 - Web Play 元数据读取并校验 manifest 后下发 `easyRpg`；浏览器与 Android 套壳的安装记录保存该配置，在线/离线启动均生成明确的引擎、编码和站点收录范围内的补丁参数。任何补丁参数会关闭 EasyRPG 补丁自动检测，因此包含明确关闭的补丁；Destiny 不在收录范围内，不记录也不生成参数。沿用当前 Web runtime，无须重建。旧 manifest 缺少配置时沿用原启动行为。
 - Android 在线页随网站更新；离线页与原生安装记录处理封装在 VIPRPG APK 中，需要发布新版 APK 才能在新安装中保存并应用 `easyRpg`。旧安装记录缺少配置时沿用原启动行为，不在启动时联网补判。
-- 判定优先级遵循 EasyRPG：显式配置 → 原 EXE → 数据库/标准运行库标记 → MP3/EXE 大小 → 编码回退。没有版本依据且原包未声明编码时，`engine=null`、`engineSource=fallback`，仅保留 liblcf 原有的编码自动识别和版本回退，避免再实现一套近似的 ICU 字符集判定。DLL 只使用文件名和 Harmony 的已知大小，不分析 DLL 内容。
+- 显式 `EasyRPG.ini` 配置优先；自动判定时先核对 LDB 的 2000/2003 系列，只接受同系列 EXE 的版本和 Maniac 证据。EXE 与数据库跨系列冲突时，同时忽略该 EXE 的版本、Maniac 标记和大小，再按数据库/标准运行库标记 → MP3/有效 EXE 大小 → 编码回退选择具体版本，避免替换的 2003/Maniac 执行文件把 2000 游戏带入错误模式。缺少数据库时仍可使用 EXE 证据；显式补丁配置及独立 DLL 标记沿用现有规则。没有版本依据且原包未声明编码时，`engine=null`、`engineSource=fallback`，仅保留 liblcf 原有的编码自动识别和版本回退，避免再实现一套近似的 ICU 字符集判定。DLL 只使用文件名和 Harmony 的已知大小，不分析 DLL 内容。
 - IndexedDB 只保存安装状态、文件清单、版本键、进度、校验信息和错误信息。
 - 普通下载 ZIP 使用 STORE，且 local file header 写入明确的 `crc32`、compressed size 和 uncompressed size；不使用 data descriptor。
 - 启动前校验 OPFS `pack-index.json`，把 pack 的 `File` 与切片索引交给播放器 Worker，由 Emscripten WORKERFS 挂载为只读 `/game`。
