@@ -90,6 +90,7 @@ export default function EternalSeaPage() {
       const range = selection.getRangeAt(0);
       if (!logRef.current?.contains(range.commonAncestorContainer)) return;
       const content = range.cloneContents();
+      for (const source of content.querySelectorAll(".sea-dialogue-source")) source.remove();
       for (const dialogue of content.querySelectorAll(".sea-dialogue")) {
         dialogue.appendChild(document.createTextNode("\n"));
       }

@@ -64,12 +64,30 @@ body:has(.eternal-sea-page) {
   pointer-events: none;
 }
 
+/* Continuous, translatable text sits beneath the opaque bitmap window. */
+.sea-dialogue-source {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 3.125cqw 3.75cqw 1.875cqw 25cqw;
+  font-family: monospace;
+  font-size: 3.75cqw;
+  line-height: 5cqw;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: none;
+  pointer-events: none;
+}
+
+.sea-dialogue-source p { margin: 0; }
+.sea-dialogue[data-side="right"] .sea-dialogue-source { padding-inline: 2.5cqw 26.25cqw; }
+
 .sea-dialogue-avatar {
   position: absolute;
   left: 5%;
-  top: 20%;
+  top: 5cqw;
   width: 15%;
-  height: 60%;
+  height: 15cqw;
   object-fit: cover;
   image-rendering: auto;
   pointer-events: none;
@@ -92,7 +110,7 @@ body:has(.eternal-sea-page) {
   line-height: 5cqw;
   text-shadow: none;
   user-select: text;
-  pointer-events: none;
+  cursor: text;
 }
 
 .sea-dialogue-text .sea-text-glyph {

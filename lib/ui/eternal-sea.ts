@@ -119,8 +119,8 @@ export function drawSeaDialogue(
   const context = canvas.getContext("2d");
   if (!context) return;
   context.imageSmoothingEnabled = false;
-  context.clearRect(0, 0, SEA_WINDOW_WIDTH, SEA_WINDOW_HEIGHT);
-  context.drawImage(images.window, 0, 0);
+  context.clearRect(0, 0, SEA_WINDOW_WIDTH, canvas.height);
+  context.drawImage(images.window, 0, 0, SEA_WINDOW_WIDTH, canvas.height);
   if (images.faces) {
     context.save();
     context.translate(side === "right" ? 304 : 16, 16);
@@ -130,7 +130,7 @@ export function drawSeaDialogue(
   }
   const { placements } = layoutSeaDialogue(name, body);
   for (const placement of placements) {
-    if (placement.character === "\n" || placement.row >= SEA_MAX_LINES) continue;
+    if (placement.character === "\n") continue;
     const glyph = seaGlyph(placement.character);
     context.drawImage(images.font, (glyph.index % 128) * 14, Math.floor(glyph.index / 128) * 14, glyph.width + 1, 13,
       seaTextLeft(side) + placement.x, SEA_TEXT_TOP + placement.row * SEA_LINE_HEIGHT, glyph.width + 1, 13);
