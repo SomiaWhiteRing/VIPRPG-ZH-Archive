@@ -2,9 +2,11 @@ import { requireAnyPermission } from "@/app/.server/auth/authorize";
 import { editPublicCreator } from "@/app/.server/db/creator-edit";
 import { parsePositiveId } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
+import { storeAvatarFromForm } from "@/app/.server/storage/avatar";
 import { CREATOR_PUBLIC_EDIT_PERMISSIONS } from "@/lib/authz/creator-permissions";
 import { parseCreatorLinks } from "@/lib/creator-links";
 import { HttpError, json, jsonError } from "@/lib/http";
+import { normalizeSha256 } from "@/lib/sha256";
 
 export async function POST(
   runtime: AppRuntime,
@@ -23,9 +25,16 @@ export async function POST(
     }
     const aliases = form.getAll("alias");
     if (aliases.some((value) => typeof value !== "string")) throw new HttpError(400, "别名格式不正确");
+    const avatarBlobSha256 = await storeAvatarFromForm(runtime, form);
+    let avatar;
+    if (avatarBlobSha256 !== undefined) {
+      const previousAvatar = field("previousAvatar");
+      avatar = { avatarBlobSha256, previousAvatar: previousAvatar === "none" ? null : normalizeSha256(previousAvatar) };
+    }
     await editPublicCreator(runtime, id, auth.user, {
       snapshot: field("snapshot"),
       metadata: { name: field("name"), links: parseCreatorLinks(field("links_json")), bio: field("bio"), aliases: aliases as string[] },
+      avatar,
     });
     return json({ ok: true });
   } catch (error) {

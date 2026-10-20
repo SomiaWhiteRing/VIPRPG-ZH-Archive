@@ -1,5 +1,3 @@
-import { requestJson } from "@/lib/ui/api-response";
-
 import { useConfirm } from "./confirm-provider";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
@@ -13,36 +11,56 @@ import { Slider } from "radix-ui";
 import { useEffect, useId, useRef, useState } from "react";
 import type { Area } from "react-easy-crop";
 import Cropper from "react-easy-crop";
-import { useRevalidator } from "react-router";
 
 const MAX_SOURCE_BYTES = 10 * 1024 * 1024;
 
 export function AvatarCropper({
   avatarBlobSha256,
   displayName,
-  endpoint = "/api/account/avatar",
   shape = "round",
   allowDelete = false,
   alignActions = "start",
+  disabled = false,
+  onChange,
+  onBusyChange,
 }: {
   avatarBlobSha256: string | null;
   displayName: string;
-  endpoint?: string;
   shape?: "round" | "square";
   allowDelete?: boolean;
   alignActions?: "start" | "end";
+  disabled?: boolean;
+  onChange?: (changed: boolean) => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
-  const revalidator = useRevalidator();
   const toast = useToast();
   const confirm = useConfirm();
   const dialogId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const [source, setSource] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [area, setArea] = useState<Area | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [draft, setDraft] = useState<{ file: File; src: string } | null>();
+  const busy = disabled || preparing;
+  const hasAvatar = draft === undefined ? Boolean(avatarBlobSha256) : Boolean(draft);
+
+  useEffect(() => {
+    const form = rootRef.current?.closest("form");
+    if (!form || draft === undefined) return;
+    function appendAvatar(event: FormDataEvent) {
+      event.formData.set("avatar", draft ? draft.file : "remove");
+    }
+    form.addEventListener("formdata", appendAvatar);
+    return () => form.removeEventListener("formdata", appendAvatar);
+  }, [draft]);
+
+  useEffect(() => () => {
+    if (draft) URL.revokeObjectURL(draft.src);
+  }, [draft]);
 
   useEffect(
     () => () => {
@@ -68,64 +86,61 @@ export function AvatarCropper({
     setArea(null);
   }
 
-  async function upload(portrait?: CharacterPortrait): Promise<boolean> {
+  async function prepare(portrait?: CharacterPortrait): Promise<boolean> {
     const imageSource = portrait ? `/api/media/blobs/${portrait.blobSha256}` : source;
     const imageArea = portrait
       ? { x: portrait.column * 48, y: portrait.row * 48, width: 48, height: 48 }
       : area;
     if (!imageSource || !imageArea || busy) return false;
-    setBusy(true);
+    setPreparing(true);
+    onBusyChange?.(true);
     try {
       const blob = await cropToPng(imageSource, imageArea, Boolean(portrait));
 
-      await requestJson(endpoint, {
-        method: "PUT",
-        credentials: "same-origin",
-        headers: { "content-type": "image/png" },
-        body: blob,
-      });
-
+      const file = new File([blob], "avatar.png", { type: "image/png" });
+      setDraft({ file, src: URL.createObjectURL(file) });
+      onChange?.(true);
       setSource(null);
-      toast.success("头像已更新。");
-      revalidator.revalidate();
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "头像上传失败");
+      toast.error(error instanceof Error ? error.message : "头像处理失败");
       return false;
     } finally {
-      setBusy(false);
+      setPreparing(false);
+      onBusyChange?.(false);
     }
   }
 
   async function remove() {
-    if (!avatarBlobSha256 || busy) return;
-    await confirm(`确定删除“${displayName}”的当前头像吗？`, {
+    if (!hasAvatar || busy) return;
+    if (await confirm(`确定删除“${displayName}”的头像吗？保存资料后生效。`, {
       title: "删除头像", confirmLabel: "删除", destructive: true,
-      action: async () => {
-        setBusy(true);
-        try {
-
-          await requestJson(endpoint, { method: "DELETE", credentials: "same-origin" });
-
-          toast.success("头像已删除。");
-          revalidator.revalidate();
-        } finally { setBusy(false); }
-      },
-    });
+    })) {
+      setDraft(avatarBlobSha256 ? null : undefined);
+      onChange?.(Boolean(avatarBlobSha256));
+    }
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-4">
-      {shape === "round" ? (
+    <div className="flex flex-wrap items-center gap-4" ref={rootRef}>
+      {draft ? (
+        <img
+          alt={`${displayName}的待保存头像`}
+          className={cn("shrink-0 object-cover", shape === "round" ? "size-20 rounded-full" : "size-24 rounded-md border border-border")}
+          height={shape === "round" ? 80 : 96}
+          src={draft.src}
+          width={shape === "round" ? 80 : 96}
+        />
+      ) : shape === "round" ? (
         <UserAvatar
-          avatarBlobSha256={avatarBlobSha256}
+          avatarBlobSha256={draft === null ? null : avatarBlobSha256}
           className="size-20"
           displayName={displayName}
           size={80}
         />
       ) : (
         <CreatorPortrait
-          avatarBlobSha256={avatarBlobSha256}
+          avatarBlobSha256={draft === null ? null : avatarBlobSha256}
           className="size-24"
           name={displayName}
           size={96}
@@ -140,7 +155,10 @@ export function AvatarCropper({
         <input
           accept="image/jpeg,image/png,image/webp"
           className="sr-only"
-          onChange={(event) => choose(event.target.files?.[0])}
+          onChange={(event) => {
+            choose(event.target.files?.[0]);
+            event.target.value = "";
+          }}
           ref={fileInputRef}
           type="file"
         />
@@ -163,8 +181,8 @@ export function AvatarCropper({
           >
             上传图片
           </Button>
-          <CharacterAvatarPicker disabled={busy} shape={shape} onSave={upload} />
-          {allowDelete && avatarBlobSha256 ? (
+          <CharacterAvatarPicker disabled={busy} shape={shape} onSave={prepare} />
+          {allowDelete && hasAvatar ? (
             <Button
               disabled={busy}
               onClick={() => void remove()}
@@ -176,6 +194,7 @@ export function AvatarCropper({
             </Button>
           ) : null}
         </div>
+        <p className="m-0 text-sm text-muted">{draft !== undefined ? "头像已修改，保存资料后生效。" : "头像修改将在保存资料后生效。"}</p>
       </div>
       <Dialog.Root
         open={Boolean(source)}
@@ -246,10 +265,10 @@ export function AvatarCropper({
               </Button>
               <Button
                 disabled={busy || !area}
-                onClick={() => void upload()}
+                onClick={() => void prepare()}
                 type="button"
               >
-                {busy ? "正在上传…" : "保存头像"}
+                {busy ? "正在处理…" : "使用此头像"}
               </Button>
             </div>
           </Dialog.Content>

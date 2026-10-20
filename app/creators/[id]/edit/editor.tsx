@@ -24,6 +24,8 @@ type SaveResult = { ok: boolean; error?: string; detail?: string; code?: string 
 export function CreatorEditor({ creator }: { creator: EditableCreator }) {
   const [result, setResult] = useState<SaveResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarChanged, setAvatarChanged] = useState(false);
   const saving = useRef(false);
   const toast = useToast();
   const [snapshot] = useState(() => creatorMetadataSnapshot(creator));
@@ -34,7 +36,7 @@ export function CreatorEditor({ creator }: { creator: EditableCreator }) {
   const [bio, setBio] = useState(creator.bio ?? "");
   const redirected = useRef(false);
   const saved = result?.ok === true;
-  const dirty = !saved && (Boolean(aliasQuery.trim()) || snapshot !== creatorMetadataSnapshot({ name, aliases, links, bio: bio || null }));
+  const dirty = !saved && (avatarChanged || Boolean(aliasQuery.trim()) || snapshot !== creatorMetadataSnapshot({ name, aliases, links, bio: bio || null }));
   const [leaveOpen, setLeaveOpen] = useState(false);
   const leaveDecision = useRef<((leave: boolean) => void) | null>(null);
   const navigate = useNavigationGuard(dirty || busy, () => new Promise<boolean>((resolve) => {
@@ -51,7 +53,7 @@ export function CreatorEditor({ creator }: { creator: EditableCreator }) {
   const failed = !busy && result && !result.ok;
 
   async function save(form: HTMLFormElement) {
-    if (saving.current) return;
+    if (saving.current || avatarBusy) return;
     const pendingAlias = normalizeEntityName(aliasQuery);
     if (pendingAlias.length > CREATOR_EDIT_LIMITS.name) {
       setResult({ ok: false, detail: `每个别名最多 ${CREATOR_EDIT_LIMITS.name} 字` });
@@ -98,21 +100,16 @@ export function CreatorEditor({ creator }: { creator: EditableCreator }) {
         <h1 className="font-serif text-3xl font-bold">编辑作者资料</h1>
       </header>
 
-      <div className="mb-5">
-        <Pane heading="作者头像">
-          <fieldset disabled={busy}>
-            <legend className="sr-only">作者头像</legend>
-            <AvatarCropper allowDelete avatarBlobSha256={creator.avatarBlobSha256} displayName={name || creator.name}
-              endpoint={`/api/creators/${creator.id}/avatar?previous=${creator.avatarBlobSha256 ?? "none"}`} shape="square" />
-          </fieldset>
-        </Pane>
-      </div>
-
-      <form method="post" action={`/api/creators/${creator.id}/update`} className="grid gap-5" aria-busy={busy} onSubmit={(event) => {
+      <form method="post" encType="multipart/form-data" action={`/api/creators/${creator.id}/update`} className="grid gap-5" aria-busy={busy} onSubmit={(event) => {
         event.preventDefault();
         void save(event.currentTarget);
       }}>
         <input name="snapshot" type="hidden" value={snapshot} />
+        <input name="previousAvatar" type="hidden" value={creator.avatarBlobSha256 ?? "none"} />
+        <Pane heading="作者头像">
+          <AvatarCropper allowDelete avatarBlobSha256={creator.avatarBlobSha256} displayName={name || creator.name}
+            disabled={busy || saved} onChange={setAvatarChanged} onBusyChange={setAvatarBusy} shape="square" />
+        </Pane>
         <fieldset disabled={busy || saved} className="min-w-0">
           <legend className="sr-only">作者资料</legend>
           <Pane heading="基本资料">
@@ -153,7 +150,7 @@ export function CreatorEditor({ creator }: { creator: EditableCreator }) {
         <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-end gap-3 rounded-lg border border-border bg-card p-3 shadow-sm">
           <div className="flex gap-2">
             <Link className={buttonVariants({ variant: "outline" })} to={detailPath}>返回</Link>
-            <Button type="submit" disabled={busy || saved || !dirty}><Save aria-hidden />{busy ? "正在保存…" : "保存资料"}</Button>
+            <Button type="submit" disabled={busy || avatarBusy || saved || !dirty}><Save aria-hidden />{busy ? "正在保存…" : "保存资料"}</Button>
           </div>
         </div>
       </form>
@@ -163,7 +160,7 @@ export function CreatorEditor({ creator }: { creator: EditableCreator }) {
           <Dialog.Overlay />
           <Dialog.Content className="left-1/2 top-1/2 grid w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg p-5">
             <Dialog.Title>{busy ? "资料正在保存" : "离开编辑页面？"}</Dialog.Title>
-            <Dialog.Description className="text-sm text-muted">{busy ? "请等待保存完成。" : "尚未保存的资料修改会丢失；已单独保存的头像会保留。"}</Dialog.Description>
+            <Dialog.Description className="text-sm text-muted">{busy ? "请等待保存完成。" : "尚未保存的资料和头像修改会丢失。"}</Dialog.Description>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => finishLeave(false)}>继续编辑</Button>
               {!busy ? <Button type="button" variant="destructive" onClick={() => finishLeave(true)}>放弃修改并离开</Button> : null}

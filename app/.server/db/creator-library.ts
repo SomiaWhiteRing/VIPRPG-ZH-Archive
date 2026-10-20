@@ -311,6 +311,7 @@ export async function updateCreatorForAdmin(
     links: CreatorLink[];
     bio: string | null;
     aliases: string[];
+    avatarBlobSha256?: string | null;
   },
   actor: ArchiveUser,
 ): Promise<AdminCreatorEdit> {
@@ -337,7 +338,8 @@ export async function updateCreatorForAdmin(
           `UPDATE creators
            SET name=?,name_key=CASE
              WHEN EXISTS(SELECT 1 FROM creator_aliases WHERE name_key=? AND creator_id<>?) THEN NULL
-             ELSE ? END,links_json=?,extra_json=?,updated_at=CURRENT_TIMESTAMP
+             ELSE ? END,links_json=?,extra_json=?,avatar_blob_sha256=CASE WHEN ? THEN ? ELSE avatar_blob_sha256 END,
+             updated_at=CURRENT_TIMESTAMP
            WHERE id=?`,
         )
         .bind(
@@ -347,6 +349,8 @@ export async function updateCreatorForAdmin(
           creatorNameKey(name),
           JSON.stringify(links),
           JSON.stringify(extra),
+          input.avatarBlobSha256 !== undefined ? 1 : 0,
+          input.avatarBlobSha256 ?? null,
           input.creatorId,
         ),
       ...aliases.map((alias) =>

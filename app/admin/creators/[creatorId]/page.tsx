@@ -23,6 +23,7 @@ import { creatorRoleLabel, workStatusLabel } from "@/lib/labels";
 import { type LoaderFunctionArgs, type MetaFunction, Link, useLoaderData } from "react-router";
 
 import { RedirectForm } from "@/app/components/ui/redirect-form";
+import { useState } from "react";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -57,6 +58,8 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 
 export default function AdminCreatorEditPage() {
   const { adminUser, creator } = useLoaderData<typeof loader>();
+  const [busy, setBusy] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   return (
     <main key={creator.id}>
       <PageHeader
@@ -75,22 +78,25 @@ export default function AdminCreatorEditPage() {
         }
       />
 
-      <Pane heading="头像">
-        <AvatarCropper
-          allowDelete
-          avatarBlobSha256={creator.avatarBlobSha256}
-          displayName={creator.name}
-          endpoint={`/api/admin/creators/${creator.id}/avatar`}
-          shape="square"
-        />
-      </Pane>
-
       <RedirectForm
         action={`/api/admin/creators/${creator.id}/update`}
         className="grid gap-4"
         method="post"
+        encType="multipart/form-data"
+        onBusyChange={setBusy}
       >
         <input name="creator_id" type="hidden" value={creator.id} />
+
+        <Pane heading="头像">
+          <AvatarCropper
+            allowDelete
+            avatarBlobSha256={creator.avatarBlobSha256}
+            displayName={creator.name}
+            disabled={busy}
+            onBusyChange={setAvatarBusy}
+            shape="square"
+          />
+        </Pane>
 
         <Pane heading="基础信息">
           <div className="grid gap-4 md:grid-cols-2">
@@ -139,7 +145,7 @@ export default function AdminCreatorEditPage() {
         </Pane>
 
         <StickySaveBar>
-          <Button type="submit">保存作者资料</Button>
+          <Button type="submit" disabled={busy || avatarBusy}>保存作者资料</Button>
         </StickySaveBar>
       </RedirectForm>
       {hasPermission(adminUser, "creator.merge_any") ? (

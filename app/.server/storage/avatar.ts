@@ -10,6 +10,20 @@ import { HttpError } from "@/lib/http";
 
 const MAX_AVATAR_BYTES = 512 * 1024;
 
+export async function storeAvatarFromForm(
+  runtime: AppRuntime,
+  form: FormData,
+): Promise<string | null | undefined> {
+  const avatar = form.get("avatar");
+  if (avatar === null) return undefined;
+  if (avatar === "remove") return null;
+  if (typeof avatar === "string" || avatar.type !== "image/png")
+    throw new HttpError(415, "头像必须是 PNG 文件");
+  if (avatar.size > MAX_AVATAR_BYTES)
+    throw new HttpError(413, "头像文件不能超过 512 KiB");
+  return storeAvatarPng(runtime, await avatar.arrayBuffer());
+}
+
 export async function storeAvatarPng(
   runtime: AppRuntime,
   buffer: ArrayBuffer,

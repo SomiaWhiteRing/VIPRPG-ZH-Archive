@@ -6,6 +6,7 @@ import {
 } from "@/app/.server/db/creator-library";
 import { redirectResponse } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
+import { storeAvatarFromForm } from "@/app/.server/storage/avatar";
 import { json, jsonError } from "@/lib/http";
 
 type RouteContext = {
@@ -39,7 +40,10 @@ export async function POST(
       throw new Error("Creator id mismatch");
     }
 
-    const creator = await updateCreatorForAdmin(runtime, input, auth.user);
+    const creator = await updateCreatorForAdmin(runtime, {
+      ...input,
+      avatarBlobSha256: await storeAvatarFromForm(runtime, formData),
+    }, auth.user);
 
     if (request.headers.get("accept")?.includes("application/json")) {
       return json({

@@ -16,6 +16,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { Link } from "react-router";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 import { hasPermission } from "@/lib/authz/permissions";
+import { useState } from "react";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -42,12 +43,14 @@ export const meta: MetaFunction = ({ error }) =>
 
 export default function ProfilePage() {
   const { user, canRename } = useLoaderData<typeof loader>();
+  const [busy, setBusy] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   return (
     <div>
       <AccountPageHeader title="个人资料" />
       <RedirectFeedback success={{ profileUpdated: "个人资料已更新。" }} />
 
-      <RedirectForm action="/api/account/profile" method="post">
+      <RedirectForm action="/api/account/profile" method="post" encType="multipart/form-data" onBusyChange={setBusy}>
         <div className="divide-y divide-border border-b border-border">
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-center">
             <Label htmlFor="profile-display-name">显示名</Label>
@@ -80,6 +83,8 @@ export default function ProfilePage() {
               alignActions="end"
               avatarBlobSha256={user.avatarBlobSha256}
               displayName={user.displayName}
+              disabled={busy}
+              onBusyChange={setAvatarBusy}
             />
           </div>
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-center">
@@ -114,7 +119,7 @@ export default function ProfilePage() {
           </div>
         </div>
         <div className="mt-5 flex justify-end">
-          <Rm2kButton type="submit">保存资料</Rm2kButton>
+          <Rm2kButton type="submit" disabled={busy || avatarBusy}>保存资料</Rm2kButton>
         </div>
       </RedirectForm>
     </div>

@@ -398,6 +398,7 @@ export async function updateOwnProfile(
     user: ArchiveUser;
     displayName: string;
     bio: string;
+    avatarBlobSha256?: string | null;
   },
 ): Promise<void> {
   const displayName = input.displayName === input.user.displayName
@@ -413,11 +414,12 @@ export async function updateOwnProfile(
   const [updated] = await database.batch([
     database
       .prepare(
-        `UPDATE users SET display_name=?,bio=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'
+        `UPDATE users SET display_name=?,bio=?,avatar_blob_sha256=CASE WHEN ? THEN ? ELSE avatar_blob_sha256 END,
+          updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'
           AND (display_name=? OR ${userPermissionSql("users.id", "user.rename_own")})
           RETURNING id`,
       )
-      .bind(displayName, bio, input.user.id, displayName),
+      .bind(displayName, bio, input.avatarBlobSha256 !== undefined ? 1 : 0, input.avatarBlobSha256 ?? null, input.user.id, displayName),
     database
       .prepare(
         `INSERT INTO auth_audit_logs(user_id,email,event_type)

@@ -17,13 +17,16 @@ const EDITOR_PERMISSION_SQL = userPermissionSql("?", ["creator.metadata.update_p
 const EDIT_APPLIED_SQL = `EXISTS (SELECT 1 FROM auth_audit_logs
   WHERE id=(SELECT MAX(id) FROM auth_audit_logs) AND json_extract(detail_json,'$.editId')=?)`;
 
+type AvatarChange = { avatarBlobSha256: string | null; previousAvatar: string | null };
+
 export async function editPublicCreator(
   runtime: AppRuntime,
   creatorId: number,
   actor: ArchiveUser,
-  change: { metadata: CreatorMetadata; snapshot: string } | { avatarBlobSha256: string | null; previousAvatar: string | null },
+  change: { metadata: CreatorMetadata; snapshot: string; avatar?: AvatarChange } | AvatarChange,
 ): Promise<void> {
   const metadata = "metadata" in change ? normalizeMetadata(change.metadata) : null;
+  const avatar = "metadata" in change ? change.avatar : change;
   const userId = actor.id;
   const db = getD1(runtime);
   const editId = crypto.randomUUID();
@@ -42,17 +45,23 @@ export async function editPublicCreator(
     aliases: JSON.parse(current.aliases) as string[],
   };
   if ("metadata" in change && creatorMetadataSnapshot(before) !== change.snapshot) throw conflict();
-  if ("previousAvatar" in change && current.avatar_blob_sha256 !== change.previousAvatar) throw conflict();
+  if (avatar && current.avatar_blob_sha256 !== avatar.previousAvatar) throw conflict();
 
-  const predicate = metadata
-    ? `name=? AND links_json IS ? AND extra_json=? AND (SELECT json_group_array(name) FROM (SELECT name FROM creator_aliases WHERE creator_id=creators.id ORDER BY name))=?`
-    : `avatar_blob_sha256 IS ?`;
-  const expected = metadata ? [current.name, current.links_json, current.extra_json, current.aliases] : ["previousAvatar" in change ? change.previousAvatar : null];
-  const beforeDetail = metadata ? before : { avatarBlobSha256: current.avatar_blob_sha256 };
-  const afterDetail = metadata ? { name: metadata.name, links: metadata.links, bio: metadata.bio, aliases: [...metadata.aliases].sort() }
-    : { avatarBlobSha256: "avatarBlobSha256" in change ? change.avatarBlobSha256 : null };
+  const predicates: string[] = [];
+  const expected: (string | null)[] = [];
+  if (metadata) {
+    predicates.push(`name=? AND links_json IS ? AND extra_json=? AND (SELECT json_group_array(name) FROM (SELECT name FROM creator_aliases WHERE creator_id=creators.id ORDER BY name))=?`);
+    expected.push(current.name, current.links_json, current.extra_json, current.aliases);
+  }
+  if (avatar) {
+    predicates.push(`avatar_blob_sha256 IS ?`);
+    expected.push(avatar.previousAvatar);
+  }
+  const beforeDetail = { ...(metadata ? before : {}), ...(avatar ? { avatarBlobSha256: current.avatar_blob_sha256 } : {}) };
+  const afterDetail = { ...(metadata ? { name: metadata.name, links: metadata.links, bio: metadata.bio, aliases: [...metadata.aliases].sort() } : {}),
+    ...(avatar ? { avatarBlobSha256: avatar.avatarBlobSha256 } : {}) };
   const statements = [db.prepare(`INSERT INTO auth_audit_logs(user_id,event_type,detail_json)
-    SELECT ?,?,? FROM creators WHERE id=? AND ${PUBLIC_CREATOR_SQL} AND ${EDITOR_PERMISSION_SQL} AND ${predicate}`)
+    SELECT ?,?,? FROM creators WHERE id=? AND ${PUBLIC_CREATOR_SQL} AND ${EDITOR_PERMISSION_SQL} AND ${predicates.join(" AND ")}`)
     .bind(userId, metadata ? "creator_metadata_update" : "creator_avatar_update", JSON.stringify({
       auditVersion: 1, creatorId, editId,
       targets: [{ type: "creator", id: creatorId, name: before.name }], source: "public",
@@ -75,8 +84,9 @@ export async function editPublicCreator(
         FROM json_each(?) a WHERE ${EDIT_APPLIED_SQL}`)
         .bind(creatorId, creatorId, JSON.stringify(metadata.aliases.map((name) => ({ name, key: creatorNameKey(name) }))), editId),
     );
-  } else if ("avatarBlobSha256" in change) {
-    statements.push(db.prepare(`UPDATE creators SET avatar_blob_sha256=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND ${EDIT_APPLIED_SQL}`).bind(change.avatarBlobSha256, creatorId, editId));
+  }
+  if (avatar) {
+    statements.push(db.prepare(`UPDATE creators SET avatar_blob_sha256=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND ${EDIT_APPLIED_SQL}`).bind(avatar.avatarBlobSha256, creatorId, editId));
   }
   statements.push(db.prepare(`DELETE FROM auth_audit_logs WHERE id=(SELECT MAX(id) FROM auth_audit_logs)
     AND json_extract(detail_json,'$.editId')=? AND json_extract(detail_json,'$.before') IS json_extract(detail_json,'$.after')`).bind(editId));

@@ -142,7 +142,7 @@ export function CharacterAvatarPicker({
             </div>
             <div className="ml-auto flex gap-2">
               <Button type="button" variant="outline" disabled={disabled} onClick={() => changeOpen(false)}>取消</Button>
-              <Button type="button" disabled={disabled || !selected} onClick={() => void save()}>{disabled ? "正在保存…" : "保存头像"}</Button>
+              <Button type="button" disabled={disabled || !selected} onClick={() => void save()}>{disabled ? "正在处理…" : "使用此头像"}</Button>
             </div>
           </footer>
         </Dialog.Content>
