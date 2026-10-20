@@ -47,7 +47,7 @@ export default function PublicUserLayout() {
   const { user, viewerId, followSummary, friends, timelineItems, isOverview } = useLoaderData<typeof loader>();
   const hasSidebar = isOverview && hasProfileOverviewSections(user.profileVisibility);
   const timelineSection = timelineItems !== null ? <AccountSection href={`/users/${user.id}/timeline`} title="时间线" divided={false}>
-    <TimelineWorkspace page={{ items: timelineItems, nextCursor: null }} viewerId={viewerId} settings={null} basePath={`/users/${user.id}/timeline`} profile showAuthor={false} expandReplies={false} />
+    <TimelineWorkspace page={{ items: timelineItems, nextCursor: null }} viewerId={viewerId} settings={null} basePath={`/users/${user.id}/timeline`} profile showAuthor={false} readOnlyInteractions expandReplies={false} />
   </AccountSection> : null;
   const children = isOverview && !hasSidebar ? timelineSection : <Outlet />;
   const friendsHref = `/users/${user.id}/connections?view=following`;

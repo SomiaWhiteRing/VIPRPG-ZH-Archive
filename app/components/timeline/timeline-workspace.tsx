@@ -32,6 +32,7 @@ type Props = {
   view?: TimelineView;
   profile?: boolean;
   showAuthor?: boolean;
+  readOnlyInteractions?: boolean;
   expandReplies?: boolean;
   canCompose?: boolean;
   canPublish?: boolean;
@@ -78,7 +79,7 @@ export function TimelineWorkspace(props: Props) {
   return <TimelineWorkspaceContent key={`${props.viewerId}:${location.pathname}${location.search}`} {...props} />;
 }
 
-function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, view = "all", profile = false, showAuthor = true, expandReplies = true, canCompose = false, canPublish = false, hasCursor = false, focused = false, initialReplies, targetReplyId = null, inboxItemId }: Props) {
+function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, view = "all", profile = false, showAuthor = true, readOnlyInteractions = false, expandReplies = true, canCompose = false, canPublish = false, hasCursor = false, focused = false, initialReplies, targetReplyId = null, inboxItemId }: Props) {
   const root = useRouteLoaderData<typeof rootLoader>("root");
   const mine = view === "mine";
   const [replyBusy, setReplyBusy] = useState<Record<number, boolean>>({});
@@ -239,7 +240,7 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
                         {item.text && <div className={cn((showAuthor || item.kind !== "status") && "mt-2", item.kind !== "status" && "rounded-r-md border-l-2 border-primary/20 bg-muted/5 py-2 pl-3 pr-2")}><StatusBody segments={item.body} collapse /></div>}
                         <CommentImages images={item.images} imageLabel={item.kind === "comment" ? "评论图片" : "吐槽图片"} />
                         {item.work && <TimelineWorkPreview work={item.work} compact={compact} />}
-                        {item.kind === "status" ? <StatusInteractions item={item} viewerId={viewerId} readOnly={profile} expandReplies={expandReplies} initialPage={initialReplies} onCacheError={reportCacheError} onBusyChange={(value) => setReplyBusy((current) => ({ ...current, [item.id]: value }))}>{footer}</StatusInteractions> : <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                        {item.kind === "status" ? <StatusInteractions item={item} viewerId={viewerId} readOnly={readOnlyInteractions} expandReplies={expandReplies} initialPage={initialReplies} onCacheError={reportCacheError} onBusyChange={(value) => setReplyBusy((current) => ({ ...current, [item.id]: value }))}>{footer}</StatusInteractions> : <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                           {footer}
                         </div>}
                       </div>
