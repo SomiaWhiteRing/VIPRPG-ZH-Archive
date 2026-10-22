@@ -1295,6 +1295,7 @@ function ForumFloorView({
         {post.body !== null ? (
           <>
             <ForumImages
+              diceKey={`${topic.id}/${post.postNumber}`}
               body={post.body || (post.images.length ? "" : "图片已移除。")}
               images={post.images}
               emojis={emojis}

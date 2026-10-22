@@ -6,10 +6,13 @@ import { resolveEmojis } from "@/app/components/emojis/client";
 import { FaceEmojiView } from "@/app/components/emojis/face-emoji";
 import { emojiIds } from "@/lib/face-emojis";
 import { FORUM_ELEMENT_PATTERN, readForumElement } from "@/lib/forum-elements";
+import { forumDice, parseForumBBCode, type ForumBBCodeNode } from "@/lib/forum-bbcode";
 import { BrowserElement } from "./browser-element";
 import { TokenPicker } from "@/app/components/pickers/token-picker";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
+import { TextSize } from "@/app/components/ui/text-size";
+import { Dice5 } from "lucide-react";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
 import type { FaceEmoji } from "@/lib/dto/db/work-community";
@@ -149,20 +152,19 @@ export function ForumBody({
   emojis,
   inline = false,
   interactiveElements = true,
+  images = [],
+  diceKey,
 }: {
   body: string;
   emojis: FaceEmoji[];
   inline?: boolean;
   interactiveElements?: boolean;
+  images?: { offset: number; content: ReactNode }[];
+  diceKey?: string;
 }) {
   const emojiMap = new Map(emojis.map((emoji) => [emoji.id, emoji]));
-  const segments = body.split(new RegExp(`(${AUTO_LINK_PATTERN.source}|:face_[1-9]\\d{0,15}:|${FORUM_ELEMENT_PATTERN.source})`, "g"));
-  const Wrapper = inline ? "span" : "div";
-  return (
-    <Wrapper
-      className={`${inline ? "" : "block max-w-[120ch]"} whitespace-pre-wrap text-[15px] leading-[1.7] [overflow-wrap:anywhere]`}
-    >
-      {segments.map((part, index) => {
+  function renderText(text: string) {
+    return text.split(new RegExp(`(${AUTO_LINK_PATTERN.source}|:face_[1-9]\\d{0,15}:|${FORUM_ELEMENT_PATTERN.source})`, "g")).map((part, index) => {
         const source = !inline ? readForumElement(part) : null;
         if (source !== null) return <BrowserElement key={index} source={source} interactive={interactiveElements} />;
         if (/^:face_[1-9]\d{0,15}:$/.test(part))
@@ -182,7 +184,42 @@ export function ForumBody({
           </Fragment>
         );
         return <MentionText key={index} text={part} />;
-      })}
+    });
+  }
+  let diceOrdinal = 0;
+  function renderNodes(nodes: ForumBBCodeNode[], literal = false): ReactNode {
+    return nodes.map((node, index) => {
+      if (node.type === "text") return <Fragment key={index}>{literal ? node.text : renderText(node.text)}</Fragment>;
+      if (node.type === "image") return <Fragment key={index}>{images[node.index]?.content}</Fragment>;
+      if (node.type === "dice") {
+        const expression = node.children.map((child) => child.type === "text" ? child.text : "").join("");
+        const diceClassName = "inline-flex max-w-full flex-wrap items-center gap-2 border-l-[3px] border-primary bg-primary/5 px-3 py-2 font-mono text-sm";
+        if (diceKey === undefined) return <span key={index} className={diceClassName} aria-label={`骰子预览：${expression}，点数发布后显示`} title="点数发布后显示。"><Dice5 aria-hidden className="size-4 shrink-0" />{renderNodes(node.children, true)}<span aria-hidden="true">→</span><strong className="text-primary">?</strong></span>;
+        const dice = node.children.every((child) => child.type === "text")
+          ? forumDice(expression, diceKey, diceOrdinal++) : null;
+        return dice ? <span key={index} className={diceClassName} title="娱乐骰子：同一帖子、骰子位置和表达式的结果固定，刷新不重掷。"><Dice5 aria-hidden className="size-4 shrink-0" />{dice.notation}<span aria-hidden="true">→</span><strong className="min-w-0 wrap-anywhere text-primary">{dice.calculation}</strong></span>
+          : <Fragment key={index}>[dice]{renderNodes(node.children, true)}[/dice]</Fragment>;
+      }
+      const children = renderNodes(node.children, node.type === "code");
+      switch (node.type) {
+        case "b": return <strong key={index}>{children}</strong>;
+        case "i": return <em key={index}>{children}</em>;
+        case "u": return <u key={index}>{children}</u>;
+        case "del": return <s key={index}>{children}</s>;
+        case "size": return <TextSize key={index} size={`${Number(node.parameter!.slice(0, -1)) * 0.009375}rem`}>{children}</TextSize>;
+        case "quote": return <blockquote key={index} className="my-2 border-l-2 border-primary/40 pl-3 text-muted">{children}</blockquote>;
+        case "code": return <code key={index} className="my-2 block rounded-md bg-muted/10 p-3 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{children}</code>;
+        case "collapse": return <details key={index} className="my-2 rounded-md border border-border px-3 py-2"><summary className="cursor-pointer font-semibold focus-visible:outline-2 focus-visible:outline-primary">{node.parameter || "展开折叠内容"}</summary><div className="pt-2">{children}</div></details>;
+      }
+    });
+  }
+  // Nested replies sit inside a sentence; block-format BBCode stays literal there.
+  const Wrapper = inline ? "span" : "div";
+  return (
+    <Wrapper
+      className={`${inline ? "" : "block max-w-[120ch]"} whitespace-pre-wrap text-[15px] leading-[1.7] [overflow-wrap:anywhere]`}
+    >
+      {inline ? renderText(body) : renderNodes(parseForumBBCode(body, images.map((image) => image.offset)))}
     </Wrapper>
   );
 }

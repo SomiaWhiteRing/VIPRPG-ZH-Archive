@@ -3,6 +3,21 @@
 @import "./shared.css";
 @source "../lib";
 
+/* Website discussion replies: expanded mobile editors use the avatar column's
+   width; the author moves into the editor's hint row. Collapsed and desktop
+   reply bars keep their existing author column. */
+@media (width < 48rem) {
+  [data-forum-reply-bar]:not([data-docked="true"]):not([data-fullscreen="true"]):has([data-forum-expanded="true"]) {
+    margin-inline: -1rem;
+  }
+  [data-forum-reply-content]:has([data-forum-expanded="true"]) {
+    width: calc(100% - 1.5rem);
+  }
+  [data-forum-reply-content]:has([data-forum-expanded="true"]) > [data-forum-reply-author] {
+    display: none;
+  }
+}
+
 /* Website dark utilities also respect the Android system appearance override. */
 @custom-variant dark {
   &:where(:root[data-theme="dark"], :root[data-theme="dark"] *, :root[data-theme="system"][data-system-theme="dark"], :root[data-theme="system"][data-system-theme="dark"] *) {

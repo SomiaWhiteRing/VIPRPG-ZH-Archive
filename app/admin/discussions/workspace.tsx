@@ -331,6 +331,7 @@ function AdminDiscussionPanel({
       ) : null}
       <div className="my-3 max-h-64 overflow-y-auto whitespace-pre-wrap wrap-anywhere">
         <ForumImages
+          diceKey={detail.target.kind === "comment" ? undefined : `${row.topicId}/${row.postNumber}`}
           body={detail.body || (detail.images.length ? "" : "正文已删除")}
           images={detail.images}
         />

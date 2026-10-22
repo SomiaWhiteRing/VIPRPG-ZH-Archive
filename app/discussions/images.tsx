@@ -102,28 +102,26 @@ export function ForumImages({
   body = "",
   emojis = [],
   interactiveElements = true,
+  diceKey,
 }: {
   images: ForumImage[];
   body?: string;
   emojis?: FaceEmoji[];
   interactiveElements?: boolean;
+  diceKey?: string;
 }) {
   const [active, setActive] = useState(-1);
-  const lastOffset = images.at(-1)?.offset ?? 0;
   return (
     <>
-      <div className="grid min-w-0 gap-3">
-        {images.map((image, index) => {
-          const text = body.slice(
-            index ? images[index - 1].offset : 0,
-            image.offset,
-          );
-          return (
-            <div
-              key={image.id}
-              className="grid min-w-0 justify-items-start gap-3"
-            >
-              {text ? <ForumBody body={text} emojis={emojis} interactiveElements={interactiveElements} /> : null}
+      <ForumBody
+        body={body}
+        emojis={emojis}
+        interactiveElements={interactiveElements}
+        diceKey={diceKey}
+        images={images.map((image, index) => ({
+          offset: image.offset,
+          content: (
+            <span className="my-3 block min-w-0">
               <Button
                 type="button"
                 variant="ghost"
@@ -140,13 +138,10 @@ export function ForumImages({
                   className="h-auto max-h-[560px] w-auto max-w-full object-contain"
                 />
               </Button>
-            </div>
-          );
-        })}
-        {body.slice(lastOffset) ? (
-          <ForumBody body={body.slice(lastOffset)} emojis={emojis} interactiveElements={interactiveElements} />
-        ) : null}
-      </div>
+            </span>
+          ),
+        }))}
+      />
       {active >= 0 ? (
         <ClientOnly>
           <ForumLightbox

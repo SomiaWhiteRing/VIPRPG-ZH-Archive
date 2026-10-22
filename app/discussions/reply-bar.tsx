@@ -4,6 +4,7 @@ import type { ReactNode, RefObject } from "react";
 import { createContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export const ForumReplyLayoutContext = createContext<{
+  author: Pick<NonNullable<ForumViewer>, "name" | "avatar"> | null;
   fullscreen: boolean;
   setFullscreen: (value: boolean) => void;
   setMobileEmojiOpen: (value: boolean) => void;
@@ -48,6 +49,7 @@ export function ForumReplyBar({
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let height = inner.getBoundingClientRect().height;
     let animation: Animation | null = null;
+    let frame = 0;
     const finish = () => {
       animation?.cancel();
       animation = null;
@@ -57,7 +59,8 @@ export function ForumReplyBar({
       finish();
       height = inner.getBoundingClientRect().height;
     };
-    const observer = new ResizeObserver(() => {
+    const animateHeight = () => {
+      frame = 0;
       const nextHeight = inner.getBoundingClientRect().height;
       if (Math.abs(nextHeight - height) < 0.5) return;
       // Resume from the visible height when a second toggle interrupts a tween.
@@ -78,11 +81,17 @@ export function ForumReplyBar({
         { duration: 240, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "both" },
       );
       animation.onfinish = finish;
+    };
+    // Animating an observed element's ancestor during resize delivery queues
+    // shallower observations and triggers ResizeObserver loop errors.
+    const observer = new ResizeObserver(() => {
+      if (!frame) frame = requestAnimationFrame(animateHeight);
     });
     observer.observe(inner);
     reducedMotion.addEventListener("change", finish);
     return () => {
       observer.disconnect();
+      cancelAnimationFrame(frame);
       reducedMotion.removeEventListener("change", finish);
       finish();
     };
@@ -272,18 +281,21 @@ export function ForumReplyBar({
           <div ref={surface}>
             <div
               ref={content}
+              data-forum-reply-content
               data-mobile-emoji-open={mobileEmojiOpen}
               className="mx-auto flex w-[min(1180px,calc(100%-2rem))] items-start gap-3 py-3 data-[mobile-emoji-open=true]:pb-0"
             >
               {viewer ? (
-                <UserAvatar
-                  displayName={viewer.name}
-                  avatarBlobSha256={viewer.avatar}
-                  className="size-8 sm:size-10"
-                />
+                <div data-forum-reply-author className="shrink-0">
+                  <UserAvatar
+                    displayName={viewer.name}
+                    avatarBlobSha256={viewer.avatar}
+                    className="size-8 sm:size-10"
+                  />
+                </div>
               ) : null}
               <div className="min-w-0 flex-1">
-                <ForumReplyLayoutContext.Provider value={{ fullscreen, setFullscreen, setMobileEmojiOpen }}>
+                <ForumReplyLayoutContext.Provider value={{ author: viewer, fullscreen, setFullscreen, setMobileEmojiOpen }}>
                   {children}
                 </ForumReplyLayoutContext.Provider>
               </div>

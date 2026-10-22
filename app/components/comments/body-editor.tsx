@@ -8,6 +8,8 @@ import { ForumElementNode } from "@/app/discussions/element-node";
 import { EditorEmojis, FaceEmojiNode } from "@/app/components/emojis/editor-node";
 import { resolveEmojis } from "@/app/components/emojis/client";
 import { Button } from "@/app/components/ui/button";
+import { cn } from "@/lib/ui/cn";
+import { ForumBody } from "@/app/discussions/shared";
 import { FORUM_BODY_LENGTH, FORUM_IMAGE_COUNT, FORUM_POST_BODY_LENGTH } from "@/lib/forum";
 import { Extension, Node as TiptapNode } from "@tiptap/core";
 import Document from "@tiptap/extension-document";
@@ -42,6 +44,7 @@ export type BodyEditorHandle = {
   mention: () => void;
   insertFiles: (files: File[]) => void;
   insertText: (text: string) => void;
+  wrapText: (opening: string, closing: string, sample?: string, sampleSelectionStart?: number) => void;
   insertEmoji: (emoji: FaceEmoji, options?: { focus?: boolean }) => void;
   insertElement: (source: string) => void;
   focus: () => void;
@@ -144,7 +147,11 @@ export function BodyEditor({
   placeholder = "写下正文……",
   autoFocus = false,
   emojis = EMPTY_EMOJIS,
+  preview = false,
+  className,
 }: {
+  preview?: boolean;
+  className?: string;
   textOnly?: boolean;
   allowMentions?: boolean;
   forumElements?: boolean;
@@ -527,6 +534,25 @@ export function BodyEditor({
       if (!busy && !pending.current)
         editor?.chain().focus().insertContent(textContent(text, allowMentions, forumElements)).run();
     },
+    wrapText: (opening, closing, sample = "", sampleSelectionStart = 0) => {
+      if (!editor || editor.isDestroyed || busy || pending.current) return;
+      const { from, to } = editor.state.selection;
+      const prefix = opening + (from === to ? sample : "");
+      // Insert around the existing slice so images, mentions and emoji nodes
+      // retain their identity; both tags form one undo step.
+      const transaction = closeHistory(editor.state.tr)
+        .insertText(closing, to)
+        .insertText(prefix, from);
+      const selectionStart = from + opening.length + (from === to ? sampleSelectionStart : 0);
+      transaction.setSelection(TextSelection.create(transaction.doc, selectionStart, to + prefix.length));
+      if (enforceMaxLength && contentLength(readDocument(transaction.doc, assets).body) > limit) {
+        onError("正文超过字数限制，请减少后再插入格式。");
+        return;
+      }
+      editor.view.dispatch(transaction.scrollIntoView());
+      editor.view.dispatch(closeHistory(editor.state.tr));
+      editor.commands.focus();
+    },
     insertElement: (source) => {
       if (!forumElements || !canEditElements || !editor || busy || pending.current) return;
       const value = readDocument(editor.state.doc, assets);
@@ -571,11 +597,33 @@ export function BodyEditor({
       <div ref={mentionHost} className="contents">
         {mentionOpen && allowMentions && !busy ? <MentionPicker container={mentionHost.current?.closest<HTMLElement>("[data-forum-fullscreen=true]") ?? null} anchor={editor?.view.dom ?? null} inputId={inputId} onSelect={closeMention} onClose={(restoreFocus) => closeMention(undefined, restoreFocus)} /> : null}
       </div>
-      <EditorContent
-        editor={editor}
-        data-topic={topic}
-        className="group/body-editor min-w-0 rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-primary/20 [[data-forum-fullscreen=true]_&]:flex [[data-forum-fullscreen=true]_&]:flex-1 [[data-forum-fullscreen=true]_&]:flex-col"
-      />
+      <div className={preview ? "hidden" : "contents"}>
+        <EditorContent
+          editor={editor}
+          data-topic={topic}
+          className={cn("group/body-editor min-w-0 rounded-md border border-border bg-card focus-within:ring-2 focus-within:ring-primary/20 [[data-forum-fullscreen=true]_&]:flex [[data-forum-fullscreen=true]_&]:flex-1 [[data-forum-fullscreen=true]_&]:flex-col", className)}
+        />
+      </div>
+      {preview ? (
+        <div
+          role="region"
+          aria-label={`${inputLabel}预览`}
+          data-topic={topic}
+          className={cn("group/body-editor min-w-0 rounded-md border border-border bg-card [[data-forum-fullscreen=true]_&]:flex [[data-forum-fullscreen=true]_&]:flex-1 [[data-forum-fullscreen=true]_&]:flex-col", className)}
+        >
+          <div data-forum-body-preview className="min-h-16 p-3 group-data-[topic=true]/body-editor:min-h-48 group-data-[topic=false]/body-editor:max-h-[min(32dvh,20rem)] group-data-[topic=false]/body-editor:overflow-y-auto [[data-forum-fullscreen=true]_&]:flex-1 [[data-forum-fullscreen=true]_&]:max-h-none [[data-forum-fullscreen=true]_&]:overflow-y-visible">
+            <ForumBody
+              body={body}
+              emojis={[...emojiMap.values()]}
+              interactiveElements={false}
+              images={images.map((image, index) => ({
+                offset: image.offset,
+                content: <img key={image.key} src={image.preview} alt={`正文图片 ${index + 1}`} width={640} height={360} className="my-2 block h-auto max-h-64 w-auto max-w-full object-contain" />,
+              }))}
+            />
+          </div>
+        </div>
+      ) : null}
     </EditorEmojis.Provider>
   );
 }
