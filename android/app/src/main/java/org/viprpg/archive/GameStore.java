@@ -164,6 +164,8 @@ final class GameStore {
         if (!"https".equals(url.getScheme()) || !origin.getHost().equals(url.getHost()) || url.getPort() != -1 || url.getUserInfo() != null) throw new IOException("下载地址无效。");
         HttpURLConnection connection = (HttpURLConnection) url.toURL().openConnection();
         connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(20000); connection.setReadTimeout(30000); connection.setRequestProperty("Accept-Encoding", "identity");
+        String cookies = android.webkit.CookieManager.getInstance().getCookie(url.toString());
+        if (cookies != null && !cookies.isEmpty()) connection.setRequestProperty("Cookie", cookies);
         if (offset > 0) connection.setRequestProperty("Range", "bytes=" + offset + "-");
         return connection;
     }
@@ -247,8 +249,6 @@ final class GameStore {
                 request.setConnectTimeout(10000); request.setReadTimeout(10000);
                 request.setRequestMethod("POST"); request.setRequestProperty("Origin", BuildConfig.SITE_ORIGIN);
                 request.setRequestProperty("User-Agent", android.webkit.WebSettings.getDefaultUserAgent(context));
-                String cookies = android.webkit.CookieManager.getInstance().getCookie(BuildConfig.SITE_ORIGIN);
-                if (cookies != null) request.setRequestProperty("Cookie", cookies);
                 request.setDoOutput(true); request.setFixedLengthStreamingMode(0);
                 request.getOutputStream().close();
                 if (request.getResponseCode() != 204) throw new IOException("安装统计上报失败（" + request.getResponseCode() + "）。");

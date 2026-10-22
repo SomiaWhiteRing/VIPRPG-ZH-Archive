@@ -28,6 +28,8 @@ APK 内 `/_android/` 只承载 WebPlayer。原生来源受限的 `VIPRPGLocal` �
 
 后台下载与真实游戏读档使用 MuMu 技术验收；构建通过不能替代不同 Android 系统/WebView、SD 卡和音视频的设备验收。Android 15 对 dataSync 前台服务有系统时限，用户强行停止应用也会终止后台任务；下次打开通过任务日志恢复。
 
+原生安装的版本信息、ZIP 下载、续传和封面请求均在同源地址校验后，按请求 URL 从 WebView CookieManager 读取当前 Cookie，沿用 App 内网页登录态以访问受限作品；不将 Cookie 写入任务日志，且不自动跟随重定向。
+
 ## 截图目录与原生图库
 
 截图通过 `VIPRPGScreenshots` 来源受限的消息接口交给 Android 写入 MediaStore；以待发布状态写入并回读，确认完整后才向相册公开。不申请存储或相册读取权限。图库保留缩略图缓存，支持下拉刷新。
