@@ -12,7 +12,6 @@ export function RpgDialogue({ name, body, faceIndex = 0, avatarUrl, side = "left
   const sourceRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLSpanElement>(null);
   const bodyRef = useRef<HTMLSpanElement>(null);
-  const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [translation, setTranslation] = useState<{ sourceName: string; sourceBody: string; name: string; body: string }>();
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string>();
@@ -22,7 +21,7 @@ export function RpgDialogue({ name, body, faceIndex = 0, avatarUrl, side = "left
   const height = SEA_WINDOW_HEIGHT + Math.max(0, lines.length - SEA_MAX_LINES) * SEA_LINE_HEIGHT;
 
   useEffect(() => {
-    if (!ready || !sourceRef.current) return;
+    if (!sourceRef.current) return;
     // Translators edit these continuous text nodes; the bitmap and selection layer
     // keep using the same layout, including when translation is undone.
     function syncTranslation() {
@@ -35,7 +34,7 @@ export function RpgDialogue({ name, body, faceIndex = 0, avatarUrl, side = "left
     observer.observe(sourceRef.current, { subtree: true, childList: true, characterData: true });
     syncTranslation();
     return () => observer.disconnect();
-  }, [name, body, ready]);
+  }, [name, body]);
 
   useEffect(() => {
     let active = true;
@@ -46,14 +45,13 @@ export function RpgDialogue({ name, body, faceIndex = 0, avatarUrl, side = "left
     ]).then(([window, font, faces]) => {
       if (active && canvasRef.current) {
         drawSeaDialogue(canvasRef.current, { window, font, faces: showAvatar ? undefined : faces }, text.name, text.body, faceIndex, side);
-        setReady(true);
       }
     }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [text.name, text.body, faceIndex, showAvatar, side]);
   return (
     <article className="sea-dialogue" data-side={side} style={height === SEA_WINDOW_HEIGHT ? undefined : { aspectRatio: `${SEA_WINDOW_WIDTH} / ${height}` }}>
-      {ready && !failed && (
+      {!failed && (
         <div className="sea-dialogue-source" ref={sourceRef} translate="yes">
           <p><span ref={nameRef}>{name}</span>：</p>
           <p>「<span ref={bodyRef}>{body}</span>」</p>

@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
-import { data, useLoaderData, useRouteLoaderData, type HeadersFunction, type LoaderFunctionArgs } from "react-router";
+import { data, useLoaderData, useRouteLoaderData, type HeadersFunction, type LinksFunction, type LoaderFunctionArgs } from "react-router";
 import type { loader as rootLoader } from "@/app/root";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { RpgDialogue, RpgFace } from "@/app/components/ui/rpg-dialogue";
-import { layoutSeaDialogue, limitSeaBodyInput } from "@/lib/ui/eternal-sea";
+import { layoutSeaDialogue, limitSeaBodyInput, SEA_ASSETS, seaBitmap } from "@/lib/ui/eternal-sea";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { getUserAvatarSrc } from "@/lib/user-profile";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -20,6 +20,10 @@ import { useClientEnvironment } from "@/app/components/use-client-environment";
 import "./sea.css";
 
 export const meta = () => pageMetaDescriptors({ title: "永恒之海", description: "海边的几句话。" });
+export const links: LinksFunction = () => [
+  { rel: "preload", as: "image", href: `${SEA_ASSETS}/ocean.gif`, media: "(prefers-reduced-motion: no-preference)", fetchPriority: "high" },
+  { rel: "preload", as: "image", href: `${SEA_ASSETS}/ocean.png`, media: "(prefers-reduced-motion: reduce)", fetchPriority: "high" },
+];
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const runtime = context.get(runtimeContext);
@@ -45,6 +49,10 @@ export default function EternalSeaPage() {
   const toast = useToast();
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
+  const [backgroundReady, setBackgroundReady] = useState(false);
+  const [composerReady, setComposerReady] = useState(false);
+  const [dialoguesStarted, setDialoguesStarted] = useState(false);
+  const [roomReady, setRoomReady] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const followingRef = useRef(true);
@@ -54,6 +62,63 @@ export default function EternalSeaPage() {
   const submissionRef = useRef<SeaSubmission | null>(null);
   const layout = layoutSeaDialogue(name, draft);
   const canSend = draft.trim().length > 0 && layout.fits;
+
+  useEffect(() => {
+    let active = true;
+    let frame = 0;
+    const ocean = matchMedia("(prefers-reduced-motion: reduce)").matches ? "ocean.png" : "ocean.gif";
+    void seaBitmap(`${SEA_ASSETS}/${ocean}`).then(image => image.decode()).catch(() => undefined).then(() => {
+      if (!active) return;
+      // Give the ocean a paint before mounting the rest of the interface.
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => { if (active) setBackgroundReady(true); });
+      });
+    });
+    return () => { active = false; cancelAnimationFrame(frame); };
+  }, []);
+
+  useEffect(() => {
+    if (!backgroundReady || composerReady) return;
+    let active = true;
+    let frame = 0;
+    const images = [`${SEA_ASSETS}/window.png`, `${SEA_ASSETS}/faces.png`, ...(accountAvatar ? [accountAvatar] : [])];
+    void Promise.allSettled(images.map(url => seaBitmap(url).then(image => image.decode()))).then(() => document.fonts.ready).then(() => {
+      if (!active) return;
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => { if (active) setComposerReady(true); });
+      });
+    });
+    return () => { active = false; cancelAnimationFrame(frame); };
+  }, [backgroundReady, composerReady, accountAvatar]);
+
+  useEffect(() => {
+    if (!composerReady) return;
+    // Paint the usable composer before mounting and loading the dialogue list.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setDialoguesStarted(true));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [composerReady]);
+
+  useEffect(() => {
+    if (!dialoguesStarted || roomReady) return;
+    let active = true;
+    let frame = 0;
+    const images = new Set([
+      ...["window.png", "font.png", "faces.png"].map(file => `${SEA_ASSETS}/${file}`),
+      ...messages.flatMap(message => message.avatarUrl ? [message.avatarUrl] : []),
+      ...(accountAvatar ? [accountAvatar] : []),
+    ]);
+    void Promise.allSettled([...images].map(url => seaBitmap(url).then(image => image.decode()))).then(() => document.fonts.ready).then(() => {
+      if (!active) return;
+      // Dialogue effects draw while hidden; allow fallback state and initial
+      // scrolling to settle before revealing the complete room in one frame.
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => { if (active) setRoomReady(true); });
+      });
+    });
+    return () => { active = false; cancelAnimationFrame(frame); };
+  }, [dialoguesStarted, roomReady, messages, accountAvatar]);
 
   useLayoutEffect(() => {
     if (environment === null) return;
@@ -68,7 +133,7 @@ export default function EternalSeaPage() {
       scrollInitializedRef.current = true;
     });
     return () => cancelAnimationFrame(frame);
-  }, [messages, environment]);
+  }, [messages, environment, dialoguesStarted, roomReady]);
 
   useEffect(() => {
     if (!native) return;
@@ -129,8 +194,8 @@ export default function EternalSeaPage() {
   return (
     <main className="eternal-sea-page" data-scroll={native ? "document" : "log"} aria-label="永恒之海">
       <h1 className="sr-only">永恒之海</h1>
-      <div className="sea-room">
-        <div className="sea-composer-dock">
+      {backgroundReady && <div className="sea-room">
+        <div className="sea-composer-dock" inert={!composerReady}>
           <form className="sea-composer" onSubmit={send}>
             <div className="sea-compose-fields">
               {accountAvatar ? (
@@ -158,7 +223,7 @@ export default function EternalSeaPage() {
             </div>
           </form>
         </div>
-        <div className="sea-log" role="log" aria-label="海边的对话" aria-live="polite" aria-relevant="additions" ref={logRef}
+        {dialoguesStarted && <div className="sea-log" inert={!roomReady} role="log" aria-label="海边的对话" aria-live="polite" aria-relevant="additions" ref={logRef}
           onScroll={() => {
             const log = logRef.current;
             if (!native && scrollInitializedRef.current && log) followingRef.current = log.scrollHeight - log.scrollTop - log.clientHeight < 32;
@@ -166,8 +231,8 @@ export default function EternalSeaPage() {
           <div className="sea-messages">
             {messages.map(message => <RpgDialogue key={message.id} {...message} />)}
           </div>
-        </div>
-      </div>
+        </div>}
+      </div>}
     </main>
   );
 }

@@ -27,6 +27,9 @@ body:has(.eternal-sea-page) {
   min-height: 0;
 }
 
+.sea-composer-dock[inert],
+.sea-log[inert] { visibility: hidden; }
+
 .sea-log {
   flex: 1;
   min-height: 0;
@@ -111,6 +114,9 @@ body:has(.eternal-sea-page) {
   text-shadow: none;
   user-select: text;
   cursor: text;
+  /* Skip offscreen glyph layout, but keep continuous translation sources outside
+     this containment so translators can read the entire conversation. */
+  content-visibility: auto;
 }
 
 .sea-dialogue-text .sea-text-glyph {
