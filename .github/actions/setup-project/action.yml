@@ -1,0 +1,18 @@
+name: Prepare project dependencies
+description: Reuse dependencies only for the same Linux runner, Node major and lockfile.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 24
+    - id: dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          ~/.npm
+        key: ubuntu24-${{ runner.arch }}-node24-dependencies-v1-${{ hashFiles('package-lock.json') }}
+    - if: steps.dependencies.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm ci --prefer-offline

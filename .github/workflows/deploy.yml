@@ -24,27 +24,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  candidate:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+  checks:
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging' && github.ref == 'refs/heads/codex/deployment-speed')
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup-project
       - name: Isolated verification configuration
         run: node scripts/prepare-verification-config.mjs
       - run: npm run check
       - run: npx tsx scripts/crawl-policy-check.ts
       - run: npx tsx scripts/archive-performance-check.ts
       - run: npm run test:timeline
-      - run: npx playwright install --with-deps chromium
+
+  candidate:
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging' && github.ref == 'refs/heads/codex/deployment-speed')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-project
+      - name: Isolated verification configuration
+        run: node scripts/prepare-verification-config.mjs
+      - name: Install headless browser and system dependencies
+        shell: bash
+        run: |
+          sudo sed -i 's|http://azure.archive.ubuntu.com|https://archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources
+          npx playwright install --with-deps --only-shell chromium
       - run: npm run test:flow -- --report output/system-self-check/flow.json
       - name: Preserve failed browser diagnostics
         if: failure()
@@ -62,9 +75,9 @@ jobs:
         run: node scripts/release-summary.mjs
 
   staging:
-    needs: candidate
+    needs: [checks, candidate]
     if: github.event_name == 'push' || inputs.target == 'staging'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: staging
     env:
@@ -75,11 +88,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup-project
       - name: Restore staging configuration
         run: node scripts/prepare-wrangler-config.mjs --env staging
         env:
@@ -90,9 +99,9 @@ jobs:
           SMOKE_BASE_URL: ${{ vars.SMOKE_BASE_URL }}
 
   production:
-    needs: candidate
+    needs: [checks, candidate]
     if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     # Manual production dispatch is the confirmation; no Environment review gate.
     environment:
@@ -106,11 +115,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup-project
       - name: Require production credentials
         shell: bash
         run: |
