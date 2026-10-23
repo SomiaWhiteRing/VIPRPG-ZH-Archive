@@ -10,7 +10,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: node_modules
-        key: ubuntu24-${{ runner.arch }}-node24-dependencies-v2-${{ hashFiles('package-lock.json', 'package.json', '.npmrc', '.github/actions/setup-project/action.yml') }}
+        key: ubuntu24-${{ runner.arch }}-node24-dependencies-v3-${{ hashFiles('package-lock.json', 'package.json', '.npmrc', '.github/actions/setup-project/action.yml') }}
     - if: steps.dependencies.outputs.cache-hit != 'true'
       shell: bash
       run: npm ci --prefer-offline

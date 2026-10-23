@@ -47,6 +47,12 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
       options: --ipc=host
+      # Both host and container use Ubuntu 24.04. Reuse the runner's compression
+      # tools instead of installing packages in the release path.
+      volumes:
+        - /usr/bin/zstd:/usr/local/bin/zstd:ro
+        - /usr/bin/zstdmt:/usr/local/bin/zstdmt:ro
+        - /usr/bin/unzstd:/usr/local/bin/unzstd:ro
     defaults:
       run:
         shell: bash
