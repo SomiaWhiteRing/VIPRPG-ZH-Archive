@@ -329,7 +329,8 @@ async function run(): Promise<void> {
     200,
   );
 
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL });
+  measurements.browser = { version: browser.version(), channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL ?? "bundled-chromium" };
   if (!archiveOnly) {
     await verifyEditorNavigation(browser, origin, adminCookie);
     await verifyPermissionHistory(browser, origin);
