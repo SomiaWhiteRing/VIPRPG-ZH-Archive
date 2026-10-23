@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   checks:
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging' && github.ref == 'refs/heads/codex/deployment-speed')
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -42,7 +42,7 @@ jobs:
       - run: npm run test:timeline
 
   candidate:
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging' && github.ref == 'refs/heads/codex/deployment-speed')
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     env:
       PLAYWRIGHT_CHROMIUM_CHANNEL: chrome

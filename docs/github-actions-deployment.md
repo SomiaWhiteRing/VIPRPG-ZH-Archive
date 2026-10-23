@@ -10,7 +10,9 @@
 | [Deploy Status](../.github/workflows/status-deploy.yml) | 不自动发布 | 检查通过后由本人批准，部署 status.viprpg.org |
 | [Android Release](../.github/workflows/android.yml) | Android 及共用构建依赖变化生成 staging APK 预发布包 | 手动选择 target=production，构建并验证正式 origin APK 后直接发布正式 Release |
 
-主站 candidate 使用隔离配置运行 check 和既有 test:flow，固定本次 SHA。手动选择 production 并运行 workflow 即确认发布；production job 在 candidate 成功后直接执行，不再等待 Review deployments。部署 job 签出同一 SHA，生成目标配置、构建并核对最终绑定，再部署和运行对应环境 smoke。Codex 代为触发须有用户对本次正式发布的明确授权。
+主站 `checks` 与 `candidate` 签出同一本次 SHA，在两个独立运行器中并行验证。`checks` 保留类型、静态、安全、爬虫策略、归档性能及时间线契约检查；`candidate` 使用隔离配置执行既有完整 `test:flow`。两者都成功后才允许部署，互不共享 D1、R2、Worker 或浏览器状态。手动选择 production 并运行 workflow 即确认发布；production job 在两组检查成功后直接执行，不再等待 Review deployments。部署 job 签出同一 SHA，生成目标配置、构建并核对最终绑定，再部署和运行对应环境 smoke。Codex 代为触发须有用户对本次正式发布的明确授权。
+
+部署工作流固定使用 Ubuntu 24.04 和 Node 24。公共准备动作按系统、架构、Node 主版本、依赖声明、锁文件、安装配置及动作本身隔离 `node_modules` 缓存；未命中时执行 `npm ci`，不使用宽泛回退键。浏览器 job 通过 `PLAYWRIGHT_CHROMIUM_CHANNEL=chrome` 使用运行器预装的稳定版 Chrome，启动前记录版本并验证可启动，避免每次安装系统包或拉取容器。验证脚本未设置通道时仍使用原来的 Playwright Chromium，并在流程报告中记录实际浏览器身份。所有断言、构建、迁移门禁与部署后 smoke 保留。
 
 staging、production 和状态服务均在发布前自动检测并应用待执行的 D1 迁移，无需手动勾选。没有待执行迁移时直接继续部署，已应用文件不会重跑；迁移失败则停止发布。手动确认发布包含本次候选的待执行迁移。数据修复、导入、重建和恢复不属于普通发布步骤。
 
