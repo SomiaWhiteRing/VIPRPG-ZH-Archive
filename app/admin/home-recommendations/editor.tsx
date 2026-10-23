@@ -35,7 +35,7 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
     const controller = new AbortController();
     const timer = setTimeout(() => {
       void requestJson<{ ok: true; works: Candidate[] }>(
-        `/api/works/lookup?title=${encodeURIComponent(query.trim())}&excludeWorkIds=${selectedIds}`,
+        `/api/works/lookup?scope=home&title=${encodeURIComponent(query.trim())}&excludeWorkIds=${selectedIds}`,
         { signal: controller.signal }, "游戏搜索失败",
       ).then((result) => { if (!controller.signal.aborted) setCandidates(result.works); })
         .catch((error) => { if (!controller.signal.aborted) setSearchError(error instanceof Error ? error.message : "游戏搜索失败。"); })
@@ -76,7 +76,7 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
 
   return (
     <form className="grid gap-5" onSubmit={(event) => void save(event)}>
-      <FormField label="添加游戏" controlId={inputId} hint={`最多推荐 ${HOME_RECOMMENDATION_LIMIT} 个公开游戏，首页按下方顺序显示前 4／3／4 个。`}>
+      <FormField label="添加游戏" controlId={inputId} hint={`最多推荐 ${HOME_RECOMMENDATION_LIMIT} 个允许首页展示的游戏，首页按下方顺序显示前 4／3／4 个；登录用户可见的游戏仅向登录用户展示。`}>
         <SearchComboBox id={inputId} label="添加推荐游戏" query={query} onQueryChange={changeQuery}
           placeholder="搜索游戏标题或别名" maxLength={200} loading={searching}
           disabled={busy || works.length >= HOME_RECOMMENDATION_LIMIT}
@@ -92,9 +92,9 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
             changeQuery("");
           }}
           onClear={() => changeQuery("")}
-          emptyState={searchError || (query.trim() ? "没有找到可添加的公开游戏。" : "输入游戏标题或别名搜索。")} />
+          emptyState={searchError || (query.trim() ? "没有找到允许首页展示的游戏。" : "输入游戏标题或别名搜索。")} />
       </FormField>
-      {works.some((work) => !work.isPublic) ? <Notice tone="warning">未公开的游戏不会在首页展示，请移除后保存。</Notice> : null}
+      {works.some((work) => !work.isPublic) ? <Notice tone="warning">存在不允许首页展示或已不可访问的游戏，请移除后保存。</Notice> : null}
       {works.length ? (
         <ol className="admin-panel m-0 grid list-none divide-y divide-border" aria-label="推荐展示顺序">
           {works.map((work, index) => (
@@ -105,7 +105,7 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
                   {work.chineseTitle || work.originalTitle}
                 </Link>
                 {work.chineseTitle ? <p className="mt-0.5 wrap-anywhere text-xs text-muted">{work.originalTitle}</p> : null}
-                {!work.isPublic ? <span className="text-xs text-muted">未公开</span> : null}
+                {!work.isPublic ? <span className="text-xs text-muted">不可在首页展示</span> : null}
               </div>
               <div className="flex shrink-0 gap-1">
                 <Button type="button" variant="outline" size="sm" disabled={busy || index === 0}

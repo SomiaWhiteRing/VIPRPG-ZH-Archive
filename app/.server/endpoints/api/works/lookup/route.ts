@@ -44,7 +44,12 @@ export async function GET(runtime: AppRuntime, request: Request) {
     }
 
     const like = `%${escapeLike(title)}%`;
-    const access = workReadCondition(url.searchParams.get("scope") === "catalog" ? auth.user : null);
+    const scope = url.searchParams.get("scope");
+    // Recommendations follow homepage eligibility, not private-read privileges.
+    // Relation lookup keeps its public-only boundary; catalogs use actor access.
+    const access = scope === "home"
+      ? { sql: "w.id IN (SELECT id FROM member_works) AND w.show_on_home=1", binds: [] }
+      : workReadCondition(scope === "catalog" ? auth.user : null);
     const works = await getD1(runtime)
       .prepare(
         `SELECT DISTINCT

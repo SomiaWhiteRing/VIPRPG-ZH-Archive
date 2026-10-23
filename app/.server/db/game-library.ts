@@ -486,7 +486,7 @@ export async function searchGameWorks(
 ): Promise<PaginatedGameSearch> {
   const pageSize = clamp(input.pageSize ?? 24, 1, 100);
   const page = clamp(input.page ?? 1, 1, 9999);
-  const filters = { query: input.query };
+  const filters = { query: input.query, workSource: await listedWorksSource(runtime) };
   const database = getD1(runtime);
   const [countResult, rowsResult] = await database.batch([
     gameWorksCountStatement(database, filters),
