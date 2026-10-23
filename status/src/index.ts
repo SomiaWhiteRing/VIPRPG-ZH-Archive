@@ -1,4 +1,5 @@
 import { monitors, monitorIntervalSeconds, type Monitor } from "./monitors";
+import { groupIncidents, recoveryWindowMs, type Incident, type IncidentState } from "./incidents";
 
 interface Env {
   STATUS_DB: D1Database;
@@ -173,13 +174,17 @@ async function statusData(db: D1Database): Promise<Response> {
 
   const states = await db.prepare(
     "SELECT monitor_id, last_status, consecutive_failures, last_checked_at, last_success_at, latency_ms, last_error FROM monitor_state",
-  ).all();
+  ).all<IncidentState>();
   const days = await db.prepare(
     "SELECT monitor_id, day_bjt, checks, successful, latency_sum_ms FROM daily_rollups WHERE day_bjt >= ? ORDER BY day_bjt",
   ).bind(dayCutoff).all();
   const incidents = await db.prepare(
-    "SELECT id, monitor_id, started_at, resolved_at, summary FROM incidents WHERE started_at >= ? OR resolved_at IS NULL ORDER BY started_at DESC LIMIT 20",
-  ).bind(incidentCutoff).all();
+    `SELECT id, monitor_id, started_at, resolved_at, summary FROM incidents
+     WHERE started_at >= ? OR resolved_at >= ? OR resolved_at IS NULL ORDER BY started_at DESC`,
+  ).bind(incidentCutoff, incidentCutoff).all<Incident>();
+  // Apply the display limit after grouping, so a flapping service does not
+  // consume the history with twenty fragments of the same incident.
+  const incidentGroups = groupIncidents(incidents.results, states.results, now.getTime());
   const recent = await db.prepare(
     "SELECT monitor_id, checked_at, success, latency_ms FROM check_results WHERE checked_at >= ? ORDER BY checked_at DESC LIMIT 300",
   ).bind(recentCutoff).all();
@@ -194,7 +199,10 @@ async function statusData(db: D1Database): Promise<Response> {
     })),
     states: states.results,
     days: days.results,
-    incidents: incidents.results,
+    incidents: incidents.results.slice(0, 20),
+    incidentGroups: incidentGroups.slice(0, 20),
+    incidentCount: incidentGroups.length,
+    recoveryWindowSeconds: recoveryWindowMs / 1000,
     recent: recent.results,
   });
 }

@@ -18,8 +18,8 @@
           <span class="brand-name">VIPRPG.org</span>
         </a>
         <nav class="site-nav" aria-label="页面导航">
-          <a class="active" href="#services" aria-current="page">服务概览</a>
-          <a href="#incidents">历史事件</a>
+          <a class="active" href="#services" aria-current="location">服务概览</a>
+          <a href="#incidents">事件记录</a>
           <a class="return-link" href="https://viprpg.org/">返回主站 <span aria-hidden="true">↗</span></a>
         </nav>
       </header>
@@ -31,7 +31,7 @@
             <h1>运行状态</h1>
             <p class="intro-copy">查看档案站和关键依赖的可用性、近期检查及事件记录。</p>
           </div>
-          <div class="check-stamp"><span class="pulse-dot" aria-hidden="true"></span> 每分钟检查一次</div>
+          <div class="check-stamp"><span class="pulse-dot" aria-hidden="true"></span> 健康接口每分钟 · 完整首页每 15 分钟</div>
         </div>
 
         <section id="overall" class="overall pending" aria-label="当前整体状态" aria-live="polite">
@@ -43,6 +43,14 @@
           <div class="overall-meta"><span>最近一次检查</span><strong id="last-check">—</strong></div>
         </section>
 
+        <section id="active-incidents" class="active-incidents" aria-labelledby="active-incidents-title" hidden>
+          <div class="section-heading">
+            <div><p class="eyebrow">ACTIVE INCIDENTS</p><h2 id="active-incidents-title">当前事件</h2></div>
+            <span id="active-incident-count" class="incident-period"></span>
+          </div>
+          <div id="active-incident-list" class="incident-list"></div>
+        </section>
+
         <section id="services" class="service-section" aria-labelledby="services-title" tabindex="-1">
           <div class="section-heading">
             <div><p class="eyebrow">MONITORED SERVICES</p><h2 id="services-title">服务概览</h2></div>
@@ -50,14 +58,21 @@
           </div>
           <div id="service-groups" class="service-groups"><p class="loading">正在加载监控记录…</p></div>
           <div class="history-axis"><span>30 天前</span><span>今天</span></div>
+          <div class="history-legend" aria-label="检查记录图例">
+            <span><i class="legend-swatch good" aria-hidden="true"></i>全部成功</span>
+            <span><i class="legend-swatch degraded" aria-hidden="true"></i>部分失败</span>
+            <span><i class="legend-swatch outage" aria-hidden="true"></i>全部失败</span>
+            <span><i class="legend-swatch unknown" aria-hidden="true"></i>无记录</span>
+          </div>
         </section>
 
         <section id="incidents" class="incident-section" aria-labelledby="incidents-title" tabindex="-1">
           <div class="section-heading">
             <div><p class="eyebrow">INCIDENT HISTORY</p><h2 id="incidents-title">近期事件</h2></div>
-            <span class="incident-period">最近 30 天</span>
+            <span id="incident-period" class="incident-period">最近 30 天</span>
           </div>
           <div id="incident-list" class="incident-list"><p class="loading">正在加载事件记录…</p></div>
+          <p id="incident-policy" class="incident-policy"></p>
         </section>
       </main>
 
