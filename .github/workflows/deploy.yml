@@ -44,6 +44,12 @@ jobs:
   candidate:
     if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging' && github.ref == 'refs/heads/codex/deployment-speed')
     runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --ipc=host
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
@@ -53,11 +59,9 @@ jobs:
       - uses: ./.github/actions/setup-project
       - name: Isolated verification configuration
         run: node scripts/prepare-verification-config.mjs
-      - name: Install headless browser and system dependencies
-        shell: bash
+      - name: Verify preinstalled browser
         run: |
-          sudo sed -i 's|http://azure.archive.ubuntu.com|https://archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources
-          npx playwright install --with-deps --only-shell chromium
+          node --input-type=module -e "import { chromium } from 'playwright'; const browser = await chromium.launch({ headless: true }); await browser.close();"
       - run: npm run test:flow -- --report output/system-self-check/flow.json
       - name: Preserve failed browser diagnostics
         if: failure()
