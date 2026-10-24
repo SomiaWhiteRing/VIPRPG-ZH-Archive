@@ -6,7 +6,7 @@ const directionControlIds = ["up", "left", "right", "down"] as const;
 export const customControlIds = ["digit1", "digit2", "digit3", "digit4"] as const;
 export type CustomControlId = typeof customControlIds[number];
 const defaultCustomKeys: Record<CustomControlId, string> = { digit1: "Digit1", digit2: "Digit2", digit3: "Digit3", digit4: "Digit4" };
-export const controlIds = ["dpad", ...directionControlIds, "decision", "cancel", "shift", "menu", "debug", "log", "fastForward3", "fastForward10", "screenshot", ...customControlIds] as const;
+export const controlIds = ["dpad", ...directionControlIds, "decision", "cancel", "shift", "menu", "debug", "highlight", "log", "fastForward3", "fastForward10", "screenshot", ...customControlIds] as const;
 export type ControlId = typeof controlIds[number];
 export type ControlPlacement = { x: number; y: number; size: number; opacity: number; visible: boolean };
 export type ControlLayout = { screen: number; splitDpad: boolean; customKeys: Record<CustomControlId, string>; buttons: Record<ControlId, ControlPlacement> };
@@ -22,10 +22,11 @@ export const controlDefinitions = {
   shift: { label: "Shift", defaultVisible: false },
   menu: { label: "Menu", defaultVisible: false },
   debug: { label: "Debug", defaultVisible: false },
+  highlight: { label: "高亮", defaultVisible: false },
   log: { label: "log", defaultVisible: false },
   fastForward3: { label: "x3", defaultVisible: false },
   fastForward10: { label: "x10", defaultVisible: false },
-  screenshot: { label: "截图", defaultVisible: false },
+  screenshot: { label: "截图", defaultVisible: true },
   digit1: { label: "1", defaultVisible: false },
   digit2: { label: "2", defaultVisible: false },
   digit3: { label: "3", defaultVisible: false },
@@ -60,12 +61,14 @@ function createDefaultLayout(orientation: DisplayOrientation): ControlLayout {
     dpad: [0.03, 0.6], decision: [0.97, 0.42], cancel: [0.84, 0.65],
     up: [0.12, 0.35], left: [0.03, 0.6], right: [0.21, 0.6], down: [0.12, 0.85],
     shift: [0.35, 0.9], menu: [0.48, 0.9], debug: [0.61, 0.9], log: [0.74, 0.9],
+    highlight: [0.8, 0.08],
     fastForward3: [0.4, 0.08], fastForward10: [0.6, 0.08], screenshot: [0.95, 0.08],
     digit1: [0.35, 0.65], digit2: [0.48, 0.65], digit3: [0.61, 0.65], digit4: [0.74, 0.65],
   } : {
     dpad: [0.03, 0.82], decision: [0.97, 0.74], cancel: [0.7, 0.85],
     up: [0.18, 0.67], left: [0.03, 0.81], right: [0.33, 0.81], down: [0.18, 0.95],
     shift: [0.05, 0.97], menu: [0.35, 0.97], debug: [0.65, 0.97], log: [0.95, 0.97],
+    highlight: [0.05, 0.6],
     fastForward3: [0.3, 0.6], fastForward10: [0.65, 0.6], screenshot: [0.95, 0.5],
     digit1: [0.05, 0.35], digit2: [0.35, 0.35], digit3: [0.65, 0.35], digit4: [0.95, 0.35],
   };

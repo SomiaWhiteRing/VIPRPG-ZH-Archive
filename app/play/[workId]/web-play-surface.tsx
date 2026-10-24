@@ -34,7 +34,7 @@ const directions = [
   { key: "right", label: "右", Icon: ArrowRight, className: "col-start-3 row-start-2" },
   { key: "down", label: "下", Icon: ArrowDown, className: "col-start-2 row-start-3" },
 ] as const;
-const buttonKeys: PlayerButton[] = ["up", "left", "right", "down", "decision", "cancel", "shift", "menu", "debug", "log", "fastForward3", "fastForward10", "digit1", "digit2", "digit3", "digit4"];
+const buttonKeys: PlayerButton[] = ["up", "left", "right", "down", "decision", "cancel", "shift", "menu", "debug", "highlight", "log", "fastForward3", "fastForward10", "digit1", "digit2", "digit3", "digit4"];
 const clampPosition = (value: number) => Math.max(0, Math.min(1, value));
 type Point = { x: number; y: number };
 type DragTarget = ControlId | "screen";
@@ -203,7 +203,7 @@ export function WebPlaySurface({
         const id = element.dataset.playControl as ControlId;
         const control = positions.buttons[id];
         const base = baseSize * control.size;
-        const pill = id === "shift" || id === "menu" || id === "debug" || id === "log";
+        const pill = id === "shift" || id === "menu" || id === "debug" || id === "highlight" || id === "log";
         const desiredWidth = base * (id === "dpad" ? 2.7 : pill ? 1.55 : 1);
         const desiredHeight = base * (id === "dpad" ? 2.7 : pill ? 0.72 : 1);
         const fitScale = desiredWidth && desiredHeight ? Math.min(1, width / desiredWidth, height / desiredHeight) : 1;

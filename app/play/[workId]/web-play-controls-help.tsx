@@ -42,7 +42,7 @@ export function WebPlayControlsHelp() {
           <div
             className="web-play-help-board"
             role="img"
-            aria-label="常用键位位置图：方向键或 WASD 移动；Z、Enter、Space 确认；X、Esc 取消；F1 系统设置、F2 帧率、F7 截图、F9 Debug 菜单、反引号键会话历史；F、G 加速，Shift 为游戏功能。"
+            aria-label="常用键位位置图：方向键或 WASD 移动；Z、Enter、Space 确认；X、Esc 取消；F1 系统设置、F2 帧率、F7 截图、F9 Debug 菜单、E 交互高亮、反引号键会话历史；F、G 加速，Shift 为游戏功能。"
           >
             <WebPlayKeyboard />
           </div>
@@ -59,7 +59,7 @@ export function WebPlayControlsHelp() {
               </div>
             ))}
           </div>
-          <p className="mb-0 mt-2.5 text-xs text-muted">游戏启动后，点击游戏画面再按 F1 打开系统设置。按住 F / G 加速（默认 3× / 10×）；Shift 功能由游戏决定。Debug模式开闭和加速倍率可在系统设置调整。</p>
+          <p className="mb-0 mt-2.5 text-xs text-muted">游戏启动后，点击游戏画面再按 F1 打开系统设置。按住 F / G 加速（默认 3× / 10×），按住 E 显示交互位置；Shift 功能由游戏决定。Debug 菜单和交互高亮需在「追加功能」中分别开启「强制TestPlay」和「场景交互高亮」，加速倍率可在系统设置调整。移动端可在布局编辑中添加 Debug 和高亮按钮，通过 Menu 打开系统设置。</p>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

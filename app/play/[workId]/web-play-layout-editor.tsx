@@ -95,6 +95,13 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
             <Button aria-label={`隐藏${label}`} className={buttonClass} onClick={() => onChange(selected, { visible: false })} size="sm" type="button" variant="outline">隐藏</Button>
           ) : null}
         </div>
+        {selected === "debug" || selected === "highlight" ? (
+          <p className="mb-2 mt-0 text-xs text-white/80">
+            {selected === "debug"
+              ? "需在 Menu → 追加功能中开启「强制TestPlay」。"
+              : "按住显示交互位置，需在 Menu → 追加功能中开启「场景交互高亮」。"}
+          </p>
+        ) : null}
         {selected === "dpad" || selected === "up" || selected === "left" || selected === "right" || selected === "down" ? (
           <Button aria-checked={layout.splitDpad} className={buttonClass} onClick={() => onSplitDpadChange(!layout.splitDpad)} role="checkbox" size="sm" type="button" variant="outline">
             拆分方向键

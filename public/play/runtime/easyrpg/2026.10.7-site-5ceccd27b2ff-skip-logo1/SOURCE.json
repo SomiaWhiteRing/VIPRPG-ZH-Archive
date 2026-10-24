@@ -1,12 +1,12 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "025566eaf914a528dd6ba7731f0b2cf67d4bbadb",
-  "version": "2026.10.6-site-09c057017e49-skip-logo1",
-  "build": "local-docker-kai-2026.10.6-skip-logo-20261019",
-  "artifact": "kai-2026.10.6-site-web.zip",
-  "archiveSha256": "09c057017e49c1f6bbd27924d18db0fc57f4abbf85370c031a57cb13afb1bf38",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/025566eaf914a528dd6ba7731f0b2cf67d4bbadb",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/025566eaf914a528dd6ba7731f0b2cf67d4bbadb/COPYING",
+  "revision": "65523a3a52466b9f669f69dbe405739f3ce29768",
+  "version": "2026.10.7-site-5ceccd27b2ff-skip-logo1",
+  "build": "local-docker-kai-2026.10.7-skip-logo-20261024",
+  "artifact": "kai-2026.10.7-site-web.zip",
+  "archiveSha256": "5ceccd27b2ff96e71e5ef3ec988ec644457237a9389b893f93239f3af91e8eb3",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/65523a3a52466b9f669f69dbe405739f3ce29768",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/65523a3a52466b9f669f69dbe405739f3ce29768/COPYING",
   "sourceState": "patched-commit",
   "sourcePatches": [
     {
@@ -26,42 +26,47 @@
     "sourceSha256": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f",
     "licenseSha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
   },
+  "pinyinDictionary": {
+    "name": "rime-pinyin-simp",
+    "source": "https://github.com/rime/rime-pinyin-simp",
+    "licenseSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
   "patches": [
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "077640cf2f48e9cc5ce06e075554554ebd5a36a3b094241b62f3d61bd844018a",
-      "afterSha256": "add66c5886952901678905eecbecdda407647a3c21bebf14962d87dbb0939afe"
+      "beforeSha256": "c5416548b4dc0d8279ff7237a2cdb13be8a42e0dd6464203b9a8292eb38f90b2",
+      "afterSha256": "7c5738402209bd500d999631eeed12610b4f748e78a0189ed23809f2d5bf0aac"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
-      "sha256": "835a71616a7a6bc7a5f8a8118010d2549e14bdbe43fea7c9bce1c7f777af26e9",
-      "beforeSha256": "add66c5886952901678905eecbecdda407647a3c21bebf14962d87dbb0939afe",
-      "afterSha256": "0927cf538a1632c0d75d77b2d4b85f2c8c060e1b7cac0e44457e6621235b298d"
+      "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
+      "beforeSha256": "7c5738402209bd500d999631eeed12610b4f748e78a0189ed23809f2d5bf0aac",
+      "afterSha256": "ded5d6d878c6b3b04bc32974c25fab718478b4f66c79e36394eadfbf0a602d17"
     }
   ],
   "files": {
     "index.js": {
-      "size": 37172,
-      "sha256": "0927cf538a1632c0d75d77b2d4b85f2c8c060e1b7cac0e44457e6621235b298d"
+      "size": 41476,
+      "sha256": "ded5d6d878c6b3b04bc32974c25fab718478b4f66c79e36394eadfbf0a602d17"
     },
     "easyrpg-player.js": {
-      "size": 149670,
-      "sha256": "86fed9410930f5a3d452e43a35c27e019819917f2103b9ebd9e97dbe8333c78b"
+      "size": 150372,
+      "sha256": "b5504b7bd5c463b77d126fd471bdf301f137d5017b8a0bdfbbbc479d4e356578"
     },
     "easyrpg-player.wasm": {
-      "size": 15940628,
-      "sha256": "3e8df4f754b0594033be7eb07886d11fbe4e3237a609b416a3f2cacf361daea6"
+      "size": 15978903,
+      "sha256": "5175b702ee1c1a815117bf0f1663ffc2145ac3eaad3c9c076c6ce2a5fff285ca"
     },
     "easyrpg-player.data": {
       "size": 7557598,
       "sha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6"
     },
     "player-worker.js": {
-      "size": 9658,
-      "sha256": "39b5aca9330c1c0463e60410929d06dc37eb740855e343ad53ca27e4be147395"
+      "size": 10573,
+      "sha256": "d41473aed12be5b03057f3428e36f678992cb8fa06df0a4023c3de47cf3c952e"
     },
     "player-audio.js": {
       "size": 1858,
@@ -102,6 +107,10 @@
     "web-movies.md": {
       "size": 4647,
       "sha256": "96ea57e1c216f79733d8f4b28591265e3b0884ca560d5ff47e15f5a728ad712f"
+    },
+    "LICENSE-rime-pinyin-simp.txt": {
+      "size": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
     },
     "skip-logo.patch": {
       "size": 2262,

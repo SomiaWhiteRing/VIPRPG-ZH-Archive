@@ -39,6 +39,7 @@ const runtimeFiles = [
   "player-audio-worker.js", "player-files.js", "web-audio.md",
   "player-movie.js", "player-movie-worker.js", "movie-decoder.js", "movie-decoder.wasm",
   "movie-decoder.LICENSE.txt", "web-movies.md",
+  "LICENSE-rime-pinyin-simp.txt",
 ];
 for (const name of [...runtimeFiles, "player-host.js", "COPYING"])
   if (!files[name]?.length) throw new Error(`Missing runtime file: ${name}`);
@@ -49,6 +50,8 @@ if (sha256(license) !== licenseSha256)
   throw new Error("Kai license does not match the pinned digest");
 if (sha256(files["movie-decoder.LICENSE.txt"]) !== runtime.movieDecoder.licenseSha256)
   throw new Error("Movie decoder license does not match the pinned digest");
+if (sha256(files["LICENSE-rime-pinyin-simp.txt"]) !== runtime.pinyinDictionary.licenseSha256)
+  throw new Error("Pinyin dictionary license does not match the pinned digest");
 
 // Preserve upstream bytes except for explicitly pinned, reproducible host patches.
 const patches = runtime.patches ?? [];
@@ -104,6 +107,7 @@ const source =
       emscriptenVersion: runtime.emscriptenVersion ?? null,
       buildscriptsRevision: runtime.buildscriptsRevision ?? null,
       movieDecoder: runtime.movieDecoder,
+      pinyinDictionary: runtime.pinyinDictionary,
       patches,
       files: Object.fromEntries(
         Object.entries(output).map(([name, bytes]) => [name, { size: bytes.length, sha256: sha256(bytes) }]),

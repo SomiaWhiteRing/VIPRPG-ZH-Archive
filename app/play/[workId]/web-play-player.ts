@@ -38,6 +38,7 @@ const playerButtons = {
   shift: { key: "Shift", code: "ShiftLeft", keyCode: 16 },
   menu: { key: "F1", code: "F1", keyCode: 112 },
   debug: { key: "F9", code: "F9", keyCode: 120 },
+  highlight: { key: "e", code: "KeyE", keyCode: 69 },
   log: { key: "`", code: "Backquote", keyCode: 192 },
   fastForward3: { key: "f", code: "KeyF", keyCode: 70 },
   fastForward10: { key: "g", code: "KeyG", keyCode: 71 },
