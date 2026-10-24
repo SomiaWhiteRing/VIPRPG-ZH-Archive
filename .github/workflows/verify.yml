@@ -3,6 +3,16 @@ name: Verify migration
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      runtime_environment:
+        description: Runtime diagnostic target
+        type: choice
+        options: [staging, production]
+        default: staging
+      runtime_work_id:
+        description: Public game used for runtime diagnostics
+        type: number
+        default: 1
 
 permissions:
   contents: read
@@ -16,17 +26,23 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    env:
+      RUNTIME_ENVIRONMENT: ${{ inputs.runtime_environment || 'staging' }}
+      RUNTIME_WORK_ID: ${{ inputs.runtime_work_id || 1 }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+      - run: npm ci
       - name: Verify deployed runtime bytes and record transfer time
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
+          import { deploymentOrigins } from './scripts/deployment-config.mjs';
           const { version } = JSON.parse(readFileSync('lib/archive/easyrpg-runtime.json', 'utf8'));
-          for (const origin of ['https://staging.viprpg.org', 'https://viprpg.org']) {
+          const origin = deploymentOrigins[process.env.RUNTIME_ENVIRONMENT];
+          if (!origin) throw new Error('Unknown runtime diagnostic target');
             await Promise.all(['wasm', 'data'].map(async (extension) => {
               const path = `/play/runtime/easyrpg/${version}/easyrpg-player.${extension}`;
               const expected = readFileSync(`public${path}`);
@@ -42,15 +58,13 @@ jobs:
                 headersMs, totalMs: performance.now() - start, bytes: body.length, identical }));
               if (!response.ok || !identical) throw new Error(`Runtime delivery mismatch: ${origin}${path}`);
             }));
-          }
           NODE
-      - run: npm ci
-      - name: Verify staging cold startup, hydration and warm cache
-        run: node scripts/easyrpg-cold-start-check.mjs --env staging --work-id 1
+      - name: Verify cold startup, hydration and warm cache
+        run: node scripts/easyrpg-cold-start-check.mjs --env "$RUNTIME_ENVIRONMENT" --work-id "$RUNTIME_WORK_ID"
         env:
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
-      - name: Compare staging startup over HTTP/2
-        run: node scripts/easyrpg-cold-start-check.mjs --env staging --work-id 1 --disable-quic --report output/easyrpg/cold-start-http2.json
+      - name: Compare startup over HTTP/2
+        run: node scripts/easyrpg-cold-start-check.mjs --env "$RUNTIME_ENVIRONMENT" --work-id "$RUNTIME_WORK_ID" --disable-quic --report output/easyrpg/cold-start-http2.json
         env:
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
       - name: Preserve runtime diagnostics
