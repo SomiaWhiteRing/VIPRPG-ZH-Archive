@@ -1,11 +1,11 @@
 {
-  "version": "2026.10.7-site-1b616b2ea2dc-startup-progress2",
+  "version": "2026.10.7-site-68ee83089ad5-startup-assets1",
   "revision": "65523a3a52466b9f669f69dbe405739f3ce29768",
-  "build": "local-docker-kai-2026.10.7-skip-logo-startup-progress-20261024",
+  "build": "local-docker-kai-2026.10.7-skip-logo-shared-assets-20261024",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "1b616b2ea2dce3cc9fca0a644d241962d4e77d6a32ad761e9c1f9bc864ce85a7",
+  "archiveSha256": "68ee83089ad5cc575af54a66fb439cd913c51a90fd5fa190d01013f2a4a80068",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
@@ -20,15 +20,15 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "3d0f003453aefc8a9f129b720e56a5e0bacd51dec72e1938342c4647c33526eb",
-      "afterSha256": "c98f504cc02dbd498d03f870553bce25cf1c1910c18334222bea91767e194505"
+      "beforeSha256": "4a2a598d91cb883de02c08050519822c785f7ed771a60b07deee3f5fd406b143",
+      "afterSha256": "3d9a48b17f27f220afb0b876805324e4742df2902b4d2921b3690f15ad31f9bc"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "c98f504cc02dbd498d03f870553bce25cf1c1910c18334222bea91767e194505",
-      "afterSha256": "a089144b0598b6e443458e76e6279e93be32ad201be9d6665c5e4070838a089e"
+      "beforeSha256": "3d9a48b17f27f220afb0b876805324e4742df2902b4d2921b3690f15ad31f9bc",
+      "afterSha256": "933fedc474e183c70a1d9724f74065bad2423e331f4b89e99f8305843f7b35f1"
     }
   ],
   "sourcePatches": [
@@ -39,6 +39,10 @@
     {
       "path": "scripts/runtime-patches/startup-download-progress.patch",
       "sha256": "a2020fb3b45e9105db9053818b7be760bc24477aac05cde5dd61e238fc02df54"
+    },
+    {
+      "path": "scripts/runtime-patches/startup-shared-assets.patch",
+      "sha256": "59d42601885b7f2fa10d823a985097ef86dd083ef737a1a2e64a3ec4e700407b"
     }
   ],
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",

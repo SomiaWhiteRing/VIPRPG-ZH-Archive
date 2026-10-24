@@ -31,6 +31,12 @@ self.onmessage = async ({data}) => {
     engine = await createEasyRpgEngine({
       audioOnly: true, noInitialRun: true, workId: data.workId,
       gamePackages: data.packages, sampleRate: data.sampleRate,
+      getPreloadedPackage: () => data.runtimeData,
+      instantiateWasm: (imports, receiveInstance) => {
+        const instance = new WebAssembly.Instance(data.wasmModule, imports);
+        receiveInstance(instance, data.wasmModule);
+        return instance.exports;
+      },
       locateFile: path => new URL(path, data.runtimeBase).href,
       setStatus: () => postMessage({type: 'startup-progress'}),
       print: (...values) => postMessage({type: 'log', level: 'info', message: values.join(' ')}),
