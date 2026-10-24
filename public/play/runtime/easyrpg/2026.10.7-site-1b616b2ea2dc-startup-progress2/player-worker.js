@@ -182,6 +182,7 @@ self.onmessage = async ({data}) => {
           audioPort.postMessage({...command, generation}, command.file ? [command.file.bytes.buffer] : []);
         },
         locateFile: path => new URL(path, data.runtimeBase).href,
+        setStatus: () => postMessage({type: 'startup-progress'}),
         readConsoleLine,
         useSystemNameInput: () => data.systemNameInput === true,
         beginNameInput, pollNameInput, cancelNameInput,

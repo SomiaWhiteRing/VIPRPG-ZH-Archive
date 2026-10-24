@@ -32,6 +32,7 @@ self.onmessage = async ({data}) => {
       audioOnly: true, noInitialRun: true, workId: data.workId,
       gamePackages: data.packages, sampleRate: data.sampleRate,
       locateFile: path => new URL(path, data.runtimeBase).href,
+      setStatus: () => postMessage({type: 'startup-progress'}),
       print: (...values) => postMessage({type: 'log', level: 'info', message: values.join(' ')}),
       printErr: (...values) => postMessage({type: 'log', level: 'error', message: values.join(' ')}),
       onAbort: message => report(new Error(message)),

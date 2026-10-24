@@ -1,0 +1,34 @@
+--- a/resources/emscripten/player-host.js
++++ b/resources/emscripten/player-host.js
+@@ -704,6 +704,11 @@
+     gamepadFrame = requestAnimationFrame(pollGamepad);
+   };
+
++  // The timeout measures inactivity, including cold downloads of the SoundFont.
++  for (const target of [worker, audioWorker]) listen(target, 'message', ({data}) => {
++    if (data.type === 'startup-progress' && !started && !closed && !stopping)
++      startStartupTimer();
++  });
+   startStartupTimer();
+   const shutdown = async () => {
+     nameInput?.finish(null);
+--- a/resources/emscripten/player-worker.js
++++ b/resources/emscripten/player-worker.js
+@@ -182,6 +182,7 @@
+           audioPort.postMessage({...command, generation}, command.file ? [command.file.bytes.buffer] : []);
+         },
+         locateFile: path => new URL(path, data.runtimeBase).href,
++        setStatus: () => postMessage({type: 'startup-progress'}),
+         readConsoleLine,
+         useSystemNameInput: () => data.systemNameInput === true,
+         beginNameInput, pollNameInput, cancelNameInput,
+--- a/resources/emscripten/player-audio-worker.js
++++ b/resources/emscripten/player-audio-worker.js
+@@ -32,6 +32,7 @@
+       audioOnly: true, noInitialRun: true, workId: data.workId,
+       gamePackages: data.packages, sampleRate: data.sampleRate,
+       locateFile: path => new URL(path, data.runtimeBase).href,
++      setStatus: () => postMessage({type: 'startup-progress'}),
+       print: (...values) => postMessage({type: 'log', level: 'info', message: values.join(' ')}),
+       printErr: (...values) => postMessage({type: 'log', level: 'error', message: values.join(' ')}),
+       onAbort: message => report(new Error(message)),

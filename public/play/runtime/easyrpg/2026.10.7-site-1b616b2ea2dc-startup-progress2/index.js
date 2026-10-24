@@ -750,6 +750,11 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     gamepadFrame = requestAnimationFrame(pollGamepad);
   };
 
+  // The timeout measures inactivity, including cold downloads of the SoundFont.
+  for (const target of [worker, audioWorker]) listen(target, 'message', ({data}) => {
+    if (data.type === 'startup-progress' && !started && !closed && !stopping)
+      startStartupTimer();
+  });
   startStartupTimer();
   const shutdown = async () => {
     nameInput?.finish(null);

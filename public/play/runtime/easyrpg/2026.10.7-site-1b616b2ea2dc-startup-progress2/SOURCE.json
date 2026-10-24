@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "65523a3a52466b9f669f69dbe405739f3ce29768",
-  "version": "2026.10.7-site-5ceccd27b2ff-skip-logo1",
-  "build": "local-docker-kai-2026.10.7-skip-logo-20261024",
-  "artifact": "kai-2026.10.7-site-web.zip",
-  "archiveSha256": "5ceccd27b2ff96e71e5ef3ec988ec644457237a9389b893f93239f3af91e8eb3",
+  "version": "2026.10.7-site-1b616b2ea2dc-startup-progress2",
+  "build": "local-docker-kai-2026.10.7-skip-logo-startup-progress-20261024",
+  "artifact": "kai-2026.10.7-startup-progress-web.zip",
+  "archiveSha256": "1b616b2ea2dce3cc9fca0a644d241962d4e77d6a32ad761e9c1f9bc864ce85a7",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/65523a3a52466b9f669f69dbe405739f3ce29768",
   "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/65523a3a52466b9f669f69dbe405739f3ce29768/COPYING",
   "sourceState": "patched-commit",
@@ -12,6 +12,10 @@
     {
       "path": "scripts/runtime-patches/skip-logo.patch",
       "sha256": "0969ba36a4aaa9363f3fa66b7d37ef2297d806f61cb298d3072fd691b16ae0da"
+    },
+    {
+      "path": "scripts/runtime-patches/startup-download-progress.patch",
+      "sha256": "a2020fb3b45e9105db9053818b7be760bc24477aac05cde5dd61e238fc02df54"
     }
   ],
   "sourceSnapshot": null,
@@ -36,21 +40,21 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "c5416548b4dc0d8279ff7237a2cdb13be8a42e0dd6464203b9a8292eb38f90b2",
-      "afterSha256": "7c5738402209bd500d999631eeed12610b4f748e78a0189ed23809f2d5bf0aac"
+      "beforeSha256": "3d0f003453aefc8a9f129b720e56a5e0bacd51dec72e1938342c4647c33526eb",
+      "afterSha256": "c98f504cc02dbd498d03f870553bce25cf1c1910c18334222bea91767e194505"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "7c5738402209bd500d999631eeed12610b4f748e78a0189ed23809f2d5bf0aac",
-      "afterSha256": "ded5d6d878c6b3b04bc32974c25fab718478b4f66c79e36394eadfbf0a602d17"
+      "beforeSha256": "c98f504cc02dbd498d03f870553bce25cf1c1910c18334222bea91767e194505",
+      "afterSha256": "a089144b0598b6e443458e76e6279e93be32ad201be9d6665c5e4070838a089e"
     }
   ],
   "files": {
     "index.js": {
-      "size": 41476,
-      "sha256": "ded5d6d878c6b3b04bc32974c25fab718478b4f66c79e36394eadfbf0a602d17"
+      "size": 41754,
+      "sha256": "a089144b0598b6e443458e76e6279e93be32ad201be9d6665c5e4070838a089e"
     },
     "easyrpg-player.js": {
       "size": 150372,
@@ -65,16 +69,16 @@
       "sha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6"
     },
     "player-worker.js": {
-      "size": 10573,
-      "sha256": "d41473aed12be5b03057f3428e36f678992cb8fa06df0a4023c3de47cf3c952e"
+      "size": 10639,
+      "sha256": "2130168297d8b7cd7937f9aef3caec2749c531cb19289d023ae90db2a6ba2d9b"
     },
     "player-audio.js": {
       "size": 1858,
       "sha256": "6174d3e6fe61fd9f970942a94a8045a64dbe568a314073e6b464a82a89d5c9e2"
     },
     "player-audio-worker.js": {
-      "size": 2347,
-      "sha256": "827ab32b8418c9d7cf4a90d4074b9aa49b130f351ad487178daca1ec0be78608"
+      "size": 2411,
+      "sha256": "c205b8805eb584258f46b19316ca48f789ce61e90bcb1107e41ccd232529343d"
     },
     "player-files.js": {
       "size": 1939,
@@ -115,6 +119,10 @@
     "skip-logo.patch": {
       "size": 2262,
       "sha256": "0969ba36a4aaa9363f3fa66b7d37ef2297d806f61cb298d3072fd691b16ae0da"
+    },
+    "startup-download-progress.patch": {
+      "size": 1686,
+      "sha256": "a2020fb3b45e9105db9053818b7be760bc24477aac05cde5dd61e238fc02df54"
     }
   }
 }
