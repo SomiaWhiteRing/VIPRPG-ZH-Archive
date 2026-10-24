@@ -31,7 +31,7 @@
 
 ### 公共实现约束
 
-手动运行 GitHub `Verify migration` 时，`runtime-delivery` job 另从独立运行器读取所选目标环境的候选引擎和音色库，核对解码后的原始字节并记录响应及传输时间，再使用预生产验收游戏执行 `node scripts/easyrpg-cold-start-check.mjs --env staging --work-id 1`，并加 `--disable-quic` 对照 HTTP/2。该脚本在全新浏览器中安装游戏、冷启动、停止并再次启动，检查 hydration／运行异常、两份完整资源各只交付一次、至多各有一次备用探测及暖启动缓存，保留时间报告与画面；时间不设跨线路速度门槛。默认目标为预生产验收游戏 1；发布后可明确选择 `runtime_environment=production` 与正式作品 ID 对照，候选运行包尚未发布到目标时按版本不匹配处理，不能混用另一环境的运行包。该流程不上传或修改作品，访问和游玩统计按网站正常业务执行。浏览器操作须遵守当前任务的授权范围。
+手动运行 GitHub `Verify migration` 时，`runtime-delivery` job 另从独立运行器读取所选目标环境的候选引擎和音色库，核对解码后的原始字节并记录响应及传输时间，再使用预生产验收游戏执行 `node scripts/easyrpg-cold-start-check.mjs --env staging --work-id 1`，并加 `--disable-quic` 对照 HTTP/2。该脚本在全新浏览器中安装游戏、冷启动、停止并再次启动，检查 hydration／运行异常、两份完整资源均已到位、至多各有一次备用探测及暖启动缓存，保留时间报告与画面；时间不设跨线路速度门槛。请求取消是异步操作，不用恰好一份完整网络响应的断言掩盖下载预读；报告保留所有候选请求的实际字节。默认目标为预生产验收游戏 1；发布后可明确选择 `runtime_environment=production` 与正式作品 ID 对照，候选运行包尚未发布到目标时按版本不匹配处理，不能混用另一环境的运行包。该流程不上传或修改作品，访问和游玩统计按网站正常业务执行。浏览器操作须遵守当前任务的授权范围。
 
 - 浏览器与 Web Worker 的 JSON 请求按实际响应协议选择 `lib/ui/api-response.ts` 的入口：成功响应明确包含 `ok: true` 时使用 `requestJson`；直接返回业务对象时使用 `requestJsonValue` 或 `postJson`，包括资源链接、展柜角色／头像查询、类型候补和提醒未读数。二进制和 204 响应使用 `requestOk`。迁移调用前逐项核对成功响应字段、HTTP 状态及冲突恢复分支，保留已有错误码和恢复操作。这些入口共用网络失败、HTTP 错误、无效响应和取消处理，不自行复制错误解析。
 - 上传提交回查、草稿恢复、只重试网络传输的上传请求，以及同时处理 HTML 跳转与 JSON 的 `RedirectForm`，可以通过 `requestResponse`／`readJsonResponse` 查看原始状态。静态检查按文件和函数限制这些消费者，不能扩大为整个目录的豁免。失败状态的 JSON 仅在恢复决策需要时显式设置 `allowFailure`。

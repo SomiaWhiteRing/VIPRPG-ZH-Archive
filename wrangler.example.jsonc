@@ -154,6 +154,10 @@
         {
           "pattern": "staging.viprpg.org",
           "custom_domain": true
+        },
+        {
+          "pattern": "runtime-staging.viprpg.org/play/runtime/easyrpg/*",
+          "zone_name": "viprpg.org"
         }
       ],
       "workers_dev": false,
@@ -185,6 +189,10 @@
   "routes": [
     {
       "pattern": "viprpg.org/*",
+      "zone_name": "viprpg.org"
+    },
+    {
+      "pattern": "runtime.viprpg.org/play/runtime/easyrpg/*",
       "zone_name": "viprpg.org"
     }
   ],

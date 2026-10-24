@@ -63,4 +63,6 @@
 
 按本次预生产测试授权，临时创建 `runtime-staging.viprpg.org` 的灰云 CNAME 到 `cf.090227.xyz`，以及 `runtime-staging.viprpg.org/play/runtime/easyrpg/*` 到已核实的现有预生产 Worker 的 Route。没有新建反代 Worker、公开 R2 或维护固定 IP。对应 ECS 查询保留了运营商 CNAME 链，HTTPS 与原运行包响应已核对。测试记录和可撤销的记录／路由 ID 位于本机 `output/startup-hydration-repair/`。
 
-同一份 6,311,434 字节的 Brotli 音色库经 101 个探测节点进行对照，探测上限为 10 秒；电信完整传输由 22/30 提升至 30/30，但联通由 20/30 降为 14/30、移动由 24/29 降为 1/29。因此候选采用客户端按传输进度选择入口，不能全量替换为社区入口，也不能把超时／部分字节的 HTTP 200 当作完整下载。预生产测试域名仅用于该验证；正式域名、Route 及持久配置仍需准备计划并取得对应批准。
+同一份 6,311,434 字节的 Brotli 音色库经 101 个探测节点进行对照，探测上限为 10 秒；电信完整传输由 22/30 提升至 30/30，但联通由 20/30 降为 14/30、移动由 24/29 降为 1/29。因此采用客户端按传输进度选择入口，不能全量替换为社区入口，也不能把超时／部分字节的 HTTP 200 当作完整下载。正式域名、Route 及持久配置的启用须有对应批准。
+
+运行包备用入口目标由 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json) 同时提供给网页和部署校验器：正式为 `runtime.viprpg.org`，预生产为 `runtime-staging.viprpg.org`。灰云 CNAME 指向 `cf.090227.xyz`，只将 `/play/runtime/easyrpg/*` Route 绑定到各自原有 Worker。两环境的 Environment 配置 secret 应保留已批准的额外 Route；部署校验只接受对应环境的这个精确路径，不接受另一个环境、其他域名或覆盖全部业务路径的宽泛 Route。原单入口配置继续可用于撤销备用入口的回退。

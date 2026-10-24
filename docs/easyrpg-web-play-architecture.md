@@ -281,7 +281,7 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 网站以预生成的 Brotli 11 表示传输引擎和音色库。导入脚本从已校验的原始字节生成 `.wasm.br`／`.data.br`，解压后逐字节核对，并在 `SOURCE.json` 中记录文件与压缩参数。只有两个原有 `.wasm`／`.data` URL 经 `assets.run_worker_first` 进入同一 Worker；处理器按客户端支持选择预压缩表示，通过 `encodeBody: manual`、正确 MIME 与 `Content-Encoding: br` 避免二次压缩，保留版本化 URL、ETag、条件请求及 `Vary: Accept-Encoding`。不接受 Brotli 或带 Range 的请求读取原始文件。浏览器原生解压后，引擎收到的字节与原包完全相同。Android 资源构建不复制 `.br` 表示，继续读取包内原始文件。
 
-预生产页面通过 `runtimeAssetBasePath` 提供保留社区 CNAME 链的运行包入口，当前为 `https://runtime-staging.viprpg.org`；入口绑定到现有预生产 Worker，页面、游戏安装、存档及 Worker 脚本仍沿用原路径。正式站尚未启用此入口。两个公开大资源的响应提供 CORS 与 Resource Timing 授权；其余业务接口没有跨源授权。
+页面通过 `runtimeAssetBasePath` 提供保留社区 CNAME 链的运行包入口；两环境目标统一声明在 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json)。入口绑定到各自现有 Worker，页面、游戏安装、存档及 Worker 脚本仍沿用原路径。配置声明不证明 DNS 或 Route 已生效，正式启用须完成批准与入口核验。两个公开大资源的响应提供 CORS 与 Resource Timing 授权；其余业务接口没有跨源授权。
 
 宿主的 [startup-regional-assets.patch](../scripts/runtime-patches/startup-regional-assets.patch) 是导入时的未压缩宿主补丁，不改变引擎或音色库字节。首次先请求原入口；700 ms 内尚未读到约 512 KiB 的解压后数据时才开始另一入口的探测，先完成该前缀的请求继续传输，另一请求立即取消。比较实际传输进展，不能只按响应头先后选择线路。完整下载成功后，在当前标签页会话中记住该文件的入口；再次启动直接复用成功入口的浏览器缓存。停止、取消和两个入口均失败时释放所有请求；没有提供不同入口的本地与 Android 调用仍只请求本地原路径。入口的 DNS、路由与配置变更另按正式操作边界审批。
 

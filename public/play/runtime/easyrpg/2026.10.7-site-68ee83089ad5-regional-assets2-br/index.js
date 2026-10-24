@@ -766,7 +766,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const probe = async index => {
       try {
         const response = await fetch(urls[index], {
-          signal: AbortSignal.any([signal, controllers[index].signal]), credentials: 'omit',
+          signal: AbortSignal.any([signal, controllers[index].signal]),
         });
         if (!response.ok) throw new Error('Runtime download failed: ' + response.status + ' ' + urls[index]);
         startupProgress();

@@ -16,6 +16,8 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 正式站已在 viprpg.org 上线，网站与 Kai 当前客户端来源白名单均包含正式域名。历史 APK 不会自动更新白名单，须安装新版；旧远端资源继续保留，见[正式手册](./production-deployment.md#首次正式初始化)。Android 接入及具体构建来源见[导入说明](./easyrpg-android-import.md)。
 
+运行包可使用 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json) 声明的备用资源入口。对应域名须保留社区 CNAME 链，并将运行包路径 Route 绑定到同一环境的原 Worker；Environment 的配置 secret 同步保存这条精确 Route。它只供引擎和音色库的客户端传输选择，部署 origin、游戏安装和存档路径保持原协议。正式入口的新增、撤销与配置同步遵守[主站入口说明](./main-ingress-selection.md#运行包入口的预生产验证)的批准边界。
+
 ## 干净种子
 
 不要把本地开发数据库整体上传到远端。准备独立的预生产导入包：

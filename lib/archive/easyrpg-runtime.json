@@ -1,5 +1,5 @@
 {
-  "version": "2026.10.7-site-68ee83089ad5-regional-assets1-br",
+  "version": "2026.10.7-site-68ee83089ad5-regional-assets2-br",
   "revision": "65523a3a52466b9f669f69dbe405739f3ce29768",
   "build": "local-docker-kai-2026.10.7-skip-logo-shared-assets-20261024",
   "emscriptenVersion": "5.0.5",
@@ -33,9 +33,9 @@
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/startup-regional-assets.patch",
-      "sha256": "38f5560131a7fe9302a1ad07aae715cbe4f6df2a4cfd75808b66e89e911e5be6",
+      "sha256": "458152ff51ec89ef09edda8b2edcd6879fa450aeb19592f182c3c0511cb2c344",
       "beforeSha256": "933fedc474e183c70a1d9724f74065bad2423e331f4b89e99f8305843f7b35f1",
-      "afterSha256": "4563c302a3aad540660fde43997c17791c496732a449b97f5f8a84c8433dd8bd"
+      "afterSha256": "9402a03e02f5c3cf17cd9f8722aa04158bbc6747986a570faa8baa7953c5bef5"
     }
   ],
   "sourcePatches": [

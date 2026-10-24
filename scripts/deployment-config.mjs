@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parse } from "jsonc-parser";
 import { downloadSubrequestLimit } from "../lib/archive/download.ts";
+import easyRpgDelivery from "../lib/archive/easyrpg-delivery.json" with { type: "json" };
 
 export const deploymentOrigins = {
   production: "https://viprpg.org",
@@ -35,7 +36,16 @@ export function validateDeployment(target, environment, directory = ".") {
     throw new Error(`Configure limits.subrequests=${downloadSubrequestLimit} to match the archive download budget`);
   if (target.vars?.APP_ORIGIN !== origin || target.vars?.SITE_NOINDEX !== String(environment === "staging"))
     throw new Error(`${environment} requires APP_ORIGIN=${origin} and the matching SITE_NOINDEX`);
-  const route = Array.isArray(target.routes) && target.routes.length === 1 ? target.routes[0] : null;
+  const routes = Array.isArray(target.routes) ? target.routes : [];
+  const assetHostname = new URL(easyRpgDelivery[origin]).hostname;
+  const assetPattern = `${assetHostname}/play/runtime/easyrpg/*`;
+  const assetRoutes = routes.filter(route => route.pattern === assetPattern);
+  const siteRoutes = routes.filter(route => route.pattern !== assetPattern);
+  if (assetRoutes.length > 1 || assetRoutes.some(route => route.zone_name !== "viprpg.org" ||
+      (route.custom_domain !== undefined && route.custom_domain !== false) ||
+      Object.keys(route).some(key => !["pattern", "zone_name", "custom_domain"].includes(key))))
+    throw new Error(`Configure only ${assetPattern} as the optional runtime asset Route`);
+  const route = siteRoutes.length === 1 ? siteRoutes[0] : null;
   const hostname = new URL(origin).hostname;
   const customDomain = route?.pattern === hostname && route.custom_domain === true;
   const productionRoute = environment === "production" && route?.pattern === `${hostname}/*` &&
@@ -43,7 +53,7 @@ export function validateDeployment(target, environment, directory = ".") {
     (route.custom_domain === undefined || route.custom_domain === false) &&
     Object.keys(route).every((key) => ["pattern", "zone_name", "custom_domain"].includes(key));
   if (target.workers_dev !== false || target.preview_urls !== false || (!customDomain && !productionRoute))
-    throw new Error(`Configure only the ${origin} custom domain${environment === "production" ? ` or ${hostname}/* Route with zone_name=${hostname}` : ""}; disable workers_dev and preview_urls`);
+    throw new Error(`Configure only the ${origin} custom domain${environment === "production" ? ` or ${hostname}/* Route with zone_name=${hostname}` : ""}, with an optional ${assetPattern} Route; disable workers_dev and preview_urls`);
   const database = target.d1_databases?.find((binding) => binding.binding === "DB");
   const bucket = target.r2_buckets?.find((binding) => binding.binding === "ARCHIVE_BUCKET");
   if (target.d1_databases?.length !== 1 || target.r2_buckets?.length !== 1 ||

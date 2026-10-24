@@ -1,15 +1,15 @@
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { webPlayDownloadProfile } from "@/lib/archive/web-play-download-policy";
 import easyRpgRuntime from "@/lib/archive/easyrpg-runtime.json";
+import easyRpgDelivery from "@/lib/archive/easyrpg-delivery.json";
 
 export const webPlayInstallerVersion = "opfs-v12-workerfs";
 export const easyRpgRuntimeVersion = easyRpgRuntime.version;
 export const easyRpgRuntimeBasePath = `/play/runtime/easyrpg/${easyRpgRuntimeVersion}`;
 
 export function easyRpgRuntimeAssetBasePath(origin: string): string {
-  return origin === "https://staging.viprpg.org"
-    ? `https://runtime-staging.viprpg.org${easyRpgRuntimeBasePath}`
-    : easyRpgRuntimeBasePath;
+  const assetOrigin = (easyRpgDelivery as Record<string, string>)[origin] ?? "";
+  return `${assetOrigin}${easyRpgRuntimeBasePath}`;
 }
 
 export function buildArchiveDownloadUrl(archiveVersionId: number): string {

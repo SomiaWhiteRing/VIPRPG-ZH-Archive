@@ -1,5 +1,5 @@
 diff --git a/player-host.js b/player-host.js
-index 09f30c01..85e27c91 100644
+index 09f30c01..8df884ab 100644
 --- a/player-host.js
 +++ b/player-host.js
 @@ -757,13 +757,73 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
@@ -22,7 +22,7 @@ index 09f30c01..85e27c91 100644
 +    const probe = async index => {
 +      try {
 +        const response = await fetch(urls[index], {
-+          signal: AbortSignal.any([signal, controllers[index].signal]), credentials: 'omit',
++          signal: AbortSignal.any([signal, controllers[index].signal]),
 +        });
 +        if (!response.ok) throw new Error('Runtime download failed: ' + response.status + ' ' + urls[index]);
 +        startupProgress();
