@@ -73,7 +73,7 @@ export type PlayerScreenshot = {
 };
 
 type PlayerMetadata = Pick<WebPlayMetadata,
-  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "engineFamily" | "easyRpg"
+  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "runtimeAssetBasePath" | "engineFamily" | "easyRpg"
 >;
 
 /** EasyRPG owns document-wide input, audio and timers. Destroy that document on exit. */
@@ -254,6 +254,7 @@ export function createPlayerSession(
       saveNative: (files: Record<string, string>) => localRequest("save", { url: nativeResources?.url, files }),
       workId: metadata.workId,
       runtimeBase: `${metadata.runtimeBasePath}/`,
+      assetBase: `${metadata.runtimeAssetBasePath || metadata.runtimeBasePath}/`,
       arguments: args,
       signal: lifetime.signal,
       onError: (error: unknown) => onLog("error", formatLogValue(error)),

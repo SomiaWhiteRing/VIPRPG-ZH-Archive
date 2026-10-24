@@ -15,6 +15,7 @@ export type WebPlayMetadata = {
   webPlayInstallerVersion: string;
   easyRpgRuntimeVersion: string;
   runtimeBasePath: string;
+  runtimeAssetBasePath?: string;
   playKey: string;
   downloadUrl: string;
   totalFiles: number;

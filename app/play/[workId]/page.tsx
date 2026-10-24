@@ -32,6 +32,7 @@ import {
   buildWebPlayDownloadUrl,
   buildWebPlayKey,
   easyRpgRuntimeBasePath,
+  easyRpgRuntimeAssetBasePath,
   easyRpgRuntimeVersion,
   webPlayInstallerVersion,
 } from "@/lib/archive/web-play";
@@ -91,6 +92,7 @@ export async function loader(args: LoaderFunctionArgs) {
     webPlayInstallerVersion,
     easyRpgRuntimeVersion,
     runtimeBasePath: easyRpgRuntimeBasePath,
+    runtimeAssetBasePath: easyRpgRuntimeAssetBasePath(runtime.origin),
     playKey: buildWebPlayKey({
       archiveVersionId: record.id,
       manifestSha256: record.manifestSha256,

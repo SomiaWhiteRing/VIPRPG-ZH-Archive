@@ -24,6 +24,8 @@ export async function maybeHandleEasyRpgAsset(
   assetRequest.headers.set("Accept-Encoding", "identity");
   const response = await assets.fetch(assetRequest);
   const headers = new Headers(response.headers);
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Timing-Allow-Origin", "*");
   const vary = headers.get("Vary");
   if (!vary?.split(",").some((value) => value.trim().toLowerCase() === "accept-encoding"))
     headers.set("Vary", vary ? `${vary}, Accept-Encoding` : "Accept-Encoding");

@@ -6,6 +6,12 @@ export const webPlayInstallerVersion = "opfs-v12-workerfs";
 export const easyRpgRuntimeVersion = easyRpgRuntime.version;
 export const easyRpgRuntimeBasePath = `/play/runtime/easyrpg/${easyRpgRuntimeVersion}`;
 
+export function easyRpgRuntimeAssetBasePath(origin: string): string {
+  return origin === "https://staging.viprpg.org"
+    ? `https://runtime-staging.viprpg.org${easyRpgRuntimeBasePath}`
+    : easyRpgRuntimeBasePath;
+}
+
 export function buildArchiveDownloadUrl(archiveVersionId: number): string {
   return `/api/archive-versions/${archiveVersionId}/download?zip_builder=${encodeURIComponent(
     downloadZipBuilderVersion,

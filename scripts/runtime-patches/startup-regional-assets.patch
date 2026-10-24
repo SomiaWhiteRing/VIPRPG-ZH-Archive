@@ -1,0 +1,85 @@
+diff --git a/player-host.js b/player-host.js
+index 09f30c01..85e27c91 100644
+--- a/player-host.js
++++ b/player-host.js
+@@ -757,13 +757,73 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+     if (data.type === 'startup-progress') startupProgress();
+   });
+   async function loadRuntimeAsset(name) {
+-    const response = await fetch(new URL(name, base), {signal});
+-    if (!response.ok) throw new Error(`Runtime download failed: ${response.status} ${name}`);
+-    startupProgress();
+-    const body = response.body.pipeThrough(new TransformStream({transform(chunk, controller) {
+-      startupProgress();
+-      controller.enqueue(chunk);
+-    }}));
++    const urls = [...new Set([new URL(name, base).href, new URL(name, options.assetBase || base).href])];
++    const preferenceKey = 'easyrpg-runtime-asset:' + base + name;
++    if (urls.length > 1) {
++      try { if (sessionStorage.getItem(preferenceKey) === urls[1]) urls.reverse(); } catch {}
++    }
++    const controllers = urls.map(() => new AbortController());
++    const probe = async index => {
++      try {
++        const response = await fetch(urls[index], {
++          signal: AbortSignal.any([signal, controllers[index].signal]), credentials: 'omit',
++        });
++        if (!response.ok) throw new Error('Runtime download failed: ' + response.status + ' ' + urls[index]);
++        startupProgress();
++        const reader = response.body.getReader();
++        const prefix = [];
++        let size = 0;
++        // Compare actual transfer progress, not merely a fast response header.
++        while (urls.length > 1 && size < 512 * 1024) {
++          const {done, value} = await reader.read();
++          if (done) break;
++          prefix.push(value);
++          size += value.byteLength;
++          startupProgress();
++        }
++        return {index, response, reader, prefix};
++      } catch (error) {
++        controllers[index].abort(error);
++        throw error;
++      }
++    };
++    let delayedStart, selected;
++    try {
++      const primary = probe(0);
++      selected = urls.length === 1 ? await primary : await Promise.any([
++        primary,
++        new Promise((resolve, reject) => {
++          delayedStart = setTimeout(() => probe(1).then(resolve, reject), 700);
++        }),
++      ]);
++    } catch (error) {
++      signal.throwIfAborted();
++      if (error instanceof AggregateError)
++        throw new Error(error.errors.map(value => value?.message || String(value)).join('; '));
++      throw error;
++    } finally {
++      clearTimeout(delayedStart);
++      controllers.forEach((controller, index) => { if (index !== selected?.index) controller.abort(); });
++    }
++    const {index, response, reader, prefix} = selected;
++    const body = new ReadableStream({
++      start(controller) { for (const chunk of prefix) controller.enqueue(chunk); },
++      async pull(controller) {
++        try {
++          const {done, value} = await reader.read();
++          if (done) {
++            if (urls.length > 1) {
++              try { sessionStorage.setItem(preferenceKey, urls[index]); } catch {}
++            }
++            controller.close();
++          } else {
++            startupProgress();
++            controller.enqueue(value);
++          }
++        } catch (error) { controller.error(error); controllers[index].abort(error); }
++      },
++      async cancel(reason) { controllers[index].abort(reason); await reader.cancel(reason).catch(() => {}); },
++    });
+     return new Response(body, {headers: {'Content-Type': response.headers.get('Content-Type') || 'application/octet-stream'}});
+   }
+   startStartupTimer();

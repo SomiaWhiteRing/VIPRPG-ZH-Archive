@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { chromium } from "playwright";
@@ -18,6 +18,9 @@ const reportPath = resolve(values.report);
 mkdirSync(dirname(reportPath), { recursive: true });
 const errors = [], assetResponses = [];
 const report = { passed: false, url: `${deploymentOrigins[values.env]}/play/${workId}` };
+const runtime = JSON.parse(readFileSync("lib/archive/easyrpg-runtime.json", "utf8"));
+const assetSizes = Object.fromEntries(["wasm", "data"].map(extension => [extension,
+  statSync(`public/play/runtime/easyrpg/${runtime.version}/easyrpg-player.${extension}`).size]));
 const browser = await chromium.launch({
   headless: true,
   ...(values["disable-quic"] ? { args: ["--disable-quic"] } : {}),
@@ -48,8 +51,15 @@ async function launch() {
         transferBytes: resource.transferSize, encodedBytes: resource.encodedBodySize,
         decodedBytes: resource.decodedBodySize, protocol: resource.nextHopProtocol }));
   });
-  assert.equal(resources.length, 2, "Each engine asset is requested once");
-  return { durationMs, resources };
+  const completedResources = resources.filter(resource => {
+    const extension = /\.(wasm|data)$/.exec(resource.url)?.[1];
+    return resource.decodedBytes === assetSizes[extension];
+  });
+  for (const extension of ["wasm", "data"])
+    assert.equal(completedResources.filter(resource => resource.url.endsWith(`.${extension}`)).length, 1,
+      `One complete ${extension} download supplies both Workers`);
+  assert.ok(resources.length <= 4, "At most one bounded alternate probe per asset");
+  return { durationMs, resources, completedResources };
 }
 
 async function stop() {
@@ -72,7 +82,9 @@ try {
   report.warm = await launch();
   await stop();
   assert.deepEqual(errors, [], "Hydration and player startup have no uncaught errors");
-  assert.ok(assetResponses.every(response => response.status === 200), "Runtime responses succeed");
+  assert.ok([...report.cold.completedResources, ...report.warm.completedResources].every(resource =>
+    assetResponses.some(response => response.url === resource.url && response.status === 200)), "Selected runtime responses succeed");
+  assert.equal(report.warm.resources.length, 2, "Warm startup uses the remembered successful routes");
   assert.ok(report.warm.resources.every(resource => resource.transferBytes === 0), "Warm startup reuses immutable assets");
   report.passed = true;
 } catch (error) {

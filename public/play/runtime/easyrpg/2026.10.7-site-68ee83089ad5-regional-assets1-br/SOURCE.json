@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "65523a3a52466b9f669f69dbe405739f3ce29768",
-  "version": "2026.10.7-site-68ee83089ad5-startup-assets2-br",
+  "version": "2026.10.7-site-68ee83089ad5-regional-assets1-br",
   "build": "local-docker-kai-2026.10.7-skip-logo-shared-assets-20261024",
   "artifact": "kai-2026.10.7-startup-assets-web.zip",
   "archiveSha256": "68ee83089ad5cc575af54a66fb439cd913c51a90fd5fa190d01013f2a4a80068",
@@ -61,12 +61,19 @@
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
       "beforeSha256": "3d9a48b17f27f220afb0b876805324e4742df2902b4d2921b3690f15ad31f9bc",
       "afterSha256": "933fedc474e183c70a1d9724f74065bad2423e331f4b89e99f8305843f7b35f1"
+    },
+    {
+      "file": "player-host.js",
+      "path": "scripts/runtime-patches/startup-regional-assets.patch",
+      "sha256": "38f5560131a7fe9302a1ad07aae715cbe4f6df2a4cfd75808b66e89e911e5be6",
+      "beforeSha256": "933fedc474e183c70a1d9724f74065bad2423e331f4b89e99f8305843f7b35f1",
+      "afterSha256": "4563c302a3aad540660fde43997c17791c496732a449b97f5f8a84c8433dd8bd"
     }
   ],
   "files": {
     "index.js": {
-      "size": 42633,
-      "sha256": "933fedc474e183c70a1d9724f74065bad2423e331f4b89e99f8305843f7b35f1"
+      "size": 45020,
+      "sha256": "4563c302a3aad540660fde43997c17791c496732a449b97f5f8a84c8433dd8bd"
     },
     "easyrpg-player.js": {
       "size": 150372,

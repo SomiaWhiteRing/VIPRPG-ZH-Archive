@@ -56,3 +56,11 @@
 回退使用同一个正式 Worker：先删除本次主站 CNAME，再恢复 `viprpg.org` managed Custom Domain；DNS 和 HTTPS 核验正常后删除这条简单 Route，并将正式配置 secret 的 routes 恢复成主站 Custom Domain。无需回滚业务代码或恢复已退休的下载域名。
 
 既有 `npm run deploy:production -- --plan` 仅预览本地候选，`npm run smoke:production` 负责只读 HTTP 核对。所有正式操作遵守项目授权边界。
+
+## 运行包入口的预生产验证
+
+2026-10-25 的只读查询确认 `flatten_all_cnames=false`。使用电信、联通、移动网段作为 ECS 查询时，`cf.090227.xyz` 返回相应运营商的 CNAME 链，而根域名 `viprpg.org` 始终返回同一组普通地址；根域名 flattening 没有保留这次观测中的运营商分流。此结果解释了解析差异，不能单凭 DNS 记录推断实际吞吐。
+
+按本次预生产测试授权，临时创建 `runtime-staging.viprpg.org` 的灰云 CNAME 到 `cf.090227.xyz`，以及 `runtime-staging.viprpg.org/play/runtime/easyrpg/*` 到已核实的现有预生产 Worker 的 Route。没有新建反代 Worker、公开 R2 或维护固定 IP。对应 ECS 查询保留了运营商 CNAME 链，HTTPS 与原运行包响应已核对。测试记录和可撤销的记录／路由 ID 位于本机 `output/startup-hydration-repair/`。
+
+同一份 6,311,434 字节的 Brotli 音色库经 101 个探测节点进行对照，探测上限为 10 秒；电信完整传输由 22/30 提升至 30/30，但联通由 20/30 降为 14/30、移动由 24/29 降为 1/29。因此候选采用客户端按传输进度选择入口，不能全量替换为社区入口，也不能把超时／部分字节的 HTTP 200 当作完整下载。预生产测试域名仅用于该验证；正式域名、Route 及持久配置仍需准备计划并取得对应批准。

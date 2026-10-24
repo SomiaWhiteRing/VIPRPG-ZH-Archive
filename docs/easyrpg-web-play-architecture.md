@@ -281,6 +281,10 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 网站以预生成的 Brotli 11 表示传输引擎和音色库。导入脚本从已校验的原始字节生成 `.wasm.br`／`.data.br`，解压后逐字节核对，并在 `SOURCE.json` 中记录文件与压缩参数。只有两个原有 `.wasm`／`.data` URL 经 `assets.run_worker_first` 进入同一 Worker；处理器按客户端支持选择预压缩表示，通过 `encodeBody: manual`、正确 MIME 与 `Content-Encoding: br` 避免二次压缩，保留版本化 URL、ETag、条件请求及 `Vary: Accept-Encoding`。不接受 Brotli 或带 Range 的请求读取原始文件。浏览器原生解压后，引擎收到的字节与原包完全相同。Android 资源构建不复制 `.br` 表示，继续读取包内原始文件。
 
+预生产页面通过 `runtimeAssetBasePath` 提供保留社区 CNAME 链的运行包入口，当前为 `https://runtime-staging.viprpg.org`；入口绑定到现有预生产 Worker，页面、游戏安装、存档及 Worker 脚本仍沿用原路径。正式站尚未启用此入口。两个公开大资源的响应提供 CORS 与 Resource Timing 授权；其余业务接口没有跨源授权。
+
+宿主的 [startup-regional-assets.patch](../scripts/runtime-patches/startup-regional-assets.patch) 是导入时的未压缩宿主补丁，不改变引擎或音色库字节。首次先请求原入口；700 ms 内尚未读到约 512 KiB 的解压后数据时才开始另一入口的探测，先完成该前缀的请求继续传输，另一请求立即取消。比较实际传输进展，不能只按响应头先后选择线路。完整下载成功后，在当前标签页会话中记住该文件的入口；再次启动直接复用成功入口的浏览器缓存。停止、取消和两个入口均失败时释放所有请求；没有提供不同入口的本地与 Android 调用仍只请求本地原路径。入口的 DNS、路由与配置变更另按正式操作边界审批。
+
 启动的 45 秒超时按无进展时间计算。音频与游戏 Worker 将 Emscripten 的数据下载和初始化状态转发给宿主，持续收到下载进展时重置计时；已就绪、停止中或已关闭的会话不再重置。首次下载运行包和 SoundFont 可以超过 45 秒，停滞的启动仍会超时。相关源码修改见 [startup-download-progress.patch](../scripts/runtime-patches/startup-download-progress.patch)，升级时与跳过 Logo 补丁一同应用并随包分发。
 
 导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont、Player、拼音词库与解码器随包许可证的摘要，只将入口文件重命名为 `index.js`。默认保留构建字节；如运行时配置声明 `patches`，仅对未压缩的 `player-host.js` 应用仓库内固定的统一差异补丁，并校验补丁文件、输入和输出的 SHA-256。导入需要 Git；补丁及摘要同时写入 `SOURCE.json`，上游 ZIP 摘要仍指向原始构建包。不会修改压缩后的生成代码或 WASM，也不依赖联网下载许可证。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。
