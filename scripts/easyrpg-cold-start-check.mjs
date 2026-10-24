@@ -9,6 +9,7 @@ const { values } = parseArgs({ options: {
   env: { type: "string", default: "staging" },
   "work-id": { type: "string", default: "1" },
   report: { type: "string", default: "output/easyrpg/cold-start.json" },
+  "disable-quic": { type: "boolean", default: false },
 } });
 assert.ok(Object.hasOwn(deploymentOrigins, values.env), "Unknown environment");
 const workId = Number(values["work-id"]);
@@ -19,6 +20,7 @@ const errors = [], assetResponses = [];
 const report = { passed: false, url: `${deploymentOrigins[values.env]}/play/${workId}` };
 const browser = await chromium.launch({
   headless: true,
+  ...(values["disable-quic"] ? { args: ["--disable-quic"] } : {}),
   ...(process.env.PLAYWRIGHT_CHROMIUM_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHROMIUM_CHANNEL } : {}),
   ...(process.env.HTTPS_PROXY ? { proxy: { server: process.env.HTTPS_PROXY } } : {}),
 });

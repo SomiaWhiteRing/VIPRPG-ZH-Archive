@@ -49,12 +49,16 @@ jobs:
         run: node scripts/easyrpg-cold-start-check.mjs --env staging --work-id 1
         env:
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
+      - name: Compare staging startup over HTTP/2
+        run: node scripts/easyrpg-cold-start-check.mjs --env staging --work-id 1 --disable-quic --report output/easyrpg/cold-start-http2.json
+        env:
+          PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
       - name: Preserve runtime diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: runtime-cold-start
-          path: output/easyrpg/cold-start.json*
+          path: output/easyrpg/cold-start*
           retention-days: 7
   verify:
     runs-on: ubuntu-latest
