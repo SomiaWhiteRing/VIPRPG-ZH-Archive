@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "65523a3a52466b9f669f69dbe405739f3ce29768",
-  "version": "2026.10.7-site-68ee83089ad5-startup-assets1",
+  "version": "2026.10.7-site-68ee83089ad5-startup-assets2-br",
   "build": "local-docker-kai-2026.10.7-skip-logo-shared-assets-20261024",
   "artifact": "kai-2026.10.7-startup-assets-web.zip",
   "archiveSha256": "68ee83089ad5cc575af54a66fb439cd913c51a90fd5fa190d01013f2a4a80068",
@@ -38,6 +38,14 @@
     "name": "rime-pinyin-simp",
     "source": "https://github.com/rime/rime-pinyin-simp",
     "licenseSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  "delivery": {
+    "encoding": "br",
+    "quality": 11,
+    "assets": [
+      "easyrpg-player.wasm",
+      "easyrpg-player.data"
+    ]
   },
   "patches": [
     {
@@ -119,6 +127,14 @@
     "LICENSE-rime-pinyin-simp.txt": {
       "size": 11358,
       "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "easyrpg-player.wasm.br": {
+      "size": 4033726,
+      "sha256": "8b388c8239cb7a11a77f32d7dfbaa32e0a4ce3929fb990e7e70813c4a2d04d6b"
+    },
+    "easyrpg-player.data.br": {
+      "size": 6311434,
+      "sha256": "dfeef2a7cca1aee072450b553c6e372c90c4f4c8b2149e95899b6b4bb634f702"
     },
     "skip-logo.patch": {
       "size": 2262,

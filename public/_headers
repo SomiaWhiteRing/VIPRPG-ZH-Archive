@@ -7,6 +7,10 @@
 /play/runtime/easyrpg/*.wasm
   Content-Type: application/wasm
 
+/play/runtime/easyrpg/*.br
+  Content-Type: application/octet-stream
+  Cache-Control: no-transform
+
 /play/player
   Cache-Control: no-store
 

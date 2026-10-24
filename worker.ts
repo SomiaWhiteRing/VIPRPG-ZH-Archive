@@ -5,6 +5,7 @@ import { createRuntime } from "./app/.server/runtime";
 import type { AppRuntime } from "./app/.server/runtime";
 import { runtimeContext } from "./app/.server/router-context";
 import { maybeHandleArchiveDownload } from "./worker/archive-download.mjs";
+import { maybeHandleEasyRpgAsset } from "./worker/easyrpg-assets";
 import { runScheduledArchiveGc } from "./worker/archive-gc.mjs";
 import { cleanupCommentImages } from "./app/.server/comments/image-cleanup";
 import { drainViewMerges } from "./app/.server/views/service";
@@ -90,7 +91,9 @@ app.all("*", async (c) => {
 });
 
 export default {
-  fetch: app.fetch,
+  async fetch(request, env, ctx) {
+    return (await maybeHandleEasyRpgAsset(request, env.ASSETS)) ?? app.fetch(request, env, ctx);
+  },
   scheduled(controller, env, ctx) {
     if (controller.cron === DAILY_AUDIT_CRON) {
       ctx.waitUntil(runScheduledAuditReports(env.DB, controller.scheduledTime));

@@ -279,6 +279,8 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 宿主并行获取 WASM、SoundFont 数据和 AudioWorklet；WASM 只编译一次，将编译后的 `WebAssembly.Module` 及预载数据传给音频和游戏 Worker。两端通过 Emscripten 的 `instantiateWasm`／`getPreloadedPackage` 使用这份启动资源，各保留独立的引擎内存，不再分别下载 WASM 与数据文件。资源下载随会话中止，传输字节进展同样重置启动的无进展计时。该实现不需要 SharedArrayBuffer 或跨源隔离。相关源码修改见 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)。
 
+网站以预生成的 Brotli 11 表示传输引擎和音色库。导入脚本从已校验的原始字节生成 `.wasm.br`／`.data.br`，解压后逐字节核对，并在 `SOURCE.json` 中记录文件与压缩参数。只有两个原有 `.wasm`／`.data` URL 经 `assets.run_worker_first` 进入同一 Worker；处理器按客户端支持选择预压缩表示，通过 `encodeBody: manual`、正确 MIME 与 `Content-Encoding: br` 避免二次压缩，保留版本化 URL、ETag、条件请求及 `Vary: Accept-Encoding`。不接受 Brotli 或带 Range 的请求读取原始文件。浏览器原生解压后，引擎收到的字节与原包完全相同。Android 资源构建不复制 `.br` 表示，继续读取包内原始文件。
+
 启动的 45 秒超时按无进展时间计算。音频与游戏 Worker 将 Emscripten 的数据下载和初始化状态转发给宿主，持续收到下载进展时重置计时；已就绪、停止中或已关闭的会话不再重置。首次下载运行包和 SoundFont 可以超过 45 秒，停滞的启动仍会超时。相关源码修改见 [startup-download-progress.patch](../scripts/runtime-patches/startup-download-progress.patch)，升级时与跳过 Logo 补丁一同应用并随包分发。
 
 导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont、Player、拼音词库与解码器随包许可证的摘要，只将入口文件重命名为 `index.js`。默认保留构建字节；如运行时配置声明 `patches`，仅对未压缩的 `player-host.js` 应用仓库内固定的统一差异补丁，并校验补丁文件、输入和输出的 SHA-256。导入需要 Git；补丁及摘要同时写入 `SOURCE.json`，上游 ZIP 摘要仍指向原始构建包。不会修改压缩后的生成代码或 WASM，也不依赖联网下载许可证。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。

@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { unzipSync } from "fflate";
+import { brotliCompressSync, brotliDecompressSync, constants } from "node:zlib";
 import runtime from "../lib/archive/easyrpg-runtime.json" with { type: "json" };
 
 const { revision, version, build, archiveSha256, soundfontSha256, licenseSha256 } = runtime;
@@ -78,6 +79,17 @@ const output = {
   "index.js": files["player-host.js"],
   ...Object.fromEntries(runtimeFiles.map(name => [name, files[name]])),
 };
+// Serve precompressed representations through the canonical URLs. Keep the
+// original files for Android's local asset server, which serves unencoded bytes.
+const brotliAssets = ["easyrpg-player.wasm", "easyrpg-player.data"];
+for (const name of brotliAssets) {
+  const compressed = brotliCompressSync(output[name], {
+    params: { [constants.BROTLI_PARAM_QUALITY]: 11 },
+  });
+  if (!brotliDecompressSync(compressed).equals(Buffer.from(output[name])))
+    throw new Error(`Brotli representation differs from the original: ${name}`);
+  output[`${name}.br`] = compressed;
+}
 // Ship the verified source changes alongside locally rebuilt engine binaries.
 const sourcePatches = runtime.sourcePatches ?? [];
 for (const patch of sourcePatches) {
@@ -108,6 +120,7 @@ const source =
       buildscriptsRevision: runtime.buildscriptsRevision ?? null,
       movieDecoder: runtime.movieDecoder,
       pinyinDictionary: runtime.pinyinDictionary,
+      delivery: { encoding: "br", quality: 11, assets: brotliAssets },
       patches,
       files: Object.fromEntries(
         Object.entries(output).map(([name, bytes]) => [name, { size: bytes.length, sha256: sha256(bytes) }]),

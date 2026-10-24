@@ -13,7 +13,10 @@ const target = resolve(root, "android/build-assets/play");
 await rm(target, { recursive: true, force: true });
 await mkdir(resolve(target, "runtime/easyrpg"), { recursive: true });
 await writeFile(resolve(target, "player.html"), await transformStyleHtml(await readFile(resolve(source, "player.html"), "utf8")));
-await cp(resolve(source, "runtime/easyrpg", version), resolve(target, "runtime/easyrpg", version), { recursive: true, force: true });
+await cp(resolve(source, "runtime/easyrpg", version), resolve(target, "runtime/easyrpg", version), {
+  recursive: true, force: true,
+  filter: (path) => !path.endsWith(".br"),
+});
 await adaptAndroidRuntime(root, resolve(target, "runtime/easyrpg", version));
 await cp(resolve(root, "public/icon/windI.png"), resolve(root, "android/build-assets/offline/icon.png"));
 
