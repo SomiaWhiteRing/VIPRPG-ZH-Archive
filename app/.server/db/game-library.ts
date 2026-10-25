@@ -1370,7 +1370,6 @@ export async function createExternalWork(
         })),
         source: "user",
         actorUserId: input.user.id,
-        requirePortrait: true,
       })),
       ...workTagStatements(database, workId, tags, "uploader"),
       database

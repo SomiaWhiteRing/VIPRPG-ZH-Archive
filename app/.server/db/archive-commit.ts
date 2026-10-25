@@ -1418,7 +1418,6 @@ async function finalizeArchiveCommit(
         credits: characters,
         source: input.metadata.admin ? "admin" : "user",
         actorUserId: input.user.id,
-        requirePortrait: !input.metadata.admin,
       })),
     );
 

@@ -12,7 +12,6 @@ export type WorkCharacterCreditInput = CharacterCreditSelection & {
 
 type ResolvedCharacter = {
   id: number;
-  has_default_portrait: number;
 };
 
 type FaceSheetChoice = {
@@ -87,7 +86,6 @@ export async function prepareWorkCharacterStatements(input: {
   credits: WorkCharacterCreditInput[];
   source: "user" | "admin";
   actorUserId: number;
-  requirePortrait?: boolean;
 }): Promise<D1PreparedStatement[]> {
   const credits = input.credits.map((credit) => ({
     ...credit,
@@ -133,16 +131,6 @@ export async function prepareWorkCharacterStatements(input: {
     const character = existingRows[index];
     const sheet = validatePortraitChoice(credit, character, sheets, input);
     validateFaceSheetBindings(credit, character, sheets, input);
-    if (
-      input.requirePortrait &&
-      !credit.portrait &&
-      character.has_default_portrait !== 1
-    ) {
-      throw new HttpError(
-        400,
-        `角色“${credit.selection.originalName}”需要选择头像`,
-      );
-    }
     if (credit.portrait && sheet) {
       addPortraitReferenceStatements(
         setupStatements,
@@ -176,13 +164,6 @@ export async function prepareWorkCharacterStatements(input: {
     const originalKey = characterNameKey(selection.originalName);
     const sheet = validatePortraitChoice(credit, existing, sheets, input);
     validateFaceSheetBindings(credit, existing, sheets, input);
-    if (
-      input.requirePortrait &&
-      !credit.portrait &&
-      existing?.has_default_portrait !== 1
-    ) {
-      throw new HttpError(400, `角色“${selection.originalName}”需要选择头像`);
-    }
 
     if (existing) {
       if (credit.portrait && sheet) {
@@ -300,9 +281,7 @@ async function resolveExistingCharacters(
     credits.map((credit) =>
       database
         .prepare(
-          `SELECT c.id,
-                  EXISTS(SELECT 1 FROM character_default_portraits cdp WHERE cdp.character_id=c.id)
-                    AS has_default_portrait
+          `SELECT c.id
            FROM characters c WHERE c.id=? LIMIT 1`,
         )
         .bind(credit.selection.characterId),
@@ -334,9 +313,7 @@ async function resolveNewCharacters(
       const originalKey = characterNameKey(credit.selection.originalName);
       return database
         .prepare(
-          `SELECT DISTINCT c.id,
-                  EXISTS(SELECT 1 FROM character_default_portraits cdp WHERE cdp.character_id=c.id)
-                    AS has_default_portrait
+          `SELECT DISTINCT c.id
            FROM characters c
            WHERE c.original_name_key=?
               OR EXISTS(

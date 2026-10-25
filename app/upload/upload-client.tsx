@@ -594,25 +594,6 @@ export function UploadClient({
       document.getElementById("upload-release-date")?.focus();
       return;
     }
-    const characterWithoutPortrait = form.characters.find((credit) => {
-      const selection = credit.selection;
-      if (adminOptions && selection.kind === "existing") return false;
-      if (credit.portrait) return false;
-      return (
-        selection.kind === "new" ||
-        !suggestions.characters.find(
-          (item) => item.id === selection.characterId,
-        )?.defaultPortrait
-      );
-    });
-    if (characterWithoutPortrait) {
-      setSubmitError(
-        `角色“${characterWithoutPortrait.selection.originalName}”还没有头像，请从素材表选择或上传脸图素材表。`,
-      );
-      document.getElementById("upload-characters")?.focus();
-      return;
-    }
-
     if (!archiveMode) {
       if (!initialWork && !imageSelections.cover) {
         setSubmitError("新建外链作品必须选择封面图。");

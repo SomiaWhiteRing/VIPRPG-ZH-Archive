@@ -286,6 +286,7 @@ export function WorkMetadataFields({
           label="简介"
         >
           <Textarea
+            className="min-h-32 resize-y overflow-auto"
             disabled={disabled}
             id="upload-description"
             onChange={(event) =>
