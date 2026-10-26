@@ -8,7 +8,7 @@ import { isSharedPlayerPath } from "../lib/archive/shared-player.ts";
 import {
   shouldSkipWebPlayLocalWrite,
 } from "../lib/archive/web-play-local-policy.ts";
-import { webPlayDownloadProfile, legacyWebPlayDownloadProfile, shouldSkipWebPlayDownloadFile } from "../lib/archive/web-play-download-policy.ts";
+import { webPlayDownloadProfile, legacyWebPlayDownloadProfile, downloadWithoutPlayerProfile, shouldSkipWebPlayDownloadFile } from "../lib/archive/web-play-download-policy.ts";
 import { hotDownloadCache, readDownloadCache, createCachedDownloadStream } from "./download-cache.mjs";
 import { loadRequestSession } from "../app/.server/auth/request-auth.ts";
 import { workReadCondition } from "../app/.server/db/work-visibility.ts";
@@ -78,7 +78,7 @@ async function handleArchiveDownload(request, env, ctx, access) {
   }
 
   const profile = match[2] === "download" ? url.searchParams.get("profile") : null;
-  if (profile !== null && profile !== webPlayDownloadProfile && profile !== legacyWebPlayDownloadProfile) {
+  if (profile !== null && profile !== webPlayDownloadProfile && profile !== legacyWebPlayDownloadProfile && profile !== downloadWithoutPlayerProfile) {
     return new Response(request.method === "HEAD" ? null : "Unsupported download profile", {
       status: 400,
       headers: { "Cache-Control": "no-store" },
@@ -466,11 +466,14 @@ async function downloadLayout(request, bucket, record, profile, player, ctx, key
     cache.layouts.set(key, layout);
   } else {
     const manifest = await loadManifest(bucket, record.manifestSha256);
-    const files = profile === webPlayDownloadProfile
+    const downloadableFiles = [...manifest.files, ...(manifest.extras ?? [])];
+    const files = profile === downloadWithoutPlayerProfile
+      ? downloadableFiles.filter((file) => !shouldSkipWebPlayDownloadFile(file.path))
+      : profile === webPlayDownloadProfile
       ? manifest.files.filter((file) => !shouldSkipWebPlayDownloadFile(file.path))
       : profile === legacyWebPlayDownloadProfile
         ? manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path))
-        : manifest.files;
+        : downloadableFiles;
     const entries = buildZipEntries(files);
     if (player) {
       if (files.some((file) => isSharedPlayerPath(file.path))) throw new Error("Shared player path conflicts with archive files");

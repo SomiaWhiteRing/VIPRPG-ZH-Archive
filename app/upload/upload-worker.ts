@@ -60,6 +60,7 @@ type ScanFileResult =
 type UploadRuntime = {
   task: BrowserUploadTaskSnapshot;
   preparedSource: PreparedArchiveSource | null;
+  extraSources?: SourceFile[];
   formDraft?: UploadFormDraft;
   metadata: ArchiveCommitMetadata | null;
   metadataBlobs: MetadataBlobUpload[];
@@ -102,6 +103,15 @@ const hashByteBudgetBytes = 256 * 1024 * 1024;
 
 self.onmessage = (event: MessageEvent<UploadWorkerInput>) => {
   const message = event.data;
+
+  if (message.type === "select_extras") {
+    void selectExtras(message);
+    return;
+  }
+  if (message.type === "extras_source") {
+    void reloadExtraSource(message);
+    return;
+  }
 
   if (message.type === "save_form_draft") {
     void saveFormDraft(message);
@@ -185,7 +195,7 @@ async function startSource(
         throw new Error("共享 Kai 播放器不可用，请先在“链接”中推荐 Windows EXE，或关闭共享播放器选项。");
       }
     }
-    const scan = await scanAndHash(task, sourceFiles, message.cleanupResources, message.useSharedPlayer, message.checkMissingResources, message.includeSaves);
+    const scan = await scanAndHash(task, sourceFiles, message.useSharedPlayer, message.checkMissingResources);
     runtime.task = task = scan.task;
     await waitForCancellation(runtime);
     const easyRpg = await detectEasyRpgConfig(sourceFiles.map(file => ({
@@ -198,7 +208,7 @@ async function startSource(
       // Choose covers only after cleanup; title and face-sheet metadata still use the original source.
       const prefill = await inspectUploadSource(
         sourceFiles,
-        message.cleanupResources ? scan.includedFiles.map((file) => file.source) : sourceFiles,
+        scan.includedFiles.map((file) => file.source),
       );
       prefill.hasManiacPatch ||= easyRpg.patches.maniac > 0;
       prefill.hasUltimateRuntime ||= easyRpg.engine?.startsWith("rpg2k3") ?? false;
@@ -315,6 +325,9 @@ async function startSource(
       },
       stats: task.stats,
     };
+    const includedPaths = new Set(preparedSource.files.map(file => file.path.normalize("NFC").toLowerCase()));
+    runtime.extraSources = sourceFiles.filter(file => !includedPaths.has(file.path.normalize("NFC").toLowerCase()) && !isSharedPlayerPath(file.path));
+    publishExtraCandidates(runtime);
     await markSourceReady(task.serverImportJobId, preparedSource);
     await waitForCancellation(runtime);
     runtime.preparedSource = preparedSource;
@@ -330,6 +343,57 @@ async function startSource(
     if (error instanceof RuntimeSettledError || runtime.settled) return;
     if (runtime.cancelAttempt && (await runtime.cancelAttempt)) return;
     await failRuntime(runtime, error);
+  }
+}
+
+function publishExtraCandidates(runtime: UploadRuntime): void {
+  const candidates = new Map([...(runtime.task.extras ?? []), ...(runtime.preparedSource?.extras ?? [])].map(file => [file.path, { path: file.path, size: file.size }]));
+  for (const file of runtime.extraSources ?? []) candidates.set(file.path, { path: file.path, size: file.size });
+  self.postMessage({ type: "extra_candidates", candidates: [...candidates.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    available: runtime.extraSources !== undefined } satisfies UploadWorkerOutput);
+}
+
+async function reloadExtraSource(message: Extract<UploadWorkerInput, { type: "extras_source" }>): Promise<void> {
+  const runtime = runtimeFor(message.localTaskId);
+  if (!runtime?.preparedSource || runtime.task.commitStarted || runtime.task.extrasBusy || runtime.settled) return;
+  runtime.task = emitTask({ ...runtime.task, extrasBusy: true, extrasError: null }, true);
+  try {
+    const files = await enumerateUploadSourceFiles(message.files, message.sourceKind);
+    await waitForCancellation(runtime);
+    const included = new Set(runtime.preparedSource.files.map(file => file.path.normalize("NFC").toLowerCase()));
+    runtime.extraSources = files.filter(file => !included.has(file.path.normalize("NFC").toLowerCase()) && !isSharedPlayerPath(file.path));
+    runtime.task = { ...runtime.task, extrasError: extraSourceError(runtime) };
+    publishExtraCandidates(runtime);
+  } catch (error) {
+    if (runtime.settled) return;
+    runtime.task = { ...runtime.task, extrasError: error instanceof Error ? error.message : "无法读取附赠文件" };
+  } finally {
+    if (!runtime.settled) runtime.task = emitTask({ ...runtime.task, extrasBusy: false }, true);
+  }
+}
+
+function extraSourceError(runtime: UploadRuntime): string | null {
+  const missing = runtime.task.extras?.find(file =>
+    !runtime.preparedSource?.extras?.some(uploaded => uploaded.path === file.path) &&
+    !runtime.extraSources?.some(source => source.path === file.path));
+  return missing ? `请重新选择原始游戏文件以读取追加文件：${missing.path}` : null;
+}
+
+async function selectExtras(message: Extract<UploadWorkerInput, { type: "select_extras" }>): Promise<void> {
+  const runtime = runtimeFor(message.localTaskId);
+  if (!runtime?.preparedSource || runtime.task.commitStarted || runtime.task.extrasBusy || runtime.settled) return;
+  const candidates = new Map([
+    ...(runtime.task.extras ?? []), ...(runtime.preparedSource.extras ?? []), ...(runtime.extraSources ?? []),
+  ].map(file => [file.path, { path: file.path, size: file.size }]));
+  runtime.task = { ...runtime.task, extras: [...new Set(message.paths)].flatMap(path => {
+    const file = candidates.get(path);
+    return file ? [file] : [];
+  }) };
+  runtime.task = emitTask({ ...runtime.task, extrasError: extraSourceError(runtime) }, true);
+  try {
+    await saveRuntimeDraft(runtime);
+  } catch {
+    postMessage({ type: "draft_save_error", message: "追加文件选择保存失败，请勿刷新或关闭页面。" } satisfies UploadWorkerOutput);
   }
 }
 
@@ -365,6 +429,8 @@ async function confirmMetadata(
     !runtime ||
     runtime.cancelAttempt ||
     runtime.task.commitStarted ||
+    runtime.task.extrasBusy ||
+    Boolean(runtime.task.extrasError) ||
     isTerminal(runtime.task.status)
   )
     return;
@@ -419,11 +485,14 @@ async function restoreDraft(draft: UploadRecoveryDraft): Promise<void> {
       sourceReady: true,
       metadataConfirmed: false,
       stats: draft.preparedSource.stats,
+      extras: draft.selectedExtras ?? draft.preparedSource.extras?.map(({ path, size }) => ({ path, size })),
       progress: { ...task.progress, percent: 100 },
     },
     preparedSource: draft.preparedSource,
     formDraft: draft.formDraft,
-    metadata: draft.metadata,
+    // The form restores the saved metadata separately. Resuming a draft must
+    // not reactivate the earlier publish confirmation through emitTask.
+    metadata: null,
     metadataBlobs: draft.metadataBlobs,
     joining: false,
     creatingJob: null,
@@ -432,7 +501,12 @@ async function restoreDraft(draft: UploadRecoveryDraft): Promise<void> {
   };
   currentRuntime = runtime;
   try {
-    runtime.task = emitTask(runtime.task, true);
+    // An interrupted extras update may have reached source-ready before the
+    // browser saved its draft. Restore the exact saved selection before joining.
+    await markSourceReady(draft.serverImportJobId, draft.preparedSource);
+    await waitForCancellation(runtime);
+    runtime.task = emitTask({ ...runtime.task, extrasError: extraSourceError(runtime) }, true);
+    publishExtraCandidates(runtime);
     await tryJoin(runtime);
   } catch (error) {
     if (error instanceof RuntimeSettledError || runtime.settled) return;
@@ -444,6 +518,8 @@ async function restoreDraft(draft: UploadRecoveryDraft): Promise<void> {
 async function tryJoin(runtime: UploadRuntime): Promise<void> {
   if (
     runtime.joining ||
+    runtime.task.extrasBusy ||
+    Boolean(runtime.task.extrasError) ||
     !runtime.preparedSource ||
     !runtime.metadata ||
     !runtime.task.metadataConfirmed ||
@@ -455,7 +531,7 @@ async function tryJoin(runtime: UploadRuntime): Promise<void> {
     return;
   await waitForCancellation(runtime);
   const importJobId = runtime.task.serverImportJobId;
-  const preparedSource = runtime.preparedSource;
+  let preparedSource = runtime.preparedSource;
   const metadata = runtime.metadata;
   runtime.joining = true;
   runtime.task = {
@@ -466,8 +542,35 @@ async function tryJoin(runtime: UploadRuntime): Promise<void> {
   try {
     await markMetadataReady(importJobId);
     await waitForCancellation(runtime);
+    if (runtime.task.extras !== undefined) {
+      const selected = runtime.task.extras;
+      const extras: ArchiveManifestFile[] = [];
+      runtime.task = emitTask({ ...runtime.task, extrasBusy: true, extrasProgress: { completed: 0, total: selected.length } }, true);
+      for (const { path } of selected) {
+        await waitForCancellation(runtime);
+        const existing = preparedSource.extras?.find(file => file.path === path);
+        if (existing) extras.push(existing);
+        else {
+          const file = runtime.extraSources!.find(file => file.path === path)!;
+          runtime.task = emitTask({ ...runtime.task, progress: { percent: 100, currentPath: path } }, true);
+          const bytes = await file.bytes();
+          const sha256 = await sha256Hex(asArrayBufferView(bytes));
+          await uploadBlob({ sha256, size: bytes.byteLength, contentType: "application/octet-stream", source: { ...file, bytes: async () => bytes } }, importJobId);
+          extras.push({ path, pathSortKey: path.toLowerCase(), role: "other", sha256, crc32: crc32(bytes),
+            size: bytes.byteLength, mtimeMs: file.mtimeMs, storage: { kind: "blob", blobSha256: sha256 } });
+        }
+        runtime.task = emitTask({ ...runtime.task, extrasProgress: { completed: extras.length, total: selected.length } }, true);
+      }
+      preparedSource = { ...preparedSource, extras: extras.sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey)) };
+      await markSourceReady(importJobId, preparedSource);
+      await waitForCancellation(runtime);
+      runtime.preparedSource = preparedSource;
+      runtime.task = emitTask({ ...runtime.task, extrasBusy: false, progress: { percent: 100, currentPath: null } }, true);
+      await saveRuntimeDraft(runtime);
+      await markMetadataReady(importJobId);
+    }
     const sourceBlobSha256s = new Set(
-      preparedSource.files.flatMap((file) =>
+      [...preparedSource.files, ...(preparedSource.extras ?? [])].flatMap((file) =>
         file.storage.kind === "blob" ? [file.storage.blobSha256] : [],
       ),
     );
@@ -657,10 +760,8 @@ function terminalTaskFromState(
 async function scanAndHash(
   initialTask: BrowserUploadTaskSnapshot,
   sourceFiles: SourceFile[],
-  cleanupResources: boolean,
   useSharedPlayer: boolean,
   checkMissingResources: boolean,
-  includeSaves: boolean,
 ): Promise<{
   task: BrowserUploadTaskSnapshot;
   includedFiles: IncludedFile[];
@@ -690,7 +791,7 @@ async function scanAndHash(
     hashByteBudgetBytes,
     async (source): Promise<ScanFileResult> => source === player
       ? { kind: "excluded", source, fileType: "shared-player" }
-      : scanOneFile(task.localTaskId, source, includeSaves),
+      : scanOneFile(task.localTaskId, source),
     async (result) => {
       recordResult = recordResult.then(async () => {
         processedFiles += 1;
@@ -728,26 +829,26 @@ async function scanAndHash(
 
   {
     task = emitTask(setPhase(task, "analyzing_resources", 0, null), true);
-    const references = cleanupResources ? new ResourceReferenceScan(includedFiles) : null;
+    const references = new ResourceReferenceScan(includedFiles);
     const ini = includedFiles.find((file) => file.path.toLowerCase() === "rpg_rt.ini");
     const missing = new MissingResourceScan(
       includedFiles, ini && (ini.cachedBytes ?? await ini.source.bytes()), createRtpResolver(includedFiles),
     );
     missingScan = missing;
-    for (let index = 0; index < includedFiles.length && (references?.needsScan || missing?.scanner.needsScan); index++) {
+    for (let index = 0; index < includedFiles.length && (references.needsScan || missing.scanner.needsScan); index++) {
       const file = includedFiles[index];
       if (/\.(?:ldb|lmt|lmu)$/i.test(file.path) || file.path.toLowerCase() === "rpg_rt.ini") {
         assertRuntimeActive(task.localTaskId);
         const bytes = file.cachedBytes ?? await file.source.bytes();
-        references?.consume(file.path, bytes);
-        missing?.scanner.consume(file.path, bytes);
+        references.consume(file.path, bytes);
+        missing.scanner.consume(file.path, bytes);
         task = emitTask(setPhase(task, "analyzing_resources", (index + 1) / includedFiles.length, file.path));
         // Let cancellation messages run even when all core bytes are already cached.
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
     }
-    const resourceCleanup = references?.finish() ?? null;
-    const removed = new Set(resourceCleanup?.excluded.map((file) => file.path));
+    const resourceCleanup = references.finish();
+    const removed = new Set(resourceCleanup.excluded.map((file) => file.path));
     for (const file of includedFiles) {
       if (!removed.has(file.path)) continue;
       includedSize -= file.size;
@@ -813,11 +914,10 @@ async function scanAndHash(
 async function scanOneFile(
   localTaskId: string,
   source: SourceFile,
-  includeSaves: boolean,
 ): Promise<ScanFileResult> {
   assertRuntimeActive(localTaskId);
 
-  const classification = classifyArchivePath(source.path, undefined, includeSaves);
+  const classification = classifyArchivePath(source.path);
 
   if (!classification.included) {
     return {
@@ -918,6 +1018,7 @@ async function buildManifest(
     },
     corePacks: sourceManifest.corePacks,
     files: sourceManifest.files,
+    ...(sourceManifest.extras?.length ? { extras: sourceManifest.extras } : {}),
   };
   const manifestJson = JSON.stringify(manifest);
 
@@ -958,6 +1059,7 @@ function buildSourceManifest(
       },
     ],
     files: source.files,
+    ...(source.extras?.length ? { extras: source.extras } : {}),
   };
 }
 
@@ -1258,6 +1360,7 @@ async function saveRuntimeDraft(runtime: UploadRuntime): Promise<void> {
     serverImportJobId: task.serverImportJobId,
     targetWorkId: task.targetWorkId,
     preparedSource,
+    selectedExtras: task.extras,
     formDraft: runtime.formDraft,
     metadata: runtime.metadata,
     metadataBlobs: runtime.metadataBlobs,

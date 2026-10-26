@@ -43,10 +43,9 @@ const testMode = process.argv[2] ?? "contract";
 const gameIndex = process.argv.indexOf("--game");
 const gamePath = gameIndex >= 0 ? process.argv[gameIndex + 1] : undefined;
 const archiveOnly = process.argv.includes("--archive-only");
-const keepResources = process.argv.includes("--keep-resources");
 const reportIndex = process.argv.indexOf("--report");
 const reportPath = reportIndex >= 0 ? resolve(process.argv[reportIndex + 1]) : null;
-const measurements: Record<string, unknown> = { testedAt: new Date().toISOString(), gamePath, keepResources };
+const measurements: Record<string, unknown> = { testedAt: new Date().toISOString(), gamePath };
 if (gameIndex >= 0)
   assert.ok(
     testMode === "flow" && gamePath,
@@ -76,7 +75,7 @@ const sourceZip = zipSync(sourceFiles, { level: 0 });
 const allowedFiles = Object.entries(sourceFiles).filter(([path]) => classifyArchivePath(path).included);
 const referenceScan = new ResourceReferenceScan(allowedFiles.map(([path, bytes]) => ({ path, size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") })));
 for (const [path, bytes] of allowedFiles) referenceScan.consume(path, bytes);
-const expectedCleanup = keepResources ? null : referenceScan.finish();
+const expectedCleanup = referenceScan.finish();
 const expectedExcluded = new Set(expectedCleanup?.excluded.map((file) => file.path));
 const expectedFiles = Object.fromEntries(allowedFiles.filter(([path]) => !expectedExcluded.has(path)));
 const catalogWorkIds = [101, 102] as const;
@@ -371,36 +370,6 @@ async function run(): Promise<void> {
   const zipInput = page.locator(
     'input[type="file"][accept*=".zip"]',
   );
-  const advancedOptionsButton = page.getByRole("button", { name: "高级选项", exact: true });
-  await advancedOptionsButton.click();
-  const cleanupOption = page.locator("[data-resource-cleanup-option]");
-  const cleanupCheckbox = cleanupOption.getByRole("checkbox");
-  assert.equal(await cleanupCheckbox.isChecked(), true, "resource cleanup defaults on");
-  let unexpectedFileChoosers = 0;
-  const recordChooser = () => { unexpectedFileChoosers++; };
-  page.on("filechooser", recordChooser);
-  await cleanupOption.getByRole("button", { name: "查看说明" }).focus();
-  await page.getByRole("tooltip").waitFor();
-  if (reportPath) {
-    mkdirSync(dirname(reportPath), { recursive: true });
-    await page.screenshot({ path: reportPath.replace(/\.json$/, ".options.png"), fullPage: true });
-  }
-  await page.keyboard.press("Escape");
-  await page.getByRole("tooltip").waitFor({ state: "hidden" });
-  await cleanupOption.locator("label").click();
-  assert.equal(await cleanupCheckbox.isChecked(), false);
-  assert.equal(unexpectedFileChoosers, 0, "option and tooltip never open file chooser");
-  page.off("filechooser", recordChooser);
-  await page.reload({ waitUntil: "networkidle" });
-  await advancedOptionsButton.click();
-  assert.equal(await cleanupCheckbox.isChecked(), false, "disabled preference survives reload");
-  await cleanupCheckbox.check();
-  await page.reload({ waitUntil: "networkidle" });
-  await advancedOptionsButton.click();
-  assert.equal(await cleanupCheckbox.isChecked(), true, "enabled preference survives reload");
-  if (keepResources) await cleanupCheckbox.uncheck();
-  await page.getByRole("button", { name: "关闭高级选项", exact: true }).click();
-  measurements.cleanupPreferenceVerified = true;
   let putCount = 0;
   const countUpload = (request: import("playwright").Request) => {
     if (request.method() === "PUT" && /\/api\/(?:blobs|core-packs)\//.test(request.url())) putCount++;

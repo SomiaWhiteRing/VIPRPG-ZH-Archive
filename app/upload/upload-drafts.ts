@@ -19,7 +19,7 @@ export function sourceObjectReferences(source: PreparedArchiveSource) {
   return {
     blobs: [
       ...new Set(
-        source.files
+        [...source.files, ...(source.extras ?? [])]
           .filter((file) => file.storage.kind === "blob")
           .map((file) => file.sha256),
       ),

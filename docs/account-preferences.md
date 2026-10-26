@@ -48,7 +48,7 @@
 
 ## 下载
 
-附带播放器默认开启。关闭时按钮使用 `buildWebPlayDownloadUrl()`，与在线游玩完全共用 `web-play-v2` 的 URL、缓存键、ETag 和 ZIP 字节。下载 Worker 不读用户偏好或 Cookie，不产生每用户缓存变体。新 profile 只排除根目录 `Player.exe`（不区分大小写），不注入共享播放器。已发布的 `web-play-v1` 保留原过滤语义，支持已有客户端与续传。
+附带播放器默认开启。关闭时按钮使用 `buildDownloadWithoutPlayerUrl()` 的 `download-no-player-v1`，保留附加区，只排除根目录 `Player.exe`（不区分大小写），不注入共享播放器。下载 profile 不产生每用户缓存变体。已发布的 `web-play-v1`、`web-play-v2` 保留原过滤语义及不含附加区的文件范围，支持已有客户端与续传；安装入口继续使用 `web-play-v2`。
 
 本地安装仍按原规则跳过普通 EXE/DLL/TXT，因此不修改已有安装键、存档、安装体积统计或已安装资源。下载体积沿用归档有效载荷口径，不包含 ZIP 头。旧归档可能仍在 manifest 中保存根 Player.exe；`0007_account_preferences.sql` 增加 `embedded_player_size_bytes` 投影，新入库时计算，历史值从不可变 manifest 一次性回填。关闭附带播放器时，卡片、列表、下载按钮和文件信息统一从归档体积减去该值，不使用过滤更多文件的本地安装体积，也不在浏览页面时读取 R2 manifest。
 

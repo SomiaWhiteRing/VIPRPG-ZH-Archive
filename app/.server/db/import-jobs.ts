@@ -305,7 +305,7 @@ export async function markImportJobSourceReady(
       `UPDATE import_jobs
        SET status = 'awaiting_metadata', source_manifest_sha256 = ?,
          updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status IN ('preflighted', 'uploading_source', 'awaiting_metadata')`,
+       WHERE id = ? AND status IN ('preflighted', 'uploading_source', 'awaiting_metadata', 'uploading_metadata')`,
     )
     .bind(sourceManifestSha256, id)
     .run();

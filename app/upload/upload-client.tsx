@@ -1,3 +1,4 @@
+import { ArchiveExtrasPicker } from "./archive-extras-picker";
 import { sha256Hex } from "@/lib/sha256";
 import { requestJson } from "@/lib/ui/api-response";
 import { normalizeWorkGenre } from "@/lib/work-genre";
@@ -43,7 +44,7 @@ import {
   updateTranslationPreference,
 } from "@/app/upload/translation-preference";
 import { useUploadController } from "@/app/upload/upload-controller";
-import { useMissingResourcesPreference, useResourceCleanupPreference, useSharedPlayerPreference } from "@/app/upload/advanced-options-preference";
+import { useMissingResourcesPreference, useSharedPlayerPreference } from "@/app/upload/advanced-options-preference";
 import type {
   BrowserUploadTaskSnapshot,
   MetadataBlobUpload,
@@ -163,14 +164,12 @@ export function UploadClient({
   const canExternalPublish = Boolean(initialWork) ||
     currentUser.permissionKeys.includes("work.external_create");
   const [mode, setMode] = useState<UploadSourceKind>("folder");
-  const [cleanupResources, setCleanupResources] = useResourceCleanupPreference();
   const [sharedPlayerPreference, setSharedPlayerPreference] = useSharedPlayerPreference();
   const [sharedPlayerOverride, setSharedPlayerOverride] = useState<boolean | null>(
     initialWork?.currentArchive?.usesSharedPlayer ?? null,
   );
   const useSharedPlayer = sharedPlayerOverride ?? sharedPlayerPreference;
   const [checkMissingResources, setCheckMissingResources] = useMissingResourcesPreference();
-  const [includeSaves, setIncludeSaves] = useState(false);
 
   function changeSharedPlayer(enabled: boolean) {
     setSharedPlayerOverride(enabled);
@@ -234,7 +233,7 @@ export function UploadClient({
   const uploadResult = upload.task?.result;
   const metadataLocked =
     upload.metadataConfirmed || Boolean(upload.task?.commitStarted);
-  const formDisabled = preparing || metadataLocked;
+  const formDisabled = preparing || metadataLocked || Boolean(upload.task?.extrasBusy);
   const hasGameFiles = Boolean(
     existingArchive ||
       sourceSummary ||
@@ -482,7 +481,7 @@ export function UploadClient({
     setMode(sourceKind);
     setSourceSummary({ name: sourceName, fileCount: files.length, sizeBytes });
     upload.startSource(
-      { sourceKind, sourceName, files, cleanupResources, useSharedPlayer, checkMissingResources, includeSaves, targetWorkId: initialWork?.id ?? null },
+      { sourceKind, sourceName, files, useSharedPlayer, checkMissingResources, targetWorkId: initialWork?.id ?? null },
       (prefill) => prefillSourceMetadata(prefill, canPrefill, generation),
     );
   }
@@ -534,6 +533,7 @@ export function UploadClient({
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     if (event.target !== event.currentTarget) return;
     event.preventDefault();
+    if (upload.task?.extrasBusy || upload.task?.extrasError) return;
     setSubmitError(null);
     setTranslatorError(null);
     setStaffErrorsVisible(true);
@@ -894,15 +894,16 @@ export function UploadClient({
               <section className="p-4 sm:p-5">
                 {archiveMode ? (
                   <ArchiveSourcePicker
+                    additionalActions={!initialWork && upload.task?.sourceReady && !upload.task.commitStarted && !upload.task.result ? (
+                      <ArchiveExtrasPicker task={upload.task} candidates={upload.extraCandidates}
+                        sourceAvailable={upload.extraSourceAvailable} onConfirm={upload.selectExtras}
+                        onReloadSource={upload.reloadExtraSource} />
+                    ) : null}
                     canceling={upload.canceling}
-                    cleanupResources={cleanupResources}
                     checkMissingResources={checkMissingResources}
                     onCheckMissingResourcesChange={setCheckMissingResources}
-                    onCleanupResourcesChange={setCleanupResources}
                     useSharedPlayer={useSharedPlayer}
                     onUseSharedPlayerChange={changeSharedPlayer}
-                    includeSaves={includeSaves}
-                    onIncludeSavesChange={setIncludeSaves}
                     disabled={
                       !canArchiveUpload ||
                       formDisabled ||
@@ -927,6 +928,7 @@ export function UploadClient({
                     sourceSummary={sourceSummary}
                     task={upload.task}
                   />
+
                 ) : (
                   <ExternalSourceSection
                     archiveDisabled={formDisabled || !canArchiveUpload}
@@ -1094,7 +1096,7 @@ export function UploadClient({
                     <Button
                       className="min-h-12 w-full"
                       disabled={
-                        preparing || Boolean(initialWork && !editSourceReady && !canSaveWithoutSource)
+                        preparing || Boolean(upload.task?.extrasBusy || upload.task?.extrasError) || Boolean(archiveMode && upload.active && !upload.task?.sourceReady) || Boolean(initialWork && !editSourceReady && !canSaveWithoutSource)
                       }
                       type="submit"
                       variant="rm2k"

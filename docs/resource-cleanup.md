@@ -1,6 +1,6 @@
 # 上传素材引用清理
 
-上传默认开启“清理未引用素材”，选项位于游戏文件拖拽区，使用 `InfoTooltip` 说明范围、例外、归档影响和恢复方式。用户可在选择游戏文件前关闭。浏览器以 `viprpg.upload.resource-cleanup.v1` 保存布尔选择；未设置时开启，刷新和重开页面后复用选择，同源标签页同步。存储被禁用时仍可在当前页面切换，不阻断上传。已开始和恢复的任务使用自己的清理结果，不受后续偏好变化影响。
+新上传固定清理未引用素材、固定不上传存档到主游戏归档，高级选项不再显示这两个开关，也不再读取 `viprpg.upload.resource-cleanup.v1` 的旧偏好。需要保留的文件在主游戏就绪后通过“追加文件”选择，确认作品资料时再上传，仅随普通下载附带。标准素材目录中的排除文件收纳在默认折叠、没有文件夹图标的“游戏中未引用的素材”区域，包含清理排除素材及同目录下类型不支持的文件；存档单独收纳为“存档文件”区域，其他排除文件独立显示。恢复旧草稿沿用其已准备的主游戏清单，不追溯改写历史归档。
 
 ## 范围
 
@@ -14,13 +14,13 @@
 - 根目录的 `harmony.dll` 和 `ultimate_rt_eb.dll` 属于标准 RPG Maker 2000/2003 运行库，不因其存在放弃清理；其他 DLL 仍按未分析扩展保护。运行库文件本身不属于清理候选。
 - 普通数据库字段、对白、改名、称号和资源文件名按字面值参与素材引用匹配，不因 `@` 或 `$` 前缀保护全部素材。标准 ExFont `$A`～`$Z`、`$a`～`$z`、Maniac ExFont `$[x,y]` 和 EasyRPG 的 `$` 大尺寸角色图文件名均不属于注释脚本。
 - 扩展注释只在注释指令 `12410`／`22410` 中识别，标记必须位于第一个字节：根目录 `dynloader.dll` 对应 `@` DynRPG 命令，`Destiny.dll` 对应 `$` DestinyScript；存在未分析的根目录 `EasyRPG.ini` 时，另识别 `@easyrpg_` 命令。DLL 和扩展配置本身仍保留全部素材，不根据脚本文本猜测加载资源。普通注释或前导空白不被当作脚本；未知指令和字段继续保守保护。[EasyRPG 脚本入口源码](https://github.com/EasyRPG/Player/blob/e68fff4a13a3dd5d40678ae66ee60f85ccb04153/src/game_interpreter.cpp#L2113)、[DynRPG 文档](https://wiki.easyrpg.org/development/technical-details/patches/dynrpg)。
-- 静态分析不能证明任意自定义 EXE、补丁或旧存档的隐式资源需求；需要完整素材时关闭选项。
+- 静态分析不能证明任意自定义 EXE、补丁或旧存档的隐式资源需求；需要把排除素材随下载保留时，可在“追加文件”中选择。
 
-只从本次上传归档中排除素材，不修改本地原文件。下载和在线游玩仍使用同一份归档；需要恢复排除文件时重新选择原游戏并关闭清理。
+只从本次上传归档中排除素材，不修改本地原文件。下载和在线游玩仍使用同一份归档；需要保留排除文件时使用“追加文件”；追加文件不进入在线安装清单。
 
 ## 数据与复核
 
-高级选项中的“检测缺失素材”默认关闭，开启后检查标准资源字段和事件中的静态文件名。检出疑似缺失或检查不完整时，在上传进度下方的文本区域提示，详情与引用来源以红字写入高级选项的清理日志。检测开关独立于清理开关，在选择文件前设置；结果随本地上传任务与恢复草稿保存，不进入服务端 manifest，不阻止上传。按素材目录匹配大小写和支持的扩展名；空名及 `(OFF)` 不告警，普通对白、名称、注释不作为缺失引用。
+高级选项中的“检测缺失素材”默认关闭，开启后检查标准资源字段和事件中的静态文件名。检出疑似缺失或检查不完整时，在上传进度下方的文本区域提示，详情与引用来源以红字写入高级选项的检测日志。检测日志显示疑似缺失项、引用来源、检测不完整／跳过原因，以及播放器替换和 RTP 自动补充记录，不显示未引用素材清理明细。播放器替换和 RTP 补充记录不受缺失检测开关影响。检测开关独立于固定清理流程，在选择文件前设置；结果随本地上传任务与恢复草稿保存，不进入服务端 manifest，不阻止上传。按素材目录匹配大小写和支持的扩展名；空名及 `(OFF)` 不告警，普通对白、名称、注释不作为缺失引用。
 
 上传根目录包含 `accord.dll`（忽略大小写）时，已开启的缺失检测自动跳过，日志记录“检测到Maniac补丁，自动跳过缺失检测”，不更改用户保存的检测偏好。RTP 自动补充独立执行；扩展保护不阻断此只读扫描，遇到未知但可按长度跳过的字段或事件指令后继续读取标准引用。素材清理仍沿用扩展保护，解析损坏及分析预算限制继续生效。上传预填将当前 2000 或普通 2003 引擎自动切换为 2003 Maniac；此识别优先于 `ultimate_rt_eb.dll` 的普通 2003 识别，不读取 DLL 内容。
 
@@ -42,13 +42,12 @@ Maniac 的音效 `11550` 和 BGM `11510` 分别支持已确认的 5／6 参数�
 
 ## 验证与历史对照
 
-既有 `scripts/rtp-cleanup-check.ts` 同时检查 RTP 对照规则和当前全素材规则，包括引用保护、自定义素材、动态/未知结构回退和无效报告。`system-self-check.ts flow` 使用当前生产规则，`--keep-resources` 关闭清理；流程会检查默认开启、标签点击不触发文件选择、InfoTooltip、关闭/开启后的刷新持久化，再执行上传恢复、提交、下载和安装。
+既有 `scripts/rtp-cleanup-check.ts` 同时检查 RTP 对照规则和当前全素材规则，包括引用保护、自定义素材、动态/未知结构回退和无效报告。`system-self-check.ts flow` 使用固定清理规则，执行上传恢复、提交、下载及安装等既有流程，不再操作已移除的清理开关。
 
 ```powershell
 npx tsx scripts/rtp-cleanup-check.ts
 npm run build
 npx tsx scripts/system-self-check.ts flow --game output/resource-cleanup/zen/original.zip --archive-only --report output/resource-cleanup/production/flow-enabled.json
-npx tsx scripts/system-self-check.ts flow --game output/resource-cleanup/zen/original.zip --archive-only --keep-resources --report output/resource-cleanup/production/flow-disabled.json
 ```
 
 2026-09-23 的三组空间实验见 [resource-cleanup-experiment.md](resource-cleanup-experiment.md)；此前 RTP-only 实现和实测记录见 [rtp-cleanup.md](rtp-cleanup.md)。这些是历史成本证据，不代表当前默认策略。

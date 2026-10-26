@@ -4,7 +4,7 @@ import { classifyArchivePath } from "./file-policy";
 export const RESOURCE_CLEANUP_VERSION = "resources-static-v7";
 export type ResourceCleanupReport = ResourceReferenceReport & { version: string };
 
-const mediaDirectories = new Set("backdrop battle battle2 battlecharset battleweapon charset chipset faceset gameover monster movie music panorama picture sound system system2 title".split(" "));
+export const resourceMediaDirectories = new Set("backdrop battle battle2 battlecharset battleweapon charset chipset faceset gameover monster movie music panorama picture sound system system2 title".split(" "));
 const mediaExtension = /\.(?:png|bmp|xyz|jpg|jpeg|gif|wav|mid|midi|mp3|ogg|oga|flac|opus|wma|avi|mpg|mpeg)$/i;
 const normalize = (path: string) => path.normalize("NFC").toLowerCase();
 
@@ -15,7 +15,7 @@ export function isResourceCleanupCandidate(file: Pick<ResourceFile, "path">): bo
   return !/[\\:]/.test(file.path) &&
     ![...file.path].some((char) => char.charCodeAt(0) <= 31 || char.charCodeAt(0) === 127) && parts.length >= 2 &&
     parts.every((part) => part.length > 0 && part !== "." && part !== "..") &&
-    mediaDirectories.has(parts[0].toLowerCase()) && mediaExtension.test(file.path) &&
+    resourceMediaDirectories.has(parts[0].toLowerCase()) && mediaExtension.test(file.path) &&
     classifyArchivePath(file.path).included;
 }
 

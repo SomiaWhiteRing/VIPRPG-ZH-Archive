@@ -154,7 +154,7 @@ export async function commitArchiveImport(
   }
 
   const blobHashes = unique(
-    manifest.files
+    [...manifest.files, ...(manifest.extras ?? [])]
       .filter((file) => file.storage.kind === "blob")
       .map((file) =>
         normalizeSha256(
@@ -289,7 +289,7 @@ export async function commitArchiveImport(
     workId,
     archiveVersionId,
     manifestSha256,
-    fileCount: manifest.files.length,
+    fileCount: manifest.files.length + (manifest.extras?.length ?? 0),
     uniqueBlobCount: blobHashes.length,
     corePackCount: corePackHashes.length,
     translators: await getWorkTranslators(runtime, workId),
@@ -303,7 +303,7 @@ export async function verifyArchiveSourceManifest(
   validateArchiveSourceManifest(manifest);
   await verifySharedPlayerAvailability(runtime, manifest);
   const blobHashes = unique(
-    manifest.files.flatMap((file) =>
+    [...manifest.files, ...(manifest.extras ?? [])].flatMap((file) =>
       file.storage.kind === "blob"
         ? [normalizeSha256(file.storage.blobSha256)]
         : [],
@@ -391,6 +391,7 @@ function sourceManifestFromArchive(
     },
     corePacks: manifest.corePacks,
     files: manifest.files,
+    ...(manifest.extras?.length ? { extras: manifest.extras } : {}),
   };
 }
 
@@ -419,11 +420,11 @@ function stableJson(value: unknown): string {
 }
 
 function validateBlobReferences(
-  manifest: Pick<ArchiveManifest, "files">,
+  manifest: Pick<ArchiveManifest, "files" | "extras">,
   blobs: ReadonlyMap<string, BlobMetadata>,
 ): void {
   const expected = new Map<string, number>();
-  for (const file of manifest.files) {
+  for (const file of [...manifest.files, ...(manifest.extras ?? [])]) {
     if (file.storage.kind !== "blob") continue;
     const sha256 = normalizeSha256(file.storage.blobSha256);
     const previous = expected.get(sha256);
@@ -648,14 +649,15 @@ function validateArchiveSourceManifest(manifest: ArchiveSourceManifest): void {
   }
 
   const paths = new Set<string>();
-  for (const file of manifest.files) {
+  for (const file of [...manifest.files, ...(manifest.extras ?? [])]) {
     validateManifestPath(file.path);
     assertCanonicalSha256(file.sha256, `file hash: ${file.path}`);
     validateCrc32(file.crc32, file.path);
-    if (paths.has(file.path)) {
+    const pathKey = file.path.normalize("NFC").toLowerCase();
+    if (paths.has(pathKey)) {
       throw new Error(`Duplicate file path: ${file.path}`);
     }
-    paths.add(file.path);
+    paths.add(pathKey);
 
     if (file.storage.kind === "blob") {
       assertCanonicalSha256(file.storage.blobSha256, `blob hash: ${file.path}`);
@@ -671,6 +673,13 @@ function validateArchiveSourceManifest(manifest: ArchiveSourceManifest): void {
       validateManifestPath(file.storage.entry);
     }
   }
+
+  for (const file of manifest.extras ?? []) {
+    if (file.storage.kind !== "blob" || isSharedPlayerPath(file.path)) {
+      throw new Error(`附赠内容不能使用核心包或覆盖共享播放器：${file.path}`);
+    }
+  }
+  sumManifestFileSizes([...manifest.files, ...(manifest.extras ?? [])]);
 
   const isBrowserUpload =
     manifest.archiveVersion.sourceType === "browser_folder" ||
@@ -711,7 +720,8 @@ export function parseArchiveSourceManifest(
     !isRecord(value) ||
     !isRecord(value.archiveVersion) ||
     !Array.isArray(value.corePacks) ||
-    !Array.isArray(value.files)
+    !Array.isArray(value.files) ||
+    (value.extras !== undefined && !Array.isArray(value.extras))
   ) {
     throw new HttpError(400, "Source manifest structure is invalid");
   }
@@ -753,7 +763,7 @@ export function parseArchiveSourceManifest(
       throw new HttpError(400, "Source manifest core pack fields are invalid");
     }
   }
-  for (const file of value.files) {
+  for (const file of [...value.files, ...((value.extras ?? []) as unknown[])]) {
     if (
       !isRecord(file) ||
       typeof file.path !== "string" ||
@@ -1585,8 +1595,8 @@ async function insertArchiveVersion(
       manifest.archiveVersion.sourceSize,
       manifest.archiveVersion.excludedFileCount,
       manifest.archiveVersion.excludedSize,
-      manifest.files.length,
-      manifest.archiveVersion.includedSize,
+      manifest.files.length + (manifest.extras?.length ?? 0),
+      manifest.archiveVersion.includedSize + sumManifestFileSizes(manifest.extras ?? []),
       input.uniqueBlobSizeBytes,
       manifest.corePacks.length,
       input.corePackSizeBytes,
@@ -1680,7 +1690,7 @@ function sumUniqueBlobBytes(manifest: ArchiveManifest): number {
   const seen = new Set<string>();
   let total = 0;
 
-  for (const file of manifest.files) {
+  for (const file of [...manifest.files, ...(manifest.extras ?? [])]) {
     if (file.storage.kind !== "blob") {
       continue;
     }

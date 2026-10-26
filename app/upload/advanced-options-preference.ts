@@ -48,6 +48,5 @@ function createBooleanPreference(storageKey: string, defaultValue: boolean) {
   };
 }
 
-export const useResourceCleanupPreference = createBooleanPreference("viprpg.upload.resource-cleanup.v1", true);
 export const useMissingResourcesPreference = createBooleanPreference("viprpg.upload.missing-resources.v1", false);
 export const useSharedPlayerPreference = createBooleanPreference("viprpg.upload.shared-player.v1", true);

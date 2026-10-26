@@ -1,5 +1,5 @@
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
-import { webPlayDownloadProfile } from "@/lib/archive/web-play-download-policy";
+import { webPlayDownloadProfile, downloadWithoutPlayerProfile } from "@/lib/archive/web-play-download-policy";
 import easyRpgRuntime from "@/lib/archive/easyrpg-runtime.json";
 import easyRpgDelivery from "@/lib/archive/easyrpg-delivery.json";
 
@@ -20,6 +20,10 @@ export function buildArchiveDownloadUrl(archiveVersionId: number): string {
 
 export function buildWebPlayDownloadUrl(archiveVersionId: number): string {
   return `${buildArchiveDownloadUrl(archiveVersionId)}&profile=${encodeURIComponent(webPlayDownloadProfile)}`;
+}
+
+export function buildDownloadWithoutPlayerUrl(archiveVersionId: number): string {
+  return `${buildArchiveDownloadUrl(archiveVersionId)}&profile=${encodeURIComponent(downloadWithoutPlayerProfile)}`;
 }
 
 export function buildWebPlayKey(input: {

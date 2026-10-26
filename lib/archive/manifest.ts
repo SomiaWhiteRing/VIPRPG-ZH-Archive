@@ -38,6 +38,8 @@ export type ArchiveManifest = {
   };
   corePacks: ArchiveManifestCorePack[];
   files: ArchiveManifestFile[];
+  // Download-only attachments. Main file statistics and installation exclude these.
+  extras?: ArchiveManifestFile[];
 };
 
 export type ArchiveSourceManifest = {
@@ -59,6 +61,7 @@ export type ArchiveSourceManifest = {
   >;
   corePacks: ArchiveManifestCorePack[];
   files: ArchiveManifestFile[];
+  extras?: ArchiveManifestFile[];
 };
 
 export type ArchiveManifestCorePack = {

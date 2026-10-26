@@ -8,6 +8,7 @@ import type {
   BrowserUploadTaskSnapshot,
   MetadataBlobUpload,
   UploadFormDraft,
+  UploadExtraCandidate,
   UploadRecoveryDraft,
   UploadSourceFile,
   UploadSourceKind,
@@ -37,6 +38,8 @@ type ResumeDraftResult =
   | { kind: "unknown"; message: string };
 
 export function useUploadController(accountId: number) {
+  const [extraCandidates, setExtraCandidates] = useState<UploadExtraCandidate[]>([]);
+  const [extraSourceAvailable, setExtraSourceAvailable] = useState(false);
   const [task, setTask] = useState<BrowserUploadTaskSnapshot | null>(null);
   const [drafts, setDrafts] = useState<UploadRecoveryDraft[]>([]);
   const [committingDraftIds, setCommittingDraftIds] = useState<number[]>([]);
@@ -67,12 +70,20 @@ export function useUploadController(accountId: number) {
     onPrefill?: (prefill: UploadSourcePrefill) => void,
   ): Worker {
     if (workerRef.current) throw new Error("当前标签页已有上传任务");
+    setExtraCandidates([]);
+    setExtraSourceAvailable(false);
     const worker = new Worker(new URL("./upload-worker.ts", import.meta.url), {
       type: "module",
     });
     worker.onmessage = (event: MessageEvent<UploadWorkerOutput>) => {
       const message = event.data;
       if (workerRef.current !== worker) return;
+
+      if (message.type === "extra_candidates") {
+        setExtraCandidates(message.candidates);
+        setExtraSourceAvailable(message.available);
+        return;
+      }
 
       if (message.type === "source_prefill") {
         onPrefill?.(message.prefill);
@@ -263,10 +274,8 @@ export function useUploadController(accountId: number) {
   function startSource(
     input: {
       sourceKind: UploadSourceKind;
-      cleanupResources: boolean;
       checkMissingResources: boolean;
       useSharedPlayer: boolean;
-      includeSaves: boolean;
       sourceName: string;
       files: UploadSourceFile[];
       targetWorkId: number | null;
@@ -290,7 +299,7 @@ export function useUploadController(accountId: number) {
     metadata: ArchiveCommitMetadata,
     metadataBlobs: MetadataBlobUpload[],
   ) {
-    if (taskRef.current?.commitStarted) return;
+    if (taskRef.current?.commitStarted || taskRef.current?.extrasBusy || taskRef.current?.extrasError) return;
     const localTaskId =
       taskRef.current?.localTaskId ?? pendingLocalTaskIdRef.current;
     if (!localTaskId || !workerRef.current) return;
@@ -456,6 +465,14 @@ export function useUploadController(accountId: number) {
 
   return {
     task,
+    extraCandidates,
+    extraSourceAvailable,
+    selectExtras: (paths: string[]) => {
+      if (taskRef.current) workerRef.current?.postMessage({ type: "select_extras", localTaskId: taskRef.current.localTaskId, paths } satisfies UploadWorkerInput);
+    },
+    reloadExtraSource: (files: UploadSourceFile[], sourceKind: UploadSourceKind) => {
+      if (taskRef.current) workerRef.current?.postMessage({ type: "extras_source", localTaskId: taskRef.current.localTaskId, files, sourceKind } satisfies UploadWorkerInput);
+    },
     drafts,
     committingDraftIds,
     active,

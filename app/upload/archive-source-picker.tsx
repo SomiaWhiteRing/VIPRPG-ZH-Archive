@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import * as Popover from "@/app/components/ui/popover";
-import { type ChangeEvent, type DragEvent, type RefObject, useId, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, type RefObject, type ReactNode, useId, useRef, useState } from "react";
 
 import type {
   BrowserUploadTaskSnapshot,
@@ -34,14 +34,11 @@ export type ArchiveSourceSummary = {
 
 export function ArchiveSourcePicker({
   canceling,
+  additionalActions,
   checkMissingResources,
   onCheckMissingResourcesChange,
-  cleanupResources,
-  onCleanupResourcesChange,
   useSharedPlayer,
   onUseSharedPlayerChange,
-  includeSaves,
-  onIncludeSavesChange,
   disabled,
   externalDisabled = false,
   existingSource = null,
@@ -57,14 +54,11 @@ export function ArchiveSourcePicker({
   task,
 }: {
   canceling: boolean;
+  additionalActions?: ReactNode;
   checkMissingResources: boolean;
   onCheckMissingResourcesChange: (value: boolean) => void;
-  cleanupResources: boolean;
   useSharedPlayer: boolean;
   onUseSharedPlayerChange: (value: boolean) => void;
-  includeSaves: boolean;
-  onIncludeSavesChange: (value: boolean) => void;
-  onCleanupResourcesChange: (value: boolean) => void;
   disabled: boolean;
   externalDisabled?: boolean;
   existingSource?: ArchiveSourceSummary | null;
@@ -101,18 +95,15 @@ export function ArchiveSourcePicker({
         <ArchiveAdvancedOptions
           checkMissingResources={checkMissingResources}
           onCheckMissingResourcesChange={onCheckMissingResourcesChange}
-          cleanupResources={cleanupResources}
           disabled={disabled}
-          onCleanupResourcesChange={onCleanupResourcesChange}
           onUseSharedPlayerChange={onUseSharedPlayerChange}
           task={sourceSummary ? task : null}
           useSharedPlayer={useSharedPlayer}
-          includeSaves={includeSaves}
-          onIncludeSavesChange={onIncludeSavesChange}
         />
       </header>
       {sourceSummary ? (
         <UploadTaskCard
+          additionalActions={additionalActions}
           canceling={canceling}
           mode={mode}
           onCancel={onCancel}
@@ -241,31 +232,21 @@ export function ArchiveSourcePicker({
 function ArchiveAdvancedOptions({
   checkMissingResources,
   onCheckMissingResourcesChange,
-  cleanupResources,
   disabled,
-  onCleanupResourcesChange,
   onUseSharedPlayerChange,
   task,
   useSharedPlayer,
-  includeSaves,
-  onIncludeSavesChange,
 }: {
   checkMissingResources: boolean;
   onCheckMissingResourcesChange: (value: boolean) => void;
-  cleanupResources: boolean;
   disabled: boolean;
-  onCleanupResourcesChange: (value: boolean) => void;
   onUseSharedPlayerChange: (value: boolean) => void;
   task: BrowserUploadTaskSnapshot | null;
   useSharedPlayer: boolean;
-  includeSaves: boolean;
-  onIncludeSavesChange: (value: boolean) => void;
 }) {
-  const cleanupResourcesId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const sharedPlayerId = useId();
   const missingResourcesId = useId();
-  const includeSavesId = useId();
 
   return (
     <Popover.Root>
@@ -316,16 +297,7 @@ function ArchiveAdvancedOptions({
               <Label className="flex-1 py-1.5" htmlFor={missingResourcesId}>检测缺失素材</Label>
               <InfoTooltip>扫描游戏引用但上传文件中未找到的素材。由于游戏可能在无法正常触发的分歧里引用未实装素材，检测结果仅供参考。</InfoTooltip>
             </div>
-            <div className="flex min-h-7 items-center gap-2" data-resource-cleanup-option>
-              <Checkbox
-                checked={cleanupResources}
-                disabled={disabled}
-                id={cleanupResourcesId}
-                onCheckedChange={(checked) => onCleanupResourcesChange(checked === true)}
-              />
-              <Label className="flex-1 py-1.5" htmlFor={cleanupResourcesId}>清理未引用素材</Label>
-              <InfoTooltip>排除游戏未使用的素材，减小上传与下载体积。</InfoTooltip>
-            </div>
+
             <div className="flex min-h-7 items-center gap-2">
               <Checkbox
                 checked={useSharedPlayer}
@@ -336,83 +308,39 @@ function ArchiveAdvancedOptions({
               <Label className="flex-1 py-1.5" htmlFor={sharedPlayerId}>使用共享EasyRPG</Label>
               <InfoTooltip>移除根目录中的Player.exe，下载时使用最新的EasyRPG Player Kai。</InfoTooltip>
             </div>
-            <div className="flex min-h-7 items-center gap-2">
-              <Checkbox
-                checked={includeSaves}
-                disabled={disabled}
-                id={includeSavesId}
-                onCheckedChange={(checked) => onIncludeSavesChange(checked === true)}
-              />
-              <Label className="flex-1 py-1.5" htmlFor={includeSavesId}>上传存档</Label>
-              <InfoTooltip>保留游戏中的LSD存档，用来应对有的作者把开发室或者章节选择放存档之类的情况。为防止误传，该选项不会默认开启。</InfoTooltip>
-            </div>
+
           </div>
-          <UploadCleanupLog task={task} />
+          <UploadDetectionLog task={task} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
 }
 
-function UploadCleanupLog({ task }: { task: BrowserUploadTaskSnapshot | null }) {
+function UploadDetectionLog({ task }: { task: BrowserUploadTaskSnapshot | null }) {
   const headingId = useId();
-  const cleanup = task?.stats.resourceCleanup;
   const missing = task?.stats.missingResources;
   const sharedPlayer = task?.stats.sharedPlayer;
   const restoredRtpFiles = task?.stats.restoredRtpFiles ?? [];
-  const files = [
-    ...(sharedPlayer ? [{ ...sharedPlayer, reason: "共享播放器" }] : []),
-    ...(cleanup?.excluded.map((file) => ({ ...file, reason: "未引用素材" })) ?? []),
-  ];
-  const excludedSize = files.reduce((sum, file) => sum + file.size, 0);
-  const summary = files.length
-    ? `已排除 ${files.length} 个文件 · 减少 ${formatBytes(excludedSize)}`
-    : cleanup?.status === "no_candidates"
-      ? "未发现可分析的素材"
-      : cleanup?.status === "preserved"
-        ? "无法完整判断，已保留全部素材"
-        : cleanup
-          ? "素材检查完成，没有需要清理的文件"
-          : task?.sourceReady
-            ? "本次上传没有清理记录"
-            : task
-              ? "文件检查完成后显示清理记录"
-              : "选择文件后，清理记录会显示在这里";
-
+  const summary = !missing ? "尚无缺失素材检测结果"
+    : missing.missing.length ? `检测到 ${missing.missing.length} 项疑似缺失素材`
+      : missing.limited || missing.reasons.length ? "请查看下方检测说明" : "未发现疑似缺失素材";
   return (
-    <section
-      aria-labelledby={headingId}
-      className="mt-3 border-t border-border pt-3"
-      data-resource-cleanup={cleanup?.status}
-    >
-      <h3 className="text-sm font-semibold" id={headingId}>清理日志</h3>
+    <section aria-labelledby={headingId} className="mt-3 border-t border-border pt-3">
+      <h3 className="text-sm font-semibold" id={headingId}>检测日志</h3>
       <p aria-live="polite" className="mt-1 text-xs text-muted">{summary}</p>
-      {files.length || restoredRtpFiles.length || cleanup?.reasons.length || missing?.missing.length || missing?.limited ? (
-        <div
-          aria-label="清理日志明细"
-          className="mt-2 max-h-48 overflow-auto overscroll-contain rounded-sm text-xs"
-          role="region"
-          tabIndex={0}
-        >
+      {sharedPlayer || restoredRtpFiles.length > 0 || (missing && (missing.missing.length > 0 || missing.reasons.length > 0 || missing.limited)) ? (
+        <div aria-label="检测日志明细" className="mt-2 max-h-48 overflow-auto overscroll-contain rounded-sm text-xs" role="region" tabIndex={0}>
           <ul className="grid gap-1 whitespace-nowrap">
-            {missing?.missing.map((file) => (
-              <li className="min-w-max text-red-600 dark:text-red-300" key={`missing:${file.path}`}>疑似缺失：{file.path} — {file.source}</li>
+            {missing?.missing.map(file => (
+              <li className="min-w-max text-red-600 dark:text-red-300" key={file.path}>疑似缺失：{file.path} — {file.source}</li>
             ))}
-            {missing?.reasons.map((reason) => (
-              <li className="min-w-max text-red-600 dark:text-red-300" key={`missing:${reason}`}>{reason}</li>
+            {missing?.reasons.map(reason => (
+              <li className="min-w-max text-red-600 dark:text-red-300" key={reason}>{reason}</li>
             ))}
             {missing?.limited ? <li className="min-w-max text-red-600 dark:text-red-300">缺失检测不完整，最多列出 200 项；未列出不代表文件齐全。</li> : null}
-            {cleanup?.reasons.filter((reason) => !missing?.reasons.includes(reason)).map((reason) => (
-              <li className="min-w-max text-muted" key={reason}>{reason}</li>
-            ))}
-            {files.map((file) => (
-              <li className="flex min-w-max items-center gap-3" key={file.path}>
-                <span className="flex-1">{file.path}</span>
-                <span className="text-muted">{file.reason}</span>
-                <span className="text-muted tabular-nums">{formatBytes(file.size)}</span>
-              </li>
-            ))}
-            {restoredRtpFiles.map((file) => (
+            {sharedPlayer ? <li className="min-w-max text-muted">播放器替换：{sharedPlayer.path}（{formatBytes(sharedPlayer.size)}）— 下载时使用共享 EasyRPG Player Kai</li> : null}
+            {restoredRtpFiles.map(file => (
               <li className="min-w-max text-blue-600 dark:text-blue-300" key={`rtp:${file.path}`}>自动补充 RTP：{file.path}</li>
             ))}
           </ul>
@@ -466,6 +394,7 @@ function ExistingArchiveCard({
 }
 
 function UploadTaskCard({
+  additionalActions,
   canceling,
   mode,
   onCancel,
@@ -473,6 +402,7 @@ function UploadTaskCard({
   sourceSummary,
   task,
 }: {
+  additionalActions?: ReactNode;
   canceling: boolean;
   mode: UploadSourceKind;
   onCancel: () => void;
@@ -482,7 +412,9 @@ function UploadTaskCard({
 }) {
   const progress = Math.min(100, task?.progress.percent ?? 0);
   const missing = task?.stats.missingResources;
-  const progressLabel = task?.sourceReady
+  const progressLabel = task?.extrasBusy && task.commitStarted
+    ? `上传追加文件 ${task.extrasProgress?.completed ?? 0}/${task.extrasProgress?.total ?? 0}`
+    : task?.sourceReady
     ? "游戏文件已就绪"
     : task
       ? uploadPhaseLabel(task.phase)
@@ -535,7 +467,7 @@ function UploadTaskCard({
         </div>
         {missing && (missing.missing.length > 0 || missing.limited) ? (
           <p className="mt-2 text-xs text-red-600 dark:text-red-300" role="status">
-            {missing.missing.length ? `检测到 ${missing.missing.length} 项疑似缺失素材。` : "缺失素材检测未能完整完成。"}详情见「高级选项」中的清理日志，不影响上传。
+            {missing.missing.length ? `检测到 ${missing.missing.length} 项疑似缺失素材。` : "缺失素材检测未能完整完成。"}详情见「高级选项」中的检测日志，不影响上传。
           </p>
         ) : null}
         {task?.error ? (
@@ -544,8 +476,9 @@ function UploadTaskCard({
           </Notice>
         ) : null}
       </div>
-      {showCancel || canRestart ? (
-        <footer className="flex justify-end gap-2 border-t border-border bg-background/60 px-4 py-3">
+      {showCancel || canRestart || additionalActions ? (
+        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-background/60 px-4 py-3">
+          {additionalActions}
           {showCancel ? (
             <Button
               aria-busy={canceling}
@@ -557,7 +490,7 @@ function UploadTaskCard({
             >
               {canceling ? (
                 <LoaderCircle aria-hidden className="animate-spin" />
-              ) : null}
+              ) : <X aria-hidden />}
               {canceling ? "取消中" : "取消上传"}
             </Button>
           ) : null}

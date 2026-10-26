@@ -124,6 +124,7 @@ export type PreparedArchiveSource = {
   sourceKind: UploadSourceKind;
   sourceName: string;
   files: ArchiveManifestFile[];
+  extras?: ArchiveManifestFile[];
   corePack: {
     sha256: string;
     size: number;
@@ -140,6 +141,7 @@ export type UploadRecoveryDraft = {
   serverImportJobId: number;
   targetWorkId: number | null;
   preparedSource: PreparedArchiveSource;
+  selectedExtras?: UploadExtraCandidate[];
   formDraft?: UploadFormDraft;
   metadata: ArchiveCommitMetadata | null;
   metadataBlobs: MetadataBlobUpload[];
@@ -160,6 +162,10 @@ export type BrowserUploadTaskSnapshot = {
   sourceReady: boolean;
   metadataConfirmed: boolean;
   commitStarted: boolean;
+  extrasBusy?: boolean;
+  extrasProgress?: { completed: number; total: number };
+  extrasError?: string | null;
+  extras?: Array<{ path: string; size: number }>;
   createdAt: string;
   progress: UploadTaskProgress;
   stats: UploadTaskStats;
@@ -202,7 +208,11 @@ export type UploadTaskCommitResult = {
   corePackCount: number;
 };
 
+export type UploadExtraCandidate = { path: string; size: number };
+
 export type UploadWorkerInput =
+  | { type: "select_extras"; localTaskId: string; paths: string[] }
+  | { type: "extras_source"; localTaskId: string; files: UploadSourceFile[]; sourceKind: UploadSourceKind }
   | { type: "save_form_draft"; localTaskId: string; formDraft: UploadFormDraft }
   | {
       type: "start_source";
@@ -210,10 +220,8 @@ export type UploadWorkerInput =
       localTaskId: string;
       sourceKind: UploadSourceKind;
       sourceName: string;
-      cleanupResources: boolean;
       checkMissingResources: boolean;
       useSharedPlayer: boolean;
-      includeSaves: boolean;
       files: UploadSourceFile[];
       targetWorkId: number | null;
     }
@@ -228,6 +236,7 @@ export type UploadWorkerInput =
   | { type: "cancel"; localTaskId: string };
 
 export type UploadWorkerOutput =
+  | { type: "extra_candidates"; candidates: UploadExtraCandidate[]; available: boolean }
   | { type: "task"; task: BrowserUploadTaskSnapshot }
   | { type: "source_prefill"; prefill: UploadSourcePrefill }
   | { type: "draft_saved"; draft: UploadRecoveryDraft }
