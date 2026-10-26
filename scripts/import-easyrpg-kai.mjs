@@ -41,6 +41,7 @@ const runtimeFiles = [
   "player-movie.js", "player-movie-worker.js", "movie-decoder.js", "movie-decoder.wasm",
   "movie-decoder.LICENSE.txt", "web-movies.md",
   "LICENSE-rime-pinyin-simp.txt",
+  "NOTICE-Zfull.txt",
 ];
 for (const name of [...runtimeFiles, "player-host.js", "COPYING"])
   if (!files[name]?.length) throw new Error(`Missing runtime file: ${name}`);

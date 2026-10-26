@@ -1,11 +1,11 @@
 {
-  "version": "2026.10.7-site-20a02c452-goto-map-br",
-  "revision": "20a02c45236da74f4f102d37070876be6314e4ca",
-  "build": "github-actions-40343681243",
+  "version": "2026.10.7-site-545cbbd66-br",
+  "revision": "545cbbd665fc9012afee0ed6adb6d1667329e8f5",
+  "build": "local-docker-20261027-545cbbd66",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "a9244d82e2e0bd8afe5080726c360b408def479aa817b9005e12e933dc32169e",
+  "archiveSha256": "c0d05641faa05280c552538bc7660ee1bd89c39262f4775e139541e31651f8b8",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
