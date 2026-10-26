@@ -273,7 +273,11 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 停止与站内离页须等待 `player.stop()`：先退出引擎，再等待串行 `IDBFS.syncfs(false)`，最后关闭音频、终止 Worker、移除 iframe、释放资源共享锁和 Work 级存档独占锁。写入失败保留 Worker 与锁并允许重试。浏览器强制关页或进程被杀时，异步写入完成没有保证，因此游戏正常保存时也会同步 IDBFS。安装 Worker 在离页时终止；普通页面数据刷新不重建播放器。
 
-当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。当前运行包为 Kai 2026.10.7，包含拼音输入法和场景交互高亮；两项引擎功能默认开启，可在「追加功能」中关闭，拼音通过游戏内姓名输入界面的布局切换使用。在固定 Player 提交上应用 [skip-logo.patch](../scripts/runtime-patches/skip-logo.patch) 、[startup-download-progress.patch](../scripts/runtime-patches/startup-download-progress.patch) 与 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)，由 Player 仓库的 `Build ZH Archive Web` GitHub Actions 工作流构建；记录 `sourceState: patched-commit`，`build` 标识 Actions 运行编号。复现时选择配置中的 Player 提交，并以包含这些补丁的 ZH-Archive 提交作为 `site_revision` 触发 `.github/workflows/site-web.yml`。工作流按 `sourcePatches` 顺序校验并应用补丁，再调用原有 `builds/package-docker.ps1 web`；构建工具链与依赖仍由固定提交的构建脚本锁定。打包后将固定源码中的 `resources/pinyin/LICENSE-rime-pinyin-simp.txt` 加入 Web ZIP 根目录，随运行包提供词库许可；词库来源及许可摘要记录在 `pinyinDictionary`。核对音色库、许可证和 Web ZIP 摘要后导入，运行目录内的 `SOURCE.json` 记录源码链接、补丁摘要和各文件摘要，并随包提供源码补丁。
+当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。当前运行包为 Kai 2026.10.7，包含拼音输入法和场景交互高亮；两项引擎功能默认开启，可在「追加功能」中关闭，拼音通过游戏内姓名输入界面的布局切换使用。当前包来自 [Actions 运行 40343681243](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/actions/runs/40343681243)，在固定 Player 提交上应用了配置中的三个 `sourcePatches`，因此记录为 `sourceState: patched-commit`。该次构建使用的临时专用工作流已撤回，运行编号仅用于追溯已发布产物。
+
+既有 Player 构建入口为 `Build and Release`（`.github/workflows/nightly-release.yml`），Web 产物为 `nightly-web`。网站在 `a3a856d8` 直接导入该工作流的固定提交产物；从 `fa13dfe3` 引入跳过 Logo 补丁后，到 `b152ce1a` 的运行包记录为本地带补丁构建，未增加专用 Actions。后续构建位置按任务授权使用 GitHub Actions，网站导入继续使用既有脚本。当前 Player 源码尚未包含这些源码补丁，普通 Web 产物与当前网站包的差异需在更新前核对。
+
+`patches` 由导入脚本应用于未压缩的宿主文件；`sourcePatches` 则需要在构建前应用，导入脚本仅校验并随包保存。当前源码补丁为 [skip-logo.patch](../scripts/runtime-patches/skip-logo.patch)、[startup-download-progress.patch](../scripts/runtime-patches/startup-download-progress.patch) 和 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)。构建工具链与依赖由固定 Player 提交的构建脚本锁定。Web ZIP 根目录同时包含固定源码中的 `resources/pinyin/LICENSE-rime-pinyin-simp.txt`，词库来源及许可摘要记录在 `pinyinDictionary`。核对音色库、许可证和 Web ZIP 摘要后导入，运行目录内的 `SOURCE.json` 记录真实源码、构建来源、补丁和文件摘要。
 
 Web 运行包包含 Debug 的 Goto Map 信息显示：左上角两行显示当前地图编号、名称及玩家坐标；选择目标地图和输入传送坐标时继续显示当前位置。
 
