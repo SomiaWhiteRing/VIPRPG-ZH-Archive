@@ -1,12 +1,12 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "545cbbd665fc9012afee0ed6adb6d1667329e8f5",
-  "version": "2026.10.7-site-545cbbd66-br",
-  "build": "local-docker-20261027-545cbbd66",
-  "artifact": "kai-2026.10.7-site-545cbbd6-web.zip",
-  "archiveSha256": "c0d05641faa05280c552538bc7660ee1bd89c39262f4775e139541e31651f8b8",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/545cbbd665fc9012afee0ed6adb6d1667329e8f5",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/545cbbd665fc9012afee0ed6adb6d1667329e8f5/COPYING",
+  "revision": "73649e08b05b827cf382807c60e75c174cb5f5f3",
+  "version": "2026.10.7-site-73649e08b-br",
+  "build": "local-docker-20261027-73649e08b",
+  "artifact": "kai-2026.10.7-site-73649e08b-web.zip",
+  "archiveSha256": "5624e74d9479391c7f7cab4d84b1d57223e8451e0599008183165b314e697eb2",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/73649e08b05b827cf382807c60e75c174cb5f5f3",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/73649e08b05b827cf382807c60e75c174cb5f5f3/COPYING",
   "sourceState": "patched-commit",
   "sourcePatches": [
     {
@@ -77,11 +77,11 @@
     },
     "easyrpg-player.js": {
       "size": 150372,
-      "sha256": "a64aad0a7da8f9017e9b68c881aeb4b4d2c0450d729fb2eaef195bf9eb0f1785"
+      "sha256": "1b8fb23088fd7b377ea283ce3c2dd6a5c9b75425615245892be91c412cb90293"
     },
     "easyrpg-player.wasm": {
-      "size": 18047542,
-      "sha256": "450f77a022eafeb5fa58c47f9da9baf45dbeab42a88e1fbb9fcc9a3ae6a42958"
+      "size": 18047046,
+      "sha256": "cee48d6d1bd7ff93428f036e30d6068eda9577f57c6015a2aedbb2d7ac7cd963"
     },
     "easyrpg-player.data": {
       "size": 7557598,
@@ -140,8 +140,8 @@
       "sha256": "9b74fb6701dfe30c5fe6492d425dfcf14d3612a18d43f6577a382f4d1008f27c"
     },
     "easyrpg-player.wasm.br": {
-      "size": 4730153,
-      "sha256": "6143b1512d4ddc9d504cbe56c8d852635c5cdef8def6b28862f3d72d959dd732"
+      "size": 4730630,
+      "sha256": "3484462f0cdf402d2a724bcaa0c216fc2ee3b07401ca7bab93d21f17e65535e2"
     },
     "easyrpg-player.data.br": {
       "size": 6311434,
