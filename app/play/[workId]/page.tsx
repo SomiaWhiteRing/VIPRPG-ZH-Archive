@@ -153,10 +153,9 @@ export default function WebPlayPage() {
           { href: `/games/${work.id}`, label: "概览" },
           { href: `/play/${work.id}`, label: "在线游玩", active: true },
           {
-            href: "#sec-comments",
-            label: "评论",
-            count: community.commentCount,
-          }, { href: `/games/${work.id}/collections`, label: "收藏与吐槽" },
+            href: `/games/${work.id}#sec-comments`,
+            label: "评论与吐槽",
+          },
         ]}
       />
       <WebPlayClient
@@ -195,7 +194,7 @@ export default function WebPlayPage() {
           <WorkCommunityStats
             commentCount={community.commentCount}
             favoriteCount={community.favoriteCount}
-            collectionHref={`/games/${work.id}/collections`}
+            collectionHref={`/games/${work.id}?tab=collections#sec-comments`}
             playerCount={community.playerCount}
             viewCount={community.viewCount}
           />

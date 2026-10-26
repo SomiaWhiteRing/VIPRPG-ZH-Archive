@@ -111,7 +111,7 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
         <WorkCommunityStats
           commentCount={community.commentCount}
           favoriteCount={community.favoriteCount}
-          collectionHref={`/games/${work.id}/collections`}
+          collectionHref={`/games/${work.id}?tab=collections#sec-comments`}
           playerCount={community.playerCount}
           viewCount={community.viewCount}
         />

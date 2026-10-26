@@ -28,6 +28,7 @@ import { Link, useRouteLoaderData } from "react-router";
 type Props = {
   target: CommentTarget;
   placeholder?: string;
+  onChanged?: () => void;
   canPin?: boolean;
   currentUserId: number | null;
   initialComments: CommentDto[];
@@ -53,6 +54,7 @@ function CommentPanelContent({
   initialComments,
   initialNextCursor,
   hideDeletedContent,
+  onChanged,
 }: Props & { hideDeletedContent: boolean }) {
   const endpoint = commentEndpoint(target);
   const [comments, setComments] = useState(initialComments);
@@ -119,6 +121,7 @@ function CommentPanelContent({
           credentials: "same-origin",
         });
 
+        onChanged?.();
         setCommentUpdates((current) => ({
           ...current,
           [comment.id]: {
@@ -189,6 +192,7 @@ function CommentPanelContent({
   }
 
   function replyCreated(rootId: number, reply: CommentDto) {
+    onChanged?.();
     setComments((current) => current.map((comment) =>
       comment.id === rootId
         ? { ...comment, replyCount: (comment.replyCount ?? 0) + 1 }
@@ -208,8 +212,10 @@ function CommentPanelContent({
     <div className="@container/comments grid gap-4" id="comments">
       {currentUserId ? (
         <CommentComposer endpoint={endpoint} target={target} placeholder={placeholder}
-          onCreated={(comment) => setComments((current) =>
-            target.kind === "work" ? [comment, ...current] : [...current, comment])} />
+          onCreated={(comment) => {
+            setComments((current) => target.kind === "work" ? [comment, ...current] : [...current, comment]);
+            onChanged?.();
+          }} />
       ) : (
         <p className="text-sm text-muted">登录后可以评论、回复和点赞。</p>
       )}

@@ -127,7 +127,7 @@ export default function PublicUserPage() {
           {favorites.items.length ? (
             <AccountWorkGrid items={favorites.items} />
           ) : (
-            <AccountEmpty>还没有公开收藏。</AccountEmpty>
+            <AccountEmpty>还没有收藏。</AccountEmpty>
           )}
         </AccountSection>
       ) : null}

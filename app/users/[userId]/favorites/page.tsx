@@ -44,7 +44,7 @@ export default function PublicFavorites() {
     <GameLibrary
       data={{ ...data, works }}
       basePath={data.base}
-      emptyTitle={data.hasFilters ? "没有找到匹配的收藏作品。" : "还没有公开收藏。"}
+      emptyTitle={data.hasFilters ? "没有找到匹配的收藏作品。" : "还没有收藏。"}
       renderWorkActions={(work) => (
         <WorkFavoriteButton
           summary={ownsList ? undefined : "counts"}

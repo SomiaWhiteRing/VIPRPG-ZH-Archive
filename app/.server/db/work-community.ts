@@ -220,11 +220,12 @@ export async function getWorkCommunitySummary(
   };
 }
 
-export async function listWorkCollections(runtime: AppRuntime, workId: number, requestedPage: number) {
+export async function listWorkCollections(runtime: AppRuntime, workId: number, requestedPage: number, notesOnly = false) {
   const database = getD1(runtime);
   const access = workReadCondition(await getCurrentUser(runtime));
   // Counts can include private collections; named entries and notes cannot.
   const where = `e.work_id=? AND e.favorited_at IS NOT NULL
+    ${notesOnly ? "AND trim(e.favorite_note) <> ''" : ""}
     AND u.status='active' AND u.profile_show_favorites=1
     AND EXISTS(SELECT 1 FROM works w WHERE w.id=? AND ${access.sql})`;
   const count = await database.prepare(
