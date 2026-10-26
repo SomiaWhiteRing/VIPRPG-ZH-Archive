@@ -1,3 +1,5 @@
+import { parseAccountPage } from "@/app/.server/auth/account-user";
+import type { WorkFavoriteUpdate } from "@/lib/user-tags";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
   getPublishedArchiveDownloadRecord,
@@ -5,6 +7,8 @@ import {
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
 import { readArchiveEasyRpgConfig } from "@/app/.server/storage/archive-bucket";
 import {
+  canPinWorkComments,
+  listWorkCollections,
   getWorkCommunitySummary,
   listRootComments,
 } from "@/app/.server/db/work-community";
@@ -13,7 +17,7 @@ import { parsePositiveId } from "@/app/.server/http/request";
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
-import { CommentPanel } from "@/app/components/comments/comment-panel";
+import { WorkDiscussionSection, useWorkCollections } from "@/app/components/work/work-discussion-section";
 import { DetailPageShell } from "@/app/components/ui/detail-page-layout";
 import { WorkCommunityStats } from "@/app/components/work/work-community-stats";
 import { WorkFavoriteButton } from "@/app/components/work/work-favorite-button";
@@ -69,7 +73,8 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const currentUser = await getCurrentUser(runtime);
 
-  const [community, comments] = await Promise.all([
+  const page = parseAccountPage(new URL(args.request.url).searchParams.get("page") ?? undefined);
+  const [community, comments, canPinComments, collections] = await Promise.all([
     getWorkCommunitySummary(runtime, work.id, currentUser?.id ?? null),
     listRootComments(
       runtime,
@@ -77,6 +82,8 @@ export async function loader(args: LoaderFunctionArgs) {
       currentUser?.id ?? null,
       null,
     ),
+    canPinWorkComments(runtime, work.id, currentUser),
+    listWorkCollections(runtime, work.id, page, true),
   ]);
 
   const metadata: WebPlayMetadata = {
@@ -113,6 +120,8 @@ export async function loader(args: LoaderFunctionArgs) {
     work,
     community,
     comments,
+    canPinComments,
+    collections,
     current,
     metadata,
   };
@@ -125,10 +134,15 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   );
 
 export default function WebPlayPage() {
-  const { record, currentUser, work, community: initialCommunity, comments, current, metadata } =
+  const { record, currentUser, work, community: initialCommunity, comments, canPinComments, collections: initialCollections, current, metadata } =
     useLoaderData<typeof loader>();
   const favorite = useWorkFavorite(initialCommunity);
   const { community } = favorite;
+  const { collections, refreshCollections } = useWorkCollections(work.id, initialCollections);
+  async function onFavoriteSaved(update: WorkFavoriteUpdate) {
+    favorite.onSaved(update);
+    await refreshCollections();
+  }
   const native = useSyncExternalStore(subscribeEnvironment, isAndroidClient, () => false);
   if (native) return <DetailPageShell>
     <WorkPageHeader chineseTitle={work.chineseTitle} originalTitle={work.originalTitle}
@@ -153,24 +167,26 @@ export default function WebPlayPage() {
           { href: `/games/${work.id}`, label: "概览" },
           { href: `/play/${work.id}`, label: "在线游玩", active: true },
           {
-            href: `/games/${work.id}#sec-comments`,
+            href: "#sec-comments",
             label: "评论与吐槽",
           },
         ]}
       />
       <WebPlayClient
         comments={
-          <CommentPanel
+          <WorkDiscussionSection
             currentUserId={currentUser?.id ?? null}
-            initialComments={comments.items}
-            initialNextCursor={comments.nextCursor}
-            target={{ kind: "work", id: work.id }}
+            workId={work.id}
+            canPin={canPinComments}
+            commentCount={community.commentCount}
+            comments={comments}
+            collections={collections}
           />
         }
         engagement={
           <WorkFavoriteButton
             summary="counts"
-            onSaved={favorite.onSaved}
+            onSaved={onFavoriteSaved}
             currentUserId={currentUser?.id ?? null}
             initialFavorited={community.favoritedByMe}
             workId={work.id}
@@ -194,7 +210,7 @@ export default function WebPlayPage() {
           <WorkCommunityStats
             commentCount={community.commentCount}
             favoriteCount={community.favoriteCount}
-            collectionHref={`/games/${work.id}?tab=collections#sec-comments`}
+            collectionHref="?tab=collections#sec-comments"
             playerCount={community.playerCount}
             viewCount={community.viewCount}
           />

@@ -1,9 +1,4 @@
 import { parseAccountPage } from "@/app/.server/auth/account-user";
-import { PaginationLinks } from "@/app/components/library/pagination-links";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/app/components/ui/tabs";
-import { UserAvatar } from "@/app/components/ui/user-avatar";
-import { useState } from "react";
-import { requestJson } from "@/lib/ui/api-response";
 import type { WorkFavoriteUpdate } from "@/lib/user-tags";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
@@ -14,7 +9,6 @@ import { parsePositiveId } from "@/app/.server/http/request";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { loadWorkOverviewSidebar } from "@/app/.server/work-overview-sidebar";
-import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { WorkCard } from "@/app/components/work/work-card";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { DetailPageLayout, DetailPageShell } from "@/app/components/ui/detail-page-layout";
@@ -22,15 +16,16 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { WorkOverviewSidebar } from "@/app/components/work/work-overview-sidebar";
 import { WorkPageHeader } from "@/app/components/work/work-page-header";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
-import { formatNumber, formatDate, formatExactTimestamp, parseTimestamp } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { tagHref } from "@/lib/user-tags";
 import { CHARACTER_ROLE_LABELS, getPublicRelationCards } from "./public-relations";
 import { AlertTriangle } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData, useSearchParams, useNavigate, useRevalidator } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { WorkMediaGallery } from "./work-media-gallery";
 import { WorkDescription } from "./work-description";
+import { WorkDiscussionSection, useWorkCollections } from "@/app/components/work/work-discussion-section";
 import { useWorkFavorite } from "@/app/components/work/use-work-favorite";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -69,20 +64,12 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 
 export default function GameDetailPage() {
   const { work, sidebar, canPinComments, title, current, primaryMedia, media, tags: initialTags, comments, collections: initialCollections, relationCards } = useLoaderData<typeof loader>();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const revalidator = useRevalidator();
-  const activeTab = searchParams.get("tab") === "collections" ? "collections" : "comments";
-  const [snapshot, setSnapshot] = useState({ source: initialCollections, collections: initialCollections });
-  const collections = snapshot.source === initialCollections ? snapshot.collections : initialCollections;
+  const { collections, refreshCollections } = useWorkCollections(work.id, initialCollections);
   const favorite = useWorkFavorite(sidebar.community, initialTags);
   const { community, tags } = favorite;
   async function onFavoriteSaved(update: WorkFavoriteUpdate) {
     favorite.onSaved(update);
-    const result = await requestJson<{ ok: true; collections: typeof collections }>(
-      `/api/works/${work.id}/collections?notes=1&page=${collections.page}`, {}, "吐槽列表加载失败",
-    );
-    setSnapshot({ source: initialCollections, collections: result.collections });
+    await refreshCollections();
   }
   const { currentUser } = sidebar;
   const relationGroups = new Map<string, typeof relationCards>();
@@ -308,64 +295,14 @@ export default function GameDetailPage() {
               </section>
             ) : null}
 
-            <section
-              aria-labelledby="comments-title"
-              className="scroll-mt-28 border-t border-border py-4.5"
-              id="sec-comments"
-            >
-              <Tabs value={activeTab} onValueChange={(value) => {
-                setSearchParams((params) => {
-                  params.set("tab", value);
-                  return params;
-                }, { preventScrollReset: true });
-              }}>
-                <TabsList aria-label="作品评论与吐槽" id="comments-title">
-                  <TabsTrigger value="comments">评论（{formatNumber(community.commentCount)}）</TabsTrigger>
-                  <TabsTrigger value="collections">吐槽（{formatNumber(collections.total)}）</TabsTrigger>
-                </TabsList>
-                <TabsContent value="comments" forceMount className="data-[state=inactive]:hidden">
-                  <CommentPanel
-                    onChanged={() => { void revalidator.revalidate(); }}
-                    currentUserId={currentUser?.id ?? null}
-                    canPin={canPinComments}
-                    initialComments={comments.items}
-                    initialNextCursor={comments.nextCursor}
-                    target={{ kind: "work", id: work.id }}
-                  />
-                </TabsContent>
-                <TabsContent value="collections">
-                  {collections.items.length ? (
-                    <ul className="grid gap-7">
-                      {collections.items.map((entry) => (
-                        <li className="flex min-w-0 items-start gap-3.5" key={entry.userId}>
-                          <Link className="shrink-0" to={`/users/${entry.userId}`}>
-                            <UserAvatar avatarBlobSha256={entry.avatarBlobSha256} displayName={entry.displayName} size={48} />
-                          </Link>
-                          <div className="min-w-0 flex-1">
-                            <div className="border-b border-border pb-1">
-                              <Link className="wrap-anywhere text-sm font-bold text-foreground hover:text-primary hover:underline" to={`/users/${entry.userId}`}>
-                                {entry.displayName}
-                              </Link>
-                            </div>
-                            <time className="mt-1 block text-xs text-muted" dateTime={parseTimestamp(entry.favoritedAt).toISOString()} title={formatExactTimestamp(entry.favoritedAt)}>
-                              {formatDate(entry.favoritedAt)}
-                            </time>
-                            {entry.note ? <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-black dark:text-foreground">{entry.note}</p> : null}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : <EmptyState title="暂无吐槽。" />}
-                  <PaginationLinks page={collections.page} pageSize={collections.pageSize} total={collections.total}
-                    onPageChange={(page) => {
-                      const params = new URLSearchParams(searchParams);
-                      params.set("tab", "collections");
-                      params.set("page", String(page));
-                      void navigate(`?${params}#sec-comments`, { preventScrollReset: true });
-                    }} />
-                </TabsContent>
-              </Tabs>
-            </section>
+            <WorkDiscussionSection
+              workId={work.id}
+              currentUserId={currentUser?.id ?? null}
+              canPin={canPinComments}
+              commentCount={community.commentCount}
+              comments={comments}
+              collections={collections}
+            />
           </>
         }
         sidebar={<WorkOverviewSidebar work={work} data={{ ...sidebar, community }} onFavoriteSaved={onFavoriteSaved} favoriteSummary="tags" />}

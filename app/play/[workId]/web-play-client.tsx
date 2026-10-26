@@ -23,7 +23,7 @@ import { DetailPageLayout } from "@/app/components/ui/detail-page-layout";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Progress } from "@/app/components/ui/progress";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
-import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
+import { useDocumentNavigationGuard, useRouterNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { createPlayerSession } from "./web-play-player";
 import type { PlayerLogLevel, PlayerSession } from "./web-play-player";
 import { WebPlaySurface } from "./web-play-surface";
@@ -219,23 +219,29 @@ export function WebPlayClient({
   }, []);
 
   const confirm = useConfirm();
-  useNavigationGuard(installSessionActive || running || playerStarting, async () => {
-    if (installSessionActive) return confirm("游戏安装尚未完成，确定离开并中断安装吗？");
-    await exitImmersive();
-    if (!(await confirm("在线游玩尚未结束，确定离开并停止游戏吗？"))) {
-      focusPlayerCanvas();
-      return false;
-    }
-    try {
-      await playerRef.current?.dispose();
-      playerRef.current = null;
-      setRunning(false);
-      return true;
-    } catch (error) {
-      setOperationError(error instanceof Error ? error.message : "游戏存档尚未写入，请重试。");
-      return false;
-    }
-  });
+  useDocumentNavigationGuard(installSessionActive || running || playerStarting);
+  useRouterNavigationGuard(
+    // Comment tabs and pagination keep this game's player mounted.
+    ({ currentLocation, nextLocation }) => (installSessionActive || running || playerStarting) &&
+      currentLocation.pathname !== nextLocation.pathname,
+    async () => {
+      if (installSessionActive) return confirm("游戏安装尚未完成，确定离开并中断安装吗？");
+      await exitImmersive();
+      if (!(await confirm("在线游玩尚未结束，确定离开并停止游戏吗？"))) {
+        focusPlayerCanvas();
+        return false;
+      }
+      try {
+        await playerRef.current?.dispose();
+        playerRef.current = null;
+        setRunning(false);
+        return true;
+      } catch (error) {
+        setOperationError(error instanceof Error ? error.message : "游戏存档尚未写入，请重试。");
+        return false;
+      }
+    },
+  );
 
   useEffect(() => {
     if (!diagnosticsOpen || installSessionActive) return;
@@ -789,18 +795,7 @@ export function WebPlayClient({
               </div>
             </section>
 
-            <section
-              aria-labelledby="comments-title"
-              className="scroll-mt-28 border-t border-border py-4.5"
-              id="sec-comments"
-            >
-              <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
-                <h2 className="m-0 text-base font-bold" id="comments-title">
-                  评论
-                </h2>
-              </div>
-              {comments}
-            </section>
+            {comments}
           </>
         }
         sidebar={
