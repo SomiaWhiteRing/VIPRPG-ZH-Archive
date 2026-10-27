@@ -1,3 +1,4 @@
+import * as catalogCommentsEndpoint from "./endpoints/api/catalogs/[id]/comments/route";
 import { json as jsonResponse, jsonError } from "@/lib/http";
 import * as materialSearchEndpoint from "./endpoints/api/material-search/route";
 import { searchMentionUsers } from "./mentions";
@@ -1070,6 +1071,24 @@ api.on("POST", "/api/creators/:creatorId/update", (c) =>
 );
 api.options("/api/creators/:creatorId/update", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
 api.all("/api/creators/:creatorId/update", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }));
+api.on(["GET", "HEAD"], "/api/catalogs/:id/comments", (c) =>
+  catalogCommentsEndpoint.GET(c.get("runtime"), c.req.raw, {
+    params: { id: c.req.param("id") },
+  }),
+);
+api.on("POST", "/api/catalogs/:id/comments", (c) =>
+  catalogCommentsEndpoint.POST(c.get("runtime"), c.req.raw, {
+    params: { id: c.req.param("id") },
+  }),
+);
+api.options("/api/catalogs/:id/comments", (c) =>
+  c.body(null, 204, { Allow: "GET, POST, HEAD, OPTIONS" }),
+);
+api.all("/api/catalogs/:id/comments", (_c) =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
+    Allow: "GET, POST, HEAD, OPTIONS",
+  } }),
+);
 api.on(["GET", "HEAD"], "/api/creators/:creatorId/comments", (c) =>
   endpoint66.GET(c.get("runtime"), c.req.raw, {
     params: { creatorId: c.req.param("creatorId") },

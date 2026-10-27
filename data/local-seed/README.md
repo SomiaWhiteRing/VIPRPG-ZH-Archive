@@ -223,3 +223,8 @@ the two built-in administrator roles receive `genre.manage`.
 
 The single game-comment pin refresh applies `0037_single_pinned_work_comment.sql`
 and records it in the migration ledger. All captured business rows are preserved.
+
+The catalog-comment refresh applies `0045_catalog_comments.sql` and records it
+in the migration ledger. Existing comments, replies, likes, emoji and image
+references, notifications and timeline events are preserved. Catalog comments
+start empty.

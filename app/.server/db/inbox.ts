@@ -463,14 +463,15 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
   const ids = source.filter((row) => row.work_comment_id !== null || row.reply_comment_id !== null || row.like_comment_id !== null).map((row) => row.id);
   if (!ids.length) return;
   const rows = await getD1(runtime).prepare(`SELECT i.id,json_extract(i.metadata_json,'$.mention') AS mention,c.body,i.reply_comment_id,i.like_comment_id,c.root_comment_id,
-      c.work_id,c.creator_id,c.character_id,
-      COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.primary_name) AS target_title,
+      c.work_id,c.creator_id,c.character_id,c.catalog_id,
+      COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.primary_name,catalog.title) AS target_title,
       sender.id AS sender_id,sender.display_name,sender.status AS sender_status,
       (SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count
     FROM inbox_items i JOIN published_comments c ON c.id=COALESCE(i.like_comment_id,i.reply_comment_id,i.work_comment_id)
     LEFT JOIN works w ON w.id=c.work_id
     LEFT JOIN creators cr ON cr.id=c.creator_id
     LEFT JOIN characters ch ON ch.id=c.character_id
+    LEFT JOIN catalogs catalog ON catalog.id=c.catalog_id
     JOIN users sender ON sender.id=i.sender_user_id AND sender.status IN ('active','deleted')
     WHERE i.id IN (SELECT value FROM json_each(?))
       AND ${commentRecipientReadSql("c", "i.recipient_user_id")}
@@ -479,7 +480,7 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
       ))`)
     .bind(JSON.stringify(ids)).all<{
       id: number; mention: number | null; body: string; reply_comment_id: number | null; like_comment_id: number | null; root_comment_id: number | null;
-      work_id: number | null; creator_id: number | null; character_id: number | null; target_title: string;
+      work_id: number | null; creator_id: number | null; character_id: number | null; catalog_id: number | null; target_title: string;
       sender_id: number; display_name: string; sender_status: string; image_count: number;
     }>();
   const byId = new Map(rows.results.map((row) => [row.id, row]));
@@ -495,7 +496,7 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
     const name = row.sender_status === "deleted" ? "账户已注销" : row.display_name;
     const action = row.mention ? "在评论中提及了你" : row.like_comment_id
       ? `赞了你的${row.root_comment_id ? "回复" : "评论"}`
-      : row.reply_comment_id ? "回复了你的评论" : "评论了你上传的作品";
+      : row.reply_comment_id ? "回复了你的评论" : row.catalog_id ? "评论了你的目录" : "评论了你上传的作品";
     item.title = `${name}${action}`;
     item.commentNotification = {
       actorName: name,
@@ -503,7 +504,7 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
       action,
       kind: row.mention ? "mention" : row.like_comment_id ? "like" : row.reply_comment_id ? "reply" : "comment",
       targetTitle: row.target_title,
-      href: `${row.work_id ? `/games/${row.work_id}` : row.creator_id ? `/creators/${row.creator_id}` : `/characters/${row.character_id}`}#sec-comments`,
+      href: `${row.work_id ? `/games/${row.work_id}` : row.creator_id ? `/creators/${row.creator_id}` : row.catalog_id ? `/catalogs/${row.catalog_id}` : `/characters/${row.character_id}`}#sec-comments`,
       excerpt: emojiText(row.body).slice(0, 180) + (row.image_count ? ` ［${row.image_count} 张图片］` : ""),
     };
   }

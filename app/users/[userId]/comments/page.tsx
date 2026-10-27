@@ -1,3 +1,5 @@
+import { parseCommentTargetKind } from "@/lib/comment-target";
+import { CommentCategoryFilter } from "@/app/components/profile/comment-category-filter";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { parseAccountPage } from "@/app/.server/auth/account-user";
 import { searchUserComments } from "@/app/.server/db/work-community";
@@ -17,15 +19,18 @@ export async function loader(args: LoaderFunctionArgs) {
     (await params).userId,
     "comments",
   );
-  const page = parseAccountPage((await searchParams).page);
+  const filters = await searchParams;
+  const page = parseAccountPage(filters.page);
+  const kind = parseCommentTargetKind(filters.kind);
   const result = await searchUserComments(runtime, {
     userId: user.id,
     publicOnly: true,
     page,
     pageSize: 20,
+    kind,
   });
   const base = `/users/${user.id}/comments`;
-  return { displayName: user.displayName, page, result, base };
+  return { displayName: user.displayName, page, result, base, kind };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
@@ -38,16 +43,18 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   );
 
 export default function PublicComments() {
-  const { page, result, base } = useLoaderData<typeof loader>();
+  const { page, result, base, kind } = useLoaderData<typeof loader>();
   return (
     <section aria-label="评论">
+      <CommentCategoryFilter basePath={base} kind={kind} />
       {result.items.length ? (
         <CommentSummaryList items={result.items} />
       ) : (
-        <AccountEmpty>还没有公开评论。</AccountEmpty>
+        <AccountEmpty>{kind ? "这个类别下还没有公开评论。" : "还没有公开评论。"}</AccountEmpty>
       )}
       <PaginationLinks
         basePath={base}
+        params={{ kind }}
         page={page}
         pageSize={result.pageSize}
         total={result.total}

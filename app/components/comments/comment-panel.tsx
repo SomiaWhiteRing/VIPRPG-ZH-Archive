@@ -180,7 +180,7 @@ function CommentPanelContent({
         for (const comment of result.items ?? []) byId.set(comment.id, comment);
         return [...byId.values()].sort((a, b) => {
           const order = a.createdAt.localeCompare(b.createdAt) || a.id - b.id;
-          return target.kind === "work" ? -order : order;
+          return (target.kind === "work" || target.kind === "catalog") ? -order : order;
         });
       });
       setNextCursor(result.nextCursor ?? null);
@@ -213,7 +213,7 @@ function CommentPanelContent({
       {currentUserId ? (
         <CommentComposer endpoint={endpoint} target={target} placeholder={placeholder}
           onCreated={(comment) => {
-            setComments((current) => target.kind === "work" ? [comment, ...current] : [...current, comment]);
+            setComments((current) => (target.kind === "work" || target.kind === "catalog") ? [comment, ...current] : [...current, comment]);
             onChanged?.();
           }} />
       ) : (
@@ -266,7 +266,7 @@ function CommentPanelContent({
 }
 
 function commentEndpoint(target: CommentTarget): string {
-  const paths = { work: "works", creator: "creators", character: "characters" };
+  const paths = { work: "works", creator: "creators", character: "characters", catalog: "catalogs" };
   return `/api/${paths[target.kind]}/${target.id}/comments`;
 }
 

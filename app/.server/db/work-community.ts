@@ -54,6 +54,7 @@ type CommentRow = {
   work_id: number | null;
   creator_id: number | null;
   character_id: number | null;
+  catalog_id: number | null;
   root_comment_id: number | null;
   reply_to_comment_id: number | null;
   reply_to_display_name: string | null;
@@ -289,7 +290,7 @@ export async function listRootComments(
   const parsed = decodeCursor(cursor);
   const size = clampPageSize(limit);
   const targetColumn = `${target.kind}_id`;
-  const descending = target.kind === "work";
+  const descending = target.kind === "work" || target.kind === "catalog";
   const direction = descending ? "DESC" : "ASC";
   const comparison = descending ? "<" : ">";
   const user = await getCurrentUser(runtime);
@@ -311,7 +312,7 @@ export async function listRootComments(
   const rootStatement = (pinned: boolean) =>
     database
       .prepare(
-        `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
+        `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.catalog_id,c.root_comment_id,c.reply_to_comment_id,
           ${commentFloorSql(target.kind)} AS floor_number,
           NULL AS reply_to_display_name,c.user_id,u.display_name AS author_name,u.avatar_blob_sha256 AS author_avatar_blob_sha256,c.body,c.status,
           c.created_at,c.updated_at,c.edited_at,
@@ -342,7 +343,7 @@ export async function listRootComments(
         ? "作品不存在"
         : target.kind === "creator"
           ? "作者不存在"
-          : "角色不存在",
+          : target.kind === "catalog" ? "目录不存在" : "角色不存在",
     );
   const page = await pageFromRows(
     runtime,
@@ -486,7 +487,7 @@ function replyRowsStatement(
   const access = commentTargetReadCondition(user);
   return database
     .prepare(
-      `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
+      `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.catalog_id,c.root_comment_id,c.reply_to_comment_id,
           (SELECT target.display_name FROM published_comments target_comment
            JOIN users target ON target.id=target_comment.user_id
            WHERE target_comment.id=c.reply_to_comment_id) AS reply_to_display_name,
@@ -516,6 +517,7 @@ export async function searchUserComments(
   input: {
     userId: number;
     publicOnly?: boolean;
+    kind?: CommentTarget["kind"];
     page?: number;
     pageSize?: number;
   },
@@ -531,18 +533,21 @@ export async function searchUserComments(
   // Push the author predicate into the public view instead of enumerating every
   // visible comment. The view retains author, root and target visibility rules.
   const base = input.publicOnly ? "FROM public_comments c" : "FROM comments c JOIN users u ON u.id=c.user_id";
-  const where = input.publicOnly ? "WHERE c.user_id=?"
-    : `WHERE c.user_id=? AND c.status<>'deleted' AND ${access.sql}`;
+  const where = (input.publicOnly ? "WHERE c.user_id=?"
+    : `WHERE c.user_id=? AND c.status<>'deleted' AND ${access.sql}`)
+    + (input.kind ? ` AND c.${input.kind}_id IS NOT NULL` : "");
   const binds = [input.userId, ...(input.publicOnly ? [] : access.binds)];
-  const from = `${base} LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id
+  const from = `${base} LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id LEFT JOIN catalogs catalog ON catalog.id=c.catalog_id
     ${DEFAULT_CHARACTER_PORTRAIT_JOINS} AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION} ${where}`;
   const database = getD1(runtime);
   const [countResult, rowsResult] = await database.batch([
     database.prepare(`SELECT COUNT(*) AS count ${base} ${where}`).bind(...binds),
     database
       .prepare(
-        `SELECT c.id,c.work_id,c.creator_id,c.character_id,CASE WHEN c.work_id IS NOT NULL THEN COALESCE(w.chinese_title,w.original_title) WHEN c.creator_id IS NOT NULL THEN cr.name ELSE ch.primary_name END AS target_title,
-        (SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS cover_blob_sha256,
+        `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.catalog_id,CASE WHEN c.work_id IS NOT NULL THEN COALESCE(w.chinese_title,w.original_title) WHEN c.creator_id IS NOT NULL THEN cr.name WHEN c.catalog_id IS NOT NULL THEN catalog.title ELSE ch.primary_name END AS target_title,
+        COALESCE(catalog.cover_blob_sha256,(SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id WHERE wma.work_id=COALESCE(w.id,
+          (SELECT ci.work_id FROM catalog_items ci JOIN public_works cw ON cw.id=ci.work_id WHERE ci.catalog_id=c.catalog_id ORDER BY ci.sort_order,ci.work_id DESC LIMIT 1))
+          AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1)) AS cover_blob_sha256,
         cr.avatar_blob_sha256,${CHARACTER_PORTRAIT_COLUMNS},
         COALESCE(c.body,'') AS body,(SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count,c.status,c.updated_at,(SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
       )
@@ -553,6 +558,7 @@ export async function searchUserComments(
     work_id: number | null;
     creator_id: number | null;
     character_id: number | null;
+    catalog_id: number | null;
     target_title: string;
     image_count: number;
     cover_blob_sha256: string | null;
@@ -601,7 +607,7 @@ export async function createComment(
   if (replyToCommentId !== undefined) {
     const replyTarget = await getD1(runtime)
       .prepare(
-        `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.status,
+        `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.catalog_id,c.root_comment_id,c.status,
         COALESCE(root.status,c.status) AS root_status
         FROM comments c LEFT JOIN comments root ON root.id=c.root_comment_id
         JOIN users author ON author.id=c.user_id
@@ -615,6 +621,7 @@ export async function createComment(
         work_id: number | null;
         creator_id: number | null;
         character_id: number | null;
+        catalog_id: number | null;
         root_comment_id: number | null;
         status: string;
         root_status: string;
@@ -649,10 +656,10 @@ export async function createComment(
   const source = "SELECT id FROM comments WHERE user_id=? AND request_key=?";
   try {
     const results = await db.batch([
-      db.prepare(`INSERT INTO comments(work_id,creator_id,character_id,user_id,root_comment_id,reply_to_comment_id,body,status,request_key,request_hash)
-        VALUES(?,?,?,?,?,?,CASE WHEN ${guard.sql} AND EXISTS(${targetQuery.sql}) THEN ? ELSE NULL END,'published',?,?) RETURNING id`)
+      db.prepare(`INSERT INTO comments(work_id,creator_id,character_id,catalog_id,user_id,root_comment_id,reply_to_comment_id,body,status,request_key,request_hash)
+        VALUES(?,?,?,?,?,?,?,CASE WHEN ${guard.sql} AND EXISTS(${targetQuery.sql}) THEN ? ELSE NULL END,'published',?,?) RETURNING id`)
         .bind(target.kind === "work" ? target.id : null, target.kind === "creator" ? target.id : null,
-          target.kind === "character" ? target.id : null, userId, rootCommentId, replyToId,
+          target.kind === "character" ? target.id : null, target.kind === "catalog" ? target.id : null, userId, rootCommentId, replyToId,
           ...guard.args, ...targetQuery.binds, body, requestKey, requestHash),
       ...contentEmojiStatements(db, "comment", source, [userId, requestKey], body, userId, true),
       ...commentImageStatements(db, ids, userId, source, [userId, requestKey]),
@@ -679,6 +686,15 @@ export async function createComment(
         WHERE c.user_id=? AND c.request_key=? AND c.root_comment_id IS NOT NULL
           AND recipient.id<>c.user_id AND recipient.status='active'
           AND ${commentRecipientReadSql("c", "recipient.id")}
+        ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
+      // Catalog owners receive new root comments; replies use the shared reply notice.
+      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,work_comment_id)
+        SELECT 'system_notice',c.user_id,recipient.id,'','',
+          'catalog-comment:'||c.id||':'||recipient.id,c.id
+        FROM published_comments c JOIN catalogs catalog ON catalog.id=c.catalog_id
+        JOIN users recipient ON recipient.id=catalog.owner_user_id
+        WHERE c.user_id=? AND c.request_key=? AND c.root_comment_id IS NULL
+          AND recipient.id<>c.user_id AND recipient.status='active'
         ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
       mentionNotification(db, userId, body, "", "comment", source, [userId, requestKey]),
     ]);
@@ -855,7 +871,7 @@ async function requiredComment(
   const access = commentTargetReadCondition(await getCurrentUser(runtime));
   const row = await getD1(runtime)
     .prepare(
-      `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.root_comment_id,c.reply_to_comment_id,
+      `SELECT c.id,c.pinned_at,c.work_id,c.creator_id,c.character_id,c.catalog_id,c.root_comment_id,c.reply_to_comment_id,
           ${commentFloorSql()} AS floor_number,
           (SELECT target.display_name FROM published_comments target_comment
            JOIN users target ON target.id=target_comment.user_id
@@ -890,39 +906,25 @@ export async function assertReadableCommentTarget(
         ? "作品不存在"
         : target.kind === "creator"
           ? "作者不存在"
-          : "角色不存在",
+          : target.kind === "catalog" ? "目录不存在" : "角色不存在",
     );
 }
 
 function targetMatchesRow(
   target: CommentTarget,
-  row: Pick<CommentRow, "work_id" | "creator_id" | "character_id">,
+  row: Pick<CommentRow, "work_id" | "creator_id" | "character_id" | "catalog_id">,
 ): boolean {
   const actual = commentTarget(row);
   return actual.kind === target.kind && actual.id === target.id;
 }
 
 function commentTarget(
-  row: Pick<CommentRow, "work_id" | "creator_id" | "character_id">,
+  row: Pick<CommentRow, "work_id" | "creator_id" | "character_id" | "catalog_id">,
 ): CommentTarget {
-  if (
-    row.work_id !== null &&
-    row.creator_id === null &&
-    row.character_id === null
-  )
-    return { kind: "work", id: row.work_id };
-  if (
-    row.creator_id !== null &&
-    row.work_id === null &&
-    row.character_id === null
-  )
-    return { kind: "creator", id: row.creator_id };
-  if (
-    row.character_id !== null &&
-    row.work_id === null &&
-    row.creator_id === null
-  )
-    return { kind: "character", id: row.character_id };
+  if (row.work_id !== null) return { kind: "work", id: row.work_id };
+  if (row.creator_id !== null) return { kind: "creator", id: row.creator_id };
+  if (row.character_id !== null) return { kind: "character", id: row.character_id };
+  if (row.catalog_id !== null) return { kind: "catalog", id: row.catalog_id };
   throw new Error("评论目标不合法");
 }
 
@@ -948,13 +950,14 @@ function commentFloorSql(kind?: CommentTarget["kind"]): string {
       AND floor.${target}_id=c.${target}_id
       AND (floor.created_at,floor.id)<=(c.created_at,c.id)
   )`;
-  // A known target avoids an OR across three unrelated indexes. Single-comment
+  // A known target avoids an OR across unrelated indexes. Single-comment
   // lookups choose the same indexed count using the row's one non-null target.
   return `CASE WHEN c.root_comment_id IS NOT NULL THEN NULL ELSE ${kind
     ? count(kind)
     : `CASE WHEN c.work_id IS NOT NULL THEN ${count("work")}
         WHEN c.creator_id IS NOT NULL THEN ${count("creator")}
-        ELSE ${count("character")} END`} END`;
+        WHEN c.character_id IS NOT NULL THEN ${count("character")}
+        ELSE ${count("catalog")} END`} END`;
 }
 
 function mapComment(

@@ -116,7 +116,7 @@ export async function uploadCommentImage(runtime: AppRuntime, request: Request) 
         throw new HttpError(404, "吐槽不存在或已隐藏。");
       if (kind === "timelineReply") permissionGate += ` AND EXISTS(${PUBLIC_STATUS.replace("e.id=?", `e.id=${id}`)})`;
     } else {
-      if ((kind !== "work" && kind !== "creator" && kind !== "character") || !Number.isSafeInteger(id) || id <= 0)
+      if ((kind !== "work" && kind !== "creator" && kind !== "character" && kind !== "catalog") || !Number.isSafeInteger(id) || id <= 0)
         throw new HttpError(400, "评论目标无效。");
       await assertReadableCommentTarget(runtime, { kind, id });
     }

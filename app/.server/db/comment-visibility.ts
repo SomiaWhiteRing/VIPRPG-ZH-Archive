@@ -7,7 +7,8 @@ export function commentTargetReadCondition(user: ArchiveUser | null, alias = "c"
   return {
     sql: `(EXISTS(SELECT 1 FROM works comment_work WHERE comment_work.id=${alias}.work_id AND ${work.sql})
       OR EXISTS(SELECT 1 FROM creators cr WHERE cr.id=${alias}.creator_id AND cr.public_at IS NOT NULL)
-      OR EXISTS(SELECT 1 FROM characters ch WHERE ch.id=${alias}.character_id))`,
+      OR EXISTS(SELECT 1 FROM characters ch WHERE ch.id=${alias}.character_id)
+      OR EXISTS(SELECT 1 FROM catalogs catalog WHERE catalog.id=${alias}.catalog_id AND catalog.status='published'))`,
     binds: work.binds,
   };
 }
@@ -19,6 +20,7 @@ export function commentTargetQuery(target: CommentTarget, user: ArchiveUser | nu
   }
   return {
     sql: target.kind === "creator" ? "SELECT id FROM creators WHERE id=? AND public_at IS NOT NULL"
+      : target.kind === "catalog" ? "SELECT id FROM catalogs WHERE id=? AND status='published'"
       : "SELECT id FROM characters WHERE id=?",
     binds: [target.id],
   };

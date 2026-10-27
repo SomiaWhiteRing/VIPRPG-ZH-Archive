@@ -95,7 +95,7 @@ export async function auditedEntityBatch(
 }
 
 export function commentAuditSnapshot(id: number): AuditSnapshot {
-  return { sql: `SELECT json_object('id',id,'workId',work_id,'creatorId',creator_id,'characterId',character_id,
+  return { sql: `SELECT json_object('id',id,'workId',work_id,'creatorId',creator_id,'characterId',character_id,'catalogId',catalog_id,
     'userId',user_id,'rootCommentId',root_comment_id,'replyToCommentId',reply_to_comment_id,'body',body,
     'images',json((SELECT json_group_array(json_object('id',id,'fingerprint',fingerprint,'format',format,
       'width',width,'height',height,'size',size,'position',position)) FROM

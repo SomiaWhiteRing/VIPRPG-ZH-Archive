@@ -8,11 +8,11 @@ import { Link } from "react-router";
 export function CommentTargetImage({ comment }: { comment: UserCommentSummary }) {
   return (
     <Link
-      aria-label={`查看${comment.target.kind === "work" ? "作品" : comment.target.kind === "creator" ? "作者" : "角色"}：${comment.targetTitle}`}
+      aria-label={`查看${comment.target.kind === "work" ? "作品" : comment.target.kind === "creator" ? "作者" : comment.target.kind === "catalog" ? "目录" : "角色"}：${comment.targetTitle}`}
       className="block w-24 shrink-0"
       to={commentTargetHref(comment.target)}
     >
-      {comment.target.kind === "work" ? (
+      {comment.target.kind === "work" || comment.target.kind === "catalog" ? (
         <span className="relative block aspect-4/3 overflow-hidden rounded-md border border-border bg-muted/15">
           <WorkThumbnail
             blobSha256={comment.coverBlobSha256}

@@ -62,6 +62,7 @@ const FROM = `FROM timeline_events e JOIN users u ON u.id=e.user_id
   LEFT JOIN public_works cw ON cw.id=c.work_id
   LEFT JOIN creators cr ON cr.id=c.creator_id AND cr.public_at IS NOT NULL
   LEFT JOIN characters ch ON ch.id=c.character_id
+  LEFT JOIN catalogs comment_catalog ON comment_catalog.id=c.catalog_id
   LEFT JOIN forum_posts fp ON fp.id=(SELECT pp.id FROM forum_public_posts pp WHERE pp.id=e.forum_post_id)
   LEFT JOIN forum_topics ft ON ft.id=fp.topic_id
   LEFT JOIN archive_versions av ON av.id=e.archive_version_id
@@ -76,7 +77,7 @@ const FROM = `FROM timeline_events e JOIN users u ON u.id=e.user_id
 const COLUMNS = `e.id,e.user_id,e.kind,e.action,e.created_at,e.updated_at,e.body,e.previous_name,e.new_name,e.work_id,e.catalog_id,e.comment_id,e.forum_post_id,
   u.display_name,u.avatar_blob_sha256,
   CASE WHEN e.kind='catalog' THEN cat.title WHEN e.kind='discussion' THEN ft.title
-    ELSE COALESCE(NULLIF(w.chinese_title,''),w.original_title,NULLIF(cw.chinese_title,''),cw.original_title,cr.name,ch.primary_name) END AS target_title,
+    ELSE COALESCE(NULLIF(w.chinese_title,''),w.original_title,NULLIF(cw.chinese_title,''),cw.original_title,cr.name,ch.primary_name,comment_catalog.title) END AS target_title,
   COALESCE(w.id,cw.id) AS preview_work_id,
   COALESCE(NULLIF(w.chinese_title,''),w.original_title,NULLIF(cw.chinese_title,''),cw.original_title) AS preview_work_title,
   COALESCE(w.original_title,cw.original_title) AS preview_work_original_title,
@@ -86,7 +87,7 @@ const COLUMNS = `e.id,e.user_id,e.kind,e.action,e.created_at,e.updated_at,e.body
   CASE WHEN e.kind='comment' THEN (SELECT COUNT(*) FROM public_comments r WHERE r.root_comment_id=c.id)
     WHEN e.kind='discussion' THEN (SELECT COUNT(*) FROM forum_public_posts p WHERE p.topic_id=ft.id AND p.post_number>1)
     ELSE NULL END AS source_reply_count,
-  c.work_id AS comment_work_id,c.creator_id AS comment_creator_id,c.character_id AS comment_character_id,
+  c.work_id AS comment_work_id,c.creator_id AS comment_creator_id,c.character_id AS comment_character_id,c.catalog_id AS comment_catalog_id,
   cat.description AS catalog_description,c.body AS source_body,
   ft.id AS topic_id,fp.post_number,
   (SELECT favorite_note FROM user_work_entries f WHERE f.user_id=e.user_id AND f.work_id=e.work_id AND f.favorited_at IS NOT NULL) AS favorite_note`;
@@ -98,7 +99,7 @@ type TimelineRow = {
   preview_work_id: number | null; preview_work_title: string | null; preview_work_original_title: string | null;
   preview_work_genre: string | null; preview_work_engine: string | null; preview_work_cover: string | null;
   source_reply_count: number | null;
-  comment_work_id: number | null; comment_creator_id: number | null; comment_character_id: number | null;
+  comment_work_id: number | null; comment_creator_id: number | null; comment_character_id: number | null; comment_catalog_id: number | null;
   catalog_description: string | null; source_body: string | null; topic_id: number | null; post_number: number | null; favorite_note: string | null;
   like_count: number; reply_count: number; liked_by_me: number;
 };
@@ -119,7 +120,7 @@ function mapItem(row: TimelineRow, viewer: Awaited<ReturnType<typeof getCurrentU
   if (row.catalog_id) href = `/catalogs/${row.catalog_id}`;
   else if (row.work_id) href = `/games/${row.work_id}`;
   else if (row.comment_id) {
-    href = `${row.comment_work_id ? `/games/${row.comment_work_id}` : row.comment_creator_id ? `/creators/${row.comment_creator_id}` : `/characters/${row.comment_character_id}`}#sec-comments`;
+    href = `${row.comment_work_id ? `/games/${row.comment_work_id}` : row.comment_creator_id ? `/creators/${row.comment_creator_id}` : row.comment_catalog_id ? `/catalogs/${row.comment_catalog_id}` : `/characters/${row.comment_character_id}`}#sec-comments`;
   } else if (row.forum_post_id) href = `/discussions/${row.topic_id}/posts/${row.post_number}`;
   const sourceText = row.kind === "favorite" ? emojiText(row.favorite_note ?? "") : "";
   const body = row.kind === "status" ? timelineBody(row.body ?? "", emojis)

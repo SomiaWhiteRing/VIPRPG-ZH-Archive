@@ -1,3 +1,5 @@
+import { listRootComments } from "@/app/.server/db/work-community";
+import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
   getCatalogById,
@@ -15,7 +17,7 @@ import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatDate, formatNumber } from "@/lib/format";
 import { useEffect, useState, type ReactNode } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useRevalidator } from "react-router";
 import { CatalogSummaryEditor } from "../catalog-manager";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -29,10 +31,12 @@ export async function loader(args: LoaderFunctionArgs) {
   ]);
   if (!catalog) throwNotFound();
 
-  const ownerCatalogs = await searchCatalogsForOwner(runtime, {
-    userId: catalog.ownerUserId,
-    pageSize: 6,
-  });
+  const [ownerCatalogs, comments, commentCount] = await Promise.all([
+    searchCatalogsForOwner(runtime, { userId: catalog.ownerUserId, pageSize: 6 }),
+    listRootComments(runtime, { kind: "catalog", id }, currentUser?.id ?? null, null),
+    runtime.db.prepare("SELECT COUNT(*) AS count FROM published_comments WHERE catalog_id=?")
+      .bind(id).first<{ count: number }>(),
+  ]);
   const otherCatalogs = ownerCatalogs.items
     .filter((item) => item.id !== catalog.id)
     .slice(0, 5);
@@ -56,6 +60,8 @@ export async function loader(args: LoaderFunctionArgs) {
     catalog,
     currentUser: pickPageFields(currentUser, ["id"]),
     otherCatalogs,
+    comments,
+    commentCount: commentCount?.count ?? 0,
     canEditSummary,
     canDelete,
     canEditItems,
@@ -73,7 +79,10 @@ export default function CatalogPage() {
     canEditSummary,
     canDelete,
     canEditItems,
+    comments,
+    commentCount,
   } = useLoaderData<typeof loader>();
+  const revalidator = useRevalidator();
   const [snapshot, setSnapshot] = useState({ source: initialCatalog, catalog: initialCatalog });
   const catalog = snapshot.source === initialCatalog ? snapshot.catalog : initialCatalog;
   const updateCatalog = (next: typeof catalog) => setSnapshot({ source: initialCatalog, catalog: next });
@@ -160,6 +169,16 @@ export default function CatalogPage() {
             items={catalog.items}
             onSaved={updateCatalog}
           />
+          <section aria-labelledby="comments-title" className="mt-8 scroll-mt-28 border-t border-border py-4.5" id="sec-comments">
+            <h2 className="mb-4 text-base font-bold" id="comments-title">评论（{formatNumber(commentCount)}）</h2>
+            <CommentPanel
+              target={{ kind: "catalog", id: catalog.id }}
+              currentUserId={currentUser?.id ?? null}
+              initialComments={comments.items}
+              initialNextCursor={comments.nextCursor}
+              onChanged={() => { void revalidator.revalidate(); }}
+            />
+          </section>
         </div>
 
         <aside
