@@ -4,8 +4,8 @@ import { getUserAvatarSrc } from "@/lib/user-profile";
 import { layoutSeaDialogue } from "@/lib/ui/eternal-sea";
 import type { SeaActor } from "./identity";
 
-type Row = { id: number; actor_key: string; user_id: number | null; name: string; body: string; avatar_mode: SeaAvatarMode; created_at: number };
-type Profile = { id: number; avatar_blob_sha256: string | null; status: string };
+type Row = { id: number; actor_key: string; user_id: number | null; name: string; body: string; avatar_mode: SeaAvatarMode; created_at: number; hidden_at: number | null };
+type Profile = { id: number; display_name: string; avatar_blob_sha256: string | null; status: string };
 type Fault = { ok: false; status: number; detail: string; code: string };
 type Published = { ok: true; revision: number; message: SeaMessage; repeated: boolean };
 const fault = (status: number, detail: string, code: string): Fault => ({ ok: false, status, detail, code });
@@ -40,12 +40,14 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
   private row(id: number) {
     return this.ctx.storage.sql.exec<Row>("SELECT * FROM messages WHERE id=?", id).toArray()[0];
   }
-  private async decorate(rows: Row[]): Promise<SeaMessage[]> {
+  private async profiles(rows: Row[]) {
     const ids = [...new Set(rows.filter(r => r.user_id !== null).map(r => r.user_id!))];
     const profiles = ids.length
-      ? (await this.env.DB.prepare(`SELECT id,avatar_blob_sha256,status FROM users WHERE id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all<Profile>()).results
+      ? (await this.env.DB.prepare(`SELECT id,display_name,avatar_blob_sha256,status FROM users WHERE id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all<Profile>()).results
       : [];
-    const users = new Map(profiles.map(user => [user.id, user]));
+    return new Map(profiles.map(user => [user.id, user]));
+  }
+  private decorate(rows: Row[], users: Map<number, Profile>): SeaMessage[] {
     return rows.map(row => {
       const user = row.user_id === null ? undefined : users.get(row.user_id);
       return {
@@ -60,11 +62,27 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     // Capture the revision and rows before awaiting profile lookups.
     const revision = this.revision();
     const rows = this.ctx.storage.sql.exec<Row>("SELECT * FROM messages WHERE hidden_at IS NULL ORDER BY id DESC LIMIT ?", SEA_ROOM_LIMIT).toArray().reverse();
-    return { revision, messages: await this.decorate(rows) };
+    return { revision, messages: this.decorate(rows, await this.profiles(rows)) };
   }
-  async moderation(): Promise<SeaModeration> {
+  async moderation(requestedPage = 1): Promise<SeaModeration> {
+    const revision = this.revision();
+    const total = this.ctx.storage.sql.exec<{ total: number }>("SELECT COUNT(*) AS total FROM messages").one().total;
+    const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / SEA_ROOM_LIMIT)));
+    const rows = this.ctx.storage.sql.exec<Row>("SELECT * FROM messages ORDER BY id DESC LIMIT ? OFFSET ?", SEA_ROOM_LIMIT, (page - 1) * SEA_ROOM_LIMIT).toArray();
+    const users = await this.profiles(rows);
     return {
-      window: await this.snapshot(),
+      window: { revision, messages: this.decorate(rows, users).map((message, index) => {
+        const row = rows[index];
+        const user = row.user_id === null ? undefined : users.get(row.user_id);
+        return {
+          ...message,
+          authorName: user?.status === "deleted" ? "账户已注销" : user?.display_name ?? row.name,
+          authorAvatarBlobSha256: user && user.status !== "deleted" ? user.avatar_blob_sha256 : null,
+          anonymous: row.avatar_mode === "alex",
+          hiddenAt: row.hidden_at,
+        };
+      }) },
+      page, total,
       mutes: this.ctx.storage.sql.exec<{ message_id: number; name: string; until: number }>("SELECT message_id,name,until FROM mutes WHERE until>? ORDER BY until DESC", Date.now()).toArray()
         .map(row => ({ messageId: row.message_id, name: row.name, until: row.until })),
     };
@@ -98,7 +116,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       return { row: this.row(id)!, revision: this.advance(), repeated: false };
     });
     if ("ok" in result) return result;
-    const [message] = await this.decorate([result.row]);
+    const [message] = this.decorate([result.row], await this.profiles([result.row]));
     if (!result.repeated) this.broadcast({ type: "message", revision: result.revision, message });
     return { ok: true, revision: result.revision, message, repeated: result.repeated };
   }

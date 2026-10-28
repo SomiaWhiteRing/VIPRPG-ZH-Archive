@@ -34,7 +34,8 @@ seaApi.get("/api/sea/moderation", async c => {
   const runtime = c.get("runtime");
   const auth = await requireAnyPermission(runtime, c.req.raw, ["sea.message.moderate_any", "sea.user.mute_any"]);
   if ("response" in auth) return auth.response;
-  return json({ ok: true, ...await seaRoom(runtime).moderation() });
+  const page = parsePositiveId(c.req.query("page") ?? "1", "page", "页码无效");
+  return json({ ok: true, ...await seaRoom(runtime).moderation(page) });
 });
 seaApi.delete("/api/sea/messages/:id", async c => {
   const runtime = c.get("runtime");

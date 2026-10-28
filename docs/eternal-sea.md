@@ -32,13 +32,13 @@ python scripts/import-eternal-sea-assets.py --rtp-collection ../RPGRewriter-Ownu
 ## 服务与权限
 
 - `worker.ts` 导出 `EternalSeaRoom`，`SEA_ROOM.getByName("public")` 是该环境的唯一聊天室。模板沿用 `exports` 的 SQLite 声明；staging 与 production 的 binding 都属于自己的 Worker，配置校验禁止跨 Worker 绑定。
-- DO 保存消息、单调编号、窗口版本号、限流状态、禁言和审核日志。展示查询固定为最近 100 条未隐藏消息；历史保留，未设置自动删除。左右头像由永久消息编号的奇偶决定，移出最旧消息时其余对话保持原侧。
+- DO 保存消息、单调编号、窗口版本号、限流状态、禁言和审核日志。前台展示查询固定为最近 100 条未隐藏消息；历史保留，未设置自动删除。左右头像由永久消息编号的奇偶决定，移出最旧消息时其余对话保持原侧。
 - `GET /api/sea/messages` 返回最新窗口，`POST /api/sea/messages` 提交正文与 `own/alex` 头像选择。名称、身份、时间和编号均由服务器生成；服务器将所有选择 `alex` 的发言（包括已有记录）署名统一显示为“无名的VIPPER”，限流、禁言仍关联原身份。沿用相同字形宽度和行布局校验，拒绝空白、超限及非法控制字符。请求体上限 4096 字节。
 - 每次提交具有 UUID，同一身份重试相同 UUID 返回原消息；相同 UUID 携带不同内容返回 409。客户端在提交失败时保留草稿与 UUID，成功后同步服务器窗口；实时与 HTTP 更新按编号去重。
 - `GET /api/sea/socket` 显式检查 Origin，直接转发 DO 握手响应。使用休眠 WebSocket，25 秒发送一次自动响应的心跳；连接断开后逐步退避到 30 秒。快照前的增量暂存，版本缺口触发完整窗口同步。每个 IP 最多 20 个同时连接，聊天室最多 1000 个。
 - 登录用户每次提交读取当前会话；失效登录态返回 401，不自动换成游客身份。游客使用 30 天 HttpOnly、SameSite=Lax 的 HMAC 签名 cookie，署名固定为“无名的VIPPER”。请求来源只使用边缘 cf-connecting-ip；本地开发使用独立的 local 标识，忽略转发 IP 头。
 - 每个身份至少间隔 3 秒、固定分钟窗口最多 20 条；每个 IP 每分钟最多 60 条。限流在 DO 中处理，不占用认证邮件和浏览统计的配额。重试已提交消息不重复消耗配额。
 - 账号头像关联用户 ID；读取窗口时批量解析当前头像，沿用现有用户头像的资源引用保护。已注销账号选择 `own` 的发言显示“账户已注销”，使用亚历克斯脸图；选择 `alex` 的发言仍署名“无名的VIPPER”。
-- `/admin/sea` 管理最近 100 条对话，可隐藏发言、禁言 30 分钟和解除禁言。接口分别校验 `sea.message.moderate_any` 与 `sea.user.mute_any`；`0033_eternal_sea_permissions.sql` 赋予 admin、super_admin，并同步固定开发种子。审核日志与审核操作在 DO 同一 SQLite 事务中保存。
+- `/admin/sea` 按新到旧分页管理全部历史，每页 100 条，包含标明状态的已隐藏发言；可隐藏发言、禁言 30 分钟和解除禁言。后台显示发帖人的当前账号名与头像，匿名发言在账号名后标注“（匿名）”，游客显示“无名的VIPPER（匿名）”，注销账号显示“账户已注销”。`GET /api/sea/moderation?page=1` 返回该页、总数、实际页码与当前禁言，超过末页的页码回落至末页；账号身份字段仅通过受权限保护的后台接口返回，前台与 WebSocket 仍使用匿名署名。接口分别校验 `sea.message.moderate_any` 与 `sea.user.mute_any`；`0033_eternal_sea_permissions.sql` 赋予 admin、super_admin，并同步固定开发种子。审核日志与审核操作在 DO 同一 SQLite 事务中保存。
 
 浏览器交互、移动设备输入和 EasyRPG 参考画面对照需单独验收，静态检查或 HTTP 检查不替代这些结果。
