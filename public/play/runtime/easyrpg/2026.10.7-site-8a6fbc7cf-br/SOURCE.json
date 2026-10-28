@@ -1,12 +1,12 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "be706d14c8da12cec931f9495ea540556e3a1298",
-  "version": "2026.10.7-site-be706d14c-br",
-  "build": "local-docker-20261028-be706d14c",
-  "artifact": "kai-2026.10.7-site-be706d14c-web.zip",
-  "archiveSha256": "690493ab53be89c1e41d04a65ddb4c2c011d31742550d4292de92bdda29a2564",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/be706d14c8da12cec931f9495ea540556e3a1298",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/be706d14c8da12cec931f9495ea540556e3a1298/COPYING",
+  "revision": "8a6fbc7cf783af265329082983c220ba26f795b7",
+  "version": "2026.10.7-site-8a6fbc7cf-br",
+  "build": "local-docker-20261029-8a6fbc7cf",
+  "artifact": "kai-2026.10.7-site-8a6fbc7cf-web.zip",
+  "archiveSha256": "983a78543625399dd13f597023d2590c616d3ccd6c8d992007ae0beb89396e9a",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/8a6fbc7cf783af265329082983c220ba26f795b7",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/8a6fbc7cf783af265329082983c220ba26f795b7/COPYING",
   "sourceState": "patched-commit",
   "sourcePatches": [
     {
@@ -80,8 +80,8 @@
       "sha256": "db3df3ad763208920b70a98968bcb3ca59cd2b82436fb8612956eab7348042bb"
     },
     "easyrpg-player.wasm": {
-      "size": 18061976,
-      "sha256": "78291b15dca7b78b747c43d1c577082ec543083f5ae423c8e640273c20e6bf36"
+      "size": 18062712,
+      "sha256": "3f01353fb0142afedbf83e0c03c6abd61501d6d1d93cf8ab4220313e5568a3e7"
     },
     "easyrpg-player.data": {
       "size": 7557598,
@@ -144,8 +144,8 @@
       "sha256": "22ea534954e6bd50ef05157a9a6c02009815ff9f97769bb25df041385514c956"
     },
     "easyrpg-player.wasm.br": {
-      "size": 4735515,
-      "sha256": "a67f52c7beeff4d5404f305a7cd9912d0f3c53340ad8f74cb39d29fd2721f2d3"
+      "size": 4735418,
+      "sha256": "ca759971a62f82ecfdb8d33c5badb486ea8c3c5723fa7e1d4e83d9cbf4cd2f5b"
     },
     "easyrpg-player.data.br": {
       "size": 6311434,

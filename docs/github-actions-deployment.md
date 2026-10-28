@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | [Deploy](../.github/workflows/deploy.yml) | 主站相关变更自动部署 staging | 选择 staging；或选择 production，点击 Run workflow 后检查通过即部署，无需再 review |
 | [Deploy Status](../.github/workflows/status-deploy.yml) | 不自动发布 | 检查通过后由本人批准，部署 status.viprpg.org |
-| [Android Release](../.github/workflows/android.yml) | Android 及共用构建依赖变化生成 staging APK 预发布包 | 手动选择 target=production，构建并验证正式 origin APK 后直接发布正式 Release |
+| [Android Release](../.github/workflows/android.yml) | Android 及共用构建依赖变化生成 staging APK 预发布包 | 手动选择 target=production，构建并验证正式 origin APK 后直接发布正式 Release；勾选 draft 则保留未公开草稿 |
 
 主站 `checks` 与 `candidate` 签出同一本次 SHA，在两个独立运行器中并行验证。`checks` 保留类型、静态、安全、爬虫策略、归档性能及时间线契约检查；`candidate` 使用隔离配置执行既有完整 `test:flow`。两者都成功后才允许部署，互不共享 D1、R2、Worker 或浏览器状态。手动选择 production 并运行 workflow 即确认发布；production job 在两组检查成功后直接执行，不再等待 Review deployments。部署 job 签出同一 SHA，生成目标配置、构建并核对最终绑定，再部署和运行对应环境 smoke。Codex 代为触发须有用户对本次正式发布的明确授权。
 

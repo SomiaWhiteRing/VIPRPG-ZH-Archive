@@ -61,6 +61,7 @@ App 默认每次冷启动检查一次更新；版本页可关闭启动检查或�
 
 - CI 版本名为 `0.3.<run_number>`，`versionCode = 100000 + run_number`；递增由 workflow 负责，不用逐次修改 Gradle。不要重建 workflow 或降低此序号基数；手动重建旧提交使用新的运行序号。
 - tag 为 `android-<staging|production>-<versionCode>`，附件包含 `viprpg-release.apk` 与 `SHA256SUMS.txt`，说明自动结算该次提交的 GitHub release notes。所有附件就绪后才公开 Release；已经发布的运行重跑时跳过打包，避免同一构建身份对应不同文件。
+- 手动构建勾选 `draft` 时，仍分配独立递增版本号、使用固定签名并验包，但 GitHub Release 保持未公开草稿，供后台准备更新使用。默认不勾选，既有自动发布行为不变；站内版本仍须单独保存或发布。
 - main 自动构建和手动 staging 构建连接 staging，Release 标为预发布；手动 production 构建连接 `https://viprpg.org`，先保存已验证 APK 和 SHA-256 artifact，再由发布 job 下载同一 artifact 并核对摘要后公开正式 Release，不增加第二次 review。两者都不自动更改 Latest 或网站推荐频道；正式构建与其他正式维护串行。切换来源不会迁移原来源的离线游戏或存档。
 - 四项仓库 Secrets 为 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`。只使用固定签名，缺少配置直接失败，不回退到临时 debug key。公开证书见 [release-certificate.pem](release-certificate.pem)，CI 发布前核对签名身份。
 - GitHub 构建成功不代表网站部署或站内发布完成。站点部署仍走独立 Deploy workflow；APK 上传与发布沿用后台入口。

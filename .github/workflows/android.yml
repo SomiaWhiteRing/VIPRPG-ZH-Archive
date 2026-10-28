@@ -68,6 +68,11 @@ on:
         default: staging
         type: choice
         options: [staging, production]
+      draft:
+        description: Keep the verified APK as an unpublished release draft
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -253,4 +258,4 @@ jobs:
           gh release upload "$RELEASE_TAG" output/android/viprpg-release.apk output/android/SHA256SUMS.txt --clobber
           prerelease=true
           if [[ "$RELEASE_TARGET" == 'production' ]]; then prerelease=false; fi
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$prerelease" --latest=false --notes-file "$notes"
+          gh release edit "$RELEASE_TAG" --draft="${{ inputs.draft == true && 'true' || 'false' }}" --prerelease="$prerelease" --latest=false --notes-file "$notes"
