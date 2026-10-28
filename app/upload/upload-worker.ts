@@ -11,7 +11,7 @@ import { ResourceReferenceScan } from "@/lib/archive/resource-cleanup";
 import { MissingResourceScan } from "@/lib/archive/missing-resources";
 import { createRtpResolver } from "@/lib/archive/rtp-restore";
 import { isSharedPlayerPath } from "@/lib/archive/shared-player";
-import { detectEasyRpgConfig } from "@/lib/archive/easyrpg-config";
+import { addDetectedManiacPf, detectEasyRpgConfig } from "@/lib/archive/easyrpg-config";
 import type { ArchiveCommitMetadata, ArchiveManifest, ArchiveManifestFile, ArchiveSourceManifest, ExcludedFileTypeSummary } from "@/lib/archive/manifest";
 import type { BrowserUploadTaskSnapshot, MetadataBlobUpload, PreparedArchiveSource, UploadRecoveryDraft, UploadFormDraft, UploadSourceKind, UploadTaskCommitResult, UploadTaskPhase, UploadTaskStats, UploadWorkerInput, UploadWorkerOutput } from "@/app/upload/upload-types";
 import { deleteUploadDraft, draftKey, putUploadDraft } from "@/app/upload/upload-drafts";
@@ -173,6 +173,22 @@ async function startSource(
       message.sourceKind,
     );
     await waitForCancellation(runtime);
+    const easyRpg = await detectEasyRpgConfig(sourceFiles);
+    if (easyRpg.patches.maniac > 0) {
+      const executable = sourceFiles.find(file => file.path.toLowerCase() === "rpg_rt.exe");
+      const iniIndex = sourceFiles.findIndex(file => file.path.toLowerCase() === "rpg_rt.ini");
+      const ini = sourceFiles[iniIndex];
+      if (executable && executable.size <= 64 * 1024 ** 2 && (!ini || ini.size <= 1024 ** 2)) {
+        const bytes = addDetectedManiacPf(await executable.bytes(), ini ? await ini.bytes() : null);
+        if (bytes) {
+          const prepared = { ...(ini ?? { path: "RPG_RT.ini", mtimeMs: null,
+            contentType: contentTypeForArchivePath("RPG_RT.ini") }), size: bytes.length, bytes: async () => bytes };
+          if (ini) sourceFiles[iniIndex] = prepared;
+          else sourceFiles.push(prepared);
+        }
+      }
+    }
+    await waitForCancellation(runtime);
     const sourceSize = sourceFiles.reduce((sum, file) => sum + file.size, 0);
 
     task = {
@@ -198,12 +214,6 @@ async function startSource(
     const scan = await scanAndHash(task, sourceFiles, message.useSharedPlayer, message.checkMissingResources);
     runtime.task = task = scan.task;
     await waitForCancellation(runtime);
-    const easyRpg = await detectEasyRpgConfig(sourceFiles.map(file => ({
-      ...file,
-      bytes: async () => scan.includedFiles.find(included => included.path === file.path)?.cachedBytes ?? file.bytes(),
-    })));
-    await waitForCancellation(runtime);
-
     try {
       // Choose covers only after cleanup; title and face-sheet metadata still use the original source.
       const prefill = await inspectUploadSource(

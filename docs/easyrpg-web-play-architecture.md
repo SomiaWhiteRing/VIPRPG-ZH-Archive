@@ -16,6 +16,7 @@
 - 浏览器拿到 ZIP 后在本地解包，解包完成后丢弃 ZIP，不长期保存完整 ZIP。
 - 解包后的 Web Play 运行目录写入 OPFS；安装器通过 `shouldSkipWebPlayLocalWrite` 跳过 `.txt`、`.exe` 和普通 `.dll`，保留规定的根目录引擎/补丁 DLL。`web-play-v2` 下载 ZIP 只排除共享 Windows Player.exe，本地过滤独立执行。普通下载 ZIP 保留全部归档文件；启用共享播放器的归档额外补入当前推荐的 Kai Windows Player.exe。
 - 新上传在完整原包上解析 `EasyRPG.ini`、`RPG_RT.exe` 的 PE 版本/LOGO/段信息、LDB 标记和文件特征，将结果保存于 `manifest.archiveVersion.easyRpg`（`easyrpg-config.v1`）。服务器在 source-ready 阶段用已验证的原文件复核配置；配置参与 source manifest 与最终 manifest 哈希，不另存 Work/D1 配置副本。
+- 上传归档前，为缺少 `[RPG_RT] pf` 的旧版固定 pf Maniac 自动补入 `pf=1`。识别要求 32 位 Maniac EXE 的可执行段同时存在变量查询和表达式查询两条版本返回指令，且返回同一日期版本并带 pf 高位；只有 DLL 名称、文案或单个常数不构成依据。已有 `pf`（包括 `pf=0`）原样保留，识别不确定时不改写。只插入 ASCII 配置，保留 INI 原有字节和换行；缺少 INI/节时创建。文件夹、ZIP、7z 使用同一入口，修改后的字节参与摘要、核心包及统计，源目录不写回。不批量修改历史归档。
 - Web Play 元数据读取并校验 manifest 后下发 `easyRpg`；浏览器与 Android 套壳的安装记录保存该配置，在线/离线启动均生成明确的引擎、编码和站点收录范围内的补丁参数。任何补丁参数会关闭 EasyRPG 补丁自动检测，因此包含明确关闭的补丁；Destiny 不在收录范围内，不记录也不生成参数。沿用当前 Web runtime，无须重建。旧 manifest 缺少配置时沿用原启动行为。
 - Android 在线页随网站更新；离线页与原生安装记录处理封装在 VIPRPG APK 中，需要发布新版 APK 才能在新安装中保存并应用 `easyRpg`。旧安装记录缺少配置时沿用原启动行为，不在启动时联网补判。
 - 显式 `EasyRPG.ini` 配置优先；自动判定时先核对 LDB 的 2000/2003 系列，只接受同系列 EXE 的版本和 Maniac 证据。EXE 与数据库跨系列冲突时，同时忽略该 EXE 的版本、Maniac 标记和大小，再按数据库/标准运行库标记 → MP3/有效 EXE 大小 → 编码回退选择具体版本，避免替换的 2003/Maniac 执行文件把 2000 游戏带入错误模式。缺少数据库时仍可使用 EXE 证据；显式补丁配置及独立 DLL 标记沿用现有规则。没有版本依据且原包未声明编码时，`engine=null`、`engineSource=fallback`，仅保留 liblcf 原有的编码自动识别和版本回退，避免再实现一套近似的 ICU 字符集判定。DLL 只使用文件名和 Harmony 的已知大小，不分析 DLL 内容。

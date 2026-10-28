@@ -21,6 +21,55 @@ export type EasyRpgConfig = {
 type SourceFile = { path: string; size: number; bytes: () => Promise<Uint8Array> };
 const detectionPaths = new Set(["rpg_rt.exe", "rpg_rt.ldb", "rpg_rt.ini", "easyrpg.ini"]);
 export const isEasyRpgDetectionFile = (path: string) => detectionPaths.has(path.toLowerCase());
+
+/** Legacy 32-bit Maniac pf builds bake the pf bit into both version-query
+ * instructions. Modern builds use the project's explicit INI setting instead.
+ * Preserve every original INI byte, including its title's legacy encoding.
+ */
+export function addDetectedManiacPf(executable: Uint8Array, ini: Uint8Array | null): Uint8Array | null {
+  if (parseIni(ini).has("rpg_rt/pf")) return null;
+  if (!inspectExecutable(executable).maniac) return null;
+  const view = new DataView(executable.buffer, executable.byteOffset, executable.byteLength);
+  const pe = view.getUint32(0x3c, true);
+  if (view.getUint16(pe + 4, true) !== 0x14c) return null;
+  const variableVersions = new Set<number>(), expressionVersions = new Set<number>();
+  const sections = pe + 0x18 + view.getUint16(pe + 0x14, true);
+  for (let section = 0; section < view.getUint16(pe + 6, true); section++) {
+    const at = sections + section * 40;
+    if (at + 40 > executable.length) break;
+    if (!(view.getUint32(at + 36, true) & 0x20000000)) continue;
+    const start = view.getUint32(at + 20, true);
+    const end = Math.min(executable.length, start + view.getUint32(at + 16, true));
+    for (let i = start; i + 9 <= end; i++) {
+      const opcode = executable[i];
+      if (opcode !== 0xb8 && opcode !== 0xbb) continue;
+      const bits = view.getUint32(i + 1, true), version = bits & 0x7fffffff;
+      const month = Math.floor(version / 100) % 100, day = version % 100;
+      if (!(bits & 0x80000000) || version < 180101 || version > 991231 || month < 1 || month > 12 || day < 1 || day > 31) continue;
+      // Control Variables: mov ebx, version; jmp to result writeback.
+      if (opcode === 0xbb && executable[i + 5] === 0xe9 && i + 10 <= end) variableVersions.add(version);
+      // Expression Other(version): mov eax, version; mov edx,eax; pop esi; ret.
+      if (opcode === 0xb8 && ((executable[i + 5] === 0x89 && executable[i + 6] === 0xc2) ||
+          (executable[i + 5] === 0x8b && executable[i + 6] === 0xd0)) &&
+          executable[i + 7] === 0x5e && executable[i + 8] === 0xc3) expressionVersions.add(version);
+    }
+  }
+  if (![...variableVersions].some(version => expressionVersions.has(version))) return null;
+
+  const original = ini ?? new Uint8Array();
+  // windows-1252 has one UTF-16 unit per byte, so match offsets are byte offsets.
+  const text = new TextDecoder("windows-1252").decode(original).replace(/^ï»¿/, "   ");
+  const section = /^[\t ]*\[RPG_RT\][^\r\n]*(?:\r?\n|$)/im.exec(text);
+  const offset = section ? section.index + section[0].length : original.length;
+  const newline = text.includes("\r\n") || !text.includes("\n") ? "\r\n" : "\n";
+  const prefix = offset && original[offset - 1] !== 10 ? newline : "";
+  const addition = new TextEncoder().encode(`${prefix}${section ? "" : `[RPG_RT]${newline}`}pf=1${newline}`);
+  const result = new Uint8Array(original.length + addition.length);
+  result.set(original.subarray(0, offset));
+  result.set(addition, offset);
+  result.set(original.subarray(offset), offset + addition.length);
+  return result;
+}
 const engineAliases: Record<string, EasyRpgEngine> = {
   "2000": "rpg2k", "2000v150": "rpg2kv150", "2000e": "rpg2ke",
   "2003": "rpg2k3", "2003v105": "rpg2k3v105", "2003e": "rpg2k3e",
