@@ -1,11 +1,11 @@
 {
-  "version": "2026.10.7-site-f28c77ac7-br",
-  "revision": "f28c77ac7673219956ea7b9f301ccad262f748b4",
-  "build": "local-docker-20261027-f28c77ac7",
+  "version": "2026.10.7-site-be706d14c-br",
+  "revision": "be706d14c8da12cec931f9495ea540556e3a1298",
+  "build": "local-docker-20261028-be706d14c",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "56e9c8871c8b283909126da8c0b72f594cab76ca5899fd695da29ec87bc07572",
+  "archiveSha256": "690493ab53be89c1e41d04a65ddb4c2c011d31742550d4292de92bdda29a2564",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
