@@ -254,7 +254,7 @@ export function createPlayerSession(
       saveNative: (files: Record<string, string>) => localRequest("save", { url: nativeResources?.url, files }),
       workId: metadata.workId,
       runtimeBase: `${metadata.runtimeBasePath}/`,
-      assetBase: `${metadata.runtimeAssetBasePath || metadata.runtimeBasePath}/`,
+      assetBase: new URL(`${metadata.runtimeAssetBasePath || metadata.runtimeBasePath}/`, playerWindow.location.href).href,
       arguments: args,
       signal: lifetime.signal,
       onError: (error: unknown) => onLog("error", formatLogValue(error)),
