@@ -274,9 +274,9 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 停止与站内离页须等待 `player.stop()`：先退出引擎，再等待串行 `IDBFS.syncfs(false)`，最后关闭音频、终止 Worker、移除 iframe、释放资源共享锁和 Work 级存档独占锁。写入失败保留 Worker 与锁并允许重试。浏览器强制关页或进程被杀时，异步写入完成没有保证，因此游戏正常保存时也会同步 IDBFS。安装 Worker 在离页时终止；普通页面数据刷新不重建播放器。
 
-当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。当前运行包为 Kai 2026.10.7，包含拼音输入法和场景交互高亮；两项引擎功能默认开启，可在「追加功能」中关闭，拼音通过游戏内姓名输入界面的布局切换使用。当前包基于 [Player 提交 8a6fbc7cf](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/commit/8a6fbc7cf783af265329082983c220ba26f795b7)，对应上游 [Actions 运行 40779422726](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/actions/runs/40779422726)。网站包在该提交上应用配置中的三个 `sourcePatches`，使用既有 Docker Web 构建入口重新生成，因此记录为 `sourceState: patched-commit`，构建来源为本地 Docker，不是该 Actions 的原始 ZIP。此次更新修复 Maniac 重定位后跳跃路线导致的镜头抖动，保留已有的默认位图字体汉字回退、CP936 中文标点及符号的文泉驿字形和全角字宽，以及小字号、空白字符和交互高亮修复。字体来源声明随运行包的 `NOTICE-Zfull.txt` 分发，Fusion Pixel、Unifont 及其上游字体许可和来源说明完整收录于 `LICENSE-smallfonts.txt`。
+当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。当前包基于 [Player 提交 75e169059](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/commit/75e169059c1ffc9d3b0faf71b12b87d0ae0435c5)，在该提交上应用配置中的三个 `sourcePatches`，通过既有 Docker Web 构建入口生成，记录为 `sourceState: patched-commit`。此次更新统一原生 Wasm 异常、提供 JSPI 与 Asyncify 两种暂停入口，并优化高频变量／表达式及逻辑像素初始化。保留此前的 pf、镜头、字体、拼音输入及交互高亮行为；字体来源声明继续随 `NOTICE-Zfull.txt`、`LICENSE-smallfonts.txt` 和拼音词库许可分发。
 
-既有 Player 构建入口为 `Build and Release`（`.github/workflows/nightly-release.yml`），Web 产物为 `nightly-web`。网站在 `a3a856d8` 直接导入该工作流的固定提交产物；从 `fa13dfe3` 引入跳过 Logo 补丁后，到 `b152ce1a` 的运行包记录为本地带补丁构建，未增加专用 Actions。后续构建位置按任务授权选择，网站导入继续使用既有脚本。当前 Player 源码尚未包含这些源码补丁，普通 Web 产物与当前网站包的差异需在更新前核对。本次音色库、视频解码器及其许可文件与 Actions 运行 40779422726 的 Web 产物逐字节一致，引擎和宿主由本地 Docker 构建生成。
+既有 Player 构建入口为 `Build and Release`（`.github/workflows/nightly-release.yml`），Web 产物为 `nightly-web`。本次上游 [Actions 运行 40937208670](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/actions/runs/40937208670) 由源码推送触发；网站使用应用三个源码补丁后的本地 Docker 构建，不是该 Actions 的原始 ZIP。构建工具链和内置 liblcf 基础版本继续锁定；libpng、FreeType 从同版 SDK 来源重建为 native longjmp ABI。音色库、视频解码器及其许可与前版逐字节一致。
 
 `patches` 由导入脚本应用于未压缩的宿主文件；`sourcePatches` 则需要在构建前应用，导入脚本仅校验并随包保存。当前源码补丁为 [skip-logo.patch](../scripts/runtime-patches/skip-logo.patch)、[startup-download-progress.patch](../scripts/runtime-patches/startup-download-progress.patch) 和 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)。构建工具链与依赖由固定 Player 提交的构建脚本锁定。Web ZIP 根目录同时包含固定源码中的 `resources/pinyin/LICENSE-rime-pinyin-simp.txt`，词库来源及许可摘要记录在 `pinyinDictionary`。核对音色库、许可证和 Web ZIP 摘要后导入，运行目录内的 `SOURCE.json` 记录真实源码、构建来源、补丁和文件摘要。
 
@@ -284,11 +284,13 @@ Web 运行包包含 Debug 的 Goto Map 信息显示：左上角两行显示当�
 
 网页与 Android 离线页共用的启动会话固定传入 `--skip-logo`，引擎完成游戏检测和初始化后直接进入标题画面，跳过 EasyRPG 与额外启动 Logo。该参数不启用 TestPlay，不跳过游戏标题，也不改变游戏事件自行显示的图片或开场动画。
 
-宿主并行获取 WASM、SoundFont 数据和 AudioWorklet；WASM 只编译一次，将编译后的 `WebAssembly.Module` 及预载数据传给音频和游戏 Worker。两端通过 Emscripten 的 `instantiateWasm`／`getPreloadedPackage` 使用这份启动资源，各保留独立的引擎内存，不再分别下载 WASM 与数据文件。资源下载随会话中止，传输字节进展同样重置启动的无进展计时。该实现不需要 SharedArrayBuffer 或跨源隔离。相关源码修改见 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)。
+同一 Map0007 第 9 波、独立 Maniac 种子及逐逻辑帧输入的回放中，原生产包约 4.49 FPS，新 JSPI 包约 58.73 FPS，音频开启约 57.96 FPS。12 个检查点的 3,600,012 个游戏变量值全部一致；这是本机指定场景证据，不代表所有设备都无长帧。固定检查方法及限制见 Player 仓库的 [Web 高负载修复流程](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/75e169059c1ffc9d3b0faf71b12b87d0ae0435c5/docs/web-performance.md)。
 
-网站以预生成的 Brotli 11 表示传输引擎和音色库。导入脚本从已校验的原始字节生成 `.wasm.br`／`.data.br`，解压后逐字节核对，并在 `SOURCE.json` 中记录文件与压缩参数。只有两个原有 `.wasm`／`.data` URL 经 `assets.run_worker_first` 进入同一 Worker；处理器按客户端支持选择预压缩表示，通过 `encodeBody: manual`、正确 MIME 与 `Content-Encoding: br` 避免二次压缩，保留版本化 URL、ETag、条件请求及 `Vary: Accept-Encoding`。不接受 Brotli 或带 Range 的请求读取原始文件。浏览器原生解压后，引擎收到的字节与原包完全相同。Android 资源构建不复制 `.br` 表示，继续读取包内原始文件。
+宿主根据 `WebAssembly.promising` 与 `WebAssembly.Suspending` 一次选择引擎：支持时使用 `easyrpg-player`，其余情况使用 `easyrpg-player-asyncify`。并行获取选定变体的 WASM、数据文件和 AudioWorklet；WASM 只编译一次，再把 `WebAssembly.Module` 与预载数据传给音频和游戏 Worker，两端使用同一变体并保留独立内存。JSPI 的 `web_main_loop` Promise 完成后才调度下一帧，等待输入时不重入游戏。资源下载仍随会话中止，字节进展重置启动计时，不需要 SharedArrayBuffer 或跨源隔离。源码补丁见 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)。
 
-页面通过 `runtimeAssetBasePath` 提供保留社区 CNAME 链的运行包入口；两环境目标统一声明在 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json)。入口绑定到各自现有 Worker，页面、游戏安装、存档及 Worker 脚本仍沿用原路径。配置声明不证明 DNS 或 Route 已生效，正式启用须完成批准与入口核验。两个公开大资源的响应提供 CORS 与 Resource Timing 授权；其余业务接口没有跨源授权。
+网站以预生成的 Brotli 11 表示传输引擎和音色库。导入脚本从已校验的原始字节生成 `.wasm.br`／`.data.br`，解压后逐字节核对，并在 `SOURCE.json` 中记录文件与压缩参数。两种变体的四个 `.wasm`／`.data` URL 经 `assets.run_worker_first` 进入同一 Worker；处理器按客户端支持选择预压缩表示，通过 `encodeBody: manual`、正确 MIME 与 `Content-Encoding: br` 避免二次压缩，保留版本化 URL、ETag、条件请求及 `Vary: Accept-Encoding`。不接受 Brotli 或带 Range 的请求读取原始文件。浏览器原生解压后，引擎收到的字节与原包完全相同。Android 资源构建不复制 `.br` 表示，继续读取包内原始文件。
+
+页面通过 `runtimeAssetBasePath` 提供保留社区 CNAME 链的运行包入口；两环境目标统一声明在 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json)。入口绑定到各自现有 Worker，页面、游戏安装、存档及 Worker 脚本仍沿用原路径。配置声明不证明 DNS 或 Route 已生效，正式启用须完成批准与入口核验。选定变体的两个公开大资源的响应提供 CORS 与 Resource Timing 授权；其余业务接口没有跨源授权。
 
 宿主的 [startup-regional-assets.patch](../scripts/runtime-patches/startup-regional-assets.patch) 是导入时的未压缩宿主补丁，不改变引擎或音色库字节。首次先请求原入口；700 ms 内尚未读到约 512 KiB 的解压后数据时才开始另一入口的探测，先完成该前缀的请求继续传输，另一请求立即取消。比较实际传输进展，不能只按响应头先后选择线路。完整下载成功后，在当前标签页会话中记住该文件的入口；再次启动直接复用成功入口的浏览器缓存。停止、取消和两个入口均失败时释放所有请求；没有提供不同入口的本地与 Android 调用仍只请求本地原路径。入口的 DNS、路由与配置变更另按正式操作边界审批。
 

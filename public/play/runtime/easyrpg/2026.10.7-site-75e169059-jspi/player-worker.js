@@ -157,8 +157,9 @@ self.onmessage = async ({data}) => {
       if (engine) throw new Error('Player already started');
       joystickAvailable = data.joystickAvailable === true;
       const present = createRenderer(data.canvas);
+      const engineName = data.engineName;
       importScripts(new URL('player-files.js', data.runtimeBase).href,
-        new URL('easyrpg-player.js', data.runtimeBase).href);
+        new URL(`${engineName}.js`, data.runtimeBase).href);
       let generation = 0;
       const audioPort = data.audioPort;
       audioPort.onmessage = ({data: state}) => {
@@ -187,7 +188,7 @@ self.onmessage = async ({data}) => {
           receiveInstance(instance, data.wasmModule);
           return instance.exports;
         },
-        locateFile: path => new URL(path, data.runtimeBase).href,
+        locateFile: path => new URL(path.replace(/^easyrpg-player\./, `${engineName}.`), data.runtimeBase).href,
         setStatus: () => postMessage({type: 'startup-progress'}),
         readConsoleLine,
         useSystemNameInput: () => data.systemNameInput === true,

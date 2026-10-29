@@ -33,8 +33,8 @@
 -    await Promise.race([context.audioWorklet.addModule(new URL('player-audio.js', base)), ready]);
 +    // Download and compile once; both Workers retain their own engine memory.
 +    const [wasmModule, runtimeData] = await Promise.race([Promise.all([
-+      loadRuntimeAsset('easyrpg-player.wasm').then(response => WebAssembly.compileStreaming(response)),
-+      loadRuntimeAsset('easyrpg-player.data').then(response => response.arrayBuffer()),
++      loadRuntimeAsset(`${engineName}.wasm`).then(response => WebAssembly.compileStreaming(response)),
++      loadRuntimeAsset(`${engineName}.data`).then(response => response.arrayBuffer()),
 +      context.audioWorklet.addModule(new URL('player-audio.js', base)),
 +    ]), ready]);
      node = new AudioWorkletNode(context, 'easyrpg-audio', {numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2]});
@@ -42,14 +42,14 @@
      const controlChannel = new MessageChannel();
      node.port.postMessage({type: 'connect', port: audioChannel.port1}, [audioChannel.port1]);
      node.connect(masterVolume);
-     audioWorker.postMessage({type: 'start', runtimeBase: base, packages: options.packages,
+     audioWorker.postMessage({type: 'start', runtimeBase: base, engineName, packages: options.packages,
 -      workId: options.workId, sampleRate: context.sampleRate,
 +      workId: options.workId, sampleRate: context.sampleRate, wasmModule, runtimeData,
        audioPort: audioChannel.port2, controlPort: controlChannel.port1},
        [audioChannel.port2, controlChannel.port1]);
      const audioCapabilities = await Promise.race([audioReady, ready]);
      const offscreen = canvas.transferControlToOffscreen();
-     worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, packages: options.packages,
+     worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, engineName, packages: options.packages,
 -      workId: options.workId, sampleRate: context.sampleRate, arguments: options.arguments || [],
 +      workId: options.workId, sampleRate: context.sampleRate, wasmModule, runtimeData, arguments: options.arguments || [],
        joystickAvailable: joystickAvailable(),
@@ -67,7 +67,7 @@
 +          receiveInstance(instance, data.wasmModule);
 +          return instance.exports;
 +        },
-         locateFile: path => new URL(path, data.runtimeBase).href,
+         locateFile: path => new URL(path.replace(/^easyrpg-player\./, `${engineName}.`), data.runtimeBase).href,
          setStatus: () => postMessage({type: 'startup-progress'}),
          readConsoleLine,
 --- a/resources/emscripten/player-audio-worker.js
@@ -82,6 +82,6 @@
 +        receiveInstance(instance, data.wasmModule);
 +        return instance.exports;
 +      },
-       locateFile: path => new URL(path, data.runtimeBase).href,
+       locateFile: path => new URL(path.replace(/^easyrpg-player\./, `${engineName}.`), data.runtimeBase).href,
        setStatus: () => postMessage({type: 'startup-progress'}),
        print: (...values) => postMessage({type: 'log', level: 'info', message: values.join(' ')}),

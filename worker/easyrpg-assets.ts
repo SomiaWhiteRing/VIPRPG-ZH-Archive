@@ -15,7 +15,7 @@ export async function maybeHandleEasyRpgAsset(
   assets: CloudflareEnv["ASSETS"],
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  const match = /^\/play\/runtime\/easyrpg\/[a-z0-9][a-z0-9.-]*\/easyrpg-player\.(wasm|data)$/.exec(url.pathname);
+  const match = /^\/play\/runtime\/easyrpg\/[a-z0-9][a-z0-9.-]*\/easyrpg-player(?:-asyncify)?\.(wasm|data)$/.exec(url.pathname);
   if (!match || !["GET", "HEAD"].includes(request.method)) return null;
   const compressed = !request.headers.has("Range") && acceptsBrotli(request);
   if (compressed) url.pathname += ".br";

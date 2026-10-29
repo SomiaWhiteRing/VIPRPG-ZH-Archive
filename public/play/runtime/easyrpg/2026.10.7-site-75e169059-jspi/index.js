@@ -6,6 +6,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     throw new Error('当前浏览器不支持本站播放器所需的画面或音频功能。');
   if (!canvas.hasAttribute('tabindex')) canvas.tabIndex = 0;
   const base = new URL(options.runtimeBase, location.href).href;
+  const engineName = typeof WebAssembly.promising === 'function' && typeof WebAssembly.Suspending === 'function'
+    ? 'easyrpg-player' : 'easyrpg-player-asyncify';
   const controller = new AbortController();
   const signal = controller.signal;
   const page = window.parent;
@@ -842,8 +844,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     // Cancel/timeout must also end startup while the audio module is loading.
     // Download and compile once; both Workers retain their own engine memory.
     const [wasmModule, runtimeData] = await Promise.race([Promise.all([
-      loadRuntimeAsset('easyrpg-player.wasm').then(response => WebAssembly.compileStreaming(response)),
-      loadRuntimeAsset('easyrpg-player.data').then(response => response.arrayBuffer()),
+      loadRuntimeAsset(`${engineName}.wasm`).then(response => WebAssembly.compileStreaming(response)),
+      loadRuntimeAsset(`${engineName}.data`).then(response => response.arrayBuffer()),
       context.audioWorklet.addModule(new URL('player-audio.js', base)),
     ]), ready]);
     node = new AudioWorkletNode(context, 'easyrpg-audio', {numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2]});
@@ -851,13 +853,13 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const controlChannel = new MessageChannel();
     node.port.postMessage({type: 'connect', port: audioChannel.port1}, [audioChannel.port1]);
     node.connect(masterVolume);
-    audioWorker.postMessage({type: 'start', runtimeBase: base, packages: options.packages,
+    audioWorker.postMessage({type: 'start', runtimeBase: base, engineName, packages: options.packages,
       workId: options.workId, sampleRate: context.sampleRate, wasmModule, runtimeData,
       audioPort: audioChannel.port2, controlPort: controlChannel.port1},
       [audioChannel.port2, controlChannel.port1]);
     const audioCapabilities = await Promise.race([audioReady, ready]);
     const offscreen = canvas.transferControlToOffscreen();
-    worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, packages: options.packages,
+    worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, engineName, packages: options.packages,
       workId: options.workId, sampleRate: context.sampleRate, wasmModule, runtimeData, arguments: options.arguments || [],
       joystickAvailable: joystickAvailable(),
       systemNameInput,

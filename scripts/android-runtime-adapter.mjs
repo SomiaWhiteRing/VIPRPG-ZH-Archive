@@ -23,7 +23,7 @@ export async function adaptAndroidRuntime(root, directory) {
   for (const worker of ['player-worker.js', 'player-audio-worker.js']) await edit(worker, source => source
     .replace("importScripts(new URL('player-files.js'", "importScripts(new URL('native-storage.js', data.runtimeBase).href);\n      if (data.nativeResources) data.packages = self.nativePackages(data.nativeResources);\n      importScripts(new URL('player-files.js'")
     .replace("  try {\n    if (data.type", "  try {\n    if (data.type === 'native-saved') { self.nativeSaveReplies?.get(data.id)?.(data.error); self.nativeSaveReplies?.delete(data.id); return; }\n    if (data.type"));
-  await edit('easyrpg-player.js', source => source
+  for (const engine of ['easyrpg-player.js', 'easyrpg-player-asyncify.js']) await edit(engine, source => source
     .replace('if(!(node.contents instanceof Blob))', 'if(!(node.contents instanceof Blob)&&!node.contents.nativeUrl)')
     .replace('FS.mount(IDBFS,{},savePath)', 'if(!self.nativeResources)FS.mount(IDBFS,{},savePath)')
     .replace('FS.mount(IDBFS,{},"/home/web_user/.config")', 'if(self.nativeResources)self.installNativeSaves(FS,Module.workId);else FS.mount(IDBFS,{},"/home/web_user/.config")'));

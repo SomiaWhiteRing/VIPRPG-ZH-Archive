@@ -1,11 +1,11 @@
 {
-  "version": "2026.10.7-site-8a6fbc7cf-br",
-  "revision": "8a6fbc7cf783af265329082983c220ba26f795b7",
-  "build": "local-docker-20261029-8a6fbc7cf",
+  "version": "2026.10.7-site-75e169059-jspi",
+  "revision": "75e169059c1ffc9d3b0faf71b12b87d0ae0435c5",
+  "build": "local-docker-20261030-75e169059-jspi",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "983a78543625399dd13f597023d2590c616d3ccd6c8d992007ae0beb89396e9a",
+  "archiveSha256": "280124a5d6f53b81f05a7fdf5eb599ceb9931324715416baa891289a545d7312",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
@@ -20,22 +20,22 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "4a2a598d91cb883de02c08050519822c785f7ed771a60b07deee3f5fd406b143",
-      "afterSha256": "3d9a48b17f27f220afb0b876805324e4742df2902b4d2921b3690f15ad31f9bc"
+      "beforeSha256": "5ca16935bb1fdcca8a31c6704f6dba0e324ccc95b19302b5d0594cadc508a94d",
+      "afterSha256": "b11244341f5bb24d8f9c74fabb1d53403ae4d5402185235fdeae1f8e413cfb53"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "3d9a48b17f27f220afb0b876805324e4742df2902b4d2921b3690f15ad31f9bc",
-      "afterSha256": "933fedc474e183c70a1d9724f74065bad2423e331f4b89e99f8305843f7b35f1"
+      "beforeSha256": "b11244341f5bb24d8f9c74fabb1d53403ae4d5402185235fdeae1f8e413cfb53",
+      "afterSha256": "c8f426591da44957d85571dd504e510df6ba7f6d8ce8a741767b3d2b053d95d4"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/startup-regional-assets.patch",
       "sha256": "458152ff51ec89ef09edda8b2edcd6879fa450aeb19592f182c3c0511cb2c344",
-      "beforeSha256": "933fedc474e183c70a1d9724f74065bad2423e331f4b89e99f8305843f7b35f1",
-      "afterSha256": "9402a03e02f5c3cf17cd9f8722aa04158bbc6747986a570faa8baa7953c5bef5"
+      "beforeSha256": "c8f426591da44957d85571dd504e510df6ba7f6d8ce8a741767b3d2b053d95d4",
+      "afterSha256": "0b5e0fda0a7489e941d296bf7916b7114576cbad7e850f498e5ced98bd1aac03"
     }
   ],
   "sourcePatches": [
@@ -45,11 +45,11 @@
     },
     {
       "path": "scripts/runtime-patches/startup-download-progress.patch",
-      "sha256": "a2020fb3b45e9105db9053818b7be760bc24477aac05cde5dd61e238fc02df54"
+      "sha256": "0521e20406bb7e8d1853471b8cb59b9df39b276429ad1891385b62b7dda8493c"
     },
     {
       "path": "scripts/runtime-patches/startup-shared-assets.patch",
-      "sha256": "59d42601885b7f2fa10d823a985097ef86dd083ef737a1a2e64a3ec4e700407b"
+      "sha256": "3176b008cacff749e35a31abc05bd651d9d7f0d95a75bc2f47c0ac08613d4cdf"
     }
   ],
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",
