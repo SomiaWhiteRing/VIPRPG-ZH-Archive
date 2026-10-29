@@ -12,8 +12,7 @@
     "run_worker_first": [
       "/play/runtime/easyrpg/*/easyrpg-player.wasm",
       "/play/runtime/easyrpg/*/easyrpg-player.data",
-      "/play/runtime/easyrpg/*/easyrpg-player-asyncify.wasm",
-      "/play/runtime/easyrpg/*/easyrpg-player-asyncify.data"
+      "/play/runtime/easyrpg/*/easyrpg-player-asyncify.wasm"
     ],
     "not_found_handling": "none",
     "html_handling": "none"

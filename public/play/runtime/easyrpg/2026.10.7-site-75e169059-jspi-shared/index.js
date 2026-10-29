@@ -845,7 +845,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     // Download and compile once; both Workers retain their own engine memory.
     const [wasmModule, runtimeData] = await Promise.race([Promise.all([
       loadRuntimeAsset(`${engineName}.wasm`).then(response => WebAssembly.compileStreaming(response)),
-      loadRuntimeAsset(`${engineName}.data`).then(response => response.arrayBuffer()),
+      loadRuntimeAsset('easyrpg-player.data').then(response => response.arrayBuffer()),
       context.audioWorklet.addModule(new URL('player-audio.js', base)),
     ]), ready]);
     node = new AudioWorkletNode(context, 'easyrpg-audio', {numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2]});

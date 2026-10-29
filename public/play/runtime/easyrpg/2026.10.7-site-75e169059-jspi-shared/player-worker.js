@@ -188,7 +188,7 @@ self.onmessage = async ({data}) => {
           receiveInstance(instance, data.wasmModule);
           return instance.exports;
         },
-        locateFile: path => new URL(path.replace(/^easyrpg-player\./, `${engineName}.`), data.runtimeBase).href,
+        locateFile: path => new URL(path.replace(/^easyrpg-player\.wasm$/, `${engineName}.wasm`), data.runtimeBase).href,
         setStatus: () => postMessage({type: 'startup-progress'}),
         readConsoleLine,
         useSystemNameInput: () => data.systemNameInput === true,

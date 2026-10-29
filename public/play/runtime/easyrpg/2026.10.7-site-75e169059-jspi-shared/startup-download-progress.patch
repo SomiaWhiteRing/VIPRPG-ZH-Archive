@@ -17,7 +17,7 @@
 @@ -182,6 +182,7 @@
            audioPort.postMessage({...command, generation}, command.file ? [command.file.bytes.buffer] : []);
          },
-         locateFile: path => new URL(path.replace(/^easyrpg-player\./, `${engineName}.`), data.runtimeBase).href,
+         locateFile: path => new URL(path.replace(/^easyrpg-player\.wasm$/, `${engineName}.wasm`), data.runtimeBase).href,
 +        setStatus: () => postMessage({type: 'startup-progress'}),
          readConsoleLine,
          useSystemNameInput: () => data.systemNameInput === true,
@@ -27,7 +27,7 @@
 @@ -32,6 +32,7 @@
        audioOnly: true, noInitialRun: true, workId: data.workId,
        gamePackages: data.packages, sampleRate: data.sampleRate,
-       locateFile: path => new URL(path.replace(/^easyrpg-player\./, `${engineName}.`), data.runtimeBase).href,
+       locateFile: path => new URL(path.replace(/^easyrpg-player\.wasm$/, `${engineName}.wasm`), data.runtimeBase).href,
 +      setStatus: () => postMessage({type: 'startup-progress'}),
        print: (...values) => postMessage({type: 'log', level: 'info', message: values.join(' ')}),
        printErr: (...values) => postMessage({type: 'log', level: 'error', message: values.join(' ')}),

@@ -36,7 +36,7 @@ if (sha256(archive) !== archiveSha256)
 const files = unzipSync(archive);
 const runtimeFiles = [
   "easyrpg-player.js", "easyrpg-player.wasm", "easyrpg-player.data",
-  "easyrpg-player-asyncify.js", "easyrpg-player-asyncify.wasm", "easyrpg-player-asyncify.data",
+  "easyrpg-player-asyncify.js", "easyrpg-player-asyncify.wasm",
   "player-worker.js", "player-audio.js",
   "player-audio-worker.js", "player-files.js", "web-audio.md",
   "player-movie.js", "player-movie-worker.js", "movie-decoder.js", "movie-decoder.wasm",
@@ -49,8 +49,6 @@ for (const name of [...runtimeFiles, "player-host.js", "COPYING"])
   if (!files[name]?.length) throw new Error(`Missing runtime file: ${name}`);
 if (sha256(files["easyrpg-player.data"]) !== soundfontSha256)
   throw new Error("Bundled SoundFont does not match Kai recommended.sf2");
-if (!Buffer.from(files["easyrpg-player-asyncify.data"]).equals(Buffer.from(files["easyrpg-player.data"])))
-  throw new Error("Asyncify SoundFont differs from the primary runtime");
 const license = files.COPYING;
 if (sha256(license) !== licenseSha256)
   throw new Error("Kai license does not match the pinned digest");
@@ -86,7 +84,7 @@ const output = {
 };
 // Serve precompressed representations through the canonical URLs. Keep the
 // original files for Android's local asset server, which serves unencoded bytes.
-const brotliAssets = ["easyrpg-player.wasm", "easyrpg-player.data", "easyrpg-player-asyncify.wasm", "easyrpg-player-asyncify.data"];
+const brotliAssets = ["easyrpg-player.wasm", "easyrpg-player.data", "easyrpg-player-asyncify.wasm"];
 for (const name of brotliAssets) {
   const compressed = brotliCompressSync(output[name], {
     params: { [constants.BROTLI_PARAM_QUALITY]: 11 },

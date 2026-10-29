@@ -34,7 +34,7 @@
 +    // Download and compile once; both Workers retain their own engine memory.
 +    const [wasmModule, runtimeData] = await Promise.race([Promise.all([
 +      loadRuntimeAsset(`${engineName}.wasm`).then(response => WebAssembly.compileStreaming(response)),
-+      loadRuntimeAsset(`${engineName}.data`).then(response => response.arrayBuffer()),
++      loadRuntimeAsset('easyrpg-player.data').then(response => response.arrayBuffer()),
 +      context.audioWorklet.addModule(new URL('player-audio.js', base)),
 +    ]), ready]);
      node = new AudioWorkletNode(context, 'easyrpg-audio', {numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2]});
@@ -67,7 +67,7 @@
 +          receiveInstance(instance, data.wasmModule);
 +          return instance.exports;
 +        },
-         locateFile: path => new URL(path.replace(/^easyrpg-player\./, `${engineName}.`), data.runtimeBase).href,
+         locateFile: path => new URL(path.replace(/^easyrpg-player\.wasm$/, `${engineName}.wasm`), data.runtimeBase).href,
          setStatus: () => postMessage({type: 'startup-progress'}),
          readConsoleLine,
 --- a/resources/emscripten/player-audio-worker.js
@@ -82,6 +82,6 @@
 +        receiveInstance(instance, data.wasmModule);
 +        return instance.exports;
 +      },
-       locateFile: path => new URL(path.replace(/^easyrpg-player\./, `${engineName}.`), data.runtimeBase).href,
+       locateFile: path => new URL(path.replace(/^easyrpg-player\.wasm$/, `${engineName}.wasm`), data.runtimeBase).href,
        setStatus: () => postMessage({type: 'startup-progress'}),
        print: (...values) => postMessage({type: 'log', level: 'info', message: values.join(' ')}),

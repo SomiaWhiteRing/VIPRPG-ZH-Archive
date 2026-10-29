@@ -286,9 +286,9 @@ Web 运行包包含 Debug 的 Goto Map 信息显示：左上角两行显示当�
 
 同一 Map0007 第 9 波、独立 Maniac 种子及逐逻辑帧输入的回放中，原生产包约 4.49 FPS，新 JSPI 包约 58.73 FPS，音频开启约 57.96 FPS。12 个检查点的 3,600,012 个游戏变量值全部一致；这是本机指定场景证据，不代表所有设备都无长帧。固定检查方法及限制见 Player 仓库的 [Web 高负载修复流程](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/75e169059c1ffc9d3b0faf71b12b87d0ae0435c5/docs/web-performance.md)。
 
-宿主根据 `WebAssembly.promising` 与 `WebAssembly.Suspending` 一次选择引擎：支持时使用 `easyrpg-player`，其余情况使用 `easyrpg-player-asyncify`。并行获取选定变体的 WASM、数据文件和 AudioWorklet；WASM 只编译一次，再把 `WebAssembly.Module` 与预载数据传给音频和游戏 Worker，两端使用同一变体并保留独立内存。JSPI 的 `web_main_loop` Promise 完成后才调度下一帧，等待输入时不重入游戏。资源下载仍随会话中止，字节进展重置启动计时，不需要 SharedArrayBuffer 或跨源隔离。源码补丁见 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)。
+宿主根据 `WebAssembly.promising` 与 `WebAssembly.Suspending` 一次选择引擎：支持时使用 `easyrpg-player`，其余情况使用 `easyrpg-player-asyncify`。并行获取选定变体的 WASM、唯一的共用音色库 `easyrpg-player.data` 和 AudioWorklet；WASM 只编译一次，再把 `WebAssembly.Module` 与预载数据传给音频和游戏 Worker，两端使用同一变体并保留独立内存。Worker 的 `locateFile` 只改写 WASM 路径，两套 JS/WASM 保留兼容性，ZIP、网站和 Android 离线资源均不再重复分发 `.data`。JSPI 的 `web_main_loop` Promise 完成后才调度下一帧，等待输入时不重入游戏。资源下载仍随会话中止，字节进展重置启动计时，不需要 SharedArrayBuffer 或跨源隔离。源码补丁见 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)。
 
-网站以预生成的 Brotli 11 表示传输引擎和音色库。导入脚本从已校验的原始字节生成 `.wasm.br`／`.data.br`，解压后逐字节核对，并在 `SOURCE.json` 中记录文件与压缩参数。两种变体的四个 `.wasm`／`.data` URL 经 `assets.run_worker_first` 进入同一 Worker；处理器按客户端支持选择预压缩表示，通过 `encodeBody: manual`、正确 MIME 与 `Content-Encoding: br` 避免二次压缩，保留版本化 URL、ETag、条件请求及 `Vary: Accept-Encoding`。不接受 Brotli 或带 Range 的请求读取原始文件。浏览器原生解压后，引擎收到的字节与原包完全相同。Android 资源构建不复制 `.br` 表示，继续读取包内原始文件。
+网站以预生成的 Brotli 11 表示传输引擎和音色库。导入脚本从已校验的原始字节生成 `.wasm.br`／`.data.br`，解压后逐字节核对，并在 `SOURCE.json` 中记录文件与压缩参数。两个 WASM 与共用音色库共三个 URL 经 `assets.run_worker_first` 进入同一 Worker；处理器按客户端支持选择预压缩表示，通过 `encodeBody: manual`、正确 MIME 与 `Content-Encoding: br` 避免二次压缩，保留版本化 URL、ETag、条件请求及 `Vary: Accept-Encoding`。不接受 Brotli 或带 Range 的请求读取原始文件。浏览器原生解压后，引擎收到的字节与原包完全相同。Android 资源构建不复制 `.br` 表示，继续读取包内原始文件。
 
 页面通过 `runtimeAssetBasePath` 提供保留社区 CNAME 链的运行包入口；两环境目标统一声明在 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json)。入口绑定到各自现有 Worker，页面、游戏安装、存档及 Worker 脚本仍沿用原路径。配置声明不证明 DNS 或 Route 已生效，正式启用须完成批准与入口核验。选定变体的两个公开大资源的响应提供 CORS 与 Resource Timing 授权；其余业务接口没有跨源授权。
 
