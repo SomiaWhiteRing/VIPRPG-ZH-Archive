@@ -119,7 +119,7 @@ export default function CreatorDetailPage() {
                 {works.length ? (
                   <Link
                     aria-label="查看全部参与作品"
-                    className="text-sm font-medium text-secondary hover:underline"
+                    className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline"
                     to={`/creators/${creator.id}/works`}
                   >
                     更多

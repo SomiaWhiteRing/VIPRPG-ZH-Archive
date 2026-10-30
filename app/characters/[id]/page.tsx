@@ -112,7 +112,7 @@ export default function CharacterDetailPage() {
               {character.works.length ? (
                 <Link
                   aria-label="查看全部登场作品"
-                  className="text-sm font-medium text-secondary hover:underline"
+                  className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline"
                   to={`/characters/${character.id}/works`}
                 >
                   更多

@@ -440,7 +440,7 @@ export function FilterSection({
     >
       <div className="mb-2 flex items-center justify-between gap-2 rounded-md bg-card px-3 py-1.5">
         <h3
-          className="m-0 font-display text-base font-normal"
+          className="m-0 min-w-0 wrap-anywhere font-display text-base font-normal"
           id={`filter-${label}`}
         >
           {label}
@@ -448,7 +448,7 @@ export function FilterSection({
         {action}
         {moreHref ? (
           <Link
-            className="shrink-0 text-xs font-semibold text-primary hover:text-accent"
+            className="shrink-0 whitespace-nowrap text-xs font-semibold text-primary hover:text-accent"
             to={moreHref}
           >
             更多 →

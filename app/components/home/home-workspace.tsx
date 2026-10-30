@@ -45,7 +45,7 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
             titleId="recent-heading"
             actions={
               <Link
-                className="shrink-0 text-sm font-bold text-primary hover:text-accent"
+                className="shrink-0 whitespace-nowrap text-sm font-bold text-primary hover:text-accent"
                 to="/games"
               >
                 查看全部 →
@@ -65,8 +65,8 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
         id="recent-original"
         aria-labelledby="original-heading"
       >
-        <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 min-[851px]:block min-[851px]:w-[135px] min-[1101px]:w-[170px]">
-          <div>
+        <div className="flex shrink-0 items-end justify-between gap-3 min-[851px]:block min-[851px]:w-[135px] min-[1101px]:w-[170px]">
+          <div className="min-w-0 wrap-anywhere">
             <h2
               className="text-2xl font-bold tracking-tight"
               id="original-heading"
@@ -75,7 +75,7 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
             </h2>
           </div>
           <Link
-            className="ml-auto shrink-0 text-sm font-bold text-primary hover:text-accent min-[851px]:mt-5 min-[851px]:inline-block"
+            className="ml-auto shrink-0 whitespace-nowrap text-sm font-bold text-primary hover:text-accent min-[851px]:mt-5 min-[851px]:inline-block"
             to="/games?original=1"
           >
             查看全部 →
@@ -107,8 +107,8 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
         id="random-works"
         aria-labelledby="random-heading"
       >
-        <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 min-[851px]:block min-[851px]:w-[135px] min-[1101px]:w-[170px]">
-          <div>
+        <div className="flex shrink-0 items-end justify-between gap-3 min-[851px]:block min-[851px]:w-[135px] min-[1101px]:w-[170px]">
+          <div className="min-w-0 wrap-anywhere">
             <h2
               className="text-2xl font-bold tracking-tight"
               id="random-heading"

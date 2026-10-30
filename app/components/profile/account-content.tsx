@@ -28,7 +28,7 @@ export function AccountSection({
           {status}
         </div>
         <Link
-          className="shrink-0 text-sm font-semibold text-primary hover:underline"
+          className="shrink-0 whitespace-nowrap text-sm font-semibold text-primary hover:underline"
           to={href}
         >
           {linkText}

@@ -22,16 +22,12 @@ export function CharacterMaterials({
 }) {
   const [collect, setCollect] = useState<CharacterMaterial | null>(null);
   const [active, setActive] = useState(-1);
-  const groups = new Map(
-    CHARACTER_MATERIAL_CATEGORIES.map(
-      ({ kind, label }) =>
-        [
-          label,
-          materials.filter((material) => material.kind === kind),
-        ] as const,
-    ).filter(([, items]) => items.length),
-  );
-  const ordered = [...groups.values()].flat();
+  const groups = CHARACTER_MATERIAL_CATEGORIES.map(({ kind, label }) => ({
+    kind,
+    label,
+    items: materials.filter((material) => material.kind === kind),
+  })).filter(({ items }) => items.length);
+  const ordered = groups.flatMap(({ items }) => items);
   const indices = new Map(
     ordered.map((material, index) => [material.id, index]),
   );
@@ -42,16 +38,16 @@ export function CharacterMaterials({
   return (
     <>
       <div className="grid gap-6">
-        {[...groups].map(([category, items]) => (
+        {groups.map(({ kind, label: category, items }) => (
           <section aria-label={category} key={category}>
             <h2 className="mb-3 text-sm font-semibold">{category}</h2>
-            <ul className="m-0 flex list-none flex-wrap items-start gap-2 p-0">
+            <ul className={`m-0 list-none items-start gap-2 p-0 ${kind === "faceset" ? "grid grid-cols-2 sm:flex sm:flex-wrap" : "flex flex-wrap"}`}>
               {items.map((material) => {
                 const index = indices.get(material.id)!;
                 const src = `/api/media/blobs/${material.blobSha256}`;
                 const label = `${name} · ${category} ${index + 1}`;
                 return (
-                  <li className="max-w-full" key={material.id}>
+                  <li className="min-w-0 max-w-full" key={material.id}>
                     <Button
                       aria-label={`查看${label}`}
                       className="block h-auto min-h-0 max-w-full rounded-none p-0 hover:bg-transparent"

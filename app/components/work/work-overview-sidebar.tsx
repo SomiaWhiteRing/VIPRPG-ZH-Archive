@@ -53,8 +53,8 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
           {containingCatalogs.length ? (
             <Card className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full" id="catalog-card">
               <div className="mb-[0.35rem] flex items-baseline justify-between gap-3">
-                <h2 className="m-0 font-mono text-xs font-normal tracking-[0.08em] text-muted">收录了本条目的目录</h2>
-                <Link aria-label="查看全部收录了本条目的目录" className="shrink-0 text-sm font-medium text-secondary hover:underline" to={`/games/${work.id}/catalogs`}>
+                <h2 className="m-0 min-w-0 wrap-anywhere font-mono text-xs font-normal tracking-[0.08em] text-muted">收录了本条目的目录</h2>
+                <Link aria-label="查看全部收录了本条目的目录" className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline" to={`/games/${work.id}/catalogs`}>
                   更多
                 </Link>
               </div>

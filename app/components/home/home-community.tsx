@@ -18,11 +18,11 @@ export function HomeCommunity({ topics, className }: { topics: HomeForumTopic[];
       aria-labelledby="community-heading"
     >
       <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h2 className="text-xl font-bold tracking-tight" id="community-heading">
+        <h2 className="min-w-0 wrap-anywhere text-xl font-bold tracking-tight" id="community-heading">
           讨论区
         </h2>
         <Link
-          className="shrink-0 text-sm font-bold text-primary hover:text-accent"
+          className="shrink-0 whitespace-nowrap text-sm font-bold text-primary hover:text-accent"
           to="/discussions"
         >
           进入 →

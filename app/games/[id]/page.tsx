@@ -136,7 +136,7 @@ export default function GameDetailPage() {
               className="scroll-mt-28 py-4.5"
               id="sec-intro"
             >
-              <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+              <div className="mb-3.5 flex items-baseline justify-between gap-4">
                 <h2 className="m-0 text-base font-bold" id="intro-title">
                   简介
                 </h2>
@@ -183,11 +183,11 @@ export default function GameDetailPage() {
                 className="scroll-mt-28 border-t border-border py-4.5"
                 id="sec-gallery"
               >
-                <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+                <div className="mb-3.5 flex items-baseline justify-between gap-4">
                   <h2 className="m-0 text-base font-bold" id="gallery-title">
                     画廊
                   </h2>
-                  <span className="font-mono text-xs text-muted max-[560px]:text-left">
+                  <span className="shrink-0 whitespace-nowrap font-mono text-xs text-muted">
                     {media.length} 张
                   </span>
                 </div>
@@ -201,13 +201,13 @@ export default function GameDetailPage() {
                 className="scroll-mt-28 border-t border-border py-4.5"
                 id="sec-cast"
               >
-                <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+                <div className="mb-3.5 flex items-baseline justify-between gap-4">
                   <h2 className="m-0 text-base font-bold" id="cast-title">
                     登场角色
                   </h2>
                   <Link
                     aria-label="查看全部登场角色"
-                    className="text-sm font-medium text-secondary hover:underline"
+                    className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline"
                     to={`/games/${work.id}/characters`}
                   >
                     更多
@@ -251,14 +251,14 @@ export default function GameDetailPage() {
                 id="sec-relations"
               >
                 <span aria-hidden="true" className="sr-only" id="relations" />
-                <div className="mb-3.5 flex items-baseline justify-between gap-4 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+                <div className="mb-3.5 flex items-baseline justify-between gap-4">
                   <h2 className="m-0 text-base font-bold" id="relations-title">
                     关联作品
                   </h2>
                   {relationCards.length ? (
                     <Link
                       aria-label="查看全部关联作品"
-                      className="text-sm font-medium text-secondary hover:underline"
+                      className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline"
                       to={`/games/${work.id}/related`}
                     >
                       更多
