@@ -55,6 +55,7 @@ body:has(.eternal-sea-page) {
   flex-shrink: 0;
   container-type: inline-size;
   cursor: default;
+  user-select: none;
 }
 
 .sea-dialogue canvas {
@@ -82,37 +83,6 @@ body:has(.eternal-sea-page) {
   left: auto;
   right: 5%;
   transform: scaleX(-1);
-}
-
-.sea-dialogue-text {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  padding: 0;
-  color: transparent;
-  font-family: inherit;
-  font-synthesis: none;
-  font-size: 3.75cqw;
-  line-height: 5cqw;
-  text-shadow: none;
-  user-select: text;
-  cursor: text;
-  content-visibility: auto;
-}
-
-.sea-dialogue-text .sea-text-glyph {
-  position: absolute;
-  display: block;
-  overflow: hidden;
-  white-space: pre;
-  pointer-events: auto;
-  cursor: text;
-}
-
-.sea-dialogue-text::selection,
-.sea-dialogue-text .sea-text-glyph::selection {
-  color: transparent;
-  background: rgb(160 205 255 / 40%);
 }
 
 .sea-dialogue-fallback {

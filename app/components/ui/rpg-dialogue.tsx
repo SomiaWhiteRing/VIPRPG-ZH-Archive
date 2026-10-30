@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { drawSeaDialogue, SEA_ASSETS, SEA_LINE_HEIGHT, SEA_TEXT_TOP, SEA_WINDOW_HEIGHT, SEA_WINDOW_WIDTH, seaBitmap, seaTextLeft, type SeaDialogueSide } from "@/lib/ui/eternal-sea";
+import { drawSeaDialogue, SEA_ASSETS, SEA_WINDOW_HEIGHT, SEA_WINDOW_WIDTH, seaBitmap, type SeaDialogueSide } from "@/lib/ui/eternal-sea";
 import type { SeaFont, SeaGlyph } from "@/lib/dto/sea";
 import { loadSeaFont, seaFontFamily } from "@/app/components/sea/font";
 
@@ -34,16 +34,7 @@ export function RpgDialogue({ glyphs, font, faceIndex = 0, avatarUrl, side = "le
     <article className="sea-dialogue" data-side={side} translate="no" style={{ fontFamily: `"${family}"` }}>
       <canvas aria-hidden="true" width={SEA_WINDOW_WIDTH} height={SEA_WINDOW_HEIGHT} ref={canvasRef} />
       {showAvatar && <img src={avatarUrl} width={48} height={48} alt="" className="sea-dialogue-avatar" onError={() => setFailedAvatarUrl(avatarUrl)} />}
-      {failed ? <p className="sea-dialogue-fallback">{glyphs.map(glyph => glyph.character).join("")}</p> : <p className="sea-dialogue-text" aria-hidden="true">
-        {glyphs.map((glyph, index) => (
-          <span key={index} className="sea-text-glyph" style={{
-            left: `${(seaTextLeft(side) + glyph.x) * 100 / SEA_WINDOW_WIDTH}%`,
-            top: `${(SEA_TEXT_TOP + glyph.row * SEA_LINE_HEIGHT) * 100 / SEA_WINDOW_HEIGHT}%`,
-            width: `${glyph.width * 100 / SEA_WINDOW_WIDTH}%`,
-            height: `${SEA_LINE_HEIGHT * 100 / SEA_WINDOW_HEIGHT}%`,
-          }}>{glyph.character}</span>
-        ))}
-      </p>}
+      {failed && <p className="sea-dialogue-fallback">{glyphs.map(glyph => glyph.character).join("")}</p>}
     </article>
   );
 }

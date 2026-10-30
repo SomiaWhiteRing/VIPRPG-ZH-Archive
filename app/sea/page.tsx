@@ -150,25 +150,6 @@ export default function EternalSeaPage() {
     return () => window.removeEventListener("scroll", trackDocumentScroll);
   }, [native]);
 
-  useEffect(() => {
-    function copyDialogue(event: ClipboardEvent) {
-      if (event.defaultPrevented || !event.clipboardData) return;
-      if (event.target instanceof Element && event.target.closest('input,textarea,[contenteditable="true"]')) return;
-      const selection = window.getSelection();
-      if (!selection?.rangeCount || selection.isCollapsed) return;
-      const range = selection.getRangeAt(0);
-      if (!logRef.current?.contains(range.commonAncestorContainer)) return;
-      const content = range.cloneContents();
-      for (const dialogue of content.querySelectorAll(".sea-dialogue")) {
-        dialogue.appendChild(document.createTextNode("\n"));
-      }
-      event.clipboardData.setData("text/plain", content.textContent ?? "");
-      event.preventDefault();
-    }
-    document.addEventListener("copy", copyDialogue);
-    return () => document.removeEventListener("copy", copyDialogue);
-  }, []);
-
   async function send(event: FormEvent) {
     event.preventDefault();
     if (!canSend || composingRef.current || sendingRef.current) return;
