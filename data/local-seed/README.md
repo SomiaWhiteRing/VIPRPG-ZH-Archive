@@ -1,5 +1,10 @@
 # Fixed Local Seed
 
+`0047_simplify_face_emoji_validation.sql` removes the seven redundant emoji
+availability triggers while preserving emoji references, libraries and groups.
+The snapshot schema and migration ledger include this migration; the legacy
+initialization token column remains for compatibility with deployed code.
+
 `0046_private_messages.sql` adds private-message receiving preferences, the base
 send permission, and empty conversation, read-position, message, image and emoji
 reference tables. The schema and migration ledger are synchronized; existing

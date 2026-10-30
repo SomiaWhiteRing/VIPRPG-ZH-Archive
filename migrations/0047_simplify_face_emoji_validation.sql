@@ -1,0 +1,7 @@
+DROP TRIGGER user_face_emojis_available;
+DROP TRIGGER default_face_emojis_available;
+DROP TRIGGER comment_face_emojis_available;
+DROP TRIGGER forum_post_face_emojis_available;
+DROP TRIGGER forum_comment_face_emojis_available;
+DROP TRIGGER timeline_event_face_emojis_available;
+DROP TRIGGER timeline_reply_face_emojis_available;
