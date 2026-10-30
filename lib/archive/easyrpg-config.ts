@@ -42,16 +42,25 @@ export function addDetectedManiacPf(executable: Uint8Array, ini: Uint8Array | nu
     const end = Math.min(executable.length, start + view.getUint32(at + 16, true));
     for (let i = start; i + 9 <= end; i++) {
       const opcode = executable[i];
-      if (opcode !== 0xb8 && opcode !== 0xbb) continue;
+      if (opcode !== 0xb8 && opcode !== 0xbb && opcode !== 0xbe) continue;
       const bits = view.getUint32(i + 1, true), version = bits & 0x7fffffff;
       const month = Math.floor(version / 100) % 100, day = version % 100;
       if (!(bits & 0x80000000) || version < 180101 || version > 991231 || month < 1 || month > 12 || day < 1 || day > 31) continue;
       // Control Variables: mov ebx, version; jmp to result writeback.
       if (opcode === 0xbb && executable[i + 5] === 0xe9 && i + 10 <= end) variableVersions.add(version);
+      // Older MSVC builds: mov esi, version; mov [esp+18h],esi; jmp to writeback.
+      if (opcode === 0xbe && i + 14 <= end && executable[i + 5] === 0x89 &&
+          executable[i + 6] === 0x74 && executable[i + 7] === 0x24 &&
+          executable[i + 8] === 0x18 && executable[i + 9] === 0xe9) variableVersions.add(version);
       // Expression Other(version): mov eax, version; mov edx,eax; pop esi; ret.
       if (opcode === 0xb8 && ((executable[i + 5] === 0x89 && executable[i + 6] === 0xc2) ||
           (executable[i + 5] === 0x8b && executable[i + 6] === 0xd0)) &&
           executable[i + 7] === 0x5e && executable[i + 8] === 0xc3) expressionVersions.add(version);
+      // MSVC expression return: mov eax, version; lea esp,[ebp-30h]; pop edi/esi/ebx.
+      if (opcode === 0xb8 && i + 11 <= end && executable[i + 5] === 0x8d &&
+          executable[i + 6] === 0x65 && executable[i + 7] === 0xd0 &&
+          executable[i + 8] === 0x5f && executable[i + 9] === 0x5e &&
+          executable[i + 10] === 0x5b) expressionVersions.add(version);
     }
   }
   if (![...variableVersions].some(version => expressionVersions.has(version))) return null;
