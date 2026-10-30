@@ -12,6 +12,7 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { prepareSeaActor } from "@/app/.server/sea/identity";
 import { seaRoom } from "@/app/.server/sea/service";
 import { useSeaRoom } from "@/app/components/sea/use-sea-room";
+import { loadSeaFont } from "@/app/components/sea/font";
 import { useToast } from "@/app/components/ui/toast";
 import { HttpError } from "@/lib/http";
 import type { SeaSubmission } from "@/lib/dto/sea";
@@ -45,7 +46,7 @@ export default function EternalSeaPage() {
   const [useOwnAvatar, setUseOwnAvatar] = useState(true);
   const name = useOwnAvatar && session ? session.displayName : "无名的VIPPER";
   const avatarUrl = useOwnAvatar ? accountAvatar : undefined;
-  const { messages, refresh } = useSeaRoom(useLoaderData<typeof loader>());
+  const { messages, font, refresh } = useSeaRoom(useLoaderData<typeof loader>());
   const toast = useToast();
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
@@ -105,20 +106,23 @@ export default function EternalSeaPage() {
     let active = true;
     let frame = 0;
     const images = new Set([
-      ...["window.png", "font.png", "faces.png"].map(file => `${SEA_ASSETS}/${file}`),
+      ...["window.png", "faces.png"].map(file => `${SEA_ASSETS}/${file}`),
       ...messages.flatMap(message => message.avatarUrl ? [message.avatarUrl] : []),
       ...(accountAvatar ? [accountAvatar] : []),
     ]);
-    void Promise.allSettled([...images].map(url => seaBitmap(url).then(image => image.decode()))).then(() => document.fonts.ready).then(() => {
+    void Promise.all([
+      Promise.allSettled([...images].map(url => seaBitmap(url).then(image => image.decode()))),
+      loadSeaFont(font),
+    ]).then(() => document.fonts.ready).then(() => {
       if (!active) return;
       // Dialogue effects draw while hidden; allow fallback state and initial
       // scrolling to settle before revealing the complete room in one frame.
       frame = requestAnimationFrame(() => {
         frame = requestAnimationFrame(() => { if (active) setRoomReady(true); });
       });
-    });
+    }).catch(() => undefined);
     return () => { active = false; cancelAnimationFrame(frame); };
-  }, [dialoguesStarted, roomReady, messages, accountAvatar]);
+  }, [dialoguesStarted, roomReady, messages, font, accountAvatar]);
 
   useLayoutEffect(() => {
     if (environment === null) return;
@@ -155,7 +159,6 @@ export default function EternalSeaPage() {
       const range = selection.getRangeAt(0);
       if (!logRef.current?.contains(range.commonAncestorContainer)) return;
       const content = range.cloneContents();
-      for (const source of content.querySelectorAll(".sea-dialogue-source")) source.remove();
       for (const dialogue of content.querySelectorAll(".sea-dialogue")) {
         dialogue.appendChild(document.createTextNode("\n"));
       }
@@ -229,7 +232,7 @@ export default function EternalSeaPage() {
             if (!native && scrollInitializedRef.current && log) followingRef.current = log.scrollHeight - log.scrollTop - log.clientHeight < 32;
           }}>
           <div className="sea-messages">
-            {messages.map(message => <RpgDialogue key={message.id} {...message} />)}
+            {messages.map(message => <RpgDialogue key={message.id} {...message} font={font} />)}
           </div>
         </div>}
       </div>}

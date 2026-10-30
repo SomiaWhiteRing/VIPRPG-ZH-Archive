@@ -1,71 +1,46 @@
 import { useEffect, useRef, useState } from "react";
-import { drawSeaDialogue, layoutSeaDialogue, SEA_ASSETS, SEA_LINE_HEIGHT, SEA_MAX_LINES, SEA_TEXT_TOP, SEA_WINDOW_HEIGHT, SEA_WINDOW_WIDTH, seaBitmap, seaTextLeft, type SeaDialogueSide } from "@/lib/ui/eternal-sea";
+import { drawSeaDialogue, SEA_ASSETS, SEA_LINE_HEIGHT, SEA_TEXT_TOP, SEA_WINDOW_HEIGHT, SEA_WINDOW_WIDTH, seaBitmap, seaTextLeft, type SeaDialogueSide } from "@/lib/ui/eternal-sea";
+import type { SeaFont, SeaGlyph } from "@/lib/dto/sea";
+import { loadSeaFont, seaFontFamily } from "@/app/components/sea/font";
 
-export function RpgDialogue({ name, body, faceIndex = 0, avatarUrl, side = "left" }: {
-  name: string;
-  body: string;
+export function RpgDialogue({ glyphs, font, faceIndex = 0, avatarUrl, side = "left" }: {
+  glyphs: SeaGlyph[];
+  font: SeaFont;
   faceIndex?: number;
   avatarUrl?: string;
   side?: SeaDialogueSide;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sourceRef = useRef<HTMLDivElement>(null);
-  const nameRef = useRef<HTMLSpanElement>(null);
-  const bodyRef = useRef<HTMLSpanElement>(null);
   const [failed, setFailed] = useState(false);
-  const [translation, setTranslation] = useState<{ sourceName: string; sourceBody: string; name: string; body: string }>();
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string>();
   const showAvatar = Boolean(avatarUrl && failedAvatarUrl !== avatarUrl);
-  const text = translation?.sourceName === name && translation.sourceBody === body ? translation : { name, body };
-  const { placements, lines } = layoutSeaDialogue(text.name, text.body);
-  const height = SEA_WINDOW_HEIGHT + Math.max(0, lines.length - SEA_MAX_LINES) * SEA_LINE_HEIGHT;
-
-  useEffect(() => {
-    if (!sourceRef.current) return;
-    // Translators edit these continuous text nodes; the bitmap and selection layer
-    // keep using the same layout, including when translation is undone.
-    function syncTranslation() {
-      const translatedName = nameRef.current?.textContent ?? name;
-      const translatedBody = bodyRef.current?.textContent ?? body;
-      setTranslation(translatedName === name && translatedBody === body ? undefined
-        : { sourceName: name, sourceBody: body, name: translatedName, body: translatedBody });
-    }
-    const observer = new MutationObserver(syncTranslation);
-    observer.observe(sourceRef.current, { subtree: true, childList: true, characterData: true });
-    syncTranslation();
-    return () => observer.disconnect();
-  }, [name, body]);
+  const family = seaFontFamily(font);
 
   useEffect(() => {
     let active = true;
     void Promise.all([
       seaBitmap(`${SEA_ASSETS}/window.png`),
-      seaBitmap(`${SEA_ASSETS}/font.png`),
       seaBitmap(`${SEA_ASSETS}/faces.png`),
-    ]).then(([window, font, faces]) => {
+      loadSeaFont(font),
+    ]).then(([window, faces]) => {
       if (active && canvasRef.current) {
-        drawSeaDialogue(canvasRef.current, { window, font, faces: showAvatar ? undefined : faces }, text.name, text.body, faceIndex, side);
+        drawSeaDialogue(canvasRef.current, { window, faces: showAvatar ? undefined : faces }, glyphs, family, faceIndex, side);
+        setFailed(false);
       }
     }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
-  }, [text.name, text.body, faceIndex, showAvatar, side]);
+  }, [glyphs, font, family, faceIndex, showAvatar, side]);
   return (
-    <article className="sea-dialogue" data-side={side} style={height === SEA_WINDOW_HEIGHT ? undefined : { aspectRatio: `${SEA_WINDOW_WIDTH} / ${height}` }}>
-      {!failed && (
-        <div className="sea-dialogue-source" ref={sourceRef} translate="yes">
-          <p><span ref={nameRef}>{name}</span>：</p>
-          <p>「<span ref={bodyRef}>{body}</span>」</p>
-        </div>
-      )}
-      <canvas aria-hidden="true" width={SEA_WINDOW_WIDTH} height={height} ref={canvasRef} />
+    <article className="sea-dialogue" data-side={side} translate="no" style={{ fontFamily: `"${family}"` }}>
+      <canvas aria-hidden="true" width={SEA_WINDOW_WIDTH} height={SEA_WINDOW_HEIGHT} ref={canvasRef} />
       {showAvatar && <img src={avatarUrl} width={48} height={48} alt="" className="sea-dialogue-avatar" onError={() => setFailedAvatarUrl(avatarUrl)} />}
-      {failed ? <p className="sea-dialogue-fallback">{placements.map(glyph => glyph.character).join("")}</p> : <p className="sea-dialogue-text" translate="no" aria-hidden="true">
-        {placements.map((glyph, index) => (
+      {failed ? <p className="sea-dialogue-fallback">{glyphs.map(glyph => glyph.character).join("")}</p> : <p className="sea-dialogue-text" aria-hidden="true">
+        {glyphs.map((glyph, index) => (
           <span key={index} className="sea-text-glyph" style={{
             left: `${(seaTextLeft(side) + glyph.x) * 100 / SEA_WINDOW_WIDTH}%`,
-            top: `${(SEA_TEXT_TOP + glyph.row * SEA_LINE_HEIGHT) * 100 / height}%`,
+            top: `${(SEA_TEXT_TOP + glyph.row * SEA_LINE_HEIGHT) * 100 / SEA_WINDOW_HEIGHT}%`,
             width: `${glyph.width * 100 / SEA_WINDOW_WIDTH}%`,
-            height: `${SEA_LINE_HEIGHT * 100 / height}%`,
+            height: `${SEA_LINE_HEIGHT * 100 / SEA_WINDOW_HEIGHT}%`,
           }}>{glyph.character}</span>
         ))}
       </p>}

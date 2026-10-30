@@ -3,14 +3,16 @@ import { SEA_ROOM_LIMIT, type SeaAvatarMode, type SeaMessage, type SeaModeration
 import { getUserAvatarSrc } from "@/lib/user-profile";
 import { layoutSeaDialogue } from "@/lib/ui/eternal-sea";
 import type { SeaActor } from "./identity";
+import { createSeaFontState, seaFontCodec, seaFontDay, seaFontDeadline, type SeaFontState, type SeaOriginalMessage } from "./font";
 
 type Row = { id: number; actor_key: string; user_id: number | null; name: string; body: string; avatar_mode: SeaAvatarMode; created_at: number; hidden_at: number | null };
 type Profile = { id: number; display_name: string; avatar_blob_sha256: string | null; status: string };
 type Fault = { ok: false; status: number; detail: string; code: string };
-type Published = { ok: true; revision: number; message: SeaMessage; repeated: boolean };
+type Published = { ok: true; revision: number; font: SeaWindow["font"]; message: SeaMessage; repeated: boolean };
 const fault = (status: number, detail: string, code: string): Fault => ({ ok: false, status, detail, code });
 
 export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
+  private fontsTask?: { day: number; task: Promise<{ current: ReturnType<typeof seaFontCodec>; previous?: ReturnType<typeof seaFontCodec> }> };
   constructor(ctx: DurableObjectState, env: CloudflareEnv) {
     super(ctx, env);
     ctx.storage.sql.exec(`
@@ -34,6 +36,29 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
   private revision() {
     return this.ctx.storage.sql.exec<{ revision: number }>("SELECT revision FROM meta WHERE id=1").one().revision;
   }
+  private fonts() {
+    const day = seaFontDay(Date.now());
+    if (this.fontsTask?.day !== day) {
+      const task = this.ctx.storage.get<{ current: SeaFontState; previous?: SeaFontState }>("fonts").then(async stored => {
+        if (stored?.current.day !== day) {
+          stored = { current: createSeaFontState(day), previous: stored?.current.day === day - 1 ? stored.current : undefined };
+          await this.ctx.storage.put("fonts", stored);
+        }
+        await this.ctx.storage.setAlarm(seaFontDeadline(day));
+        return { current: seaFontCodec(stored.current), previous: stored.previous ? seaFontCodec(stored.previous) : undefined };
+      }).catch(error => { this.fontsTask = undefined; throw error; });
+      this.fontsTask = { day, task };
+    }
+    return this.fontsTask.task;
+  }
+  async font(id: string) {
+    const { current, previous } = await this.fonts();
+    const codec = [current, previous].find(item => item?.font.id === id);
+    return codec?.bytes() ?? null;
+  }
+  async alarm() {
+    this.broadcast({ type: "snapshot", ...await this.snapshot() });
+  }
   private advance() {
     return this.ctx.storage.sql.exec<{ revision: number }>("UPDATE meta SET revision=revision+1 WHERE id=1 RETURNING revision").one().revision;
   }
@@ -47,7 +72,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       : [];
     return new Map(profiles.map(user => [user.id, user]));
   }
-  private decorate(rows: Row[], users: Map<number, Profile>): SeaMessage[] {
+  private decorate(rows: Row[], users: Map<number, Profile>): SeaOriginalMessage[] {
     return rows.map(row => {
       const user = row.user_id === null ? undefined : users.get(row.user_id);
       return {
@@ -62,7 +87,8 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     // Capture the revision and rows before awaiting profile lookups.
     const revision = this.revision();
     const rows = this.ctx.storage.sql.exec<Row>("SELECT * FROM messages WHERE hidden_at IS NULL ORDER BY id DESC LIMIT ?", SEA_ROOM_LIMIT).toArray().reverse();
-    return { revision, messages: this.decorate(rows, await this.profiles(rows)) };
+    const { current } = await this.fonts();
+    return { revision, font: current.font, messages: this.decorate(rows, await this.profiles(rows)).map(message => current.message(message)) };
   }
   async moderation(requestedPage = 1): Promise<SeaModeration> {
     const revision = this.revision();
@@ -116,9 +142,10 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       return { row: this.row(id)!, revision: this.advance(), repeated: false };
     });
     if ("ok" in result) return result;
-    const [message] = this.decorate([result.row], await this.profiles([result.row]));
-    if (!result.repeated) this.broadcast({ type: "message", revision: result.revision, message });
-    return { ok: true, revision: result.revision, message, repeated: result.repeated };
+    const { current } = await this.fonts();
+    const message = current.message(this.decorate([result.row], await this.profiles([result.row]))[0]);
+    if (!result.repeated) this.broadcast({ type: "message", revision: result.revision, font: current.font, message });
+    return { ok: true, revision: result.revision, font: current.font, message, repeated: result.repeated };
   }
   async hide(id: number, operatorId: number) {
     const found = this.ctx.storage.transactionSync(() => {

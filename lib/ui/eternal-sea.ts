@@ -1,4 +1,5 @@
 import glyphData from "./eternal-sea-glyphs.json";
+import type { SeaGlyph } from "@/lib/dto/sea";
 
 export const SEA_WINDOW_WIDTH = 320;
 export const SEA_WINDOW_HEIGHT = 80;
@@ -91,6 +92,8 @@ export function limitSeaBodyInput(body: string) {
 }
 
 const bitmaps = new Map<string, Promise<HTMLImageElement>>();
+const fontBitmaps = new Map<string, Map<string, HTMLCanvasElement>>();
+let fontMask: HTMLCanvasElement | undefined;
 
 export function seaBitmap(url: string) {
   const cached = bitmaps.get(url);
@@ -110,9 +113,9 @@ export function seaBitmap(url: string) {
 
 export function drawSeaDialogue(
   canvas: HTMLCanvasElement,
-  images: { window: HTMLImageElement; font: HTMLImageElement; faces?: HTMLImageElement },
-  name: string,
-  body: string,
+  images: { window: HTMLImageElement; faces?: HTMLImageElement },
+  placements: SeaGlyph[],
+  fontFamily: string,
   faceIndex: number,
   side: SeaDialogueSide = "left",
 ) {
@@ -128,11 +131,45 @@ export function drawSeaDialogue(
     context.drawImage(images.faces, (faceIndex % 4) * 48, Math.floor(faceIndex / 4) * 48, 48, 48, 0, 0, 48, 48);
     context.restore();
   }
-  const { placements } = layoutSeaDialogue(name, body);
+  let rendered = fontBitmaps.get(fontFamily);
+  if (!rendered) {
+    rendered = new Map();
+    fontBitmaps.set(fontFamily, rendered);
+    if (fontBitmaps.size > 2) fontBitmaps.delete(fontBitmaps.keys().next().value!);
+  }
+  fontMask ??= document.createElement("canvas");
+  if (fontMask.width !== 120) { fontMask.width = 120; fontMask.height = 120; }
+  const maskContext = fontMask.getContext("2d")!;
+  maskContext.font = `120px "${fontFamily}"`;
+  maskContext.textBaseline = "alphabetic";
+  const colors = [[240, 250, 255], [240, 250, 255], [213, 236, 253], [213, 236, 253],
+    [187, 222, 252], [187, 222, 252], [161, 208, 251], [161, 208, 251],
+    [135, 195, 250], [108, 181, 248], [82, 167, 247], [56, 153, 246]];
   for (const placement of placements) {
     if (placement.character === "\n") continue;
-    const glyph = seaGlyph(placement.character);
-    context.drawImage(images.font, (glyph.index % 128) * 14, Math.floor(glyph.index / 128) * 14, glyph.width + 1, 13,
-      seaTextLeft(side) + placement.x, SEA_TEXT_TOP + placement.row * SEA_LINE_HEIGHT, glyph.width + 1, 13);
+    let bitmap = rendered.get(placement.character);
+    if (!bitmap) {
+      // Sample inside enlarged font pixels, then apply the original System
+      // palette and shadow. This avoids browser antialiasing changing the RTP art.
+      maskContext.clearRect(0, 0, 120, 120);
+      maskContext.fillText(placement.character, 0, 120);
+      bitmap = document.createElement("canvas");
+      bitmap.width = 14; bitmap.height = 14;
+      const pixels = bitmap.getContext("2d", { willReadFrequently: true })!;
+      pixels.imageSmoothingEnabled = false;
+      pixels.drawImage(fontMask, 0, 0, 120, 120, 0, 0, 12, 12);
+      const mask = pixels.getImageData(0, 0, 14, 14).data;
+      const image = pixels.createImageData(14, 14);
+      for (let y = 0; y < 12; y++) for (let x = 0; x < placement.width; x++) {
+        if (mask[(y * 14 + x) * 4 + 3] >= 128) image.data.set([29, 29, 30, 255], ((y + 1) * 14 + x + 1) * 4);
+      }
+      for (let y = 0; y < 12; y++) for (let x = 0; x < placement.width; x++) {
+        if (mask[(y * 14 + x) * 4 + 3] >= 128) image.data.set([...colors[y], 255], (y * 14 + x) * 4);
+      }
+      pixels.putImageData(image, 0, 0);
+      rendered.set(placement.character, bitmap);
+    }
+    context.drawImage(bitmap, 0, 0, placement.width + 1, 13,
+      seaTextLeft(side) + placement.x, SEA_TEXT_TOP + placement.row * SEA_LINE_HEIGHT, placement.width + 1, 13);
   }
 }

@@ -67,24 +67,6 @@ body:has(.eternal-sea-page) {
   pointer-events: none;
 }
 
-/* Continuous, translatable text sits beneath the opaque bitmap window. */
-.sea-dialogue-source {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  padding: 3.125cqw 3.75cqw 1.875cqw 25cqw;
-  font-family: monospace;
-  font-size: 3.75cqw;
-  line-height: 5cqw;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  user-select: none;
-  pointer-events: none;
-}
-
-.sea-dialogue-source p { margin: 0; }
-.sea-dialogue[data-side="right"] .sea-dialogue-source { padding-inline: 2.5cqw 26.25cqw; }
-
 .sea-dialogue-avatar {
   position: absolute;
   left: 5%;
@@ -108,14 +90,13 @@ body:has(.eternal-sea-page) {
   margin: 0;
   padding: 0;
   color: transparent;
-  font-family: monospace;
+  font-family: inherit;
+  font-synthesis: none;
   font-size: 3.75cqw;
   line-height: 5cqw;
   text-shadow: none;
   user-select: text;
   cursor: text;
-  /* Skip offscreen glyph layout, but keep continuous translation sources outside
-     this containment so translators can read the entire conversation. */
   content-visibility: auto;
 }
 

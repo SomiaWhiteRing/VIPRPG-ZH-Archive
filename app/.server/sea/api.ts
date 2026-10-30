@@ -8,6 +8,11 @@ import { prepareSeaActor, seaIpKey } from "./identity";
 import { seaRoom, seaSubmission } from "./service";
 
 export const seaApi = new Hono<{ Bindings: CloudflareEnv; Variables: { runtime: AppRuntime } }>();
+seaApi.get("/api/sea/fonts/:id", async c => {
+  const bytes = await seaRoom(c.get("runtime")).font(c.req.param("id"));
+  if (!bytes) throw new HttpError(404, "资源不存在");
+  return new Response(bytes, { headers: { "Content-Type": "font/woff", "Cache-Control": "public, max-age=86400, immutable" } });
+});
 seaApi.get("/api/sea/messages", async c => json({ ok: true, ...await seaRoom(c.get("runtime")).snapshot() }));
 seaApi.post("/api/sea/messages", async c => {
   const runtime = c.get("runtime");

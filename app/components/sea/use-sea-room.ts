@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SEA_ROOM_LIMIT, type SeaEvent, type SeaWindow } from "@/lib/dto/sea";
 import { requestJson } from "@/lib/ui/api-response";
+import { loadSeaFont } from "./font";
 
 export function useSeaRoom(initial: SeaWindow) {
   const [window, setWindow] = useState(initial);
   const current = useRef(initial);
-  const apply = useCallback((next: SeaWindow) => {
-    if (next.revision < current.current.revision) return;
-    current.current = { revision: next.revision, messages: next.messages.slice(-SEA_ROOM_LIMIT) };
-    setWindow(current.current);
+  const apply = useCallback(async (next: SeaWindow) => {
+    if (next.revision < current.current.revision || next.font.expiresAt < current.current.font.expiresAt) return;
+    const target = { revision: next.revision, font: next.font, messages: next.messages.slice(-SEA_ROOM_LIMIT) };
+    current.current = target;
+    await loadSeaFont(next.font);
+    if (current.current === target) setWindow(target);
   }, []);
   const refresh = useCallback(async (signal?: AbortSignal) => {
-    apply(await requestJson<SeaWindow>("/api/sea/messages", { signal, cache: "no-store" }, "同步对话失败"));
+    await apply(await requestJson<SeaWindow>("/api/sea/messages", { signal, cache: "no-store" }, "同步对话失败"));
   }, [apply]);
 
   useEffect(() => {
@@ -34,7 +37,7 @@ export function useSeaRoom(initial: SeaWindow) {
       receivedAt = Date.now();
       if (event.type === "snapshot") {
         initializing = false;
-        apply(event);
+        void apply(event).catch(() => { socket?.close(); });
         const pending = buffered;
         buffered = [];
         for (const item of pending.sort((a, b) => a.revision - b.revision)) receive(item);
@@ -46,10 +49,11 @@ export function useSeaRoom(initial: SeaWindow) {
         return;
       }
       const previous = current.current;
+      if (event.font.id !== previous.font.id) { resync(); return; }
       if (event.revision <= previous.revision) return;
       if (event.revision !== previous.revision + 1) { resync(); return; }
       const messages = [...previous.messages.filter(message => message.id !== event.message.id), event.message].sort((a, b) => a.id - b.id);
-      apply({ revision: event.revision, messages });
+      void apply({ revision: event.revision, font: event.font, messages }).catch(() => { socket?.close(); });
     }
     function connect() {
       if (!active) return;
@@ -94,5 +98,5 @@ export function useSeaRoom(initial: SeaWindow) {
       socket?.close();
     };
   }, [apply, refresh]);
-  return { messages: window.messages, refresh };
+  return { messages: window.messages, font: window.font, refresh };
 }
