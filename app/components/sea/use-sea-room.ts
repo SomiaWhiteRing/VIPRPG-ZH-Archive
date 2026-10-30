@@ -31,29 +31,28 @@ export function useSeaRoom(initial: SeaWindow) {
     function resync() {
       if (syncing || !active) return;
       syncing = true;
-      void refresh(controller.signal).catch(() => { socket?.close(); }).finally(() => { syncing = false; });
-    }
-    function receive(event: SeaEvent) {
-      receivedAt = Date.now();
-      if (event.type === "snapshot") {
+      initializing = true;
+      void refresh(controller.signal).then(() => {
+        syncing = false;
         initializing = false;
-        void apply(event).catch(() => { socket?.close(); });
         const pending = buffered;
         buffered = [];
         for (const item of pending.sort((a, b) => a.revision - b.revision)) receive(item);
-        return;
-      }
-      if (initializing) {
+      }).catch(() => { syncing = false; socket?.close(); });
+    }
+    function receive(event: SeaEvent) {
+      receivedAt = Date.now();
+      if (syncing || (initializing && event.type !== "snapshot")) {
         if (buffered.length >= SEA_ROOM_LIMIT) { buffered = []; socket?.close(); return; }
         buffered.push(event);
         return;
       }
+      if (event.type === "snapshot") { resync(); return; }
       const previous = current.current;
-      if (event.font.id !== previous.font.id) { resync(); return; }
       if (event.revision <= previous.revision) return;
       if (event.revision !== previous.revision + 1) { resync(); return; }
       const messages = [...previous.messages.filter(message => message.id !== event.message.id), event.message].sort((a, b) => a.id - b.id);
-      void apply({ revision: event.revision, font: event.font, messages }).catch(() => { socket?.close(); });
+      void apply({ revision: event.revision, font: previous.font, messages }).catch(() => { socket?.close(); });
     }
     function connect() {
       if (!active) return;

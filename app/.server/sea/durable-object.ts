@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { SEA_ROOM_LIMIT, type SeaAvatarMode, type SeaMessage, type SeaModeration, type SeaSubmission, type SeaWindow } from "@/lib/dto/sea";
+import { SEA_ROOM_LIMIT, type SeaAvatarMode, type SeaEvent, type SeaMessage, type SeaModeration, type SeaSubmission, type SeaWindow } from "@/lib/dto/sea";
 import { getUserAvatarSrc } from "@/lib/user-profile";
 import { layoutSeaDialogue } from "@/lib/ui/eternal-sea";
 import type { SeaActor } from "./identity";
@@ -43,6 +43,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
         if (stored?.current.day !== day) {
           stored = { current: createSeaFontState(day), previous: stored?.current.day === day - 1 ? stored.current : undefined };
           await this.ctx.storage.put("fonts", stored);
+          this.advance();
         }
         await this.ctx.storage.setAlarm(seaFontDeadline(day));
         return { current: seaFontCodec(stored.current), previous: stored.previous ? seaFontCodec(stored.previous) : undefined };
@@ -57,7 +58,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     return codec?.bytes() ?? null;
   }
   async alarm() {
-    this.broadcast({ type: "snapshot", ...await this.snapshot() });
+    this.broadcast(await this.socketSnapshot());
   }
   private advance() {
     return this.ctx.storage.sql.exec<{ revision: number }>("UPDATE meta SET revision=revision+1 WHERE id=1 RETURNING revision").one().revision;
@@ -84,11 +85,15 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     });
   }
   async snapshot(): Promise<SeaWindow> {
+    const { current } = await this.fonts();
     // Capture the revision and rows before awaiting profile lookups.
     const revision = this.revision();
     const rows = this.ctx.storage.sql.exec<Row>("SELECT * FROM messages WHERE hidden_at IS NULL ORDER BY id DESC LIMIT ?", SEA_ROOM_LIMIT).toArray().reverse();
-    const { current } = await this.fonts();
     return { revision, font: current.font, messages: this.decorate(rows, await this.profiles(rows)).map(message => current.message(message)) };
+  }
+  private async socketSnapshot() {
+    const { revision, messages } = await this.snapshot();
+    return { type: "snapshot" as const, revision, messages };
   }
   async moderation(requestedPage = 1): Promise<SeaModeration> {
     const revision = this.revision();
@@ -116,6 +121,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
   async publish(actor: SeaActor, input: SeaSubmission): Promise<Published | Fault> {
     if (!input.body.trim() || !layoutSeaDialogue(actor.name, input.body).fits)
       return fault(400, "发言超出对话框容量", "sea_body_invalid");
+    const { current } = await this.fonts();
     const now = Date.now();
     const result = this.ctx.storage.transactionSync(() => {
       const old = this.ctx.storage.sql.exec<Row>("SELECT * FROM messages WHERE actor_key=? AND client_message_id=?", actor.key, input.clientMessageId).toArray()[0];
@@ -142,9 +148,8 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       return { row: this.row(id)!, revision: this.advance(), repeated: false };
     });
     if ("ok" in result) return result;
-    const { current } = await this.fonts();
     const message = current.message(this.decorate([result.row], await this.profiles([result.row]))[0]);
-    if (!result.repeated) this.broadcast({ type: "message", revision: result.revision, font: current.font, message });
+    if (!result.repeated) this.broadcast({ type: "message", revision: result.revision, message });
     return { ok: true, revision: result.revision, font: current.font, message, repeated: result.repeated };
   }
   async hide(id: number, operatorId: number) {
@@ -157,7 +162,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       }
       return true;
     });
-    if (found) this.broadcast({ type: "snapshot", ...await this.snapshot() });
+    if (found) this.broadcast(await this.socketSnapshot());
     return found;
   }
   mute(id: number, minutes: number, operatorId: number) {
@@ -171,7 +176,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       return true;
     });
   }
-  private broadcast(event: unknown) {
+  private broadcast(event: SeaEvent) {
     const text = JSON.stringify(event);
     for (const socket of this.ctx.getWebSockets()) {
       try { socket.send(text); } catch { this.close(socket, 1011, "连接已失效"); }
@@ -189,7 +194,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       return new Response("连接过多", { status: 429 });
     const pair = new WebSocketPair();
     this.ctx.acceptWebSocket(pair[1], [ip]);
-    this.ctx.waitUntil(this.snapshot().then(snapshot => pair[1].send(JSON.stringify({ type: "snapshot", ...snapshot }))).catch(() => this.close(pair[1], 1011, "同步失败")));
+    this.ctx.waitUntil(this.socketSnapshot().then(snapshot => pair[1].send(JSON.stringify(snapshot))).catch(() => this.close(pair[1], 1011, "同步失败")));
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
   webSocketMessage(socket: WebSocket) { this.close(socket, 1008, "请通过发言接口提交"); }
