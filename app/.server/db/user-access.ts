@@ -15,6 +15,7 @@ export type UserRow = {
   include_player_in_zip: number;
   notify_uploaded_work_comments: number;
   notify_friend_additions: number;
+  receive_private_messages: number;
   show_game_card_interaction_data: number;
   hide_deleted_content: number;
   color_theme: string;
@@ -66,6 +67,7 @@ export const USER_PROFILE_COLUMNS = `
   u.include_player_in_zip,
   u.notify_uploaded_work_comments,
   u.notify_friend_additions,
+  u.receive_private_messages,
   u.show_game_card_interaction_data,
   u.hide_deleted_content,
   u.color_theme,
@@ -175,7 +177,7 @@ export function mapArchiveUser(
     avatarBlobSha256: row.avatar_blob_sha256,
     bio: row.bio,
     profileVisibility: mapProfileVisibility(row),
-    preferences: readAccountPreferences(row.include_player_in_zip, row.account_shortcuts, row.notify_uploaded_work_comments, row.show_game_card_interaction_data, row.hide_deleted_content, row.color_theme, row.timeline_as_homepage, row.notify_friend_additions),
+    preferences: readAccountPreferences(row.include_player_in_zip, row.account_shortcuts, row.notify_uploaded_work_comments, row.show_game_card_interaction_data, row.hide_deleted_content, row.color_theme, row.timeline_as_homepage, row.notify_friend_additions, row.receive_private_messages),
     roleIds: roles.map((role) => role.id),
     roleKeys: roles.map((role) => role.key),
     roleNames: roles.map((role) => role.name),

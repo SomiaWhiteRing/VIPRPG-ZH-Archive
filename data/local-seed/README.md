@@ -1,5 +1,12 @@
 # Fixed Local Seed
 
+`0046_private_messages.sql` adds private-message receiving preferences, the base
+send permission, and empty conversation, read-position, message, image and emoji
+reference tables. The schema and migration ledger are synchronized; existing
+accounts and business records are preserved.
+The snapshot also includes the two registration-recipient indexes from `0044`,
+which had not yet been recorded in this fixed seed.
+
 The direct inbox migration `0028_work_maintainer_direct_inbox.sql` removes obsolete
 maintainer summary notices and their index, carrying read receipts to application
 rows. The fixed seed schema and migration ledger include this migration.

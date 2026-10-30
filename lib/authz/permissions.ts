@@ -22,6 +22,7 @@ export const PERMISSION_CATEGORIES = {
   forum: { group: "community", label: "讨论区" },
   sea: { group: "community", label: "永恒之海" },
   timeline: { group: "community", label: "时间线" },
+  message: { group: "community", label: "短信箱" },
   emoji: { group: "community", label: "默认表情" },
   user: { group: "access", label: "账户管理" },
   role_access: { group: "access", label: "角色分配与审批" },
@@ -36,6 +37,10 @@ export const PERMISSION_CATEGORIES = {
 export type PermissionCategory = keyof typeof PERMISSION_CATEGORIES;
 
 export const PERMISSIONS = {
+  "message.send": {
+    category: "message", label: "发送私信", scope: "本人发起的一对一私信",
+    description: "向允许接收私信的活跃用户发送文字、表情或单张图片；历史消息仅限会话双方读取。",
+  },
   "sea.message.moderate_any": {
     category: "sea", label: "管理永恒之海发言", scope: "公共聊天室",
     description: "查看最近对话，隐藏违规发言；操作记录保存在聊天室。",
@@ -708,6 +713,7 @@ export const CHARACTER_ADMIN_PERMISSIONS = [
 export const SYSTEM_ROLE_PERMISSIONS = {
   user: [
     "user.rename_own",
+    "message.send",
     "forum.use",
     "timeline.use", "timeline.status.create",
     "timeline.status.delete_own", "timeline.event.delete_own",

@@ -8,6 +8,7 @@ import { maybeHandleArchiveDownload } from "./worker/archive-download.mjs";
 import { maybeHandleEasyRpgAsset } from "./worker/easyrpg-assets";
 import { runScheduledArchiveGc } from "./worker/archive-gc.mjs";
 import { cleanupCommentImages } from "./app/.server/comments/image-cleanup";
+import { cleanupDirectMessageImages } from "./app/.server/messages/image-cleanup";
 import { drainViewMerges } from "./app/.server/views/service";
 import { runScheduledAuditReports } from "./app/.server/db/audit-reports";
 import { DAILY_AUDIT_CRON } from "./lib/audit-report-config.mjs";
@@ -15,6 +16,7 @@ import { crawlerResponse, publicRobots, isFilteredGameList } from "./lib/crawl-p
 
 export { ViewStats } from "./app/.server/views/durable-object";
 export { EternalSeaRoom } from "./app/.server/sea/durable-object";
+export { MessageRoom } from "./app/.server/messages/durable-object";
 
 const developmentRender = createRequestHandler(
   () => import("virtual:react-router/server-build"),
@@ -110,6 +112,7 @@ export default {
         .then(async (report) => {
           console.log("Scheduled archive GC completed", JSON.stringify(report));
           console.log("Comment image cleanup completed", JSON.stringify(await cleanupCommentImages(env.DB, env.ARCHIVE_BUCKET)));
+          await cleanupDirectMessageImages(env.DB, env.ARCHIVE_BUCKET);
         })
         .catch((error) => {
           console.error("Scheduled archive GC failed", error);

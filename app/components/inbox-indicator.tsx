@@ -1,15 +1,22 @@
 import { requestJsonValue } from "@/lib/ui/api-response";
 import { INBOX_CHANGED_EVENT } from "@/lib/inbox-events";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 
 import { useLocation, useRouteLoaderData, useSearchParams } from "react-router";
 
+const InboxUnreadContext = createContext({ unread: 0, messagesUnread: 0 });
+export function useInboxUnread() { return useContext(InboxUnreadContext); }
+
 export function InboxIndicator({
   initialUnread,
+  initialMessagesUnread,
+  enabled,
   children,
 }: {
   initialUnread: number;
-  children: (unread: number) => ReactNode;
+  initialMessagesUnread: number;
+  enabled: boolean;
+  children: ReactNode;
 }) {
   const pathname = useLocation().pathname;
   const navigationParams = new URLSearchParams(useSearchParams()[0]);
@@ -20,15 +27,18 @@ export function InboxIndicator({
     initial: initialUnread,
     serverTime,
     unread: initialUnread,
+    initialMessages: initialMessagesUnread,
+    messagesUnread: initialMessagesUnread,
   });
   const mounted = useRef(false);
   const lastSuccess = useRef(0);
   const lastLoader = useRef<number | undefined>(undefined);
-  if (snapshot.initial !== initialUnread || snapshot.serverTime !== serverTime) {
-    setSnapshot({ initial: initialUnread, serverTime, unread: initialUnread });
+  if (snapshot.initial !== initialUnread || snapshot.initialMessages !== initialMessagesUnread || snapshot.serverTime !== serverTime) {
+    setSnapshot({ initial: initialUnread, serverTime, unread: initialUnread, initialMessages: initialMessagesUnread, messagesUnread: initialMessagesUnread });
   }
 
   useEffect(() => {
+    if (!enabled) return;
     let disposed = false;
     let inFlight = false;
     let queued = false;
@@ -42,19 +52,20 @@ export function InboxIndicator({
       if (!force && Date.now() - lastSuccess.current < 1000) return;
       inFlight = true;
       try {
-        const result = await requestJsonValue<{ unread?: unknown }>("/api/inbox/unread", {
+        const result = await requestJsonValue<{ unread: number; messagesUnread: number }>("/api/inbox/unread", {
           cache: "no-store",
           signal: controller.signal,
         });
         const unread = result.unread;
+        const messagesUnread = result.messagesUnread;
         if (
           !disposed &&
           typeof unread === "number" &&
           Number.isSafeInteger(unread) &&
-          unread >= 0
+          unread >= 0 && Number.isSafeInteger(messagesUnread) && messagesUnread >= 0
         ) {
           lastSuccess.current = Date.now();
-          setSnapshot((previous) => ({ ...previous, unread }));
+          setSnapshot((previous) => ({ ...previous, unread, messagesUnread }));
         }
       } catch {
         // Retain the last successful value; the next navigation/focus can retry.
@@ -91,7 +102,7 @@ export function InboxIndicator({
       document.removeEventListener("visibilitychange", onFocus);
       window.removeEventListener(INBOX_CHANGED_EVENT, onChanged);
     };
-  }, [pathname, query, serverTime]);
+  }, [pathname, query, serverTime, enabled]);
 
-  return children(snapshot.unread);
+  return <InboxUnreadContext.Provider value={snapshot}>{children}</InboxUnreadContext.Provider>;
 }

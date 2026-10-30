@@ -148,6 +148,10 @@
           {
             "name": "SEA_ROOM",
             "class_name": "EternalSeaRoom"
+          },
+          {
+            "name": "MESSAGE_ROOM",
+            "class_name": "MessageRoom"
           }
         ]
       },
@@ -166,6 +170,10 @@
     }
   },
   "exports": {
+    "MessageRoom": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
     "ViewStats": {
       "type": "durable-object",
       "storage": "sqlite"
@@ -184,6 +192,10 @@
       {
         "name": "SEA_ROOM",
         "class_name": "EternalSeaRoom"
+      },
+      {
+        "name": "MESSAGE_ROOM",
+        "class_name": "MessageRoom"
       }
     ]
   },

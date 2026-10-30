@@ -176,7 +176,7 @@ function authContext(id = actor.id, permitted = true): AuthContext {
       avatarBlobSha256: null, bio: "",
       profileVisibility: { bio: true, showcase: true, friends: true, favorites: true, history: true, catalogs: true, comments: true, discussions: true },
       preferences: {
-        colorTheme: "system", timelineAsHomepage: false, notifyUploadedWorkComments: true, notifyFriendAdditions: true, includePlayerInZip: true,
+        colorTheme: "system", timelineAsHomepage: false, notifyUploadedWorkComments: true, notifyFriendAdditions: true, receivePrivateMessages: true, includePlayerInZip: true,
         showGameCardInteractionData: true, hideDeletedContent: false, shortcuts: [],
       },
       roleIds: [], roleKeys: [], roleNames: [], permissionKeys,

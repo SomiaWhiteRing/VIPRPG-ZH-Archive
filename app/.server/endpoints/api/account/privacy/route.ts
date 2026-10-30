@@ -24,6 +24,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
       user: auth.user,
       preferencesForm: combined ? form : undefined,
       notifyFriendAdditions: form.has("notifyFriendAdditions") ? form.getAll("notifyFriendAdditions").includes("1") : undefined,
+      receivePrivateMessages: form.has("receivePrivateMessages") ? form.getAll("receivePrivateMessages").includes("1") : undefined,
       visibility: {
         bio: form.get("showBio") === "1",
         showcase: form.get("showShowcase") === "1",

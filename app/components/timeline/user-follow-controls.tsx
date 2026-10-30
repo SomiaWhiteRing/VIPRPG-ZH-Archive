@@ -1,6 +1,7 @@
 import { requestJson } from "@/lib/ui/api-response";
 
 import { useRef, useState } from "react";
+import { Mail } from "lucide-react";
 import { Link, useRevalidator } from "react-router";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
@@ -8,7 +9,7 @@ import { useConfirm } from "@/app/components/ui/confirm-provider";
 import type { FollowSummary } from "@/lib/dto/db/user-follows";
 import { notifyInboxChanged } from "@/lib/inbox-events";
 
-export function UserFollowControls({ userId, displayName, viewerId, summary }: { userId: number; displayName: string; viewerId: number | null; summary: FollowSummary | null }) {
+export function UserFollowControls({ userId, displayName, viewerId, summary, canMessage = false }: { userId: number; displayName: string; viewerId: number | null; summary: FollowSummary | null; canMessage?: boolean }) {
   const submitting = useRef(false);
   const [busy, setBusy] = useState(false);
   const revalidator = useRevalidator();
@@ -42,5 +43,6 @@ export function UserFollowControls({ userId, displayName, viewerId, summary }: {
         disabled={busy || (summary.isFollowing ? !summary.canUnfollow : !summary.canFollow)} onClick={() => void toggle()}>
         {busy ? "正在保存…" : summary.isFollowing ? "解除好友" : "加为好友"}
       </Button>}
+    {canMessage ? <Button asChild size="sm" variant="outline" className="w-9 px-0"><Link to={`/me/messages/${userId}`} aria-label="发私信" title="发私信"><Mail aria-hidden /></Link></Button> : null}
   </div>;
 }

@@ -9,6 +9,7 @@ export type AccountNavigationItem = {
 
 export const ACCOUNT_NAVIGATION: readonly AccountNavigationItem[] = [
   { href: "/me", label: "概览", exact: true },
+  { href: "/me/messages", label: "短信箱" },
   { href: "/me/favorites", label: "收藏", group: "收藏与整理", separatorBefore: true },
   { href: "/me/catalogs", label: "我的目录", group: "收藏与整理" },
   { href: "/me/showcase", label: "喜爱展柜", group: "收藏与整理" },

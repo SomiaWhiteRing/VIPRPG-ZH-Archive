@@ -1,3 +1,7 @@
+export function privateMessageImageKey(id: string): string {
+  return `private-messages/${id}`;
+}
+
 export function blobKey(sha256: string): string {
   const normalized = canonicalHash(sha256);
   return `blobs/sha256/${normalized.slice(0, 2)}/${normalized.slice(2, 4)}/${normalized}`;

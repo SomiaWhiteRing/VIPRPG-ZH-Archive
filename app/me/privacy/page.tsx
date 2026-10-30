@@ -20,6 +20,11 @@ export async function loader(args: LoaderFunctionArgs) {
   const params = await searchParams;
   const settings = [
     {
+      name: "receivePrivateMessages",
+      label: "接收私信",
+      checked: user.preferences.receivePrivateMessages,
+    },
+    {
       name: "showBio",
       label: "在个人主页展示简介",
       checked: user.profileVisibility.bio,
@@ -84,6 +89,7 @@ export default function PrivacyPage() {
         <h2 className="mb-3 text-lg font-semibold">隐私</h2>
         <input name="showFriends" type="hidden" value="0" />
         <input name="notifyFriendAdditions" type="hidden" value="0" />
+        <input name="receivePrivateMessages" type="hidden" value="0" />
         <div className="divide-y divide-border border-b border-border">
           {settings.map((setting) => (
             <div className="py-2" key={setting.name}>

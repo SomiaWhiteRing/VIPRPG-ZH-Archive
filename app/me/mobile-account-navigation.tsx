@@ -4,6 +4,8 @@ import { ACCOUNT_NAVIGATION, isAccountNavigationActive } from "@/lib/account-nav
 import { cn } from "@/lib/ui/cn";
 import { ChevronDown, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { useInboxUnread } from "@/app/components/inbox-indicator";
+import { UnreadBadge } from "@/app/components/ui/unread-badge";
 import { Link, useLocation, useOutletContext } from "react-router";
 
 export type AccountOutletContext = { canUpload: boolean };
@@ -20,6 +22,7 @@ export function MobileAccountNavigation(props: MobileAccountNavigationProps) {
 
 function MobileAccountNavigationMenu({ children, heading = false }: MobileAccountNavigationProps) {
   const { canUpload } = useOutletContext<AccountOutletContext>();
+  const { messagesUnread } = useInboxUnread();
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const items = ACCOUNT_NAVIGATION.filter((item) => !item.requiresUpload || canUpload);
@@ -78,6 +81,7 @@ function MobileAccountNavigationMenu({ children, heading = false }: MobileAccoun
                           )}
                         >
                           {item.label}
+                          {item.href === "/me/messages" ? <UnreadBadge className="ml-auto" count={messagesUnread} /> : null}
                         </Link>
                       </Dialog.Close>
                     );

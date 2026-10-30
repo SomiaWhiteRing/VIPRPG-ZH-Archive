@@ -12,4 +12,4 @@ export type AdminUserAccessUpdate = {
 export type PublicUserProfile = Pick<
   ArchiveUser,
   "id" | "displayName" | "avatarBlobSha256" | "profileVisibility" | "createdAt"
-> & { bio: string | null };
+> & { bio: string | null; canReceivePrivateMessages: boolean };

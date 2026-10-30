@@ -111,6 +111,7 @@ import * as endpoint89 from "@/app/.server/endpoints/discussions/sitemaps/[shard
 
 import { Hono } from "hono";
 import { seaApi } from "./sea/api";
+import { messageApi } from "./messages/api";
 import type { AppRuntime } from "./runtime";
 import { emojiApi } from "./emojis/api";
 import { resourceApi } from "./resources/api";
@@ -134,6 +135,7 @@ api.all("/api/material-search", (_c) => jsonResponse({ ok: false, error: "Method
   { status: 405, headers: { Allow: "GET, OPTIONS" } }));
 api.route("/", sitemapApi);
 api.route("/", seaApi);
+api.route("/", messageApi);
 api.get("/api/admin/audit/reports/:date/export", (c) => auditReportExportEndpoint.GET(c.get("runtime"), c.req.raw,
   { params: Promise.resolve({ date: c.req.param("date") }) }));
 api.options("/api/admin/audit/reports/:date/export", (c) => c.body(null, 204, { Allow: "GET, OPTIONS" }));

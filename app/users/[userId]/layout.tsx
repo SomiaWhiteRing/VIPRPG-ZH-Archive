@@ -11,6 +11,7 @@ import { AccountSection } from "@/app/components/profile/account-content";
 import { FriendSection } from "@/app/components/profile/friend-section";
 import { TimelineWorkspace } from "@/app/components/timeline/timeline-workspace";
 import { hasProfileOverviewSections } from "@/lib/user-profile";
+import { hasPermission } from "@/lib/authz/permissions";
 import { DetailPageLayout } from "@/app/components/ui/detail-page-layout";
 import { PageContainer } from "@/app/components/ui/page-container";
 import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
@@ -36,7 +37,7 @@ export async function loader(args: LoaderFunctionArgs) {
     isOverview && user.profileVisibility.friends ? listUserFollows(runtime, user.id, "following", null, 15) : null,
     isOverview ? listTimeline(runtime, { actorUserId: user.id, viewerId: viewer?.id, limit: hasProfileOverviewSections(user.profileVisibility) ? 5 : 10 }) : null,
   ]);
-  return data({ user, viewerId: viewer?.id ?? null, followSummary, friends, timelineItems: timeline?.items ?? null, isOverview }, { headers: { "Cache-Control": "private, no-store" } });
+  return data({ user, viewerId: viewer?.id ?? null, canMessage: !!viewer && viewer.id !== user.id && user.canReceivePrivateMessages && hasPermission(viewer, "message.send"), followSummary, friends, timelineItems: timeline?.items ?? null, isOverview }, { headers: { "Cache-Control": "private, no-store" } });
 }
 export function headers() { return { "Cache-Control": "private, no-store" }; }
 
@@ -44,7 +45,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: [loaderData?.user.displayName || "用户", "个人主页"] }, error);
 
 export default function PublicUserLayout() {
-  const { user, viewerId, followSummary, friends, timelineItems, isOverview } = useLoaderData<typeof loader>();
+  const { user, viewerId, canMessage, followSummary, friends, timelineItems, isOverview } = useLoaderData<typeof loader>();
   const hasSidebar = isOverview && hasProfileOverviewSections(user.profileVisibility);
   const timelineSection = timelineItems !== null ? <AccountSection href={`/users/${user.id}/timeline`} title="时间线" divided={false}>
     <TimelineWorkspace page={{ items: timelineItems, nextCursor: null }} viewerId={viewerId} settings={null} basePath={`/users/${user.id}/timeline`} profile showAuthor={false} readOnlyInteractions expandReplies={false} />
@@ -82,7 +83,7 @@ export default function PublicUserLayout() {
                 {user.bio || "这位用户还没有填写简介。"}
               </p>
             ) : null}
-            <UserFollowControls key={`${user.id}:${viewerId}`} userId={user.id} displayName={user.displayName} viewerId={viewerId} summary={followSummary} />
+            <UserFollowControls key={`${user.id}:${viewerId}`} userId={user.id} displayName={user.displayName} viewerId={viewerId} summary={followSummary} canMessage={canMessage} />
           </div>
         </header>
         <PublicProfileNavigation userId={user.id} visibility={user.profileVisibility} />

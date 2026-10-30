@@ -3,14 +3,14 @@ import type {
   HeaderNavigationLink,
 } from "@/app/components/header-navigation";
 import { HeaderNavigation } from "@/app/components/header-navigation";
-import { InboxIndicator } from "@/app/components/inbox-indicator";
+import { useInboxUnread } from "@/app/components/inbox-indicator";
+import { notifyInboxChanged } from "@/lib/inbox-events";
 import { useClientEnvironment } from "@/app/components/use-client-environment";
-import { Badge } from "@/app/components/ui/badge";
+import { UnreadBadge } from "@/app/components/ui/unread-badge";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
-import { formatUnreadCount } from "@/lib/format";
 import { getPageSearchScope } from "@/lib/search";
 import { ACCOUNT_SHORTCUTS, type AccountPreferences } from "@/lib/account-preferences";
 import { canAccessOwnWorks } from "@/lib/authz/permissions";
@@ -23,7 +23,7 @@ import {
 import { ChevronDown, Menu, Search, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
@@ -31,7 +31,6 @@ type Session = {
   id: number;
   displayName: string;
   avatarBlobSha256: string | null;
-  unread: number;
   permissionKeys: PermissionKey[];
   isBootstrapAdmin: boolean;
   preferences: AccountPreferences;
@@ -342,18 +341,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
             </Button>
           ) : null}
           {session ? (
-            <Suspense
-              fallback={<UserMenu inAdmin={inAdmin} session={session} />}
-            >
-              <InboxIndicator key={session.id} initialUnread={session.unread}>
-                {(unread) => (
-                  <UserMenu
-                    inAdmin={inAdmin}
-                    session={{ ...session, unread }}
-                  />
-                )}
-              </InboxIndicator>
-            </Suspense>
+            <UserMenu inAdmin={inAdmin} session={session} />
           ) : (
             <>
               <Link
@@ -428,6 +416,7 @@ function UserMenu({
   session: Session;
 }) {
   const environment = useClientEnvironment();
+  const { unread, messagesUnread } = useInboxUnread();
   const consoleHref = getAdminLandingHref(getAdminNavigation(session));
   const logoutFormRef = useRef<HTMLFormElement>(null);
   const [logoutBusy, setLogoutBusy] = useState(false);
@@ -436,10 +425,10 @@ function UserMenu({
 
   return (
     <>
-      <DropdownMenu.Root>
+      <DropdownMenu.Root onOpenChange={(open) => { if (open) notifyInboxChanged(); }}>
         <DropdownMenu.Trigger asChild>
           <Button
-            aria-label={`${session.displayName} 用户菜单${session.unread > 0 ? `，${session.unread} 条未读提醒` : ""}`}
+            aria-label={`${session.displayName} 用户菜单${unread + messagesUnread > 0 ? `，${unread + messagesUnread} 条未读` : ""}`}
             className="max-w-44 gap-1.5 px-2.5"
             size="sm"
             type="button"
@@ -452,7 +441,7 @@ function UserMenu({
                 displayName={session.displayName}
                 size={24}
               />
-              {session.unread > 0 ? (
+              {unread > 0 || messagesUnread > 0 ? (
                 <span
                   aria-hidden
                   className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-background"
@@ -473,7 +462,8 @@ function UserMenu({
           >
             <DropdownMenu.Item asChild>
               <Link className={itemClass} to="/me">
-                个人中心
+                <span>个人中心</span>
+                {!session.preferences.shortcuts.includes("/me/messages") ? <UnreadBadge count={messagesUnread} /> : null}
               </Link>
             </DropdownMenu.Item>
             {session.preferences.shortcuts.map((href) => {
@@ -481,7 +471,10 @@ function UserMenu({
               if (!item || (item.requiresUpload && !canAccessOwnWorks({ status: "active", permissionKeys: session.permissionKeys }))) return null;
               return (
                 <DropdownMenu.Item asChild key={href}>
-                  <Link className={itemClass} to={href}>{item.label}</Link>
+                  <Link className={itemClass} to={href}>
+                    <span>{item.label}</span>
+                    {href === "/me/messages" ? <UnreadBadge count={messagesUnread} /> : null}
+                  </Link>
                 </DropdownMenu.Item>
               );
             })}
@@ -491,17 +484,10 @@ function UserMenu({
                 className={itemClass}
                 to="/inbox"
                 prefetch="none"
-                aria-label={`提醒，${session.unread} 条未读`}
+                aria-label={`提醒，${unread} 条未读`}
               >
                 <span>提醒</span>
-                {session.unread > 0 ? (
-                  <Badge
-                    className="min-h-5 px-1.5 text-[11px]"
-                    variant="negative"
-                  >
-                    {formatUnreadCount(session.unread)}
-                  </Badge>
-                ) : null}
+                <UnreadBadge count={unread} />
               </Link>
             </DropdownMenu.Item>
             {environment === "browser" ? (

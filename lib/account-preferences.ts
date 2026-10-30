@@ -3,7 +3,7 @@ import { ACCOUNT_NAVIGATION } from "./account-navigation";
 export const ACCOUNT_SHORTCUTS = ACCOUNT_NAVIGATION.filter(
   (item) => item.href !== "/me" && item.href !== "/me/permissions",
 );
-export const DEFAULT_ACCOUNT_SHORTCUTS = ["/me/favorites", "/me/emojis", "/me/catalogs"];
+export const DEFAULT_ACCOUNT_SHORTCUTS = ["/me/messages", "/me/favorites", "/me/emojis"];
 
 export type ColorTheme = "light" | "dark" | "system";
 export const DEFAULT_COLOR_THEME: ColorTheme = "system";
@@ -26,6 +26,7 @@ export type AccountPreferences = {
   timelineAsHomepage: boolean;
   notifyUploadedWorkComments: boolean;
   notifyFriendAdditions: boolean;
+  receivePrivateMessages: boolean;
   includePlayerInZip: boolean;
   showGameCardInteractionData: boolean;
   hideDeletedContent: boolean;
@@ -41,12 +42,13 @@ export function parseAccountShortcuts(value: unknown): string[] {
   return value;
 }
 
-export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number, showGameCardInteractionData: number, hideDeletedContent: number, colorTheme: string, timelineAsHomepage: number, notifyFriendAdditions: number): AccountPreferences {
+export function readAccountPreferences(includePlayer: number, shortcuts: string | null, notifyUploadedWorkComments: number, showGameCardInteractionData: number, hideDeletedContent: number, colorTheme: string, timelineAsHomepage: number, notifyFriendAdditions: number, receivePrivateMessages: number): AccountPreferences {
   return {
     colorTheme: parseColorTheme(colorTheme),
     timelineAsHomepage: timelineAsHomepage === 1,
     notifyUploadedWorkComments: notifyUploadedWorkComments !== 0,
     notifyFriendAdditions: notifyFriendAdditions === 1,
+    receivePrivateMessages: receivePrivateMessages === 1,
     includePlayerInZip: includePlayer !== 0,
     showGameCardInteractionData: showGameCardInteractionData !== 0,
     hideDeletedContent: hideDeletedContent === 1,

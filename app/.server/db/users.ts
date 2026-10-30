@@ -51,7 +51,7 @@ type UserAuthRow = UserRow & {
 
 type PublicUserRow = Pick<
   UserRow,
-  "id" | "display_name" | "avatar_blob_sha256" | "bio" | "created_at"
+  "id" | "display_name" | "avatar_blob_sha256" | "bio" | "created_at" | "status" | "receive_private_messages"
 > &
   ProfileVisibilityRow;
 
@@ -65,6 +65,7 @@ const USER_SELECT = `SELECT
   include_player_in_zip,
   notify_uploaded_work_comments,
   notify_friend_additions,
+  receive_private_messages,
   show_game_card_interaction_data,
   hide_deleted_content,
   color_theme,
@@ -204,7 +205,7 @@ export const findPublicUserById = async (
   return memoizeRequest(runtime, `public-user:${id}`, async () => {
     const row = await getD1(runtime)
       .prepare(
-        `SELECT id,display_name,avatar_blob_sha256,bio,
+        `SELECT id,display_name,avatar_blob_sha256,bio,status,receive_private_messages,
               profile_show_bio,profile_show_showcase,profile_show_friends,profile_show_favorites,profile_show_history,
               profile_show_catalogs,profile_show_comments,profile_show_discussions,created_at
        FROM users
@@ -220,6 +221,7 @@ export const findPublicUserById = async (
       displayName: row.display_name,
       avatarBlobSha256: row.avatar_blob_sha256,
       bio: profileVisibility.bio ? row.bio : null,
+      canReceivePrivateMessages: row.status === "active" && row.receive_private_messages === 1,
       profileVisibility,
       createdAt: row.created_at,
     };
@@ -437,6 +439,7 @@ export async function updateOwnProfileVisibility(
     user: ArchiveUser;
     visibility: ProfileVisibility;
     notifyFriendAdditions?: boolean;
+    receivePrivateMessages?: boolean;
     preferencesForm?: FormData;
   },
 ): Promise<void> {
@@ -445,7 +448,7 @@ export async function updateOwnProfileVisibility(
       .prepare(
         `UPDATE users
          SET profile_show_bio=?,profile_show_showcase=?,profile_show_friends=?,profile_show_favorites=?,profile_show_history=?,
-             profile_show_catalogs=?,profile_show_comments=?,profile_show_discussions=?,notify_friend_additions=COALESCE(?,notify_friend_additions),updated_at=CURRENT_TIMESTAMP
+             profile_show_catalogs=?,profile_show_comments=?,profile_show_discussions=?,notify_friend_additions=COALESCE(?,notify_friend_additions),receive_private_messages=COALESCE(?,receive_private_messages),updated_at=CURRENT_TIMESTAMP
          WHERE id=?`,
       )
       .bind(
@@ -458,6 +461,7 @@ export async function updateOwnProfileVisibility(
         input.visibility.comments ? 1 : 0,
         input.visibility.discussions ? 1 : 0,
         input.notifyFriendAdditions === undefined ? null : input.notifyFriendAdditions ? 1 : 0,
+        input.receivePrivateMessages === undefined ? null : input.receivePrivateMessages ? 1 : 0,
         input.user.id,
       ),
     getD1(runtime)
@@ -930,7 +934,7 @@ export async function deleteOwnAccount(
     db
       .prepare(
         `UPDATE users SET status='deleted',display_name='账户已注销',avatar_blob_sha256=NULL,
-      bio='',password_hash=NULL,timeline_enabled=0,timeline_as_homepage=0,timeline_default_view='following',include_player_in_zip=1,notify_uploaded_work_comments=1,notify_friend_additions=1,show_game_card_interaction_data=1,hide_deleted_content=0,color_theme='system',account_shortcuts=NULL,profile_show_bio=0,profile_show_showcase=0,profile_show_friends=0,profile_show_favorites=0,profile_show_history=0,
+      bio='',password_hash=NULL,receive_private_messages=0,timeline_enabled=0,timeline_as_homepage=0,timeline_default_view='following',include_player_in_zip=1,notify_uploaded_work_comments=1,notify_friend_additions=1,show_game_card_interaction_data=1,hide_deleted_content=0,color_theme='system',account_shortcuts=NULL,profile_show_bio=0,profile_show_showcase=0,profile_show_friends=0,profile_show_favorites=0,profile_show_history=0,
       profile_show_catalogs=0,profile_show_comments=0,profile_show_discussions=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'`,
       )
       .bind(user.id),

@@ -19,6 +19,8 @@ import {
 } from "react-router";
 import { getCurrentUser } from "./.server/auth/current-user";
 import { countUnreadInboxItemsForUser } from "./.server/db/inbox";
+import { countUnreadDirectMessages } from "./.server/db/messages";
+import { InboxIndicator } from "./components/inbox-indicator";
 import { runtimeContext } from "./.server/router-context";
 import { getSiteAnalyticsConfig } from "./.server/analytics";
 import { SiteAnalytics } from "./components/site-analytics";
@@ -44,6 +46,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const user = await getCurrentUser(runtime);
   const unread = user ? await countUnreadInboxItemsForUser(runtime, user) : 0;
+  const messagesUnread = user ? await countUnreadDirectMessages(runtime, user.id) : 0;
   return {
     serverTime: Date.now(),
     embedded: args.request.headers.get("Sec-Fetch-Dest") === "iframe",
@@ -54,6 +57,7 @@ export async function loader(args: LoaderFunctionArgs) {
           displayName: user.displayName,
           avatarBlobSha256: user.avatarBlobSha256,
           unread,
+          messagesUnread,
           permissionKeys: user.permissionKeys,
           isBootstrapAdmin: user.isBootstrapAdmin,
           preferences: user.preferences,
@@ -114,7 +118,7 @@ export default function App() {
   const { pathname } = useLocation();
   const inSea = pathname === "/sea";
   return (
-    <>
+    <InboxIndicator initialUnread={session?.unread ?? 0} initialMessagesUnread={session?.messagesUnread ?? 0} enabled={!!session}>
       <SiteAnalytics config={analytics} embedded={inFrame} />
       {!inFrame ? <GameStorageBoundary /> : null}
       <NavigationProgress />
@@ -137,7 +141,7 @@ export default function App() {
         </div>
       ) : <Outlet />}
       {!inFrame && !inSea && pathname !== "/rakuen" ? <SiteFooter /> : null}
-    </>
+    </InboxIndicator>
   );
 }
 

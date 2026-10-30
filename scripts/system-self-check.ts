@@ -1315,8 +1315,8 @@ export default {
     JSON.stringify({
       ...nativeConfig,
       main: serverEntry,
-      durable_objects: { bindings: [{ name: "VIEW_STATS", class_name: "ViewStats" }, { name: "SEA_ROOM", class_name: "EternalSeaRoom" }] },
-      exports: { ViewStats: { type: "durable-object", storage: "sqlite" }, EternalSeaRoom: { type: "durable-object", storage: "sqlite" } },
+      durable_objects: { bindings: [{ name: "VIEW_STATS", class_name: "ViewStats" }, { name: "SEA_ROOM", class_name: "EternalSeaRoom" }, { name: "MESSAGE_ROOM", class_name: "MessageRoom" }] },
+      exports: { ViewStats: { type: "durable-object", storage: "sqlite" }, EternalSeaRoom: { type: "durable-object", storage: "sqlite" }, MessageRoom: { type: "durable-object", storage: "sqlite" } },
       ratelimits: [...nativeConfig.ratelimits, {
         name: "VIEW_RATE_LIMITER", namespace_id: "2", simple: { limit: 120, period: 60 },
       }],

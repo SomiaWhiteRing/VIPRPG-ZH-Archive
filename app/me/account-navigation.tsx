@@ -1,10 +1,13 @@
 import { ACCOUNT_NAVIGATION, isAccountNavigationActive } from "@/lib/account-navigation";
 import { cn } from "@/lib/ui/cn";
 import { Fragment } from "react";
+import { useInboxUnread } from "@/app/components/inbox-indicator";
+import { UnreadBadge } from "@/app/components/ui/unread-badge";
 import { Link, useLocation } from "react-router";
 
 export function AccountNavigation({ canUpload }: { canUpload: boolean }) {
   const pathname = useLocation().pathname ?? "/me";
+  const { messagesUnread } = useInboxUnread();
   const items = ACCOUNT_NAVIGATION.filter(
     (item) => !item.requiresUpload || canUpload,
   );
@@ -30,6 +33,7 @@ export function AccountNavigation({ canUpload }: { canUpload: boolean }) {
             to={item.href}
           >
             {item.label}
+            {item.href === "/me/messages" ? <UnreadBadge className="ml-auto" count={messagesUnread} /> : null}
           </Link>
         </Fragment>
       );
