@@ -131,13 +131,19 @@ function renderOverall(data, stateMap) {
 
 function renderServices(data, stateMap) {
   const container = document.getElementById("service-groups");
+  const stagingOpen = container.querySelector(".staging-group")?.open ?? false;
+  const stagingFocused = document.activeElement?.id === "staging-group-toggle";
   container.replaceChildren();
   const days = datesForThirtyDays();
   const groups = [...new Set(data.monitors.map((monitor) => monitor.group))];
   const dayMap = new Map(data.days.map((day) => [`${day.monitor_id}:${day.day_bjt}`, day]));
   for (const group of groups) {
-    const section = el("section", "service-group");
-    section.append(el("h3", "group-title", group));
+    const isStaging = group === "预生产站";
+    const section = el(isStaging ? "details" : "section", isStaging ? "service-group staging-group" : "service-group");
+    if (isStaging) section.open = stagingOpen;
+    const heading = el(isStaging ? "summary" : "h3", "group-title", group);
+    if (isStaging) heading.id = "staging-group-toggle";
+    section.append(heading);
     for (const monitor of data.monitors.filter((item) => item.group === group)) {
       const state = stateMap.get(monitor.id);
       const currentStatus = statusOf(state, Date.now(), monitor.intervalSeconds);
@@ -185,6 +191,7 @@ function renderServices(data, stateMap) {
     }
     container.append(section);
   }
+  if (stagingFocused) document.getElementById("staging-group-toggle")?.focus({ preventScroll: true });
 }
 
 function duration(milliseconds) {

@@ -89,6 +89,7 @@ main { width: min(100% - 32px, 1180px); margin: 0 auto; padding: 34px 0 72px; fl
 .key-swatch { display: inline-block; width: 9px; height: 13px; margin-right: 5px; border-radius: 2px; background: var(--primary); vertical-align: -2px; }
 .service-groups { display: grid; gap: 20px; }
 .group-title { margin: 0 0 9px; color: var(--secondary); font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+.staging-group summary { cursor: pointer; }
 .service-card { display: grid; gap: 14px; margin-bottom: 8px; padding: 17px 19px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); box-shadow: var(--shadow); }
 .service-main { display: flex; justify-content: space-between; align-items: start; gap: 14px; }
 .service-name { font-size: 15px; font-weight: 700; }
