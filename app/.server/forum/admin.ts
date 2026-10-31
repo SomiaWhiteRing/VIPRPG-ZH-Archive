@@ -50,7 +50,9 @@ export async function adminForumList(
     COALESCE(c.body,p.body,root.body,'') AS body,COALESCE(c.status,p.status,t.status) AS state,u.display_name AS author
     FROM forum_content_reports r JOIN forum_topics t ON t.id=r.topic_id JOIN users reporter ON reporter.id=r.user_id
     LEFT JOIN forum_posts p ON p.id=r.post_id LEFT JOIN forum_posts root ON root.topic_id=t.id AND root.post_number=1
-    LEFT JOIN forum_post_comments c ON c.id=r.comment_id JOIN users u ON u.id=COALESCE(c.user_id,p.user_id,t.user_id) WHERE r.status='pending'`;
+    LEFT JOIN forum_post_comments c ON c.id=r.comment_id JOIN users u ON u.id=COALESCE(c.user_id,p.user_id,t.user_id) WHERE r.status='pending'
+    UNION ALL SELECT r.id,r.reason,r.explanation,reporter.display_name,r.created_at,r.id,'message',0,0,peer.display_name,'','pending',peer.display_name
+    FROM direct_message_reports r JOIN users reporter ON reporter.id=r.user_id JOIN users peer ON peer.id=r.peer_user_id WHERE r.status='pending'`;
   else if (input.view === "posts")
     source = `SELECT p.id,'post' AS kind,p.topic_id AS topicId,p.post_number AS postNumber,t.title,p.body,p.status AS state,u.display_name AS author,p.created_at AS createdAt FROM forum_posts p JOIN forum_topics t ON t.id=p.topic_id JOIN users u ON u.id=p.user_id
     UNION ALL SELECT c.id,'comment',p.topic_id,p.post_number,t.title,c.body,c.status,u.display_name,c.created_at FROM forum_post_comments c JOIN forum_posts p ON p.id=c.post_id JOIN forum_topics t ON t.id=p.topic_id JOIN users u ON u.id=c.user_id`;

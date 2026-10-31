@@ -15,6 +15,7 @@ import { notifyInboxChanged } from "@/lib/inbox-events";
 import { requestJson } from "@/lib/ui/api-response";
 import { MessageComposer } from "./composer";
 import { useMessageRoom } from "./use-message-room";
+import { MessageMenu } from "./menu";
 
 export function MessageThread({ viewerId, initial }: { viewerId: number; initial: DirectMessagePage }) {
   const [page, setPage] = useState(initial);
@@ -121,9 +122,12 @@ export function MessageThread({ viewerId, initial }: { viewerId: number; initial
   return <>
     <AccountPageHeader title="短信箱" actions={<Button asChild variant="ghost" size="sm"><Link to="/me/messages"><ArrowLeft aria-hidden />返回</Link></Button>} />
     <section className="mt-4 flex h-[min(72dvh,48rem)] min-h-80 flex-col overflow-hidden rounded-lg border border-border bg-card" aria-label={`与${page.peer.displayName}的短信`}>
-      <Link className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3 text-sm font-semibold" to={`/users/${peerId}`}>
-        <UserAvatar avatarBlobSha256={page.peer.avatarBlobSha256} displayName={page.peer.displayName} size={32} />{page.peer.displayName}
-      </Link>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <Link className="flex min-w-0 items-center gap-3 text-sm font-semibold" to={`/users/${peerId}`}>
+          <UserAvatar avatarBlobSha256={page.peer.avatarBlobSha256} displayName={page.peer.displayName} size={32} /><span className="truncate">{page.peer.displayName}</span>
+        </Link>
+        <MessageMenu peer={page.peer} onChanged={refresh} />
+      </div>
       <div ref={list} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4" role="log" aria-label="短信记录" aria-live="polite" aria-relevant="additions"
         onScroll={event => { const element = event.currentTarget; followBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 96; }}>
         {page.hasOlder ? <div className="mb-4 text-center"><Button type="button" variant="ghost" size="sm" disabled={loadingOlder} onClick={() => void older()}>更早的短信</Button></div> : null}
@@ -142,12 +146,13 @@ export function MessageThread({ viewerId, initial }: { viewerId: number; initial
           </div>)}
         </div>
       </div>
+      {!page.peer.acceptsMessages ? <p role="status" className="m-0 border-t border-border px-4 py-2 text-sm text-muted">对方已停止接收你的信息</p> : null}
       {page.peer.canSend ? <MessageComposer peerId={peerId} lastMessageId={page.messages.at(-1)?.id ?? 0} onSent={async () => { followBottom.current = true; await refresh(); if (list.current) list.current.scrollTop = list.current.scrollHeight; }} /> : null}
     </section>
   </>;
 }
 
-function MessageText({ body, emojis }: { body: string; emojis: FaceEmoji[] }) {
+export function MessageText({ body, emojis }: { body: string; emojis: FaceEmoji[] }) {
   const parts: ReactNode[] = [];
   const pattern = new RegExp(`${FACE_EMOJI_PATTERN.source}|${AUTO_LINK_PATTERN.source}`, "g");
   let cursor = 0;

@@ -64,6 +64,7 @@ export default [
     route("discussion-tags", "admin/discussion-tags/page.tsx"),
     route("discussions/images", "admin/discussions/images/page.tsx"),
     route("discussions", "admin/discussions/page.tsx"),
+    route("discussions/messages/:reportId", "admin/discussions/messages/[reportId]/page.tsx"),
     route("emojis", "admin/emojis/page.tsx"),
     route("home-recommendations", "admin/home-recommendations/page.tsx"),
     route("sea", "admin/sea/page.tsx"),

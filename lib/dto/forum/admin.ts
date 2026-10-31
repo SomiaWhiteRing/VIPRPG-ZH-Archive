@@ -2,7 +2,7 @@ import type { ForumImage, ForumTag, ForumTarget } from "@/lib/forum";
 
 export type ForumAdminRow = {
   id: number;
-  kind: "topic" | "post" | "comment";
+  kind: "topic" | "post" | "comment" | "message";
   topicId: number;
   postNumber: number;
   title: string;

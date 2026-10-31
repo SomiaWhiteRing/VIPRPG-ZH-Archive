@@ -125,14 +125,14 @@ export function AdminDiscussions({
             {data.items.map((row) => (
               <tr
                 className="border-b border-border"
-                key={`${row.reportId ?? row.kind}-${row.id}`}
+                key={`${row.kind}-${row.reportId ?? row.id}`}
               >
                 <td className="max-w-96">
                   <strong className="admin-cell-title wrap-anywhere">
                     {row.title || "已删除主题"}
                   </strong>
                   <p className="text-xs text-muted">
-                    {row.kind === "topic"
+                    {row.kind === "message" ? "私信" : row.kind === "topic"
                       ? "主题"
                       : `#${row.postNumber}${row.kind === "comment" ? " 楼中楼" : " 普通楼层"}`}{" "}
                     · {row.id}
@@ -173,7 +173,7 @@ export function AdminDiscussions({
                   <Timestamp value={row.createdAt} />
                 </td>
                 <td className="admin-action-column">
-                  <Button
+                  {row.kind === "message" ? <Button asChild variant="ghost" size="sm"><Link to={`/admin/discussions/messages/${row.id}`}>查看</Link></Button> : <Button
                     variant="ghost"
                     size="sm"
                     disabled={busy}
@@ -181,7 +181,7 @@ export function AdminDiscussions({
                     type="button"
                   >
                     查看
-                  </Button>
+                  </Button>}
                 </td>
               </tr>
             ))}

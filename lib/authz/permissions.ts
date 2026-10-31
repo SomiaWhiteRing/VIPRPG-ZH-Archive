@@ -367,7 +367,7 @@ export const PERMISSIONS = {
   },
   "forum.content.moderate_any": {
     category: "forum", label: "审核讨论内容", scope: "全部讨论与举报",
-    description: "查看审核上下文，隐藏或恢复被隐藏内容，锁定或解锁主题并处理举报。",
+    description: "查看审核上下文，隐藏或恢复被隐藏内容，锁定或解锁主题并处理举报；私信仅可通过对应举报查看会话。",
   },
   "forum.topic.feature_any": {
     category: "forum", label: "策展公开讨论", scope: "全部公开主题",

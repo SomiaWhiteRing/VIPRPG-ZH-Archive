@@ -240,3 +240,8 @@ The catalog-comment refresh applies `0045_catalog_comments.sql` and records it
 in the migration ledger. Existing comments, replies, likes, emoji and image
 references, notifications and timeline events are preserved. Catalog comments
 start empty.
+
+The per-conversation receiving and private-report refresh applies
+`0048_message_receiving_and_reports.sql` and records it in the migration ledger.
+Existing messages default to delivered; private reports start empty. Existing
+business records, accounts and object references are preserved.

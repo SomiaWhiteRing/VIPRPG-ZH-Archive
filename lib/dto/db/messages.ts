@@ -5,6 +5,8 @@ export type MessagePeer = {
   displayName: string;
   avatarBlobSha256: string | null;
   canSend: boolean;
+  receiveMessages: boolean;
+  acceptsMessages: boolean;
 };
 
 export type DirectMessage = {
@@ -24,7 +26,7 @@ export type DirectMessagePage = {
 };
 
 export type DirectConversation = {
-  peer: Omit<MessagePeer, "canSend">;
+  peer: Pick<MessagePeer, "id" | "displayName" | "avatarBlobSha256">;
   excerpt: string;
   updatedAt: string;
   unread: number;

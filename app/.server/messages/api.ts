@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { requireUser } from "@/app/.server/auth/guards";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
-import { directMessagePeer, findSentDirectMessage, listDirectConversations, listDirectMessages, markDirectMessagesRead, sendDirectMessage } from "@/app/.server/db/messages";
+import { directMessagePeer, findSentDirectMessage, listDirectConversations, listDirectMessages, markDirectMessagesRead, sendDirectMessage, setDirectMessageReceiving } from "@/app/.server/db/messages";
+import { createDirectMessageReport, readDirectMessageReport } from "@/app/.server/db/message-reports";
 import { parsePositiveId, readJsonObject, readRequestBody } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { privateMessageImageKey } from "@/lib/archive/object-keys";
@@ -17,6 +18,13 @@ messageApi.use("/api/messages/*", async (c, next) => {
   c.set("messageUser", auth.user);
   await next();
 });
+async function imageResponse(runtime: AppRuntime, image: { object_key: string; format: string } | null) {
+  if (!image) throw new HttpError(404, "图片不存在");
+  const object = await runtime.bucket.get(image.object_key);
+  if (!object) throw new HttpError(404, "图片不存在");
+  return new Response(object.body, { headers: { "Content-Type": `image/${image.format}`, "Content-Length": String(object.size),
+    "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Cross-Origin-Resource-Policy": "same-origin" } });
+}
 messageApi.get("/api/messages/conversations", async c => {
   const before = c.req.query("before");
   return json({ ok: true, ...await listDirectConversations(c.get("runtime"), c.get("messageUser"),
@@ -27,13 +35,17 @@ messageApi.get("/api/messages/images/:messageId", async c => {
   const id = parsePositiveId(c.req.param("messageId"));
   const image = await runtime.db.prepare(`SELECT i.object_key,i.format FROM direct_messages m
     JOIN direct_message_images i ON i.id=m.image_id AND i.state='ready'
-    WHERE m.id=? AND (m.sender_user_id=? OR m.recipient_user_id=?)`)
+    WHERE m.id=? AND (m.sender_user_id=? OR (m.recipient_user_id=? AND m.delivered=1))`)
     .bind(id, user.id, user.id).first<{ object_key: string; format: string }>();
-  if (!image) throw new HttpError(404, "图片不存在");
-  const object = await runtime.bucket.get(image.object_key);
-  if (!object) throw new HttpError(404, "图片不存在");
-  return new Response(object.body, { headers: { "Content-Type": `image/${image.format}`, "Content-Length": String(object.size),
-    "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Cross-Origin-Resource-Policy": "same-origin" } });
+  return imageResponse(runtime, image);
+});
+messageApi.get("/api/messages/reports/:reportId/images/:messageId", async c => {
+  const runtime = c.get("runtime");
+  const report = await readDirectMessageReport(runtime, c.get("messageUser"), parsePositiveId(c.req.param("reportId")));
+  const image = await runtime.db.prepare(`SELECT i.object_key,i.format FROM direct_messages m
+    JOIN direct_message_images i ON i.id=m.image_id AND i.state='ready' WHERE m.id=? AND m.conversation_id=?`)
+    .bind(parsePositiveId(c.req.param("messageId")), report.conversationId).first<{ object_key: string; format: string }>();
+  return imageResponse(runtime, image);
 });
 messageApi.get("/api/messages/:peerId/socket", async c => {
   const runtime = c.get("runtime"), user = c.get("messageUser");
@@ -59,6 +71,17 @@ messageApi.post("/api/messages/:peerId/read", async c => {
     throw new HttpError(400, "已读位置无效");
   await markDirectMessagesRead(c.get("runtime"), c.get("messageUser").id, parsePositiveId(c.req.param("peerId")), input.through);
   return json({ ok: true });
+});
+messageApi.post("/api/messages/:peerId/receiving", async c => {
+  const input = await readJsonObject(c.req.raw, "接收设置无效", { maximumBytes: 1024 });
+  if (typeof input.receive !== "boolean") throw new HttpError(400, "接收设置无效");
+  await setDirectMessageReceiving(c.get("runtime"), c.get("messageUser"), parsePositiveId(c.req.param("peerId")), input.receive);
+  return json({ ok: true });
+});
+messageApi.post("/api/messages/:peerId/report", async c => {
+  const input = await readJsonObject(c.req.raw, "举报内容无效", { maximumBytes: 16384 });
+  const report = await createDirectMessageReport(c.get("runtime"), c.get("messageUser"), parsePositiveId(c.req.param("peerId")), input);
+  return json({ ok: true, ...report });
 });
 messageApi.post("/api/messages/:peerId", async c => {
   const input = await readJsonObject(c.req.raw, "消息格式无效", { maximumBytes: 20000, requireJsonContentType: true });
