@@ -26,7 +26,7 @@ export type DirectMessagePage = {
 };
 
 export type DirectConversation = {
-  peer: Pick<MessagePeer, "id" | "displayName" | "avatarBlobSha256">;
+  peer: Pick<MessagePeer, "id" | "displayName" | "avatarBlobSha256" | "receiveMessages">;
   excerpt: string;
   updatedAt: string;
   unread: number;

@@ -123,9 +123,12 @@ export function MessageThread({ viewerId, initial }: { viewerId: number; initial
     <AccountPageHeader title="短信箱" actions={<Button asChild variant="ghost" size="sm"><Link to="/me/messages"><ArrowLeft aria-hidden />返回</Link></Button>} />
     <section className="mt-4 flex h-[min(72dvh,48rem)] min-h-80 flex-col overflow-hidden rounded-lg border border-border bg-card" aria-label={`与${page.peer.displayName}的短信`}>
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <Link className="flex min-w-0 items-center gap-3 text-sm font-semibold" to={`/users/${peerId}`}>
-          <UserAvatar avatarBlobSha256={page.peer.avatarBlobSha256} displayName={page.peer.displayName} size={32} /><span className="truncate">{page.peer.displayName}</span>
-        </Link>
+        <div className="flex min-w-0 items-center gap-2">
+          <Link className="flex min-w-0 items-center gap-3 text-sm font-semibold" to={`/users/${peerId}`}>
+            <UserAvatar avatarBlobSha256={page.peer.avatarBlobSha256} displayName={page.peer.displayName} size={32} /><span className="truncate">{page.peer.displayName}</span>
+          </Link>
+          {!page.peer.receiveMessages ? <span className="shrink-0 text-sm text-muted">[已屏蔽]</span> : null}
+        </div>
         <MessageMenu peer={page.peer} onChanged={refresh} />
       </div>
       <div ref={list} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4" role="log" aria-label="短信记录" aria-live="polite" aria-relevant="additions"

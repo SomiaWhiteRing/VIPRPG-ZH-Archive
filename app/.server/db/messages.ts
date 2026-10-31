@@ -42,7 +42,7 @@ export async function directMessagePeer(runtime: AppRuntime, user: ArchiveUser, 
 }
 
 export async function listDirectConversations(runtime: AppRuntime, user: ArchiveUser, before = Number.MAX_SAFE_INTEGER) {
-  const rows = await runtime.db.prepare(`SELECT u.id AS peer_id,u.display_name,u.avatar_blob_sha256,
+  const rows = await runtime.db.prepare(`SELECT u.id AS peer_id,u.display_name,u.avatar_blob_sha256,s.receive_messages,
     m.id AS last_id,m.kind,m.body,m.created_at,
     (SELECT COUNT(*) FROM direct_messages unread WHERE unread.conversation_id=c.id AND unread.recipient_user_id=?
       AND unread.delivered=1 AND unread.id>COALESCE(s.last_read_message_id,0)) AS unread
@@ -50,11 +50,11 @@ export async function listDirectConversations(runtime: AppRuntime, user: Archive
     JOIN users u ON u.id=CASE WHEN c.lower_user_id=? THEN c.upper_user_id ELSE c.lower_user_id END
     JOIN direct_messages m ON m.id=(SELECT MAX(last.id) FROM direct_messages last WHERE last.conversation_id=c.id AND (last.sender_user_id=s.user_id OR last.delivered=1))
     WHERE s.user_id=? AND m.id<? ORDER BY m.id DESC LIMIT 31`).bind(user.id, user.id, user.id, before)
-    .all<{ peer_id: number; display_name: string; avatar_blob_sha256: string | null;
+    .all<{ peer_id: number; display_name: string; avatar_blob_sha256: string | null; receive_messages: number;
       last_id: number; kind: string; body: string | null; created_at: string; unread: number }>();
   const selected = rows.results.slice(0, 30);
   const conversations: DirectConversation[] = selected.map(row => ({
-    peer: { id: row.peer_id, displayName: row.display_name, avatarBlobSha256: row.avatar_blob_sha256 },
+    peer: { id: row.peer_id, displayName: row.display_name, avatarBlobSha256: row.avatar_blob_sha256, receiveMessages: row.receive_messages === 1 },
     excerpt: row.kind === "image" ? "[图片]" : emojiText(row.body ?? "").slice(0, 120),
     updatedAt: row.created_at, unread: row.unread,
   }));

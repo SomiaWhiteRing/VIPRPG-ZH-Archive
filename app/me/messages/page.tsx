@@ -47,7 +47,10 @@ export default function MessagesPage() {
         <Link to={`/me/messages/${conversation.peer.id}`} prefetch="none" className="flex min-w-0 items-center gap-3 rounded-md px-2 py-4 hover:bg-muted/10 focus-visible:outline-2 focus-visible:outline-primary">
           <UserAvatar avatarBlobSha256={conversation.peer.avatarBlobSha256} displayName={conversation.peer.displayName} size={40} />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-3"><strong className="truncate text-sm">{conversation.peer.displayName}</strong><Timestamp className="shrink-0 text-muted" value={conversation.updatedAt} /></div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2"><strong className="truncate text-sm">{conversation.peer.displayName}</strong>{!conversation.peer.receiveMessages ? <span className="shrink-0 text-sm text-muted">[已屏蔽]</span> : null}</div>
+              <Timestamp className="shrink-0 text-muted" value={conversation.updatedAt} />
+            </div>
             <p className="m-0 mt-1 truncate text-sm text-muted">{conversation.excerpt}</p>
           </div>
           <UnreadBadge count={conversation.unread} />
