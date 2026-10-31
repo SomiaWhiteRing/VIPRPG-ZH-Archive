@@ -13,7 +13,6 @@ import {
   Outlet,
   Scripts,
   useLoaderData,
-  useLocation,
   useRouteError,
   useRouteLoaderData,
 } from "react-router";
@@ -27,6 +26,7 @@ import { SiteAnalytics } from "./components/site-analytics";
 import { SiteFooter } from "./components/site-footer";
 import { SiteHeaderNav } from "./components/site-header-nav";
 import { BackToTop } from "./components/back-to-top";
+import { usePageLayout } from "./components/use-page-layout";
 import { GameStorageBoundary } from "./components/game-storage-boundary";
 import { NavigationProgress } from "./components/ui/navigation-progress";
 import { PageScrollRestoration } from "./components/ui/anchor-navigation";
@@ -68,7 +68,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const isSSR = useIsSSR();
-  const inSea = useLocation().pathname === "/sea";
+  const { hideBackToTop } = usePageLayout();
   const { isFocusVisible } = useFocusVisible();
   const root = useRouteLoaderData<typeof loader>("root");
   const [themePreview, setThemePreview] = useState<ColorTheme | null>(null);
@@ -102,7 +102,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <ColorThemePreviewContext.Provider value={setThemePreview}>
           <ToastProvider>
             <ConfirmProvider>{children}</ConfirmProvider>
-            {!inSea ? <BackToTop /> : null}
+            {!hideBackToTop ? <BackToTop /> : null}
           </ToastProvider>
         </ColorThemePreviewContext.Provider>
         <PageScrollRestoration />
@@ -115,14 +115,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   const { session, embedded, analytics } = useLoaderData<typeof loader>();
   const inFrame = useSyncExternalStore(subscribeFrame, frameSnapshot, () => embedded);
-  const { pathname } = useLocation();
-  const inSea = pathname === "/sea";
+  const { hideSiteHeader, hideSiteFooter } = usePageLayout();
   return (
     <InboxIndicator initialUnread={session?.unread ?? 0} initialMessagesUnread={session?.messagesUnread ?? 0} enabled={!!session}>
       <SiteAnalytics config={analytics} embedded={inFrame} />
       {!inFrame ? <GameStorageBoundary /> : null}
       <NavigationProgress />
-      {!inFrame && !inSea ? <SiteHeaderNav
+      {!inFrame && !hideSiteHeader ? <SiteHeaderNav
         session={session}
         loginLink={
           !session ? (
@@ -140,7 +139,7 @@ export default function App() {
           <Outlet />
         </div>
       ) : <Outlet />}
-      {!inFrame && !inSea && pathname !== "/rakuen" ? <SiteFooter /> : null}
+      {!inFrame && !hideSiteFooter ? <SiteFooter /> : null}
     </InboxIndicator>
   );
 }

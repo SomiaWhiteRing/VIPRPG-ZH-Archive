@@ -15,6 +15,9 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type LoaderFunctionArgs, type MetaFunction, Link, useLoaderData } from "react-router";
 
 import { useRouterNavigationGuard } from "@/app/components/ui/use-navigation-guard";
+import type { PageLayoutHandle } from "@/app/components/use-page-layout";
+
+export const handle = { layout: { hideSiteFooter: true } } satisfies PageLayoutHandle;
 
 const sources = {
   all: "全部",

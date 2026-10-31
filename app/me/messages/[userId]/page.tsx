@@ -7,6 +7,11 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { HttpError } from "@/lib/http";
 import { MessageThread } from "../thread";
+import type { PageLayoutHandle } from "@/app/components/use-page-layout";
+
+export const handle = {
+  androidLayout: { hideBackToTop: true, accountLayout: "standalone" },
+} satisfies PageLayoutHandle;
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);

@@ -3,6 +3,7 @@ import { ImagePlus, Send } from "lucide-react";
 import { BodyEditor, type BodyEditorHandle } from "@/app/components/comments/body-editor";
 import { EmojiPicker } from "@/app/components/emojis/picker";
 import { Button } from "@/app/components/ui/button";
+import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useToast } from "@/app/components/ui/toast";
 import { createImageProcessor } from "@/app/discussions/image-processor";
 import { MESSAGE_BODY_LENGTH, MESSAGE_IMAGE_BYTES } from "@/lib/messages";
@@ -21,6 +22,7 @@ export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: num
   const pendingImage = useRef<{ source: File; image: File; clientId: string; messageId?: number } | null>(null);
   const processor = useRef<ReturnType<typeof createImageProcessor> | null>(null);
   const toast = useToast();
+  const confirm = useConfirm();
   useEffect(() => () => processor.current?.dispose(), []);
 
   async function sendText() {
@@ -42,6 +44,13 @@ export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: num
   async function sendImage(file: File) {
     if (submitting.current) return;
     submitting.current = true;
+    const preview = URL.createObjectURL(file);
+    const accepted = await confirm("", {
+      title: "发送图片", confirmLabel: "发送",
+      content: <img src={preview} alt="待发送的图片" className="mx-auto max-h-[50dvh] max-w-full rounded-md object-contain" />,
+    });
+    URL.revokeObjectURL(preview);
+    if (!accepted) { submitting.current = false; return; }
     setBusy(true);
     try {
       let input = pendingImage.current;
@@ -80,12 +89,12 @@ export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: num
         onChange={value => setBody(value)} onBusyChange={setBusy} onError={message => { if (message) toast.error(message); }}
         onCompositionChange={value => { composing.current = value; }} />
     </div>
-    <div className="mt-2 flex items-center gap-2">
-      <EmojiPicker disabled={busy} onSelect={(emoji, options) => editor.current?.insertEmoji(emoji, options)}>{trigger => trigger}</EmojiPicker>
+    <EmojiPicker disabled={busy} onSelect={(emoji, options) => editor.current?.insertEmoji(emoji, options)}>{trigger => <div className="mt-2 flex items-center gap-2">
+      {trigger}
       <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" aria-label="发送图片"
         onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void sendImage(file); }} />
       <Button type="button" variant="ghost" size="icon" disabled={busy} aria-label="发送图片" onClick={() => fileInput.current?.click()}><ImagePlus aria-hidden /></Button>
       <Button className="ml-auto" type="submit" disabled={busy || !body.trim() || bodyLength(body) > MESSAGE_BODY_LENGTH}><Send aria-hidden />发送</Button>
-    </div>
+    </div>}</EmojiPicker>
   </form>;
 }

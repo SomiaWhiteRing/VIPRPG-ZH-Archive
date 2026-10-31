@@ -18,7 +18,9 @@ import { UploadClient } from "@/app/upload/upload-client";
 import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { type LoaderFunctionArgs, type MetaFunction, useLoaderData } from "react-router";
+import type { PageLayoutHandle } from "@/app/components/use-page-layout";
 
+export const handle = { layout: { accountLayout: "full-width" } } satisfies PageLayoutHandle;
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);

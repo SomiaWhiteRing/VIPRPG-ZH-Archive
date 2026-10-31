@@ -18,7 +18,12 @@ import { HttpError } from "@/lib/http";
 import type { SeaSubmission } from "@/lib/dto/sea";
 import { requestJson } from "@/lib/ui/api-response";
 import { useClientEnvironment } from "@/app/components/use-client-environment";
+import type { PageLayoutHandle } from "@/app/components/use-page-layout";
 import "./sea.css";
+
+export const handle = {
+  layout: { hideBackToTop: true, hideSiteHeader: true, hideSiteFooter: true },
+} satisfies PageLayoutHandle;
 
 export const meta = () => pageMetaDescriptors({ title: "永恒之海", description: "海边的几句话。" });
 export const links: LinksFunction = () => [

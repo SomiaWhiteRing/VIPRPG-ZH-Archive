@@ -2,11 +2,12 @@ import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { pickPageFields } from "@/app/.server/page-data";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PageContainer } from "@/app/components/ui/page-container";
+import { usePageLayout } from "@/app/components/use-page-layout";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { canAccessOwnWorks } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Outlet, useLoaderData, useMatch } from "react-router";
+import { Outlet, useLoaderData } from "react-router";
 import { AccountNavigation } from "./account-navigation";
 import type { AccountOutletContext } from "./mobile-account-navigation";
 export { shouldRevalidatePermissionPanel as shouldRevalidate } from "@/lib/ui/route-revalidation";
@@ -32,11 +33,13 @@ export const meta: MetaFunction = ({ error }) =>
 
 export default function AccountLayout() {
   const { user } = useLoaderData<typeof loader>();
-  const fullWidth = Boolean(useMatch("/me/uploads/:workId"));
+  const { accountLayout } = usePageLayout();
+  const standaloneLayout = accountLayout === "standalone";
+  const fullWidth = accountLayout === "full-width" || standaloneLayout;
   const canUpload = Boolean(user && canAccessOwnWorks(user));
   const children = <Outlet context={{ canUpload } satisfies AccountOutletContext} />;
   return (
-    <PageContainer>
+    <PageContainer className={standaloneLayout ? "py-0 sm:py-0" : undefined}>
       {/* Let content expand even when the sidebar is hidden by external styles. */}
       <div className={fullWidth ? "block" : "md:flex md:gap-8"}>
         {!fullWidth ? (
@@ -58,7 +61,7 @@ export default function AccountLayout() {
             </div>
           </>
         ) : null}
-        <div className={fullWidth ? "min-w-0 flex-1 pt-5 md:pt-0" : "min-w-0 flex-1"}>{children}</div>
+        <div className={accountLayout === "full-width" ? "min-w-0 flex-1 pt-5 md:pt-0" : "min-w-0 flex-1"}>{children}</div>
       </div>
     </PageContainer>
   );
