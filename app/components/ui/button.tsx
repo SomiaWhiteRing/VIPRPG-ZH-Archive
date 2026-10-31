@@ -13,7 +13,7 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
-        neutral: "bg-muted/15 text-foreground hover:bg-muted/25",
+        neutral: "bg-[rgb(104_115_125/15%)] text-foreground hover:bg-[rgb(104_115_125/25%)] dark:bg-[rgb(164_181_173/15%)] dark:hover:bg-[rgb(164_181_173/25%)]",
         outline: "border border-border bg-card text-foreground shadow-sm hover:border-primary hover:text-primary",
         ghost: "text-foreground hover:bg-muted/15",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",

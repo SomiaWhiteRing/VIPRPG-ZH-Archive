@@ -228,7 +228,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
 
   return (
     <header
-      className="sticky top-0 z-40 border-b border-border bg-background/95 text-foreground shadow-sm backdrop-blur"
+      className="sticky top-0 z-40 border-b border-border bg-background bg-background/95 text-foreground shadow-sm backdrop-blur"
       id="site-header"
       ref={headerRef}
       onKeyDown={(event) => {
@@ -441,10 +441,11 @@ function UserMenu({
                 displayName={session.displayName}
                 size={24}
               />
+              {/* The sRGB value matches red-500 and works in WebView 110. */}
               {unread > 0 || messagesUnread > 0 ? (
                 <span
                   aria-hidden
-                  className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-background"
+                  className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#fb2c36] ring-2 ring-background"
                 />
               ) : null}
             </span>
