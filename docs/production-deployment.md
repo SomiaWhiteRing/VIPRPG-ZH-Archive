@@ -16,7 +16,7 @@
 
 正式 workflow 自动核对迁移账本并应用候选中待执行的迁移，无需手动勾选；没有待执行迁移时直接继续部署，迁移失败则停止发布。手动选择 `target=production` 并运行 workflow 的确认包含本次候选中的待应用迁移，不包含数据修复、seed 导入或重建数据库。账本按文件名核对，不能证明历史同名 SQL 的内容一致，首发前仍须核对实际 schema。迁移发生在 Worker 发布前，需兼容短暂继续运行的旧 Worker；不兼容变更应单独安排停写窗口。本地 CLI 仍通过 `--apply-migrations` 区分包含迁移的发布与仅发布代码。
 
-production Environment 不配置 required reviewers，继续保存正式 secrets 并限制只有 main 可以发布。主站正式 job 仅在手动选择 production 且候选成功时执行；共用该 Environment 的正式 Android Release 也在手动启动、构建校验通过后直接发布。独立 status Environment 保留现有审批配置。正式主站、状态服务和正式 Android workflow 使用 `production-maintenance` 互斥组；本地／API 维护仍需人工确保不与其并发。
+production Environment 不配置 required reviewers，继续保存正式 secrets 并限制只有 main 可以发布。主站正式 job 仅在手动选择 production 且候选成功时执行；共用该 Environment 的正式 Android Release 也在手动启动、构建校验通过后直接发布。独立 status Environment 同样不设置 required reviewers，保留 secrets 和发布来源限制。正式主站、状态服务和正式 Android workflow 使用 `production-maintenance` 互斥组；本地／API 维护仍需人工确保不与其并发。
 
 正式 secrets 使用独立名称，避免回落到旧仓库级配置：
 

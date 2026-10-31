@@ -118,13 +118,6 @@ function renderOverall(data, stateMap) {
     pending: "监控数据暂不可用",
     monitoring: "服务已恢复，持续观察中",
   }[overall];
-  document.getElementById("overall-description").textContent = {
-    operational: "各项关键服务均可正常访问。",
-    degraded: "有服务检查失败，正在继续确认。",
-    outage: "有服务连续检查失败，请查看下方详情。",
-    pending: "部分服务未在预定检查周期内返回记录，请稍后刷新。",
-    monitoring: "近期发生过中断，正在确认恢复是否稳定。",
-  }[overall];
   const latest = [...stateMap.values()].map((s) => s.last_checked_at).sort().at(-1);
   document.getElementById("last-check").textContent = formatDate(latest);
 }
@@ -153,7 +146,6 @@ function renderServices(data, stateMap) {
       const main = el("div", "service-main");
       const title = el("div");
       title.append(el("div", "service-name", monitor.name));
-      title.append(el("div", "service-description", monitor.description));
       const badge = el("span", `service-status ${current}`);
       badge.append(icon(current), document.createTextNode(statusLabel(current)));
       main.append(title, badge);
@@ -181,12 +173,6 @@ function renderServices(data, stateMap) {
       const recent = data.recent.find((item) => item.monitor_id === monitor.id && item.success === 1);
       meta.append(el("span", "", recent ? `最近成功响应 ${recent.latency_ms} ms` : "近一小时无成功响应记录"));
       card.append(main, history, meta);
-      const note = el("p", "service-note", `${monitor.intervalSeconds === 60 ? "每分钟检查" : "每 15 分钟检查"} · ${formatDate(state?.last_checked_at)}`);
-      if (currentStatus === "outage" || currentStatus === "degraded") {
-        note.classList.add("failed");
-        note.append(document.createTextNode(` · ${state?.last_error || "检查失败"}`));
-      }
-      card.append(note);
       section.append(card);
     }
     container.append(section);
@@ -233,9 +219,8 @@ function incidentCard(incident, monitor, data, opened) {
   card.tabIndex = -1;
   const heading = el("div", "incident-heading");
   const title = el("div");
-  title.append(el("p", "incident-component", `${monitor?.group || "监控服务"} · ${monitor?.name || incident.monitor_id}`));
   const name = el("h3");
-  const permalink = el("a", "", `${monitor?.name || "服务"}${incident.episodes.length > 1 ? "间歇性中断" : "访问异常"}`);
+  const permalink = el("a", "", `${monitor?.group || "监控服务"} ${monitor?.name || incident.monitor_id}${incident.episodes.length > 1 ? "间歇性中断" : "访问异常"}`);
   permalink.href = `#${card.id}`;
   name.append(permalink);
   title.append(name);
@@ -304,8 +289,7 @@ function renderIncidents(data) {
   const current = data.incidentGroups.filter((incident) => incident.phase !== "resolved");
   document.getElementById("active-incidents").hidden = !current.length;
   document.getElementById("active-incident-count").textContent = `${current.length} 起事件`;
-  document.getElementById("incident-period").textContent = `近 30 天 · 共 ${data.incidentCount} 起事件`;
-  document.getElementById("incident-policy").textContent = `同一监控项恢复后 ${data.recoveryWindowSeconds / 60} 分钟内再次中断时合并展示；期间恢复时段以绿色标记。事件按探测时间归并，具体原因需另行确认。`;
+  document.getElementById("incident-period").textContent = `近 30 天共 ${data.incidentCount} 起事件${data.incidentCount > data.incidentGroups.length ? `，显示 ${data.incidentGroups.length} 起` : ""}`;
   for (const incident of current) active.append(incidentCard(incident, monitors.get(incident.monitor_id), data, opened));
   let previousDay = "";
   for (const incident of data.incidentGroups.filter((item) => item.phase === "resolved")) {
@@ -322,11 +306,9 @@ function renderIncidents(data) {
     emptyIcon.append(icon("operational"));
     const body = el("div");
     body.append(el("strong", "", current.length ? "正在跟进的事件显示在页面上方" : "近 30 天没有服务中断事件"));
-    body.append(el("p", "", current.length ? "恢复稳定后，将归入历史事件。" : "连续检查失败后会自动记录事件。"));
     empty.append(emptyIcon, body);
     history.append(empty);
   }
-  if (data.incidentCount > data.incidentGroups.length) history.append(el("p", "incident-policy", `当前展示最近 ${data.incidentGroups.length} 起事件。`));
   if (focused?.startsWith("incident-toggle-")) document.getElementById(focused)?.focus({ preventScroll: true });
   const target = document.getElementById(window.location.hash.slice(1));
   if (restoreIncidentAnchor && target?.classList.contains("incident-card")) scrollElementIntoView(target, { behavior: "auto" });
@@ -348,7 +330,6 @@ async function refresh() {
     overall.className = "overall pending";
     overall.querySelector(".overall-icon").replaceChildren(icon("pending"));
     document.getElementById("overall-title").textContent = "状态数据暂不可用";
-    document.getElementById("overall-description").textContent = "暂时无法刷新检查记录；下方保留上次获取的数据，请稍后刷新。";
     document.getElementById("last-check").textContent = "—";
   }
 }

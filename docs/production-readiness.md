@@ -18,7 +18,7 @@
 
 负责人随后明确授权正式部署，并同步 Kai 与 RPGRewriter-Ownuse 的导入／更新指向。首发代码为 `f056fb8cc0cefd0d95c90dc40760fade016f0326`，通过 production Environment 的本人确认发布至 [viprpg.org](https://viprpg.org)。[发布运行](https://github.com/SomiaWhiteRing/VIPRPG-ZH-Archive/actions/runs/36208034503)保留候选、审批、部署与 smoke 记录；初次绑定域名后立即运行的 smoke 连接失败，域名生效后本机九个 smoke 路径均返回 200，重跑同一候选的发布 job 后 CI 全部通过。
 
-首发时 GitHub production/status 的唯一确认人为 SomiaWhiteRing，允许本人自审、禁止绕过确认、只允许 main 发布；staging 无审批保护，main 没有增加分支保护或 PR 限制。随后负责人要求取消正式站重复 review，production 已移除 required reviewers，手动 Run workflow 后检查通过即部署；正式 secrets 与 main 来源限制保留，共用该 Environment 的正式 Android 同样不再二次 review。独立 status 的审批配置未变。production 三项专用名称的 secrets 已填入正式配置；移除了无消费者的旧仓库级 CLOUDFLARE_API_TOKEN 和 WRANGLER_CONFIG_JSONC，staging/status Environment 保留各自配置。正式 AUTH_SECRET 独立生成；部署 API token 沿用现有可用凭据，当前凭据无 token 管理权限，未声称已经实现 Cloudflare token 的逐资源权限隔离。
+首发时 GitHub production/status 的唯一确认人为 SomiaWhiteRing，允许本人自审、禁止绕过确认、只允许 main 发布；staging 无审批保护，main 没有增加分支保护或 PR 限制。随后负责人要求取消正式站重复 review，production 已移除 required reviewers，手动 Run workflow 后检查通过即部署；正式 secrets 与 main 来源限制保留，共用该 Environment 的正式 Android 同样不再二次 review。独立 status 随后也移除 required reviewers，手动启动并检查通过后直接部署。production 三项专用名称的 secrets 已填入正式配置；移除了无消费者的旧仓库级 CLOUDFLARE_API_TOKEN 和 WRANGLER_CONFIG_JSONC，staging/status Environment 保留各自配置。正式 AUTH_SECRET 独立生成；部署 API token 沿用现有可用凭据，当前凭据无 token 管理权限，未声称已经实现 Cloudflare token 的逐资源权限隔离。
 
 新建独立 D1/R2 `viprpg-archive-production`，保留旧 prod 和 staging 资源。应用 0001 首发基线后导入干净种子：930 个角色、132 个分类、887 个默认头像、30 个默认表情、8 个链接，17,173 个对象共 150,282,413 字节；用户和作品为零。逐表数量、完整 schema、外键及迁移账本一致；本地 SHA-256 与全量远端对象大小／MD5 ETag 一致。资源身份、旧版本绑定、种子及校验报告保存在本机 `output/production-setup/`，其中 source.sqlite 含完整开发快照，只用于本地准备，没有上传。
 
