@@ -216,8 +216,7 @@ export function MessageThread({ viewerId, initial }: { viewerId: number; initial
         <div className="flex flex-col gap-4">
           {page.messages.map(message => <div key={message.id}
             className={message.senderUserId === viewerId ? "flex flex-col items-end" : "flex flex-col items-start"}>
-            {/* Explicit alpha colors also render in Android WebView 110, before color-mix support. */}
-            <div className={message.image ? "max-w-[85%]" : message.senderUserId === viewerId ? "max-w-[85%] rounded-2xl rounded-br-sm bg-[#2f9f921a] px-3 py-2 dark:bg-[#65c6b31a]" : "max-w-[85%] rounded-2xl rounded-bl-sm bg-[#68737d26] px-3 py-2 dark:bg-[#a4b5ad26]"}>
+            <div className={message.image ? "max-w-[85%]" : message.senderUserId === viewerId ? "max-w-[85%] rounded-2xl rounded-br-sm bg-primary/10 px-3 py-2" : "max-w-[85%] rounded-2xl rounded-bl-sm bg-muted/15 px-3 py-2"}>
               {message.image ? <a className="block" href={message.image.url} target="_blank" rel="noreferrer" aria-label="查看图片">
                 <img src={message.image.url} width={message.image.width} height={message.image.height} alt="图片短信" loading="lazy" className="block h-auto max-h-72 w-auto max-w-full rounded-md object-contain"
                   onLoad={() => { if (followBottom.current) scrollToBottom(); }} />

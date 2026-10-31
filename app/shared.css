@@ -47,15 +47,21 @@
 }
 
 /* Consumers: website pages, android/web/offline-app.tsx and offline.css,
-   shared Button/Input variants, and Tailwind base typography in both entry points. */
+   shared Button/Input variants, and Tailwind base typography in both entry points.
+   Alpha backgrounds and opaque theme colors share these RGB palette channels. */
 @theme {
-  --color-background: #f5f4ef;
+  --rgb-background: 245 244 239;
+  --rgb-muted: 104 115 125;
+  --rgb-primary: 47 159 146;
+  --rgb-black: 0 0 0;
+  --color-background: rgb(var(--rgb-background));
   --color-foreground: #17212b;
   --color-card: #ffffff;
-  --color-muted: #68737d;
+  --color-muted: rgb(var(--rgb-muted));
   --color-border: #d9ddd9;
   --color-input: #d9ddd9;
-  --color-primary: #2f9f92;
+  --color-primary: rgb(var(--rgb-primary));
+  --color-black: rgb(var(--rgb-black));
   --color-primary-foreground: #ffffff;
   --color-accent: #d7652d;
   --color-destructive: #b42318;
@@ -66,6 +72,15 @@
   --font-mono: "IBM Plex Mono", "Cascadia Code", "SFMono-Regular", Consolas, Menlo, Monaco, "Liberation Mono", ui-monospace, monospace;
 }
 
+/* Consumers: website SiteHeaderNav, MessageThread, Button and AlertDialog;
+   APK OfflineApp feedback, WebPlaySurface controls and shared Dialog overlays.
+   Modern browsers retain Tailwind's color-mix and semantic color overrides. */
+@utility bg-* {
+  @supports not (color: color-mix(in oklab, black, transparent)) {
+    background-color: rgb(--value(--rgb-*) / calc(--modifier(number) * 1%));
+  }
+}
+
 /* Consumers: app/root.tsx body, android/web/offline.css body and the shared Button/Input.
    Android supplies data-system-theme before page scripts and on device changes;
    browsers resolve system appearance with the media query before paint. */
@@ -74,13 +89,13 @@
 
   :root:is([data-theme="dark"], [data-theme="system"][data-system-theme="dark"]) {
     color-scheme: dark;
-    --color-background: #151c1b;
+    --rgb-background: 21 28 27;
     --color-foreground: #e6ede9;
     --color-card: #202a27;
-    --color-muted: #a4b5ad;
+    --rgb-muted: 164 181 173;
     --color-border: #43564d;
     --color-input: #6a8175;
-    --color-primary: #65c6b3;
+    --rgb-primary: 101 198 179;
     --color-primary-foreground: #102b25;
     --color-accent: #f2a16f;
     --color-destructive: #f3948a;
@@ -90,13 +105,13 @@
   @media (prefers-color-scheme: dark) {
     :root[data-theme="system"]:not([data-system-theme]) {
       color-scheme: dark;
-      --color-background: #151c1b;
+      --rgb-background: 21 28 27;
       --color-foreground: #e6ede9;
       --color-card: #202a27;
-      --color-muted: #a4b5ad;
+      --rgb-muted: 164 181 173;
       --color-border: #43564d;
       --color-input: #6a8175;
-      --color-primary: #65c6b3;
+      --rgb-primary: 101 198 179;
       --color-primary-foreground: #102b25;
       --color-accent: #f2a16f;
       --color-destructive: #f3948a;

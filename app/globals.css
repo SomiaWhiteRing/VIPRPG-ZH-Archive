@@ -3,6 +3,11 @@
 @import "./shared.css";
 @source "../lib";
 
+/* Website unread indicators retain Tailwind red-500 in WebView 110. */
+@theme {
+  --color-red-500: #fb2c36;
+}
+
 /* Website discussion replies: expanded mobile editors use the avatar column's
    width; the author moves into the editor's hint row. Collapsed and desktop
    reply bars keep their existing author column. */
