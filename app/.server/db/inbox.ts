@@ -69,11 +69,17 @@ type InboxItemRow = {
   applicant_avatar: string | null;
   can_approve_maintainer: number;
   is_recipient: number;
+  report_kind: "forum" | "message" | null;
+  report_id: number | null;
+  report_target_id: number | null;
 };
 
 function inboxSelect(details: boolean) {
   return `SELECT
   i.id,
+  json_extract(i.metadata_json,'$.reportKind') AS report_kind,
+  json_extract(i.metadata_json,'$.reportId') AS report_id,
+  (SELECT target_id FROM forum_content_reports WHERE id=json_extract(i.metadata_json,'$.reportId') AND json_extract(i.metadata_json,'$.reportKind')='forum') AS report_target_id,
   i.type,
   i.work_comment_id,
   i.reply_comment_id,
@@ -203,7 +209,7 @@ export async function listInboxItemsForUser(
     friends: "friend_action IN ('added','returned')",
     system:
       "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL AND like_comment_id IS NULL AND timeline_event_id IS NULL AND COALESCE(friend_action,'') NOT IN ('added','returned')",
-    pending: "can_reject=1",
+    pending: "can_reject=1 OR (report_kind IS NOT NULL AND status='pending')",
   }[input.category];
   const filter = `(${categorySql}) AND ${input.unread ? "read_at IS NULL" : "1"}`;
   // Resolve the boundary from all visible items, including ones just marked read.
@@ -229,7 +235,7 @@ export async function listInboxItemsForUser(
       `${query.sql} SELECT
     COUNT(CASE WHEN ${filter} THEN 1 END) AS total,
     COUNT(CASE WHEN ${filter}${boundary} THEN 1 END) AS matching,
-    COUNT(CASE WHEN can_reject=1 THEN 1 END) AS pending,
+    COUNT(CASE WHEN can_reject=1 OR (report_kind IS NOT NULL AND status='pending') THEN 1 END) AS pending,
     COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread FROM actionable`,
     )
     .bind(...query.binds, ...boundaryBinds)
@@ -428,6 +434,7 @@ function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser): InboxItem {
     friendNotification,
     commentNotification: null,
     timelineNotification: null,
+    report: row.report_kind && row.report_id ? { kind: row.report_kind, id: row.report_id, targetId: row.report_target_id } : null,
     id: row.id,
     type: row.type,
     status: row.status,

@@ -29,6 +29,7 @@ import { InboxControls } from "./controls";
 import { useInboxAutoRead } from "./use-auto-read";
 import { canReviewWorkMaintainerRequests } from '@/app/.server/db/work-maintainers';
 import { MaintainerRequestDetails } from './maintainer-request-details';
+import { hasPermission } from "@/lib/authz/permissions";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -44,7 +45,7 @@ export async function loader(args: LoaderFunctionArgs) {
     redirectPage(
       `/login?next=${encodeURIComponent(inboxHref(category, unread, page, cursor))}`,
     );
-  const canResolve = canResolveInboxRequests(currentUser) || await canReviewWorkMaintainerRequests(runtime, currentUser);
+  const canResolve = canResolveInboxRequests(currentUser) || hasPermission(currentUser, "forum.content.moderate_any") || await canReviewWorkMaintainerRequests(runtime, currentUser);
   if (category === "pending" && !canResolve)
     redirectPage(inboxHref("all", unread));
   const result = await listInboxItemsForUser(runtime, currentUser, {
@@ -272,6 +273,7 @@ function InboxRow({
               </div>
             ) : null}
             {item.maintainerRequest ? <MaintainerRequestDetails request={item.maintainerRequest} /> : null}
+            {item.report ? <Link className="mt-1 block text-sm text-primary hover:underline" to={item.report.kind === "message" ? `/admin/discussions/messages/${item.report.id}` : `/admin/discussions?view=reports&q=${item.report.targetId ?? ""}`}>查看举报</Link> : null}
             {item.body ? (
               <p className="mt-2 whitespace-pre-wrap text-sm">{item.body}</p>
             ) : null}
@@ -317,7 +319,7 @@ function emptyLabel(category: InboxCategory, unread: boolean) {
     likes: "还没有收到赞",
     friends: "还没有收到好友提醒",
     system: "暂无系统通知",
-    pending: "暂无待处理申请",
+    pending: "暂无待处理事项",
   }[category];
 }
 

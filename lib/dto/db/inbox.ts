@@ -48,6 +48,7 @@ export type InboxItem = {
   } | null;
   interaction: InboxInteraction | null;
   friendNotification: InboxFriendNotification | null;
+  report: { kind: "forum" | "message"; id: number; targetId: number | null } | null;
   timelineNotification: {
     eventId: number;
     replyId: number | null;
