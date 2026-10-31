@@ -8,9 +8,9 @@ async function processImage(file: File): Promise<File> {
   if (meta.format === "gif" || meta.animated)
     return new File([original], file.name, { type: `image/${meta.format}` });
 
-  // Default decoding applies EXIF orientation once, including in WebView 110,
-  // where the explicit "from-image" option is not supported.
-  const bitmap = await createImageBitmap(file);
+  // Browser decode applies EXIF orientation once; encoders receive oriented RGBA
+  // and do not copy the source EXIF tag into the new file.
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
   let pixels: ImageData;
   try {
     if (bitmap.width !== meta.width || bitmap.height !== meta.height)
