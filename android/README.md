@@ -80,6 +80,8 @@ APK 位于 `output/android/viprpg-debug.apk`。Docker 镜像独立安装 Node 24
 
 调试包默认指向 `https://staging.viprpg.org`，该站点当前提供仓库中的在线游玩功能。旧的 workers.dev 站点仍为上一版网站，不适合作为此 App 的安装入口。正式发布前必须先部署新版站点，再用 `SITE_ORIGIN=https://viprpg.org` 重新构建并验证。**在线安装和离线打开必须是同一个来源**；更换来源需要重新打包，且不同来源的已安装游戏互不可见。在线站点如升级运行组件，应重新打包 APK；离线页只发布当前声明的版本，不附带历史 runtime。
 
+需要在模拟器中验证未部署的网站改动时，可使用独立调试包和 ADB 直连本机网站，操作见[Android 模拟器本地测试](../docs/android-local-testing.md)。
+
 正式签名时以只读卷挂载 keystore 到容器内，通过 `docker compose -f android/compose.yaml run --rm -v <主机keystore绝对路径>:/run/secrets/archive.jks:ro -e SITE_ORIGIN=https://viprpg.org -e ANDROID_KEYSTORE_FILE=/run/secrets/archive.jks -e ANDROID_KEYSTORE_PASSWORD -e ANDROID_KEY_ALIAS -e ANDROID_KEY_PASSWORD apk release` 构建（环境变量值由调用环境提供）。签名文件和密码不得写入本公开仓库或 Docker 镜像。首次发布前请固定包名 `org.viprpg.archive`、签名证书、versionCode 与来源；debug 包不用于正式升级。本地默认版本为 0.3.4 / 5，可通过 `ANDROID_VERSION_NAME` 与 `ANDROID_VERSION_CODE` 指定新版本；同一构建号只能用于同一原始 APK。发布证书及密码须另行安全备份，本公开仓库只保存公开证书。
 
 安装由原生前台服务执行，离开页面或切到后台可继续下载；进程终止后，重新打开 App 会恢复未完成任务。系统强制停止期间不能继续执行。删除本地游戏保留存档和截图。清除 App 数据或卸载会删除私有游戏、存档和任务日志，系统相册截图保留。

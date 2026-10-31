@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | `npm run check` | 类型、lint、静态架构、安全和 UI 静态规则 | 不证明浏览器交互；按改动需要单独运行 |
 | `npx tsx scripts/ui-self-check.ts` | `app` 下 TSX 控件和样式改动的最小 UI 静态检查 | 仅扫描源码，不启动浏览器；规则独立于 TypeScript 和 ESLint，已包含在 `npm run check` 中 |
+| [Android 模拟器本地测试](android-local-testing.md) | 在独立调试包内验证未部署的网站改动 | 需要当前任务明确授权构建和模拟器交互；只使用隔离的本地数据 |
 | `npx tsx scripts/shared-boundary-check.ts` | 公共请求、响应、输入解析、对象键、哈希和格式化入口约束 | 仅扫描源码，逐项输出文件、行号和规则；已包含在 `npm run check` 中 |
 | `npm test` | 独立临时 D1/R2 中的稳定 HTTP/API 契约 | 不启动浏览器流程；不依赖开发 seed |
 | `npm run test:forum` | 论坛持久契约 | 使用独立内存 SQLite，不启动浏览器或开发 Worker |
