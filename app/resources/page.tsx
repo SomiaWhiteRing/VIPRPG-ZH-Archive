@@ -7,6 +7,7 @@ import {
   type LoaderFunctionArgs,
   type MetaFunction,
   useLoaderData,
+  useLocation,
 } from "react-router";
 import { ResourceAction, ResourceEntry } from "./resource-entry";
 import { ResourceContent } from "./content";
@@ -26,6 +27,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
 }
 export default function ResourcesPage() {
   const { resources } = useLoaderData<typeof loader>();
+  const location = useLocation();
   return (
     <PageContainer className="pt-5 pb-8 sm:pt-6 sm:pb-10">
       <PageHeader compact title="链接" />
@@ -34,6 +36,7 @@ export default function ResourcesPage() {
           <ResourceEntry
             key={resource.id}
             id={resource.slug}
+            highlightKey={location.hash === `#${resource.slug}` ? location.key : undefined}
             title={resource.name}
             iconSrc={`/api/media/blobs/${resource.icon_blob_sha256}`}
             sourceUrl={resource.kind === "tool" ? resource.source_url : undefined}

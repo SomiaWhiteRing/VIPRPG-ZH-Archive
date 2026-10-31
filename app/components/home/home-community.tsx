@@ -1,4 +1,5 @@
 import { EmptyState } from "@/app/components/ui/empty-state";
+import { AndroidClientBanner } from "./android-client-banner";
 import { cn } from "@/lib/ui/cn";
 import type { HomeForumTopic } from "@/lib/forum-public";
 import { Link } from "react-router";
@@ -86,6 +87,7 @@ export function HomeCommunity({ topics, className }: { topics: HomeForumTopic[];
           关于本站 →
         </Link>
       </section>
+      <AndroidClientBanner />
     </aside>
   );
 }

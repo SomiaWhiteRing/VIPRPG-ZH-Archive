@@ -1,10 +1,11 @@
 import { Button, rm2kSurfaceClassName } from "@/app/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { ArrowUpRight, Download } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 type ResourceEntryProps = {
   id: string;
+  highlightKey?: string;
   title: string;
   iconSrc: string;
   sourceUrl?: string;
@@ -14,18 +15,38 @@ type ResourceEntryProps = {
 
 export function ResourceEntry({
   id,
+  highlightKey,
   title,
   iconSrc,
   sourceUrl,
   children,
   actions,
 }: ResourceEntryProps) {
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (highlightKey === undefined || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+    setHighlightedKey(highlightKey);
+    const timer = window.setTimeout(() => setHighlightedKey(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [highlightKey]);
+  const highlighting = highlightKey !== undefined && highlightedKey === highlightKey;
+
   return (
     <article
       aria-labelledby={`${id}-heading`}
-      className="relative isolate grid min-w-0 scroll-mt-24 grid-cols-[1.5rem_1.5rem_minmax(0,1fr)] sm:grid-cols-[2rem_2rem_minmax(0,1fr)]"
+      className={cn(
+        "relative isolate grid min-w-0 scroll-mt-24 grid-cols-[1.5rem_1.5rem_minmax(0,1fr)] sm:grid-cols-[2rem_2rem_minmax(0,1fr)]",
+        highlighting && "z-50",
+      )}
       id={id}
     >
+      {highlighting ? (
+        <div
+          key={highlightKey}
+          aria-hidden="true"
+          className="resource-entry-highlight"
+        />
+      ) : null}
       <div
         aria-hidden="true"
         className="relative z-20 col-span-2 col-start-1 row-start-1 grid aspect-square w-full translate-x-1/4 place-items-center self-start overflow-hidden rounded-lg border border-border bg-card p-2"

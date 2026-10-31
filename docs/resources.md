@@ -75,6 +75,10 @@ EXE 上传完成／恢复确认时，服务器额外流式计算 CRC32，保存�
 
 软件卡片有图标即可公开，不要求先发布或推荐安装包；没有推荐包时显示暂未提供下载。不自动回退到 GitHub。所有链接使用 `/resources#<slug>` 定位卡片，`easyrpg-kai` 锚点保留，供已有 Android 游戏导入入口在未安装播放器时回退。历史版本、更新说明及安装包由后台维护，不另设前台详情页。
 
+探索首页在“随处逛逛”区域下方展示占满可用宽度的“网站安卓客户端”横幅，指向 `/resources#viprpg-android`；普通浏览器可见，本站 Android APK 内隐藏。登录用户可通过横幅右上方、边框外的关闭按钮隐藏横幅，状态按用户 ID 保存于当前浏览器的 localStorage，不写入账号偏好或跨设备同步；未登录用户不显示关闭按钮。带锚点进入链接页时，支持悬停与精细指针的桌面浏览器用柔和聚光突出对应条目的图标、标题和卡片主体：周围留白 14px、圆角 12px，无额外描边，区域外以 22% 黑色压暗，配合轻阴影，在约 2.2 秒内淡入并淡出；高亮不拦截点击，重复导航可以重新触发。移动端只保留锚点定位，不额外高亮或压暗；减少动态效果设置下短暂静态显示聚光后直接恢复。
+
+软件下载主按钮继续直接下载当前平台推荐包。支持悬停与精细指针的普通浏览器中，提供 Android 推荐包的软件可通过右侧箭头展开扫码下载；多平台软件在同一浮层保留其他平台的下载入口。移动端及本站 APK 不显示二维码，仍可直接下载或选择其他平台。二维码由 `qrcode.react` 在浮层展开时渲染为 SVG，带四模块留白，编码当前站点 origin 下对应 Android 附件的 `/api/tool-artifacts/:id/download`，不增加更新接口请求或第三方二维码服务。
+
 ## Windy 协议
 
 当前客户端请求 `/api/tools/windy-translator/updates/stable/windows-x64`，可附加 `applicationBuildId`。接口匹配现有 [Windy 协议](https://github.com/SomiaWhiteRing/WindyTranslator/blob/main/docs/website-updates.md)，使用 `schemaVersion: 1`。
