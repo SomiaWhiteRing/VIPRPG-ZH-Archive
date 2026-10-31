@@ -210,6 +210,8 @@ export function BodyEditor({
   );
   const mounted = useRef(true);
   const pending = useRef<{ bookmark: SelectionBookmark } | null>(null);
+  const composing = useRef(false);
+  const compositionFrame = useRef<number | null>(null);
   const editor = useEditor({
     immediatelyRender: false,
     shouldRerenderOnTransaction: false,
@@ -270,14 +272,29 @@ export function BodyEditor({
       },
       handleDOMEvents: {
         compositionstart: () => {
+          if (compositionFrame.current !== null) cancelAnimationFrame(compositionFrame.current);
+          compositionFrame.current = null;
+          composing.current = true;
           onCompositionChange(true);
           return false;
         },
         compositionend: () => {
-          onCompositionChange(false);
-          // The IME transaction may land after compositionend.
-          requestAnimationFrame(() => {
-            if (!allowMentions || !editor || editor.isDestroyed || busy || pending.current) return;
+          composing.current = false;
+          if (editor && !editor.isDestroyed) {
+            const value = readDocument(editor.state.doc, assets);
+            onChange(value.body, value.images);
+          }
+          // The final input/ProseMirror transaction can follow compositionend.
+          // Publish subsequent updates, but defer content replacement and keyboard
+          // submission until the final transaction has landed.
+          if (compositionFrame.current !== null) cancelAnimationFrame(compositionFrame.current);
+          compositionFrame.current = requestAnimationFrame(() => {
+            compositionFrame.current = null;
+            if (!editor || editor.isDestroyed) return;
+            onCompositionChange(false);
+            const value = readDocument(editor.state.doc, assets);
+            onChange(value.body, value.images);
+            if (!allowMentions || busy || pending.current) return;
             const { from, empty } = editor.state.selection;
             const text = editor.state.doc.textBetween(Math.max(0, from - 2), from, "\n", "\ufffc");
             if (empty && text.endsWith("@") && !/[A-Za-z0-9._%+/@:-]/.test(text.slice(0, -1))) {
@@ -338,6 +355,9 @@ export function BodyEditor({
         );
     },
     onUpdate: ({ editor }) => {
+      // Publishing preedit text rerenders the controlled editor while the IME
+      // still owns its text node and selection.
+      if (composing.current || editor.view.composing) return;
       const value = readDocument(editor.state.doc, assets);
       onChange(value.body, value.images);
     },
@@ -346,6 +366,7 @@ export function BodyEditor({
   useEffect(() => {
     if (!editor) return;
     for (const image of images) assets.set(image.key, image);
+    if (composing.current || editor.view.composing || compositionFrame.current !== null) return;
     const current = readDocument(editor.state.doc, assets);
     if (
       current.body !== body ||
@@ -572,6 +593,7 @@ export function BodyEditor({
     const resources = assets;
     return () => {
       mounted.current = false;
+      if (compositionFrame.current !== null) cancelAnimationFrame(compositionFrame.current);
       processor.current?.dispose();
       processor.current = null;
       for (const image of resources.values())
