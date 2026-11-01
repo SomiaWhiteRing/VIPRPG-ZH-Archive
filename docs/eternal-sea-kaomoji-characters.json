@@ -26,8 +26,8 @@
       "selection": "all characters"
     }
   ],
-  "productionThroughMessageId": 2995,
-  "uniqueCharacters": 935,
+  "productionThroughMessageId": 3010,
+  "uniqueCharacters": 937,
   "characters": [
     {
       "code": 10,
@@ -1374,6 +1374,12 @@
       "occurrences": 54
     },
     {
+      "code": 3405,
+      "character": "്",
+      "name": "MALAYALAM SIGN VIRAMA",
+      "occurrences": 43
+    },
+    {
       "code": 3526,
       "character": "ෆ",
       "name": "SINHALA LETTER FAYANNA",
@@ -1588,6 +1594,12 @@
       "character": "ᐛ",
       "name": "CANADIAN SYLLABICS NASKAPI WAA",
       "occurrences": 468
+    },
+    {
+      "code": 5151,
+      "character": "ᐟ",
+      "name": "CANADIAN SYLLABICS FINAL ACUTE",
+      "occurrences": 43
     },
     {
       "code": 5153,
@@ -5644,7 +5656,7 @@
     "validSamples": 41560,
     "excludedMalformedSamples": 36,
     "fullyCoveredBefore": 27265,
-    "fullyCoveredAfter": 35283,
-    "remainingIncompleteSamples": 6277
+    "fullyCoveredAfter": 35315,
+    "remainingIncompleteSamples": 6245
   }
 }
