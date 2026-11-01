@@ -56,7 +56,7 @@ function layoutSeaText(text: string, indentContinuation = false) {
       // Combining marks keep their ink width but share the preceding cell.
       // Double marks span the boundary between that cell and the next.
       if (glyph.width > 0) placements.push({ character,
-        x: previous ? previous.x + ("͜͟͠͡".includes(character) ? previous.width - glyph.width / 2 : Math.floor((previous.width - glyph.width) / 2)) : width,
+        x: previous ? previous.x + ("͜͟͞͠͡".includes(character) ? previous.width - glyph.width / 2 : Math.floor((previous.width - glyph.width) / 2)) : width,
         row: previous?.row ?? lines.length - 1, width: glyph.width });
       lines[lines.length - 1] += character;
       continue;

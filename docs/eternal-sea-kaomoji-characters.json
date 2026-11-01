@@ -1,482 +1,579 @@
 {
-  "source": "https://kaomoji.you/en/",
   "checkedAt": "2026-11-01",
-  "samples": 805,
-  "uniqueSamples": 801,
-  "categories": [
-    "Anger",
-    "Apologizing",
-    "Bear",
-    "Bird",
-    "Cat",
-    "Confusion",
-    "Dissatisfaction",
-    "Dog",
-    "Doubt",
-    "Embarrassment",
-    "Enemies",
-    "Faces",
-    "Fear",
-    "Fish",
-    "Food",
-    "Friends",
-    "Games",
-    "Greeting",
-    "Hiding",
-    "Hugging",
-    "Indifference",
-    "Joy",
-    "Love",
-    "Magic",
-    "Music",
-    "Nosebleeding",
-    "Pain",
-    "Pig",
-    "Rabbit",
-    "Running",
-    "Sadness",
-    "Sleeping",
-    "Special",
-    "Spider",
-    "Surprise",
-    "Sympathy",
-    "Weapons",
-    "Winking",
-    "Writing"
+  "sources": [
+    {
+      "url": "https://kaomoji.you/en/",
+      "checkedAt": "2026-11-01",
+      "samples": 805,
+      "uniqueSamples": 801,
+      "categoryCount": 39,
+      "selection": "all characters"
+    },
+    {
+      "url": "https://github.com/kaomojiya-collection/kaomoji-collection",
+      "revision": "2ca1b394345a437bbec9e9b9445d1dd75ae3f7d4",
+      "license": "MIT",
+      "samples": 41596,
+      "validSamples": 41560,
+      "selection": "characters occurring at least 50 times"
+    },
+    {
+      "url": "https://github.com/kaomojikan/kaomoji-data",
+      "revision": "60c92ea4e85279ad42ff525e9a40464ebeb1003e",
+      "license": "MIT",
+      "samples": 1808,
+      "validSamples": 1808,
+      "selection": "all characters"
+    }
   ],
-  "uniqueCharacters": 425,
+  "productionThroughMessageId": 2995,
+  "uniqueCharacters": 935,
   "characters": [
+    {
+      "code": 10,
+      "character": "\n",
+      "name": "UNNAMED",
+      "occurrences": 377
+    },
     {
       "code": 32,
       "character": " ",
       "name": "SPACE",
-      "occurrences": 672
+      "occurrences": 34866
     },
     {
       "code": 33,
       "character": "!",
       "name": "EXCLAMATION MARK",
-      "occurrences": 8
+      "occurrences": 3114
     },
     {
       "code": 34,
       "character": "\"",
       "name": "QUOTATION MARK",
-      "occurrences": 3
+      "occurrences": 16
     },
     {
       "code": 35,
       "character": "#",
       "name": "NUMBER SIGN",
-      "occurrences": 5
+      "occurrences": 3426
     },
     {
       "code": 36,
       "character": "$",
       "name": "DOLLAR SIGN",
-      "occurrences": 2
+      "occurrences": 32
+    },
+    {
+      "code": 38,
+      "character": "&",
+      "name": "AMPERSAND",
+      "occurrences": 6325
     },
     {
       "code": 39,
       "character": "'",
       "name": "APOSTROPHE",
-      "occurrences": 9
+      "occurrences": 15
     },
     {
       "code": 40,
       "character": "(",
       "name": "LEFT PARENTHESIS",
-      "occurrences": 931
+      "occurrences": 43902
     },
     {
       "code": 41,
       "character": ")",
       "name": "RIGHT PARENTHESIS",
-      "occurrences": 920
+      "occurrences": 44711
     },
     {
       "code": 42,
       "character": "*",
       "name": "ASTERISK",
-      "occurrences": 135
+      "occurrences": 9149
+    },
+    {
+      "code": 43,
+      "character": "+",
+      "name": "PLUS SIGN",
+      "occurrences": 587
     },
     {
       "code": 44,
       "character": ",",
       "name": "COMMA",
-      "occurrences": 10
+      "occurrences": 1169
     },
     {
       "code": 45,
       "character": "-",
       "name": "HYPHEN-MINUS",
-      "occurrences": 76
+      "occurrences": 4528
     },
     {
       "code": 46,
       "character": ".",
       "name": "FULL STOP",
-      "occurrences": 84
+      "occurrences": 4069
     },
     {
       "code": 47,
       "character": "/",
       "name": "SOLIDUS",
-      "occurrences": 94
+      "occurrences": 2083
     },
     {
       "code": 48,
       "character": "0",
       "name": "DIGIT ZERO",
-      "occurrences": 13
+      "occurrences": 228
+    },
+    {
+      "code": 50,
+      "character": "2",
+      "name": "DIGIT TWO",
+      "occurrences": 3174
     },
     {
       "code": 51,
       "character": "3",
       "name": "DIGIT THREE",
-      "occurrences": 5
+      "occurrences": 543
+    },
+    {
+      "code": 55,
+      "character": "7",
+      "name": "DIGIT SEVEN",
+      "occurrences": 3172
+    },
+    {
+      "code": 57,
+      "character": "9",
+      "name": "DIGIT NINE",
+      "occurrences": 64
     },
     {
       "code": 58,
       "character": ":",
       "name": "COLON",
-      "occurrences": 32
+      "occurrences": 2663
     },
     {
       "code": 59,
       "character": ";",
       "name": "SEMICOLON",
-      "occurrences": 42
+      "occurrences": 9042
     },
     {
       "code": 60,
       "character": "<",
       "name": "LESS-THAN SIGN",
-      "occurrences": 43
+      "occurrences": 99
     },
     {
       "code": 61,
       "character": "=",
       "name": "EQUALS SIGN",
-      "occurrences": 76
+      "occurrences": 2278
     },
     {
       "code": 62,
       "character": ">",
       "name": "GREATER-THAN SIGN",
-      "occurrences": 37
+      "occurrences": 86
     },
     {
       "code": 63,
       "character": "?",
       "name": "QUESTION MARK",
-      "occurrences": 8
+      "occurrences": 512
     },
     {
       "code": 64,
       "character": "@",
       "name": "COMMERCIAL AT",
-      "occurrences": 3
+      "occurrences": 157
+    },
+    {
+      "code": 65,
+      "character": "A",
+      "name": "LATIN CAPITAL LETTER A",
+      "occurrences": 141
     },
     {
       "code": 67,
       "character": "C",
       "name": "LATIN CAPITAL LETTER C",
-      "occurrences": 11
+      "occurrences": 106
     },
     {
       "code": 68,
       "character": "D",
       "name": "LATIN CAPITAL LETTER D",
-      "occurrences": 1
+      "occurrences": 77
+    },
+    {
+      "code": 69,
+      "character": "E",
+      "name": "LATIN CAPITAL LETTER E",
+      "occurrences": 26
     },
     {
       "code": 73,
       "character": "I",
       "name": "LATIN CAPITAL LETTER I",
-      "occurrences": 1
+      "occurrences": 42
+    },
+    {
+      "code": 76,
+      "character": "L",
+      "name": "LATIN CAPITAL LETTER L",
+      "occurrences": 46
     },
     {
       "code": 79,
       "character": "O",
       "name": "LATIN CAPITAL LETTER O",
-      "occurrences": 16
+      "occurrences": 366
     },
     {
       "code": 81,
       "character": "Q",
       "name": "LATIN CAPITAL LETTER Q",
-      "occurrences": 5
+      "occurrences": 20
     },
     {
       "code": 83,
       "character": "S",
       "name": "LATIN CAPITAL LETTER S",
-      "occurrences": 1
+      "occurrences": 24
     },
     {
       "code": 84,
       "character": "T",
       "name": "LATIN CAPITAL LETTER T",
-      "occurrences": 13
+      "occurrences": 317
     },
     {
       "code": 85,
       "character": "U",
       "name": "LATIN CAPITAL LETTER U",
-      "occurrences": 5
+      "occurrences": 138
     },
     {
       "code": 86,
       "character": "V",
       "name": "LATIN CAPITAL LETTER V",
-      "occurrences": 4
+      "occurrences": 86
+    },
+    {
+      "code": 88,
+      "character": "X",
+      "name": "LATIN CAPITAL LETTER X",
+      "occurrences": 72
+    },
+    {
+      "code": 89,
+      "character": "Y",
+      "name": "LATIN CAPITAL LETTER Y",
+      "occurrences": 49
     },
     {
       "code": 90,
       "character": "Z",
       "name": "LATIN CAPITAL LETTER Z",
-      "occurrences": 14
+      "occurrences": 95
     },
     {
       "code": 91,
       "character": "[",
       "name": "LEFT SQUARE BRACKET",
-      "occurrences": 11
+      "occurrences": 191
     },
     {
       "code": 92,
       "character": "\\",
       "name": "REVERSE SOLIDUS",
-      "occurrences": 29
+      "occurrences": 610
     },
     {
       "code": 93,
       "character": "]",
       "name": "RIGHT SQUARE BRACKET",
-      "occurrences": 11
+      "occurrences": 209
     },
     {
       "code": 94,
       "character": "^",
       "name": "CIRCUMFLEX ACCENT",
-      "occurrences": 133
+      "occurrences": 3578
     },
     {
       "code": 95,
       "character": "_",
       "name": "LOW LINE",
-      "occurrences": 195
+      "occurrences": 5298
     },
     {
       "code": 96,
       "character": "`",
       "name": "GRAVE ACCENT",
-      "occurrences": 104
+      "occurrences": 7337
     },
     {
       "code": 97,
       "character": "a",
       "name": "LATIN SMALL LETTER A",
-      "occurrences": 2
+      "occurrences": 105
     },
     {
       "code": 98,
       "character": "b",
       "name": "LATIN SMALL LETTER B",
-      "occurrences": 4
+      "occurrences": 255
     },
     {
       "code": 99,
       "character": "c",
       "name": "LATIN SMALL LETTER C",
-      "occurrences": 2
+      "occurrences": 384
     },
     {
       "code": 100,
       "character": "d",
       "name": "LATIN SMALL LETTER D",
-      "occurrences": 3
+      "occurrences": 172
+    },
+    {
+      "code": 101,
+      "character": "e",
+      "name": "LATIN SMALL LETTER E",
+      "occurrences": 91
+    },
+    {
+      "code": 103,
+      "character": "g",
+      "name": "LATIN SMALL LETTER G",
+      "occurrences": 1220
     },
     {
       "code": 104,
       "character": "h",
       "name": "LATIN SMALL LETTER H",
-      "occurrences": 1
+      "occurrences": 96
     },
     {
       "code": 105,
       "character": "i",
       "name": "LATIN SMALL LETTER I",
-      "occurrences": 5
+      "occurrences": 222
+    },
+    {
+      "code": 107,
+      "character": "k",
+      "name": "LATIN SMALL LETTER K",
+      "occurrences": 150
     },
     {
       "code": 108,
       "character": "l",
       "name": "LATIN SMALL LETTER L",
-      "occurrences": 4
+      "occurrences": 1767
     },
     {
       "code": 109,
       "character": "m",
       "name": "LATIN SMALL LETTER M",
-      "occurrences": 8
+      "occurrences": 362
     },
     {
       "code": 110,
       "character": "n",
       "name": "LATIN SMALL LETTER N",
-      "occurrences": 1
+      "occurrences": 61
     },
     {
       "code": 111,
       "character": "o",
       "name": "LATIN SMALL LETTER O",
-      "occurrences": 98
+      "occurrences": 4367
     },
     {
       "code": 112,
       "character": "p",
       "name": "LATIN SMALL LETTER P",
-      "occurrences": 1
+      "occurrences": 250
     },
     {
       "code": 113,
       "character": "q",
       "name": "LATIN SMALL LETTER Q",
-      "occurrences": 1
+      "occurrences": 789
+    },
+    {
+      "code": 114,
+      "character": "r",
+      "name": "LATIN SMALL LETTER R",
+      "occurrences": 152
+    },
+    {
+      "code": 115,
+      "character": "s",
+      "name": "LATIN SMALL LETTER S",
+      "occurrences": 116
+    },
+    {
+      "code": 116,
+      "character": "t",
+      "name": "LATIN SMALL LETTER T",
+      "occurrences": 3225
     },
     {
       "code": 117,
       "character": "u",
       "name": "LATIN SMALL LETTER U",
-      "occurrences": 1
+      "occurrences": 675
+    },
+    {
+      "code": 118,
+      "character": "v",
+      "name": "LATIN SMALL LETTER V",
+      "occurrences": 206
     },
     {
       "code": 119,
       "character": "w",
       "name": "LATIN SMALL LETTER W",
-      "occurrences": 3
+      "occurrences": 249
     },
     {
       "code": 120,
       "character": "x",
       "name": "LATIN SMALL LETTER X",
-      "occurrences": 22
+      "occurrences": 3294
     },
     {
       "code": 121,
       "character": "y",
       "name": "LATIN SMALL LETTER Y",
-      "occurrences": 2
+      "occurrences": 151
     },
     {
       "code": 122,
       "character": "z",
       "name": "LATIN SMALL LETTER Z",
-      "occurrences": 24
+      "occurrences": 327
     },
     {
       "code": 123,
       "character": "{",
       "name": "LEFT CURLY BRACKET",
-      "occurrences": 7
+      "occurrences": 92
     },
     {
       "code": 124,
       "character": "|",
       "name": "VERTICAL LINE",
-      "occurrences": 34
+      "occurrences": 1413
     },
     {
       "code": 125,
       "character": "}",
       "name": "RIGHT CURLY BRACKET",
-      "occurrences": 7
+      "occurrences": 95
     },
     {
       "code": 126,
       "character": "~",
       "name": "TILDE",
-      "occurrences": 51
+      "occurrences": 1195
     },
     {
       "code": 164,
       "character": "¤",
       "name": "CURRENCY SIGN",
-      "occurrences": 1
+      "occurrences": 31
     },
     {
       "code": 168,
       "character": "¨",
       "name": "DIAERESIS",
-      "occurrences": 2
+      "occurrences": 130
     },
     {
       "code": 172,
       "character": "¬",
       "name": "NOT SIGN",
-      "occurrences": 14
+      "occurrences": 306
     },
     {
       "code": 175,
       "character": "¯",
       "name": "MACRON",
-      "occurrences": 16
+      "occurrences": 629
     },
     {
       "code": 176,
       "character": "°",
       "name": "DEGREE SIGN",
-      "occurrences": 112
+      "occurrences": 2631
     },
     {
       "code": 177,
       "character": "±",
       "name": "PLUS-MINUS SIGN",
-      "occurrences": 2
+      "occurrences": 5
     },
     {
       "code": 179,
       "character": "³",
       "name": "SUPERSCRIPT THREE",
-      "occurrences": 2
+      "occurrences": 324
     },
     {
       "code": 180,
       "character": "´",
       "name": "ACUTE ACCENT",
-      "occurrences": 107
+      "occurrences": 11439
+    },
+    {
+      "code": 183,
+      "character": "·",
+      "name": "MIDDLE DOT",
+      "occurrences": 510
     },
     {
       "code": 184,
       "character": "¸",
       "name": "CEDILLA",
-      "occurrences": 2
+      "occurrences": 58
     },
     {
       "code": 186,
       "character": "º",
       "name": "MASCULINE ORDINAL INDICATOR",
-      "occurrences": 12
+      "occurrences": 536
     },
     {
       "code": 210,
       "character": "Ò",
       "name": "LATIN CAPITAL LETTER O WITH GRAVE",
-      "occurrences": 1
+      "occurrences": 24
     },
     {
       "code": 211,
       "character": "Ó",
       "name": "LATIN CAPITAL LETTER O WITH ACUTE",
-      "occurrences": 1
+      "occurrences": 22
     },
     {
       "code": 215,
       "character": "×",
       "name": "MULTIPLICATION SIGN",
-      "occurrences": 13
+      "occurrences": 389
     },
     {
       "code": 240,
@@ -485,286 +582,520 @@
       "occurrences": 1
     },
     {
+      "code": 242,
+      "character": "ò",
+      "name": "LATIN SMALL LETTER O WITH GRAVE",
+      "occurrences": 59
+    },
+    {
+      "code": 243,
+      "character": "ó",
+      "name": "LATIN SMALL LETTER O WITH ACUTE",
+      "occurrences": 60
+    },
+    {
+      "code": 247,
+      "character": "÷",
+      "name": "DIVISION SIGN",
+      "occurrences": 5
+    },
+    {
+      "code": 313,
+      "character": "Ĺ",
+      "name": "LATIN CAPITAL LETTER L WITH ACUTE",
+      "occurrences": 12
+    },
+    {
+      "code": 335,
+      "character": "ŏ",
+      "name": "LATIN SMALL LETTER O WITH BREVE",
+      "occurrences": 94
+    },
+    {
+      "code": 359,
+      "character": "ŧ",
+      "name": "LATIN SMALL LETTER T WITH STROKE",
+      "occurrences": 190
+    },
+    {
       "code": 596,
       "character": "ɔ",
       "name": "LATIN SMALL LETTER OPEN O",
-      "occurrences": 1
+      "occurrences": 11
     },
     {
       "code": 604,
       "character": "ɜ",
       "name": "LATIN SMALL LETTER REVERSED OPEN E",
-      "occurrences": 1
+      "occurrences": 5
+    },
+    {
+      "code": 606,
+      "character": "ɞ",
+      "name": "LATIN SMALL LETTER CLOSED REVERSED OPEN E",
+      "occurrences": 184
     },
     {
       "code": 618,
       "character": "ɪ",
       "name": "LATIN LETTER SMALL CAPITAL I",
-      "occurrences": 1
+      "occurrences": 14
+    },
+    {
+      "code": 643,
+      "character": "ʃ",
+      "name": "LATIN SMALL LETTER ESH",
+      "occurrences": 57
     },
     {
       "code": 660,
       "character": "ʔ",
       "name": "LATIN LETTER GLOTTAL STOP",
-      "occurrences": 5
+      "occurrences": 242
     },
     {
       "code": 661,
       "character": "ʕ",
       "name": "LATIN LETTER PHARYNGEAL VOICED FRICATIVE",
-      "occurrences": 5
+      "occurrences": 246
     },
     {
       "code": 662,
       "character": "ʖ",
       "name": "LATIN LETTER INVERTED GLOTTAL STOP",
-      "occurrences": 23
+      "occurrences": 191
     },
     {
       "code": 664,
       "character": "ʘ",
       "name": "LATIN LETTER BILABIAL CLICK",
-      "occurrences": 10
+      "occurrences": 112
+    },
+    {
+      "code": 666,
+      "character": "ʚ",
+      "name": "LATIN SMALL LETTER CLOSED OPEN E",
+      "occurrences": 177
     },
     {
       "code": 706,
       "character": "˂",
       "name": "MODIFIER LETTER LEFT ARROWHEAD",
-      "occurrences": 3
+      "occurrences": 579
     },
     {
       "code": 707,
       "character": "˃",
       "name": "MODIFIER LETTER RIGHT ARROWHEAD",
-      "occurrences": 3
+      "occurrences": 579
     },
     {
       "code": 710,
       "character": "ˆ",
       "name": "MODIFIER LETTER CIRCUMFLEX ACCENT",
-      "occurrences": 7
+      "occurrences": 378
     },
     {
       "code": 711,
       "character": "ˇ",
       "name": "CARON",
-      "occurrences": 6
+      "occurrences": 210
     },
     {
       "code": 714,
       "character": "ˊ",
       "name": "MODIFIER LETTER ACUTE ACCENT",
-      "occurrences": 5
+      "occurrences": 668
     },
     {
       "code": 715,
       "character": "ˋ",
       "name": "MODIFIER LETTER GRAVE ACCENT",
-      "occurrences": 13
+      "occurrences": 674
     },
     {
       "code": 717,
       "character": "ˍ",
       "name": "MODIFIER LETTER LOW MACRON",
-      "occurrences": 1
+      "occurrences": 23
+    },
+    {
+      "code": 725,
+      "character": "˕",
+      "name": "MODIFIER LETTER DOWN TACK",
+      "occurrences": 20
     },
     {
       "code": 726,
       "character": "˖",
       "name": "MODIFIER LETTER PLUS SIGN",
-      "occurrences": 2
+      "occurrences": 102
+    },
+    {
+      "code": 727,
+      "character": "˗",
+      "name": "MODIFIER LETTER MINUS SIGN",
+      "occurrences": 31
     },
     {
       "code": 728,
       "character": "˘",
       "name": "BREVE",
-      "occurrences": 58
+      "occurrences": 3389
     },
     {
       "code": 729,
       "character": "˙",
       "name": "DOT ABOVE",
-      "occurrences": 14
+      "occurrences": 2420
     },
     {
       "code": 730,
       "character": "˚",
       "name": "RING ABOVE",
+      "occurrences": 476
+    },
+    {
+      "code": 738,
+      "character": "ˢ",
+      "name": "MODIFIER LETTER SMALL S",
       "occurrences": 1
+    },
+    {
+      "code": 748,
+      "character": "ˬ",
+      "name": "MODIFIER LETTER VOICING",
+      "occurrences": 98
+    },
+    {
+      "code": 755,
+      "character": "˳",
+      "name": "MODIFIER LETTER LOW RING",
+      "occurrences": 30
     },
     {
       "code": 757,
       "character": "˵",
       "name": "MODIFIER LETTER MIDDLE DOUBLE GRAVE ACCENT",
-      "occurrences": 3
+      "occurrences": 194
     },
     {
       "code": 758,
       "character": "˶",
       "name": "MODIFIER LETTER MIDDLE DOUBLE ACUTE ACCENT",
-      "occurrences": 7
+      "occurrences": 754
     },
     {
       "code": 768,
       "character": "̀",
       "name": "COMBINING GRAVE ACCENT",
-      "occurrences": 12
+      "occurrences": 1866
     },
     {
       "code": 769,
       "character": "́",
       "name": "COMBINING ACUTE ACCENT",
-      "occurrences": 15
+      "occurrences": 1819
+    },
+    {
+      "code": 772,
+      "character": "̄",
+      "name": "COMBINING MACRON",
+      "occurrences": 42
     },
     {
       "code": 773,
       "character": "̅",
       "name": "COMBINING OVERLINE",
-      "occurrences": 6
+      "occurrences": 81
+    },
+    {
+      "code": 774,
+      "character": "̆",
+      "name": "COMBINING BREVE",
+      "occurrences": 164
+    },
+    {
+      "code": 776,
+      "character": "̈",
+      "name": "COMBINING DIAERESIS",
+      "occurrences": 93
+    },
+    {
+      "code": 781,
+      "character": "̍",
+      "name": "COMBINING VERTICAL LINE ABOVE",
+      "occurrences": 60
+    },
+    {
+      "code": 785,
+      "character": "̑",
+      "name": "COMBINING INVERTED BREVE",
+      "occurrences": 197
+    },
+    {
+      "code": 803,
+      "character": "̣",
+      "name": "COMBINING DOT BELOW",
+      "occurrences": 807
+    },
+    {
+      "code": 804,
+      "character": "̤",
+      "name": "COMBINING DIAERESIS BELOW",
+      "occurrences": 334
+    },
+    {
+      "code": 805,
+      "character": "̥",
+      "name": "COMBINING RING BELOW",
+      "occurrences": 1488
+    },
+    {
+      "code": 808,
+      "character": "̨",
+      "name": "COMBINING OGONEK",
+      "occurrences": 65
     },
     {
       "code": 809,
       "character": "̩",
       "name": "COMBINING VERTICAL LINE BELOW",
-      "occurrences": 2
+      "occurrences": 256
+    },
+    {
+      "code": 811,
+      "character": "̫",
+      "name": "COMBINING INVERTED DOUBLE ARCH BELOW",
+      "occurrences": 734
+    },
+    {
+      "code": 814,
+      "character": "̮",
+      "name": "COMBINING BREVE BELOW",
+      "occurrences": 109
     },
     {
       "code": 815,
       "character": "̯",
       "name": "COMBINING INVERTED BREVE BELOW",
-      "occurrences": 5
+      "occurrences": 90
     },
     {
       "code": 818,
       "character": "̲",
       "name": "COMBINING LOW LINE",
-      "occurrences": 6
+      "occurrences": 55
+    },
+    {
+      "code": 819,
+      "character": "̳",
+      "name": "COMBINING DOUBLE LOW LINE",
+      "occurrences": 83
+    },
+    {
+      "code": 820,
+      "character": "̴",
+      "name": "COMBINING TILDE OVERLAY",
+      "occurrences": 842
+    },
+    {
+      "code": 821,
+      "character": "̵",
+      "name": "COMBINING SHORT STROKE OVERLAY",
+      "occurrences": 254
+    },
+    {
+      "code": 822,
+      "character": "̶",
+      "name": "COMBINING LONG STROKE OVERLAY",
+      "occurrences": 847
+    },
+    {
+      "code": 823,
+      "character": "̷",
+      "name": "COMBINING SHORT SOLIDUS OVERLAY",
+      "occurrences": 784
+    },
+    {
+      "code": 824,
+      "character": "̸",
+      "name": "COMBINING LONG SOLIDUS OVERLAY",
+      "occurrences": 77
+    },
+    {
+      "code": 831,
+      "character": "̿",
+      "name": "COMBINING DOUBLE OVERLINE",
+      "occurrences": 84
+    },
+    {
+      "code": 840,
+      "character": "͈",
+      "name": "COMBINING DOUBLE VERTICAL LINE BELOW",
+      "occurrences": 834
+    },
+    {
+      "code": 850,
+      "character": "͒",
+      "name": "COMBINING FERMATA",
+      "occurrences": 67
     },
     {
       "code": 860,
       "character": "͜",
       "name": "COMBINING DOUBLE BREVE BELOW",
-      "occurrences": 14
+      "occurrences": 230
+    },
+    {
+      "code": 862,
+      "character": "͞",
+      "name": "COMBINING DOUBLE MACRON",
+      "occurrences": 529
     },
     {
       "code": 863,
       "character": "͟",
       "name": "COMBINING DOUBLE MACRON BELOW",
-      "occurrences": 4
+      "occurrences": 547
     },
     {
       "code": 864,
       "character": "͠",
       "name": "COMBINING DOUBLE TILDE",
-      "occurrences": 1
+      "occurrences": 14
     },
     {
       "code": 865,
       "character": "͡",
       "name": "COMBINING DOUBLE INVERTED BREVE",
-      "occurrences": 24
+      "occurrences": 354
     },
     {
       "code": 916,
       "character": "Δ",
       "name": "GREEK CAPITAL LETTER DELTA",
-      "occurrences": 1
+      "occurrences": 34
     },
     {
       "code": 920,
       "character": "Θ",
       "name": "GREEK CAPITAL LETTER THETA",
-      "occurrences": 7
+      "occurrences": 227
     },
     {
       "code": 931,
       "character": "Σ",
       "name": "GREEK CAPITAL LETTER SIGMA",
-      "occurrences": 10
+      "occurrences": 398
     },
     {
       "code": 934,
       "character": "Φ",
       "name": "GREEK CAPITAL LETTER PHI",
-      "occurrences": 6
+      "occurrences": 168
     },
     {
       "code": 936,
       "character": "Ψ",
       "name": "GREEK CAPITAL LETTER PSI",
-      "occurrences": 4
+      "occurrences": 47
     },
     {
       "code": 949,
       "character": "ε",
       "name": "GREEK SMALL LETTER EPSILON",
-      "occurrences": 18
+      "occurrences": 1570
     },
     {
       "code": 950,
       "character": "ζ",
       "name": "GREEK SMALL LETTER ZETA",
-      "occurrences": 7
+      "occurrences": 26
     },
     {
       "code": 952,
       "character": "θ",
       "name": "GREEK SMALL LETTER THETA",
-      "occurrences": 7
+      "occurrences": 81
     },
     {
       "code": 956,
       "character": "μ",
       "name": "GREEK SMALL LETTER MU",
+      "occurrences": 20
+    },
+    {
+      "code": 958,
+      "character": "ξ",
+      "name": "GREEK SMALL LETTER XI",
+      "occurrences": 63
+    },
+    {
+      "code": 960,
+      "character": "π",
+      "name": "GREEK SMALL LETTER PI",
       "occurrences": 8
     },
     {
       "code": 961,
       "character": "ρ",
       "name": "GREEK SMALL LETTER RHO",
-      "occurrences": 3
+      "occurrences": 88
     },
     {
       "code": 962,
       "character": "ς",
       "name": "GREEK SMALL LETTER FINAL SIGMA",
-      "occurrences": 3
+      "occurrences": 43
     },
     {
       "code": 963,
       "character": "σ",
       "name": "GREEK SMALL LETTER SIGMA",
-      "occurrences": 6
+      "occurrences": 692
+    },
+    {
+      "code": 965,
+      "character": "υ",
+      "name": "GREEK SMALL LETTER UPSILON",
+      "occurrences": 27
     },
     {
       "code": 966,
       "character": "φ",
       "name": "GREEK SMALL LETTER PHI",
-      "occurrences": 10
+      "occurrences": 133
     },
     {
       "code": 968,
       "character": "ψ",
       "name": "GREEK SMALL LETTER PSI",
-      "occurrences": 4
+      "occurrences": 24
     },
     {
       "code": 969,
       "character": "ω",
       "name": "GREEK SMALL LETTER OMEGA",
-      "occurrences": 132
+      "occurrences": 10253
+    },
+    {
+      "code": 982,
+      "character": "ϖ",
+      "name": "GREEK PI SYMBOL",
+      "occurrences": 68
     },
     {
       "code": 1044,
       "character": "Д",
       "name": "CYRILLIC CAPITAL LETTER DE",
-      "occurrences": 7
+      "occurrences": 1926
     },
     {
       "code": 1047,
       "character": "З",
       "name": "CYRILLIC CAPITAL LETTER ZE",
-      "occurrences": 1
+      "occurrences": 57
     },
     {
       "code": 1070,
@@ -776,13 +1107,19 @@
       "code": 1076,
       "character": "д",
       "name": "CYRILLIC SMALL LETTER DE",
-      "occurrences": 8
+      "occurrences": 1331
     },
     {
       "code": 1079,
       "character": "з",
       "name": "CYRILLIC SMALL LETTER ZE",
-      "occurrences": 5
+      "occurrences": 261
+    },
+    {
+      "code": 1086,
+      "character": "о",
+      "name": "CYRILLIC SMALL LETTER O",
+      "occurrences": 54
     },
     {
       "code": 1092,
@@ -791,118 +1128,202 @@
       "occurrences": 1
     },
     {
+      "code": 1097,
+      "character": "щ",
+      "name": "CYRILLIC SMALL LETTER SHCHA",
+      "occurrences": 54
+    },
+    {
+      "code": 1105,
+      "character": "ё",
+      "name": "CYRILLIC SMALL LETTER IO",
+      "occurrences": 72
+    },
+    {
       "code": 1154,
       "character": "҂",
       "name": "CYRILLIC THOUSANDS SIGN",
-      "occurrences": 5
+      "occurrences": 17
+    },
+    {
+      "code": 1257,
+      "character": "ө",
+      "name": "CYRILLIC SMALL LETTER BARRED O",
+      "occurrences": 73
     },
     {
       "code": 1285,
       "character": "ԅ",
       "name": "CYRILLIC SMALL LETTER KOMI ZJE",
-      "occurrences": 5
+      "occurrences": 146
     },
     {
       "code": 1374,
       "character": "՞",
       "name": "ARMENIAN QUESTION MARK",
-      "occurrences": 1
+      "occurrences": 573
     },
     {
       "code": 1418,
       "character": "֊",
       "name": "ARMENIAN HYPHEN",
-      "occurrences": 1
+      "occurrences": 67
+    },
+    {
+      "code": 1493,
+      "character": "ו",
+      "name": "HEBREW LETTER VAV",
+      "occurrences": 2
     },
     {
       "code": 1604,
       "character": "ل",
       "name": "ARABIC LETTER LAM",
-      "occurrences": 2
+      "occurrences": 24
     },
     {
       "code": 1608,
       "character": "و",
       "name": "ARABIC LETTER WAW",
-      "occurrences": 3
+      "occurrences": 804
     },
     {
       "code": 1637,
       "character": "٥",
       "name": "ARABIC-INDIC DIGIT FIVE",
-      "occurrences": 3
+      "occurrences": 44
     },
     {
       "code": 1641,
       "character": "٩",
       "name": "ARABIC-INDIC DIGIT NINE",
-      "occurrences": 14
+      "occurrences": 674
     },
     {
       "code": 1657,
       "character": "ٹ",
       "name": "ARABIC LETTER TTEH",
-      "occurrences": 1
+      "occurrences": 2
     },
     {
       "code": 1697,
       "character": "ڡ",
       "name": "ARABIC LETTER DOTLESS FEH",
-      "occurrences": 2
+      "occurrences": 197
     },
     {
       "code": 1782,
       "character": "۶",
       "name": "EXTENDED ARABIC-INDIC DIGIT SIX",
-      "occurrences": 10
+      "occurrences": 462
+    },
+    {
+      "code": 2369,
+      "character": "ु",
+      "name": "DEVANAGARI VOWEL SIGN U",
+      "occurrences": 124
+    },
+    {
+      "code": 2370,
+      "character": "ू",
+      "name": "DEVANAGARI VOWEL SIGN UU",
+      "occurrences": 94
+    },
+    {
+      "code": 2385,
+      "character": "॑",
+      "name": "DEVANAGARI STRESS SIGN UDATTA",
+      "occurrences": 248
+    },
+    {
+      "code": 2402,
+      "character": "ॢ",
+      "name": "DEVANAGARI VOWEL SIGN VOCALIC L",
+      "occurrences": 58
+    },
+    {
+      "code": 2444,
+      "character": "ঌ",
+      "name": "BENGALI LETTER VOCALIC L",
+      "occurrences": 62
+    },
+    {
+      "code": 2553,
+      "character": "৹",
+      "name": "BENGALI CURRENCY DENOMINATOR SIXTEEN",
+      "occurrences": 26
+    },
+    {
+      "code": 2570,
+      "character": "ਊ",
+      "name": "GURMUKHI LETTER UU",
+      "occurrences": 52
     },
     {
       "code": 2632,
       "character": "ੈ",
       "name": "GURMUKHI VOWEL SIGN AI",
-      "occurrences": 1
+      "occurrences": 20
     },
     {
       "code": 2669,
       "character": "੭",
       "name": "GURMUKHI DIGIT SEVEN",
-      "occurrences": 6
+      "occurrences": 397
     },
     {
       "code": 2798,
       "character": "૮",
       "name": "GUJARATI DIGIT EIGHT",
-      "occurrences": 2
+      "occurrences": 162
+    },
+    {
+      "code": 2835,
+      "character": "ଓ",
+      "name": "ORIYA LETTER O",
+      "occurrences": 82
     },
     {
       "code": 2840,
       "character": "ଘ",
       "name": "ORIYA LETTER GHA",
-      "occurrences": 2
+      "occurrences": 100
     },
     {
       "code": 2866,
       "character": "ଲ",
       "name": "ORIYA LETTER LA",
-      "occurrences": 2
+      "occurrences": 4
     },
     {
       "code": 2919,
       "character": "୧",
       "name": "ORIYA DIGIT ONE",
-      "occurrences": 1
+      "occurrences": 120
     },
     {
       "code": 2920,
       "character": "୨",
       "name": "ORIYA DIGIT TWO",
-      "occurrences": 1
+      "occurrences": 78
+    },
+    {
+      "code": 2951,
+      "character": "இ",
+      "name": "TAMIL LETTER I",
+      "occurrences": 136
+    },
+    {
+      "code": 3056,
+      "character": "௰",
+      "name": "TAMIL NUMBER TEN",
+      "occurrences": 68
     },
     {
       "code": 3104,
       "character": "ఠ",
       "name": "TELUGU LETTER TTHA",
-      "occurrences": 8
+      "occurrences": 47
     },
     {
       "code": 3174,
@@ -914,43 +1335,67 @@
       "code": 3178,
       "character": "౪",
       "name": "TELUGU DIGIT FOUR",
-      "occurrences": 1
+      "occurrences": 108
     },
     {
       "code": 3232,
       "character": "ಠ",
       "name": "KANNADA LETTER TTHA",
-      "occurrences": 20
+      "occurrences": 336
     },
     {
       "code": 3233,
       "character": "ಡ",
       "name": "KANNADA LETTER DDA",
-      "occurrences": 4
+      "occurrences": 28
     },
     {
       "code": 3237,
       "character": "ಥ",
       "name": "KANNADA LETTER THA",
-      "occurrences": 6
+      "occurrences": 85
     },
     {
       "code": 3248,
       "character": "ರ",
       "name": "KANNADA LETTER RA",
-      "occurrences": 4
+      "occurrences": 11
+    },
+    {
+      "code": 3366,
+      "character": "ദ",
+      "name": "MALAYALAM LETTER DA",
+      "occurrences": 104
+    },
+    {
+      "code": 3391,
+      "character": "ി",
+      "name": "MALAYALAM VOWEL SIGN I",
+      "occurrences": 54
+    },
+    {
+      "code": 3526,
+      "character": "ෆ",
+      "name": "SINHALA LETTER FAYANNA",
+      "occurrences": 101
+    },
+    {
+      "code": 3585,
+      "character": "ก",
+      "name": "THAI CHARACTER KO KAI",
+      "occurrences": 131
     },
     {
       "code": 3589,
       "character": "ฅ",
       "name": "THAI CHARACTER KHO KHON",
-      "occurrences": 6
+      "occurrences": 1080
     },
     {
       "code": 3591,
       "character": "ง",
       "name": "THAI CHARACTER NGO NGU",
-      "occurrences": 7
+      "occurrences": 516
     },
     {
       "code": 3605,
@@ -962,217 +1407,415 @@
       "code": 3623,
       "character": "ว",
       "name": "THAI CHARACTER WO WAEN",
-      "occurrences": 1
+      "occurrences": 146
+    },
+    {
+      "code": 3633,
+      "character": "ั",
+      "name": "THAI CHARACTER MAI HAN-AKAT",
+      "occurrences": 51
     },
     {
       "code": 3636,
       "character": "ิ",
       "name": "THAI CHARACTER SARA I",
-      "occurrences": 8
+      "occurrences": 204
     },
     {
       "code": 3639,
       "character": "ื",
       "name": "THAI CHARACTER SARA UEE",
-      "occurrences": 2
+      "occurrences": 14
+    },
+    {
+      "code": 3664,
+      "character": "๐",
+      "name": "THAI DIGIT ZERO",
+      "occurrences": 62
     },
     {
       "code": 3665,
       "character": "๑",
       "name": "THAI DIGIT ONE",
-      "occurrences": 11
+      "occurrences": 3290
     },
     {
       "code": 3720,
       "character": "ຈ",
       "name": "LAO LETTER CO",
-      "occurrences": 2
+      "occurrences": 10
     },
     {
       "code": 3764,
       "character": "ິ",
       "name": "LAO VOWEL SIGN I",
-      "occurrences": 1
+      "occurrences": 18
     },
     {
       "code": 3765,
       "character": "ີ",
       "name": "LAO VOWEL SIGN II",
-      "occurrences": 1
+      "occurrences": 6
     },
     {
       "code": 3766,
       "character": "ຶ",
       "name": "LAO VOWEL SIGN Y",
-      "occurrences": 2
+      "occurrences": 74
+    },
+    {
+      "code": 3794,
+      "character": "໒",
+      "name": "LAO DIGIT TWO",
+      "occurrences": 135
     },
     {
       "code": 3851,
       "character": "་",
       "name": "TIBETAN MARK INTERSYLLABIC TSHEG",
-      "occurrences": 1
+      "occurrences": 25
     },
     {
       "code": 3853,
       "character": "།",
       "name": "TIBETAN MARK SHAD",
-      "occurrences": 1
+      "occurrences": 49
     },
     {
       "code": 3854,
       "character": "༎",
       "name": "TIBETAN MARK NYIS SHAD",
-      "occurrences": 2
+      "occurrences": 60
     },
     {
       "code": 3869,
       "character": "༝",
       "name": "TIBETAN SIGN RDEL NAG GCIG",
-      "occurrences": 1
+      "occurrences": 88
+    },
+    {
+      "code": 3877,
+      "character": "༥",
+      "name": "TIBETAN DIGIT FIVE",
+      "occurrences": 60
     },
     {
       "code": 3900,
       "character": "༼",
       "name": "TIBETAN MARK ANG KHANG GYON",
-      "occurrences": 3
+      "occurrences": 48
     },
     {
       "code": 3901,
       "character": "༽",
       "name": "TIBETAN MARK ANG KHANG GYAS",
-      "occurrences": 3
+      "occurrences": 46
     },
     {
       "code": 3904,
       "character": "ཀ",
       "name": "TIBETAN LETTER KA",
-      "occurrences": 1
+      "occurrences": 99
+    },
+    {
+      "code": 3947,
+      "character": "ཫ",
+      "name": "TIBETAN LETTER KKA",
+      "occurrences": 84
+    },
+    {
+      "code": 3954,
+      "character": "ི",
+      "name": "TIBETAN VOWEL SIGN I",
+      "occurrences": 175
+    },
+    {
+      "code": 3968,
+      "character": "ྀ",
+      "name": "TIBETAN VOWEL SIGN REVERSED I",
+      "occurrences": 189
     },
     {
       "code": 4304,
       "character": "ა",
       "name": "GEORGIAN LETTER AN",
-      "occurrences": 2
+      "occurrences": 190
     },
     {
       "code": 4314,
       "character": "ლ",
       "name": "GEORGIAN LETTER LAS",
-      "occurrences": 5
+      "occurrences": 222
     },
     {
       "code": 4326,
       "character": "ღ",
       "name": "GEORGIAN LETTER GHAN",
-      "occurrences": 2
+      "occurrences": 116
+    },
+    {
+      "code": 4359,
+      "character": "ᄇ",
+      "name": "HANGUL CHOSEONG PIEUP",
+      "occurrences": 10
     },
     {
       "code": 4369,
       "character": "ᄑ",
       "name": "HANGUL CHOSEONG PHIEUPH",
-      "occurrences": 2
+      "occurrences": 4
     },
     {
       "code": 4538,
       "character": "ᆺ",
       "name": "HANGUL JONGSEONG SIOS",
-      "occurrences": 2
+      "occurrences": 30
+    },
+    {
+      "code": 5009,
+      "character": "᎑",
+      "name": "ETHIOPIC TONAL MARK DERET",
+      "occurrences": 58
+    },
+    {
+      "code": 5141,
+      "character": "ᐕ",
+      "name": "CANADIAN SYLLABICS WEST-CREE WOO",
+      "occurrences": 67
     },
     {
       "code": 5147,
       "character": "ᐛ",
       "name": "CANADIAN SYLLABICS NASKAPI WAA",
-      "occurrences": 2
+      "occurrences": 468
+    },
+    {
+      "code": 5153,
+      "character": "ᐡ",
+      "name": "CANADIAN SYLLABICS FINAL BOTTOM HALF RING",
+      "occurrences": 490
+    },
+    {
+      "code": 5154,
+      "character": "ᐢ",
+      "name": "CANADIAN SYLLABICS FINAL TOP HALF RING",
+      "occurrences": 793
     },
     {
       "code": 5312,
       "character": "ᓀ",
       "name": "CANADIAN SYLLABICS NE",
-      "occurrences": 2
+      "occurrences": 17
+    },
+    {
+      "code": 5414,
+      "character": "ᔦ",
+      "name": "CANADIAN SYLLABICS YE",
+      "occurrences": 56
+    },
+    {
+      "code": 5416,
+      "character": "ᔨ",
+      "name": "CANADIAN SYLLABICS YI",
+      "occurrences": 52
     },
     {
       "code": 5461,
       "character": "ᕕ",
       "name": "CANADIAN SYLLABICS FI",
-      "occurrences": 1
+      "occurrences": 41
     },
     {
       "code": 5463,
       "character": "ᕗ",
       "name": "CANADIAN SYLLABICS FO",
-      "occurrences": 1
+      "occurrences": 160
+    },
+    {
+      "code": 5465,
+      "character": "ᕙ",
+      "name": "CANADIAN SYLLABICS FA",
+      "occurrences": 111
+    },
+    {
+      "code": 5476,
+      "character": "ᕤ",
+      "name": "CANADIAN SYLLABICS THO",
+      "occurrences": 82
+    },
+    {
+      "code": 5478,
+      "character": "ᕦ",
+      "name": "CANADIAN SYLLABICS THA",
+      "occurrences": 83
+    },
+    {
+      "code": 5489,
+      "character": "ᕱ",
+      "name": "CANADIAN SYLLABICS TYI",
+      "occurrences": 10
     },
     {
       "code": 5586,
       "character": "ᗒ",
       "name": "CANADIAN SYLLABICS CARRIER WE",
-      "occurrences": 2
+      "occurrences": 15
     },
     {
       "code": 5589,
       "character": "ᗕ",
       "name": "CANADIAN SYLLABICS CARRIER WA",
-      "occurrences": 2
+      "occurrences": 15
     },
     {
       "code": 5596,
       "character": "ᗜ",
       "name": "CANADIAN SYLLABICS CARRIER THU",
-      "occurrences": 2
+      "occurrences": 325
+    },
+    {
+      "code": 5597,
+      "character": "ᗝ",
+      "name": "CANADIAN SYLLABICS CARRIER THO",
+      "occurrences": 14
     },
     {
       "code": 5602,
       "character": "ᗢ",
       "name": "CANADIAN SYLLABICS CARRIER TTU",
-      "occurrences": 1
+      "occurrences": 13
     },
     {
       "code": 5603,
       "character": "ᗣ",
       "name": "CANADIAN SYLLABICS CARRIER TTO",
-      "occurrences": 1
+      "occurrences": 11
+    },
+    {
+      "code": 5608,
+      "character": "ᗨ",
+      "name": "CANADIAN SYLLABICS CARRIER PU",
+      "occurrences": 28
+    },
+    {
+      "code": 5898,
+      "character": "ᜊ",
+      "name": "TAGALOG LETTER BA",
+      "occurrences": 196
+    },
+    {
+      "code": 7109,
+      "character": "ᯅ",
+      "name": "BATAK LETTER BA",
+      "occurrences": 54
+    },
+    {
+      "code": 7446,
+      "character": "ᴖ",
+      "name": "LATIN SMALL LETTER TOP HALF O",
+      "occurrences": 115
     },
     {
       "code": 7447,
       "character": "ᴗ",
       "name": "LATIN SMALL LETTER BOTTOM HALF O",
-      "occurrences": 16
+      "occurrences": 1638
     },
     {
       "code": 7461,
       "character": "ᴥ",
       "name": "LATIN LETTER AIN",
-      "occurrences": 9
+      "occurrences": 320
     },
     {
       "code": 7484,
       "character": "ᴼ",
       "name": "MODIFIER LETTER CAPITAL O",
-      "occurrences": 4
+      "occurrences": 11
+    },
+    {
+      "code": 7502,
+      "character": "ᵎ",
+      "name": "MODIFIER LETTER SMALL TURNED I",
+      "occurrences": 51
+    },
+    {
+      "code": 7506,
+      "character": "ᵒ",
+      "name": "MODIFIER LETTER SMALL O",
+      "occurrences": 302
     },
     {
       "code": 7508,
       "character": "ᵔ",
       "name": "MODIFIER LETTER SMALL TOP HALF O",
-      "occurrences": 22
+      "occurrences": 455
     },
     {
       "code": 7509,
       "character": "ᵕ",
       "name": "MODIFIER LETTER SMALL BOTTOM HALF O",
-      "occurrences": 10
+      "occurrences": 1256
+    },
+    {
+      "code": 7620,
+      "character": "᷄",
+      "name": "COMBINING MACRON-ACUTE",
+      "occurrences": 420
+    },
+    {
+      "code": 7621,
+      "character": "᷅",
+      "name": "COMBINING GRAVE-MACRON",
+      "occurrences": 442
+    },
+    {
+      "code": 8034,
+      "character": "ὢ",
+      "name": "GREEK SMALL LETTER OMEGA WITH PSILI AND VARIA",
+      "occurrences": 65
+    },
+    {
+      "code": 8101,
+      "character": "ᾥ",
+      "name": "GREEK SMALL LETTER OMEGA WITH DASIA AND OXIA AND YPOGEGRAMMENI",
+      "occurrences": 117
     },
     {
       "code": 8203,
       "character": "​",
       "name": "ZERO WIDTH SPACE",
-      "occurrences": 3
+      "occurrences": 116
+    },
+    {
+      "code": 8205,
+      "character": "‍",
+      "name": "ZERO WIDTH JOINER",
+      "occurrences": 75
+    },
+    {
+      "code": 8206,
+      "character": "‎",
+      "name": "LEFT-TO-RIGHT MARK",
+      "occurrences": 114
+    },
+    {
+      "code": 8208,
+      "character": "‐",
+      "name": "HYPHEN",
+      "occurrences": 73
+    },
+    {
+      "code": 8211,
+      "character": "–",
+      "name": "EN DASH",
+      "occurrences": 95
     },
     {
       "code": 8213,
       "character": "―",
       "name": "HORIZONTAL BAR",
-      "occurrences": 18
+      "occurrences": 254
     },
     {
       "code": 8216,
@@ -1184,7 +1827,7 @@
       "code": 8217,
       "character": "’",
       "name": "RIGHT SINGLE QUOTATION MARK",
-      "occurrences": 10
+      "occurrences": 14
     },
     {
       "code": 8221,
@@ -1196,685 +1839,1063 @@
       "code": 8222,
       "character": "„",
       "name": "DOUBLE LOW-9 QUOTATION MARK",
-      "occurrences": 8
+      "occurrences": 29
+    },
+    {
+      "code": 8224,
+      "character": "†",
+      "name": "DAGGER",
+      "occurrences": 86
     },
     {
       "code": 8225,
       "character": "‡",
       "name": "DOUBLE DAGGER",
-      "occurrences": 1
+      "occurrences": 5
     },
     {
       "code": 8226,
       "character": "•",
       "name": "BULLET",
-      "occurrences": 84
+      "occurrences": 8056
     },
     {
       "code": 8229,
       "character": "‥",
       "name": "TWO DOT LEADER",
-      "occurrences": 4
+      "occurrences": 80
     },
     {
       "code": 8230,
       "character": "…",
       "name": "HORIZONTAL ELLIPSIS",
-      "occurrences": 2
+      "occurrences": 1102
     },
     {
       "code": 8231,
       "character": "‧",
       "name": "HYPHENATION POINT",
-      "occurrences": 1
+      "occurrences": 240
+    },
+    {
+      "code": 8234,
+      "character": "‪",
+      "name": "LEFT-TO-RIGHT EMBEDDING",
+      "occurrences": 120
+    },
+    {
+      "code": 8242,
+      "character": "′",
+      "name": "PRIME",
+      "occurrences": 107
     },
     {
       "code": 8243,
       "character": "″",
       "name": "DOUBLE PRIME",
-      "occurrences": 1
+      "occurrences": 8
     },
     {
       "code": 8245,
       "character": "‵",
       "name": "REVERSED PRIME",
-      "occurrences": 1
+      "occurrences": 51
     },
     {
       "code": 8246,
       "character": "‶",
       "name": "REVERSED DOUBLE PRIME",
-      "occurrences": 1
+      "occurrences": 11
     },
     {
       "code": 8248,
       "character": "‸",
       "name": "CARET",
-      "occurrences": 4
+      "occurrences": 119
+    },
+    {
+      "code": 8249,
+      "character": "‹",
+      "name": "SINGLE LEFT-POINTING ANGLE QUOTATION MARK",
+      "occurrences": 486
+    },
+    {
+      "code": 8250,
+      "character": "›",
+      "name": "SINGLE RIGHT-POINTING ANGLE QUOTATION MARK",
+      "occurrences": 244
+    },
+    {
+      "code": 8251,
+      "character": "※",
+      "name": "REFERENCE MARK",
+      "occurrences": 79
     },
     {
       "code": 8254,
       "character": "‾",
       "name": "OVERLINE",
-      "occurrences": 6
+      "occurrences": 180
     },
     {
       "code": 8255,
       "character": "‿",
       "name": "UNDERTIE",
-      "occurrences": 43
+      "occurrences": 931
     },
     {
       "code": 8256,
       "character": "⁀",
       "name": "CHARACTER TIE",
-      "occurrences": 4
+      "occurrences": 9
     },
     {
       "code": 8260,
       "character": "⁄",
       "name": "FRACTION SLASH",
-      "occurrences": 12
+      "occurrences": 228
+    },
+    {
+      "code": 8265,
+      "character": "⁉",
+      "name": "EXCLAMATION QUESTION MARK",
+      "occurrences": 2
+    },
+    {
+      "code": 8269,
+      "character": "⁍",
+      "name": "BLACK RIGHTWARDS BULLET",
+      "occurrences": 56
+    },
+    {
+      "code": 8270,
+      "character": "⁎",
+      "name": "LOW ASTERISK",
+      "occurrences": 293
+    },
+    {
+      "code": 8285,
+      "character": "⁝",
+      "name": "TRICOLON",
+      "occurrences": 57
+    },
+    {
+      "code": 8288,
+      "character": "⁠",
+      "name": "WORD JOINER",
+      "occurrences": 59
     },
     {
       "code": 8304,
       "character": "⁰",
       "name": "SUPERSCRIPT ZERO",
-      "occurrences": 2
+      "occurrences": 131
+    },
+    {
+      "code": 8314,
+      "character": "⁺",
+      "name": "SUPERSCRIPT PLUS SIGN",
+      "occurrences": 70
+    },
+    {
+      "code": 8316,
+      "character": "⁼",
+      "name": "SUPERSCRIPT EQUALS SIGN",
+      "occurrences": 69
     },
     {
       "code": 8317,
       "character": "⁽",
       "name": "SUPERSCRIPT LEFT PARENTHESIS",
-      "occurrences": 2
+      "occurrences": 243
     },
     {
       "code": 8318,
       "character": "⁾",
       "name": "SUPERSCRIPT RIGHT PARENTHESIS",
-      "occurrences": 2
+      "occurrences": 657
+    },
+    {
+      "code": 8323,
+      "character": "₃",
+      "name": "SUBSCRIPT THREE",
+      "occurrences": 132
     },
     {
       "code": 8330,
       "character": "₊",
       "name": "SUBSCRIPT PLUS SIGN",
-      "occurrences": 1
+      "occurrences": 177
     },
     {
       "code": 8333,
       "character": "₍",
       "name": "SUBSCRIPT LEFT PARENTHESIS",
-      "occurrences": 1
+      "occurrences": 622
     },
     {
       "code": 8334,
       "character": "₎",
       "name": "SUBSCRIPT RIGHT PARENTHESIS",
-      "occurrences": 1
+      "occurrences": 478
+    },
+    {
+      "code": 8408,
+      "character": "⃘",
+      "name": "COMBINING RING OVERLAY",
+      "occurrences": 65
+    },
+    {
+      "code": 8409,
+      "character": "⃙",
+      "name": "COMBINING CLOCKWISE RING OVERLAY",
+      "occurrences": 72
+    },
+    {
+      "code": 8411,
+      "character": "⃛",
+      "name": "COMBINING THREE DOTS ABOVE",
+      "occurrences": 53
+    },
+    {
+      "code": 8576,
+      "character": "ↀ",
+      "name": "ROMAN NUMERAL ONE THOUSAND C D",
+      "occurrences": 23
     },
     {
       "code": 8592,
       "character": "←",
       "name": "LEFTWARDS ARROW",
-      "occurrences": 3
+      "occurrences": 34
     },
     {
       "code": 8593,
       "character": "↑",
       "name": "UPWARDS ARROW",
-      "occurrences": 1
+      "occurrences": 11
     },
     {
       "code": 8594,
       "character": "→",
       "name": "RIGHTWARDS ARROW",
-      "occurrences": 6
+      "occurrences": 62
     },
     {
       "code": 8636,
       "character": "↼",
       "name": "LEFTWARDS HARPOON WITH BARB UPWARDS",
-      "occurrences": 4
+      "occurrences": 34
     },
     {
       "code": 8640,
       "character": "⇀",
       "name": "RIGHTWARDS HARPOON WITH BARB UPWARDS",
-      "occurrences": 4
+      "occurrences": 22
     },
     {
       "code": 8704,
       "character": "∀",
       "name": "FOR ALL",
-      "occurrences": 42
+      "occurrences": 3358
     },
     {
       "code": 8706,
       "character": "∂",
       "name": "PARTIAL DIFFERENTIAL",
-      "occurrences": 1
+      "occurrences": 49
     },
     {
       "code": 8711,
       "character": "∇",
       "name": "NABLA",
-      "occurrences": 2
+      "occurrences": 588
     },
     {
       "code": 8712,
       "character": "∈",
       "name": "ELEMENT OF",
-      "occurrences": 2
+      "occurrences": 86
+    },
+    {
+      "code": 8715,
+      "character": "∋",
+      "name": "CONTAINS AS MEMBER",
+      "occurrences": 88
     },
     {
       "code": 8721,
       "character": "∑",
       "name": "N-ARY SUMMATION",
-      "occurrences": 2
+      "occurrences": 51
     },
     {
       "code": 8722,
       "character": "−",
       "name": "MINUS SIGN",
-      "occurrences": 1
+      "occurrences": 42
+    },
+    {
+      "code": 8727,
+      "character": "∗",
+      "name": "ASTERISK OPERATOR",
+      "occurrences": 74
     },
     {
       "code": 8730,
       "character": "√",
       "name": "SQUARE ROOT",
-      "occurrences": 2
+      "occurrences": 8
     },
     {
       "code": 8734,
       "character": "∞",
       "name": "INFINITY",
-      "occurrences": 4
+      "occurrences": 43
     },
     {
       "code": 8736,
       "character": "∠",
       "name": "ANGLE",
-      "occurrences": 4
+      "occurrences": 271
+    },
+    {
+      "code": 8743,
+      "character": "∧",
+      "name": "LOGICAL AND",
+      "occurrences": 215
     },
     {
       "code": 8745,
       "character": "∩",
       "name": "INTERSECTION",
-      "occurrences": 4
+      "occurrences": 652
     },
     {
       "code": 8746,
       "character": "∪",
       "name": "UNION",
-      "occurrences": 10
+      "occurrences": 109
+    },
+    {
+      "code": 8747,
+      "character": "∫",
+      "name": "INTEGRAL",
+      "occurrences": 8
+    },
+    {
+      "code": 8756,
+      "character": "∴",
+      "name": "THEREFORE",
+      "occurrences": 65
+    },
+    {
+      "code": 8757,
+      "character": "∵",
+      "name": "BECAUSE",
+      "occurrences": 132
     },
     {
       "code": 8790,
       "character": "≖",
       "name": "RING IN EQUAL TO",
-      "occurrences": 6
+      "occurrences": 165
     },
     {
       "code": 8801,
       "character": "≡",
       "name": "IDENTICAL TO",
-      "occurrences": 10
+      "occurrences": 1395
     },
     {
       "code": 8806,
       "character": "≦",
       "name": "LESS-THAN OVER EQUAL TO",
-      "occurrences": 17
+      "occurrences": 769
     },
     {
       "code": 8807,
       "character": "≧",
       "name": "GREATER-THAN OVER EQUAL TO",
-      "occurrences": 18
+      "occurrences": 753
     },
     {
       "code": 8834,
       "character": "⊂",
       "name": "SUBSET OF",
-      "occurrences": 10
+      "occurrences": 960
     },
     {
       "code": 8835,
       "character": "⊃",
       "name": "SUPERSET OF",
+      "occurrences": 921
+    },
+    {
+      "code": 8854,
+      "character": "⊖",
+      "name": "CIRCLED MINUS",
+      "occurrences": 22
+    },
+    {
+      "code": 8855,
+      "character": "⊗",
+      "name": "CIRCLED TIMES",
       "occurrences": 11
     },
     {
       "code": 8857,
       "character": "⊙",
       "name": "CIRCLED DOT OPERATOR",
-      "occurrences": 4
+      "occurrences": 368
     },
     {
       "code": 8869,
       "character": "⊥",
       "name": "UP TACK",
-      "occurrences": 1
+      "occurrences": 6
+    },
+    {
+      "code": 8889,
+      "character": "⊹",
+      "name": "HERMITIAN CONJUGATE MATRIX",
+      "occurrences": 73
+    },
+    {
+      "code": 8895,
+      "character": "⊿",
+      "name": "RIGHT TRIANGLE",
+      "occurrences": 28
     },
     {
       "code": 8899,
       "character": "⋃",
       "name": "N-ARY UNION",
-      "occurrences": 1
+      "occurrences": 3
+    },
+    {
+      "code": 8902,
+      "character": "⋆",
+      "name": "STAR OPERATOR",
+      "occurrences": 323
     },
     {
       "code": 8976,
       "character": "⌐",
       "name": "REVERSED NOT SIGN",
-      "occurrences": 2
+      "occurrences": 64
+    },
+    {
+      "code": 8977,
+      "character": "⌑",
+      "name": "SQUARE LOZENGE",
+      "occurrences": 47
     },
     {
       "code": 8978,
       "character": "⌒",
       "name": "ARC",
-      "occurrences": 47
+      "occurrences": 1370
     },
     {
       "code": 8979,
       "character": "⌓",
       "name": "SEGMENT",
-      "occurrences": 1
+      "occurrences": 231
     },
     {
       "code": 8995,
       "character": "⌣",
       "name": "SMILE",
-      "occurrences": 8
+      "occurrences": 116
+    },
+    {
+      "code": 9007,
+      "character": "⌯",
+      "name": "SYMMETRY",
+      "occurrences": 169
+    },
+    {
+      "code": 9118,
+      "character": "⎞",
+      "name": "RIGHT PARENTHESIS UPPER HOOK",
+      "occurrences": 50
+    },
+    {
+      "code": 9285,
+      "character": "⑅",
+      "name": "OCR BOW TIE",
+      "occurrences": 253
+    },
+    {
+      "code": 9289,
+      "character": "⑉",
+      "name": "OCR CUSTOMER ACCOUNT NUMBER",
+      "occurrences": 96
     },
     {
       "code": 9312,
       "character": "①",
       "name": "CIRCLED DIGIT ONE",
-      "occurrences": 2
+      "occurrences": 8
     },
     {
       "code": 9435,
       "character": "ⓛ",
       "name": "CIRCLED LATIN SMALL LETTER L",
-      "occurrences": 2
+      "occurrences": 14
     },
     {
       "code": 9472,
       "character": "─",
       "name": "BOX DRAWINGS LIGHT HORIZONTAL",
-      "occurrences": 8
+      "occurrences": 462
     },
     {
       "code": 9473,
       "character": "━",
       "name": "BOX DRAWINGS HEAVY HORIZONTAL",
-      "occurrences": 17
+      "occurrences": 2135
+    },
+    {
+      "code": 9475,
+      "character": "┃",
+      "name": "BOX DRAWINGS HEAVY VERTICAL",
+      "occurrences": 47
+    },
+    {
+      "code": 9480,
+      "character": "┈",
+      "name": "BOX DRAWINGS LIGHT QUADRUPLE DASH HORIZONTAL",
+      "occurrences": 129
     },
     {
       "code": 9484,
       "character": "┌",
       "name": "BOX DRAWINGS LIGHT DOWN AND RIGHT",
-      "occurrences": 22
+      "occurrences": 345
+    },
+    {
+      "code": 9487,
+      "character": "┏",
+      "name": "BOX DRAWINGS HEAVY DOWN AND RIGHT",
+      "occurrences": 290
     },
     {
       "code": 9488,
       "character": "┐",
       "name": "BOX DRAWINGS LIGHT DOWN AND LEFT",
-      "occurrences": 16
+      "occurrences": 247
+    },
+    {
+      "code": 9491,
+      "character": "┓",
+      "name": "BOX DRAWINGS HEAVY DOWN AND LEFT",
+      "occurrences": 243
     },
     {
       "code": 9492,
       "character": "└",
       "name": "BOX DRAWINGS LIGHT UP AND RIGHT",
-      "occurrences": 3
+      "occurrences": 85
+    },
+    {
+      "code": 9495,
+      "character": "┗",
+      "name": "BOX DRAWINGS HEAVY UP AND RIGHT",
+      "occurrences": 249
     },
     {
       "code": 9496,
       "character": "┘",
       "name": "BOX DRAWINGS LIGHT UP AND LEFT",
-      "occurrences": 7
+      "occurrences": 148
+    },
+    {
+      "code": 9499,
+      "character": "┛",
+      "name": "BOX DRAWINGS HEAVY UP AND LEFT",
+      "occurrences": 306
     },
     {
       "code": 9500,
       "character": "├",
       "name": "BOX DRAWINGS LIGHT VERTICAL AND RIGHT",
-      "occurrences": 3
+      "occurrences": 6
+    },
+    {
+      "code": 9507,
+      "character": "┣",
+      "name": "BOX DRAWINGS HEAVY VERTICAL AND RIGHT",
+      "occurrences": 58
     },
     {
       "code": 9508,
       "character": "┤",
       "name": "BOX DRAWINGS LIGHT VERTICAL AND LEFT",
-      "occurrences": 4
+      "occurrences": 20
     },
     {
       "code": 9516,
       "character": "┬",
       "name": "BOX DRAWINGS LIGHT DOWN AND HORIZONTAL",
-      "occurrences": 16
+      "occurrences": 54
     },
     {
       "code": 9523,
       "character": "┳",
       "name": "BOX DRAWINGS HEAVY DOWN AND HORIZONTAL",
-      "occurrences": 6
+      "occurrences": 46
     },
     {
       "code": 9524,
       "character": "┴",
       "name": "BOX DRAWINGS LIGHT UP AND HORIZONTAL",
-      "occurrences": 14
+      "occurrences": 38
     },
     {
       "code": 9531,
       "character": "┻",
       "name": "BOX DRAWINGS HEAVY UP AND HORIZONTAL",
-      "occurrences": 6
+      "occurrences": 222
     },
     {
       "code": 9552,
       "character": "═",
       "name": "BOX DRAWINGS DOUBLE HORIZONTAL",
-      "occurrences": 5
+      "occurrences": 124
     },
     {
       "code": 9573,
       "character": "╥",
       "name": "BOX DRAWINGS DOWN DOUBLE AND HORIZONTAL SINGLE",
-      "occurrences": 8
+      "occurrences": 99
     },
     {
       "code": 9580,
       "character": "╬",
       "name": "BOX DRAWINGS DOUBLE VERTICAL AND HORIZONTAL",
-      "occurrences": 8
+      "occurrences": 161
     },
     {
       "code": 9581,
       "character": "╭",
       "name": "BOX DRAWINGS LIGHT ARC DOWN AND RIGHT",
-      "occurrences": 14
+      "occurrences": 203
     },
     {
       "code": 9582,
       "character": "╮",
       "name": "BOX DRAWINGS LIGHT ARC DOWN AND LEFT",
-      "occurrences": 17
+      "occurrences": 314
     },
     {
       "code": 9583,
       "character": "╯",
       "name": "BOX DRAWINGS LIGHT ARC UP AND LEFT",
-      "occurrences": 17
+      "occurrences": 233
     },
     {
       "code": 9584,
       "character": "╰",
       "name": "BOX DRAWINGS LIGHT ARC UP AND RIGHT",
-      "occurrences": 10
+      "occurrences": 152
     },
     {
       "code": 9585,
       "character": "╱",
       "name": "BOX DRAWINGS LIGHT DIAGONAL UPPER RIGHT TO LOWER LEFT",
-      "occurrences": 7
+      "occurrences": 27
     },
     {
       "code": 9586,
       "character": "╲",
       "name": "BOX DRAWINGS LIGHT DIAGONAL UPPER LEFT TO LOWER RIGHT",
-      "occurrences": 7
+      "occurrences": 24
     },
     {
       "code": 9593,
       "character": "╹",
       "name": "BOX DRAWINGS HEAVY UP",
-      "occurrences": 2
+      "occurrences": 226
+    },
+    {
+      "code": 9600,
+      "character": "▀",
+      "name": "UPPER HALF BLOCK",
+      "occurrences": 38
     },
     {
       "code": 9617,
       "character": "░",
       "name": "LIGHT SHADE",
-      "occurrences": 2
+      "occurrences": 25
     },
     {
       "code": 9618,
       "character": "▒",
       "name": "MEDIUM SHADE",
-      "occurrences": 2
+      "occurrences": 13
     },
     {
       "code": 9619,
       "character": "▓",
       "name": "DARK SHADE",
-      "occurrences": 2
+      "occurrences": 13
     },
     {
       "code": 9620,
       "character": "▔",
       "name": "UPPER ONE EIGHTH BLOCK",
-      "occurrences": 2
+      "occurrences": 61
     },
     {
       "code": 9632,
       "character": "■",
       "name": "BLACK SQUARE",
-      "occurrences": 4
+      "occurrences": 154
     },
     {
       "code": 9633,
       "character": "□",
       "name": "WHITE SQUARE",
-      "occurrences": 19
+      "occurrences": 496
     },
     {
       "code": 9651,
       "character": "△",
       "name": "WHITE UP-POINTING TRIANGLE",
-      "occurrences": 3
+      "occurrences": 140
     },
     {
       "code": 9660,
       "character": "▼",
       "name": "BLACK DOWN-POINTING TRIANGLE",
-      "occurrences": 8
+      "occurrences": 126
     },
     {
       "code": 9661,
       "character": "▽",
       "name": "WHITE DOWN-POINTING TRIANGLE",
-      "occurrences": 86
+      "occurrences": 1582
+    },
+    {
+      "code": 9662,
+      "character": "▾",
+      "name": "BLACK DOWN-POINTING SMALL TRIANGLE",
+      "occurrences": 38
     },
     {
       "code": 9663,
       "character": "▿",
       "name": "WHITE DOWN-POINTING SMALL TRIANGLE",
-      "occurrences": 9
+      "occurrences": 155
     },
     {
       "code": 9671,
       "character": "◇",
       "name": "WHITE DIAMOND",
-      "occurrences": 1
+      "occurrences": 185
     },
     {
       "code": 9673,
       "character": "◉",
       "name": "FISHEYE",
-      "occurrences": 2
+      "occurrences": 302
     },
     {
       "code": 9675,
       "character": "○",
       "name": "WHITE CIRCLE",
-      "occurrences": 8
+      "occurrences": 710
+    },
+    {
+      "code": 9677,
+      "character": "◍",
+      "name": "CIRCLE WITH VERTICAL FILL",
+      "occurrences": 417
     },
     {
       "code": 9678,
       "character": "◎",
       "name": "BULLSEYE",
-      "occurrences": 6
+      "occurrences": 291
     },
     {
       "code": 9679,
       "character": "●",
       "name": "BLACK CIRCLE",
-      "occurrences": 14
+      "occurrences": 790
+    },
+    {
+      "code": 9680,
+      "character": "◐",
+      "name": "CIRCLE WITH LEFT HALF BLACK",
+      "occurrences": 21
+    },
+    {
+      "code": 9681,
+      "character": "◑",
+      "name": "CIRCLE WITH RIGHT HALF BLACK",
+      "occurrences": 21
     },
     {
       "code": 9684,
       "character": "◔",
       "name": "CIRCLE WITH UPPER RIGHT QUADRANT BLACK",
-      "occurrences": 2
+      "occurrences": 150
     },
     {
       "code": 9685,
       "character": "◕",
       "name": "CIRCLE WITH ALL BUT UPPER LEFT QUADRANT BLACK",
-      "occurrences": 28
+      "occurrences": 1024
     },
     {
       "code": 9686,
       "character": "◖",
       "name": "LEFT HALF BLACK CIRCLE",
-      "occurrences": 1
+      "occurrences": 5
     },
     {
       "code": 9687,
       "character": "◗",
       "name": "RIGHT HALF BLACK CIRCLE",
-      "occurrences": 1
+      "occurrences": 6
     },
     {
       "code": 9692,
       "character": "◜",
       "name": "UPPER LEFT QUADRANT CIRCULAR ARC",
-      "occurrences": 2
+      "occurrences": 316
     },
     {
       "code": 9693,
       "character": "◝",
       "name": "UPPER RIGHT QUADRANT CIRCULAR ARC",
-      "occurrences": 2
+      "occurrences": 321
     },
     {
       "code": 9694,
       "character": "◞",
       "name": "LOWER RIGHT QUADRANT CIRCULAR ARC",
-      "occurrences": 1
+      "occurrences": 225
     },
     {
       "code": 9695,
       "character": "◟",
       "name": "LOWER LEFT QUADRANT CIRCULAR ARC",
-      "occurrences": 1
+      "occurrences": 207
+    },
+    {
+      "code": 9696,
+      "character": "◠",
+      "name": "UPPER HALF CIRCLE",
+      "occurrences": 172
     },
     {
       "code": 9697,
       "character": "◡",
       "name": "LOWER HALF CIRCLE",
-      "occurrences": 20
+      "occurrences": 718
     },
     {
       "code": 9698,
       "character": "◢",
       "name": "BLACK LOWER RIGHT TRIANGLE",
-      "occurrences": 2
+      "occurrences": 25
     },
     {
       "code": 9699,
       "character": "◣",
       "name": "BLACK LOWER LEFT TRIANGLE",
-      "occurrences": 2
+      "occurrences": 25
+    },
+    {
+      "code": 9702,
+      "character": "◦",
+      "name": "WHITE BULLET",
+      "occurrences": 159
+    },
+    {
+      "code": 9728,
+      "character": "☀",
+      "name": "BLACK SUN WITH RAYS",
+      "occurrences": 98
     },
     {
       "code": 9730,
       "character": "☂",
       "name": "UMBRELLA",
-      "occurrences": 1
+      "occurrences": 18
     },
     {
       "code": 9733,
       "character": "★",
       "name": "BLACK STAR",
-      "occurrences": 5
+      "occurrences": 344
     },
     {
       "code": 9734,
       "character": "☆",
       "name": "WHITE STAR",
-      "occurrences": 56
+      "occurrences": 1518
     },
     {
       "code": 9737,
       "character": "☉",
       "name": "SUN",
-      "occurrences": 2
+      "occurrences": 76
+    },
+    {
+      "code": 9749,
+      "character": "☕",
+      "name": "HOT BEVERAGE",
+      "occurrences": 76
     },
     {
       "code": 9756,
       "character": "☜",
       "name": "WHITE LEFT POINTING INDEX",
-      "occurrences": 2
+      "occurrences": 21
     },
     {
       "code": 9758,
       "character": "☞",
       "name": "WHITE RIGHT POINTING INDEX",
-      "occurrences": 3
+      "occurrences": 96
     },
     {
       "code": 9825,
       "character": "♡",
       "name": "WHITE HEART SUIT",
-      "occurrences": 54
+      "occurrences": 2678
+    },
+    {
+      "code": 9829,
+      "character": "♥",
+      "name": "BLACK HEART SUIT",
+      "occurrences": 464
     },
     {
       "code": 9832,
       "character": "♨",
       "name": "HOT SPRINGS",
-      "occurrences": 3
+      "occurrences": 7
     },
     {
       "code": 9834,
       "character": "♪",
       "name": "EIGHTH NOTE",
-      "occurrences": 20
+      "occurrences": 1429
     },
     {
       "code": 9835,
       "character": "♫",
       "name": "BEAMED EIGHTH NOTES",
-      "occurrences": 5
+      "occurrences": 68
     },
     {
       "code": 9836,
       "character": "♬",
       "name": "BEAMED SIXTEENTH NOTES",
-      "occurrences": 7
+      "occurrences": 157
+    },
+    {
+      "code": 9839,
+      "character": "♯",
+      "name": "MUSIC SHARP SIGN",
+      "occurrences": 8
+    },
+    {
+      "code": 9864,
+      "character": "⚈",
+      "name": "BLACK CIRCLE WITH WHITE DOT RIGHT",
+      "occurrences": 54
+    },
+    {
+      "code": 9888,
+      "character": "⚠",
+      "name": "WARNING SIGN",
+      "occurrences": 164
+    },
+    {
+      "code": 9889,
+      "character": "⚡",
+      "name": "HIGH VOLTAGE SIGN",
+      "occurrences": 62
+    },
+    {
+      "code": 9917,
+      "character": "⚽",
+      "name": "SOCCER BALL",
+      "occurrences": 3
+    },
+    {
+      "code": 9924,
+      "character": "⛄",
+      "name": "SNOWMAN WITHOUT SNOW",
+      "occurrences": 8
     },
     {
       "code": 9986,
       "character": "✂",
       "name": "BLACK SCISSORS",
-      "occurrences": 1
+      "occurrences": 13
+    },
+    {
+      "code": 9993,
+      "character": "✉",
+      "name": "ENVELOPE",
+      "occurrences": 63
+    },
+    {
+      "code": 9994,
+      "character": "✊",
+      "name": "RAISED FIST",
+      "occurrences": 25
+    },
+    {
+      "code": 9996,
+      "character": "✌",
+      "name": "VICTORY HAND",
+      "occurrences": 190
+    },
+    {
+      "code": 10022,
+      "character": "✦",
+      "name": "BLACK FOUR POINTED STAR",
+      "occurrences": 25
     },
     {
       "code": 10023,
       "character": "✧",
       "name": "WHITE FOUR POINTED STAR",
-      "occurrences": 13
+      "occurrences": 1269
+    },
+    {
+      "code": 10024,
+      "character": "✨",
+      "name": "SPARKLES",
+      "occurrences": 692
     },
     {
       "code": 10025,
       "character": "✩",
       "name": "STRESS OUTLINED WHITE STAR",
-      "occurrences": 1
+      "occurrences": 198
+    },
+    {
+      "code": 10026,
+      "character": "✪",
+      "name": "CIRCLED WHITE STAR",
+      "occurrences": 90
     },
     {
       "code": 10031,
       "character": "✯",
       "name": "PINWHEEL STAR",
-      "occurrences": 2
+      "occurrences": 38
     },
     {
       "code": 10036,
@@ -1886,331 +2907,1165 @@
       "code": 10042,
       "character": "✺",
       "name": "SIXTEEN POINTED ASTERISK",
-      "occurrences": 2
+      "occurrences": 13
     },
     {
       "code": 10047,
       "character": "✿",
       "name": "BLACK FLORETTE",
-      "occurrences": 7
+      "occurrences": 383
     },
     {
       "code": 10048,
       "character": "❀",
       "name": "WHITE FLORETTE",
-      "occurrences": 1
+      "occurrences": 74
+    },
+    {
+      "code": 10049,
+      "character": "❁",
+      "name": "EIGHT PETALLED OUTLINED BLACK FLORETTE",
+      "occurrences": 132
+    },
+    {
+      "code": 10052,
+      "character": "❄",
+      "name": "SNOWFLAKE",
+      "occurrences": 20
+    },
+    {
+      "code": 10071,
+      "character": "❗",
+      "name": "HEAVY EXCLAMATION MARK SYMBOL",
+      "occurrences": 6
     },
     {
       "code": 10075,
       "character": "❛",
       "name": "HEAVY SINGLE TURNED COMMA QUOTATION MARK ORNAMENT",
-      "occurrences": 6
+      "occurrences": 204
     },
     {
       "code": 10084,
       "character": "❤",
       "name": "HEAVY BLACK HEART",
-      "occurrences": 6
+      "occurrences": 130
+    },
+    {
+      "code": 10209,
+      "character": "⟡",
+      "name": "WHITE CONCAVE-SIDED DIAMOND",
+      "occurrences": 8
     },
     {
       "code": 10521,
       "character": "⤙",
       "name": "LEFTWARDS ARROW-TAIL",
-      "occurrences": 2
+      "occurrences": 37
     },
     {
       "code": 10826,
       "character": "⩊",
       "name": "UNION BESIDE AND JOINED WITH UNION",
-      "occurrences": 9
+      "occurrences": 106
+    },
+    {
+      "code": 11088,
+      "character": "⭐",
+      "name": "WHITE MEDIUM STAR",
+      "occurrences": 93
+    },
+    {
+      "code": 11090,
+      "character": "⭒",
+      "name": "WHITE SMALL STAR",
+      "occurrences": 7
+    },
+    {
+      "code": 11601,
+      "character": "ⵑ",
+      "name": "TIFINAGH LETTER TUAREG YANG",
+      "occurrences": 1
     },
     {
       "code": 11804,
       "character": "⸜",
       "name": "LEFT LOW PARAPHRASE BRACKET",
-      "occurrences": 4
+      "occurrences": 242
     },
     {
       "code": 11805,
       "character": "⸝",
       "name": "RIGHT LOW PARAPHRASE BRACKET",
-      "occurrences": 24
+      "occurrences": 3303
     },
     {
       "code": 12288,
       "character": "　",
       "name": "IDEOGRAPHIC SPACE",
-      "occurrences": 24
+      "occurrences": 787
     },
     {
       "code": 12289,
       "character": "、",
       "name": "IDEOGRAPHIC COMMA",
-      "occurrences": 10
+      "occurrences": 224
     },
     {
       "code": 12290,
       "character": "。",
       "name": "IDEOGRAPHIC FULL STOP",
-      "occurrences": 20
+      "occurrences": 888
     },
     {
       "code": 12291,
       "character": "〃",
       "name": "DITTO MARK",
-      "occurrences": 14
+      "occurrences": 461
     },
     {
       "code": 12294,
       "character": "〆",
       "name": "IDEOGRAPHIC CLOSING MARK",
-      "occurrences": 2
+      "occurrences": 18
     },
     {
       "code": 12295,
       "character": "〇",
       "name": "IDEOGRAPHIC NUMBER ZERO",
-      "occurrences": 5
+      "occurrences": 124
+    },
+    {
+      "code": 12300,
+      "character": "「",
+      "name": "LEFT CORNER BRACKET",
+      "occurrences": 77
     },
     {
       "code": 12301,
       "character": "」",
       "name": "RIGHT CORNER BRACKET",
-      "occurrences": 8
+      "occurrences": 314
     },
     {
       "code": 12304,
       "character": "【",
       "name": "LEFT BLACK LENTICULAR BRACKET",
-      "occurrences": 1
+      "occurrences": 182
     },
     {
       "code": 12305,
       "character": "】",
       "name": "RIGHT BLACK LENTICULAR BRACKET",
-      "occurrences": 1
+      "occurrences": 180
     },
     {
       "code": 12306,
       "character": "〒",
       "name": "POSTAL MARK",
-      "occurrences": 2
+      "occurrences": 10
     },
     {
       "code": 12316,
       "character": "〜",
       "name": "WAVE DASH",
-      "occurrences": 13
+      "occurrences": 334
     },
     {
       "code": 12323,
       "character": "〣",
       "name": "HANGZHOU NUMERAL THREE",
-      "occurrences": 2
+      "occurrences": 11
+    },
+    {
+      "code": 12353,
+      "character": "ぁ",
+      "name": "HIRAGANA LETTER SMALL A",
+      "occurrences": 174
+    },
+    {
+      "code": 12354,
+      "character": "あ",
+      "name": "HIRAGANA LETTER A",
+      "occurrences": 200
+    },
+    {
+      "code": 12355,
+      "character": "ぃ",
+      "name": "HIRAGANA LETTER SMALL I",
+      "occurrences": 71
+    },
+    {
+      "code": 12356,
+      "character": "い",
+      "name": "HIRAGANA LETTER I",
+      "occurrences": 840
+    },
+    {
+      "code": 12357,
+      "character": "ぅ",
+      "name": "HIRAGANA LETTER SMALL U",
+      "occurrences": 229
+    },
+    {
+      "code": 12358,
+      "character": "う",
+      "name": "HIRAGANA LETTER U",
+      "occurrences": 337
+    },
+    {
+      "code": 12359,
+      "character": "ぇ",
+      "name": "HIRAGANA LETTER SMALL E",
+      "occurrences": 60
+    },
+    {
+      "code": 12360,
+      "character": "え",
+      "name": "HIRAGANA LETTER E",
+      "occurrences": 141
+    },
+    {
+      "code": 12361,
+      "character": "ぉ",
+      "name": "HIRAGANA LETTER SMALL O",
+      "occurrences": 62
+    },
+    {
+      "code": 12362,
+      "character": "お",
+      "name": "HIRAGANA LETTER O",
+      "occurrences": 481
+    },
+    {
+      "code": 12363,
+      "character": "か",
+      "name": "HIRAGANA LETTER KA",
+      "occurrences": 163
+    },
+    {
+      "code": 12364,
+      "character": "が",
+      "name": "HIRAGANA LETTER GA",
+      "occurrences": 152
+    },
+    {
+      "code": 12365,
+      "character": "き",
+      "name": "HIRAGANA LETTER KI",
+      "occurrences": 165
+    },
+    {
+      "code": 12366,
+      "character": "ぎ",
+      "name": "HIRAGANA LETTER GI",
+      "occurrences": 86
     },
     {
       "code": 12367,
       "character": "く",
       "name": "HIRAGANA LETTER KU",
-      "occurrences": 1
+      "occurrences": 317
+    },
+    {
+      "code": 12368,
+      "character": "ぐ",
+      "name": "HIRAGANA LETTER GU",
+      "occurrences": 97
+    },
+    {
+      "code": 12369,
+      "character": "け",
+      "name": "HIRAGANA LETTER KE",
+      "occurrences": 63
+    },
+    {
+      "code": 12370,
+      "character": "げ",
+      "name": "HIRAGANA LETTER GE",
+      "occurrences": 12
+    },
+    {
+      "code": 12371,
+      "character": "こ",
+      "name": "HIRAGANA LETTER KO",
+      "occurrences": 305
+    },
+    {
+      "code": 12372,
+      "character": "ご",
+      "name": "HIRAGANA LETTER GO",
+      "occurrences": 109
+    },
+    {
+      "code": 12373,
+      "character": "さ",
+      "name": "HIRAGANA LETTER SA",
+      "occurrences": 134
+    },
+    {
+      "code": 12375,
+      "character": "し",
+      "name": "HIRAGANA LETTER SI",
+      "occurrences": 379
+    },
+    {
+      "code": 12376,
+      "character": "じ",
+      "name": "HIRAGANA LETTER ZI",
+      "occurrences": 32
+    },
+    {
+      "code": 12377,
+      "character": "す",
+      "name": "HIRAGANA LETTER SU",
+      "occurrences": 320
+    },
+    {
+      "code": 12378,
+      "character": "ず",
+      "name": "HIRAGANA LETTER ZU",
+      "occurrences": 14
+    },
+    {
+      "code": 12380,
+      "character": "ぜ",
+      "name": "HIRAGANA LETTER ZE",
+      "occurrences": 8
+    },
+    {
+      "code": 12381,
+      "character": "そ",
+      "name": "HIRAGANA LETTER SO",
+      "occurrences": 160
+    },
+    {
+      "code": 12382,
+      "character": "ぞ",
+      "name": "HIRAGANA LETTER ZO",
+      "occurrences": 75
+    },
+    {
+      "code": 12383,
+      "character": "た",
+      "name": "HIRAGANA LETTER TA",
+      "occurrences": 304
+    },
+    {
+      "code": 12384,
+      "character": "だ",
+      "name": "HIRAGANA LETTER DA",
+      "occurrences": 207
+    },
+    {
+      "code": 12385,
+      "character": "ち",
+      "name": "HIRAGANA LETTER TI",
+      "occurrences": 191
     },
     {
       "code": 12387,
       "character": "っ",
       "name": "HIRAGANA LETTER SMALL TU",
-      "occurrences": 19
+      "occurrences": 2074
     },
     {
       "code": 12388,
       "character": "つ",
       "name": "HIRAGANA LETTER TU",
-      "occurrences": 15
+      "occurrences": 576
     },
     {
       "code": 12389,
       "character": "づ",
       "name": "HIRAGANA LETTER DU",
-      "occurrences": 6
+      "occurrences": 96
+    },
+    {
+      "code": 12390,
+      "character": "て",
+      "name": "HIRAGANA LETTER TE",
+      "occurrences": 255
+    },
+    {
+      "code": 12391,
+      "character": "で",
+      "name": "HIRAGANA LETTER DE",
+      "occurrences": 204
+    },
+    {
+      "code": 12392,
+      "character": "と",
+      "name": "HIRAGANA LETTER TO",
+      "occurrences": 172
+    },
+    {
+      "code": 12393,
+      "character": "ど",
+      "name": "HIRAGANA LETTER DO",
+      "occurrences": 110
+    },
+    {
+      "code": 12394,
+      "character": "な",
+      "name": "HIRAGANA LETTER NA",
+      "occurrences": 191
+    },
+    {
+      "code": 12395,
+      "character": "に",
+      "name": "HIRAGANA LETTER NI",
+      "occurrences": 211
+    },
+    {
+      "code": 12396,
+      "character": "ぬ",
+      "name": "HIRAGANA LETTER NU",
+      "occurrences": 126
+    },
+    {
+      "code": 12397,
+      "character": "ね",
+      "name": "HIRAGANA LETTER NE",
+      "occurrences": 110
+    },
+    {
+      "code": 12398,
+      "character": "の",
+      "name": "HIRAGANA LETTER NO",
+      "occurrences": 81
+    },
+    {
+      "code": 12399,
+      "character": "は",
+      "name": "HIRAGANA LETTER HA",
+      "occurrences": 165
+    },
+    {
+      "code": 12400,
+      "character": "ば",
+      "name": "HIRAGANA LETTER BA",
+      "occurrences": 102
+    },
+    {
+      "code": 12405,
+      "character": "ふ",
+      "name": "HIRAGANA LETTER HU",
+      "occurrences": 147
+    },
+    {
+      "code": 12406,
+      "character": "ぶ",
+      "name": "HIRAGANA LETTER BU",
+      "occurrences": 64
+    },
+    {
+      "code": 12407,
+      "character": "ぷ",
+      "name": "HIRAGANA LETTER PU",
+      "occurrences": 120
     },
     {
       "code": 12408,
       "character": "へ",
       "name": "HIRAGANA LETTER HE",
-      "occurrences": 2
+      "occurrences": 148
+    },
+    {
+      "code": 12410,
+      "character": "ぺ",
+      "name": "HIRAGANA LETTER PE",
+      "occurrences": 40
+    },
+    {
+      "code": 12411,
+      "character": "ほ",
+      "name": "HIRAGANA LETTER HO",
+      "occurrences": 45
+    },
+    {
+      "code": 12414,
+      "character": "ま",
+      "name": "HIRAGANA LETTER MA",
+      "occurrences": 337
+    },
+    {
+      "code": 12415,
+      "character": "み",
+      "name": "HIRAGANA LETTER MI",
+      "occurrences": 66
+    },
+    {
+      "code": 12416,
+      "character": "む",
+      "name": "HIRAGANA LETTER MU",
+      "occurrences": 270
+    },
+    {
+      "code": 12417,
+      "character": "め",
+      "name": "HIRAGANA LETTER ME",
+      "occurrences": 119
+    },
+    {
+      "code": 12418,
+      "character": "も",
+      "name": "HIRAGANA LETTER MO",
+      "occurrences": 163
+    },
+    {
+      "code": 12419,
+      "character": "ゃ",
+      "name": "HIRAGANA LETTER SMALL YA",
+      "occurrences": 137
+    },
+    {
+      "code": 12420,
+      "character": "や",
+      "name": "HIRAGANA LETTER YA",
+      "occurrences": 101
+    },
+    {
+      "code": 12421,
+      "character": "ゅ",
+      "name": "HIRAGANA LETTER SMALL YU",
+      "occurrences": 95
+    },
+    {
+      "code": 12423,
+      "character": "ょ",
+      "name": "HIRAGANA LETTER SMALL YO",
+      "occurrences": 82
+    },
+    {
+      "code": 12424,
+      "character": "よ",
+      "name": "HIRAGANA LETTER YO",
+      "occurrences": 183
+    },
+    {
+      "code": 12425,
+      "character": "ら",
+      "name": "HIRAGANA LETTER RA",
+      "occurrences": 84
+    },
+    {
+      "code": 12426,
+      "character": "り",
+      "name": "HIRAGANA LETTER RI",
+      "occurrences": 249
+    },
+    {
+      "code": 12427,
+      "character": "る",
+      "name": "HIRAGANA LETTER RU",
+      "occurrences": 166
+    },
+    {
+      "code": 12428,
+      "character": "れ",
+      "name": "HIRAGANA LETTER RE",
+      "occurrences": 119
+    },
+    {
+      "code": 12429,
+      "character": "ろ",
+      "name": "HIRAGANA LETTER RO",
+      "occurrences": 83
+    },
+    {
+      "code": 12430,
+      "character": "ゎ",
+      "name": "HIRAGANA LETTER SMALL WA",
+      "occurrences": 64
+    },
+    {
+      "code": 12431,
+      "character": "わ",
+      "name": "HIRAGANA LETTER WA",
+      "occurrences": 118
+    },
+    {
+      "code": 12435,
+      "character": "ん",
+      "name": "HIRAGANA LETTER N",
+      "occurrences": 612
+    },
+    {
+      "code": 12442,
+      "character": "゚",
+      "name": "COMBINING KATAKANA-HIRAGANA SEMI-VOICED SOUND MARK",
+      "occurrences": 54
     },
     {
       "code": 12443,
       "character": "゛",
       "name": "KATAKANA-HIRAGANA VOICED SOUND MARK",
-      "occurrences": 3
+      "occurrences": 68
     },
     {
       "code": 12444,
       "character": "゜",
       "name": "KATAKANA-HIRAGANA SEMI-VOICED SOUND MARK",
-      "occurrences": 6
+      "occurrences": 785
     },
     {
       "code": 12445,
       "character": "ゝ",
       "name": "HIRAGANA ITERATION MARK",
-      "occurrences": 5
+      "occurrences": 330
     },
     {
       "code": 12446,
       "character": "ゞ",
       "name": "HIRAGANA VOICED ITERATION MARK",
-      "occurrences": 7
+      "occurrences": 404
+    },
+    {
+      "code": 12449,
+      "character": "ァ",
+      "name": "KATAKANA LETTER SMALL A",
+      "occurrences": 123
+    },
+    {
+      "code": 12450,
+      "character": "ア",
+      "name": "KATAKANA LETTER A",
+      "occurrences": 124
+    },
+    {
+      "code": 12452,
+      "character": "イ",
+      "name": "KATAKANA LETTER I",
+      "occurrences": 205
+    },
+    {
+      "code": 12454,
+      "character": "ウ",
+      "name": "KATAKANA LETTER U",
+      "occurrences": 85
     },
     {
       "code": 12455,
       "character": "ェ",
       "name": "KATAKANA LETTER SMALL E",
-      "occurrences": 2
+      "occurrences": 168
+    },
+    {
+      "code": 12456,
+      "character": "エ",
+      "name": "KATAKANA LETTER E",
+      "occurrences": 38
+    },
+    {
+      "code": 12458,
+      "character": "オ",
+      "name": "KATAKANA LETTER O",
+      "occurrences": 57
+    },
+    {
+      "code": 12459,
+      "character": "カ",
+      "name": "KATAKANA LETTER KA",
+      "occurrences": 113
+    },
+    {
+      "code": 12460,
+      "character": "ガ",
+      "name": "KATAKANA LETTER GA",
+      "occurrences": 67
+    },
+    {
+      "code": 12461,
+      "character": "キ",
+      "name": "KATAKANA LETTER KI",
+      "occurrences": 137
+    },
+    {
+      "code": 12463,
+      "character": "ク",
+      "name": "KATAKANA LETTER KU",
+      "occurrences": 164
+    },
+    {
+      "code": 12466,
+      "character": "ゲ",
+      "name": "KATAKANA LETTER GE",
+      "occurrences": 14
+    },
+    {
+      "code": 12467,
+      "character": "コ",
+      "name": "KATAKANA LETTER KO",
+      "occurrences": 153
+    },
+    {
+      "code": 12468,
+      "character": "ゴ",
+      "name": "KATAKANA LETTER GO",
+      "occurrences": 69
     },
     {
       "code": 12471,
       "character": "シ",
       "name": "KATAKANA LETTER SI",
-      "occurrences": 7
+      "occurrences": 141
+    },
+    {
+      "code": 12473,
+      "character": "ス",
+      "name": "KATAKANA LETTER SU",
+      "occurrences": 101
+    },
+    {
+      "code": 12477,
+      "character": "ソ",
+      "name": "KATAKANA LETTER SO",
+      "occurrences": 120
+    },
+    {
+      "code": 12479,
+      "character": "タ",
+      "name": "KATAKANA LETTER TA",
+      "occurrences": 175
+    },
+    {
+      "code": 12481,
+      "character": "チ",
+      "name": "KATAKANA LETTER TI",
+      "occurrences": 218
+    },
+    {
+      "code": 12483,
+      "character": "ッ",
+      "name": "KATAKANA LETTER SMALL TU",
+      "occurrences": 470
     },
     {
       "code": 12484,
       "character": "ツ",
       "name": "KATAKANA LETTER TU",
-      "occurrences": 2
+      "occurrences": 193
+    },
+    {
+      "code": 12486,
+      "character": "テ",
+      "name": "KATAKANA LETTER TE",
+      "occurrences": 53
     },
     {
       "code": 12487,
       "character": "デ",
       "name": "KATAKANA LETTER DE",
-      "occurrences": 2
+      "occurrences": 30
+    },
+    {
+      "code": 12488,
+      "character": "ト",
+      "name": "KATAKANA LETTER TO",
+      "occurrences": 53
+    },
+    {
+      "code": 12489,
+      "character": "ド",
+      "name": "KATAKANA LETTER DO",
+      "occurrences": 84
+    },
+    {
+      "code": 12490,
+      "character": "ナ",
+      "name": "KATAKANA LETTER NA",
+      "occurrences": 55
+    },
+    {
+      "code": 12491,
+      "character": "ニ",
+      "name": "KATAKANA LETTER NI",
+      "occurrences": 99
+    },
+    {
+      "code": 12493,
+      "character": "ネ",
+      "name": "KATAKANA LETTER NE",
+      "occurrences": 61
     },
     {
       "code": 12494,
       "character": "ノ",
       "name": "KATAKANA LETTER NO",
-      "occurrences": 61
+      "occurrences": 1255
+    },
+    {
+      "code": 12495,
+      "character": "ハ",
+      "name": "KATAKANA LETTER HA",
+      "occurrences": 141
+    },
+    {
+      "code": 12496,
+      "character": "バ",
+      "name": "KATAKANA LETTER BA",
+      "occurrences": 53
+    },
+    {
+      "code": 12497,
+      "character": "パ",
+      "name": "KATAKANA LETTER PA",
+      "occurrences": 71
+    },
+    {
+      "code": 12498,
+      "character": "ヒ",
+      "name": "KATAKANA LETTER HI",
+      "occurrences": 81
+    },
+    {
+      "code": 12501,
+      "character": "フ",
+      "name": "KATAKANA LETTER HU",
+      "occurrences": 100
+    },
+    {
+      "code": 12502,
+      "character": "ブ",
+      "name": "KATAKANA LETTER BU",
+      "occurrences": 47
+    },
+    {
+      "code": 12503,
+      "character": "プ",
+      "name": "KATAKANA LETTER PU",
+      "occurrences": 13
     },
     {
       "code": 12504,
       "character": "ヘ",
       "name": "KATAKANA LETTER HE",
-      "occurrences": 14
+      "occurrences": 144
+    },
+    {
+      "code": 12507,
+      "character": "ホ",
+      "name": "KATAKANA LETTER HO",
+      "occurrences": 77
+    },
+    {
+      "code": 12510,
+      "character": "マ",
+      "name": "KATAKANA LETTER MA",
+      "occurrences": 69
     },
     {
       "code": 12511,
       "character": "ミ",
       "name": "KATAKANA LETTER MI",
-      "occurrences": 1
+      "occurrences": 222
+    },
+    {
+      "code": 12512,
+      "character": "ム",
+      "name": "KATAKANA LETTER MU",
+      "occurrences": 87
     },
     {
       "code": 12513,
       "character": "メ",
       "name": "KATAKANA LETTER ME",
-      "occurrences": 6
+      "occurrences": 121
+    },
+    {
+      "code": 12514,
+      "character": "モ",
+      "name": "KATAKANA LETTER MO",
+      "occurrences": 71
+    },
+    {
+      "code": 12515,
+      "character": "ャ",
+      "name": "KATAKANA LETTER SMALL YA",
+      "occurrences": 112
+    },
+    {
+      "code": 12516,
+      "character": "ヤ",
+      "name": "KATAKANA LETTER YA",
+      "occurrences": 122
+    },
+    {
+      "code": 12517,
+      "character": "ュ",
+      "name": "KATAKANA LETTER SMALL YU",
+      "occurrences": 34
+    },
+    {
+      "code": 12519,
+      "character": "ョ",
+      "name": "KATAKANA LETTER SMALL YO",
+      "occurrences": 71
+    },
+    {
+      "code": 12521,
+      "character": "ラ",
+      "name": "KATAKANA LETTER RA",
+      "occurrences": 164
+    },
+    {
+      "code": 12522,
+      "character": "リ",
+      "name": "KATAKANA LETTER RI",
+      "occurrences": 160
+    },
+    {
+      "code": 12523,
+      "character": "ル",
+      "name": "KATAKANA LETTER RU",
+      "occurrences": 60
+    },
+    {
+      "code": 12524,
+      "character": "レ",
+      "name": "KATAKANA LETTER RE",
+      "occurrences": 57
     },
     {
       "code": 12525,
       "character": "ロ",
       "name": "KATAKANA LETTER RO",
-      "occurrences": 6
+      "occurrences": 222
     },
     {
       "code": 12526,
       "character": "ヮ",
       "name": "KATAKANA LETTER SMALL WA",
-      "occurrences": 7
+      "occurrences": 191
+    },
+    {
+      "code": 12527,
+      "character": "ワ",
+      "name": "KATAKANA LETTER WA",
+      "occurrences": 57
+    },
+    {
+      "code": 12531,
+      "character": "ン",
+      "name": "KATAKANA LETTER N",
+      "occurrences": 348
     },
     {
       "code": 12539,
       "character": "・",
       "name": "KATAKANA MIDDLE DOT",
-      "occurrences": 107
+      "occurrences": 5087
     },
     {
       "code": 12540,
       "character": "ー",
       "name": "KATAKANA-HIRAGANA PROLONGED SOUND MARK",
-      "occurrences": 16
+      "occurrences": 1517
     },
     {
       "code": 12541,
       "character": "ヽ",
       "name": "KATAKANA ITERATION MARK",
-      "occurrences": 54
+      "occurrences": 1151
     },
     {
       "code": 12542,
       "character": "ヾ",
       "name": "KATAKANA VOICED ITERATION MARK",
-      "occurrences": 25
+      "occurrences": 1222
+    },
+    {
+      "code": 12609,
+      "character": "ㅁ",
+      "name": "HANGUL LETTER MIEUM",
+      "occurrences": 140
     },
     {
       "code": 12610,
       "character": "ㅂ",
       "name": "HANGUL LETTER PIEUP",
-      "occurrences": 1
+      "occurrences": 245
     },
     {
       "code": 12613,
       "character": "ㅅ",
       "name": "HANGUL LETTER SIOS",
-      "occurrences": 1
+      "occurrences": 189
+    },
+    {
+      "code": 12622,
+      "character": "ㅎ",
+      "name": "HANGUL LETTER HIEUH",
+      "occurrences": 55
+    },
+    {
+      "code": 12671,
+      "character": "ㅿ",
+      "name": "HANGUL LETTER PANSIOS",
+      "occurrences": 52
+    },
+    {
+      "code": 12678,
+      "character": "ㆆ",
+      "name": "HANGUL LETTER YEORINHIEUH",
+      "occurrences": 54
+    },
+    {
+      "code": 12904,
+      "character": "㉨",
+      "name": "CIRCLED HANGUL CIEUC",
+      "occurrences": 20
     },
     {
       "code": 19968,
       "character": "一",
       "name": "CJK UNIFIED IDEOGRAPH-4E00",
-      "occurrences": 4
+      "occurrences": 49
+    },
+    {
+      "code": 19976,
+      "character": "丈",
+      "name": "CJK UNIFIED IDEOGRAPH-4E08",
+      "occurrences": 1
     },
     {
       "code": 19977,
       "character": "三",
       "name": "CJK UNIFIED IDEOGRAPH-4E09",
-      "occurrences": 2
+      "occurrences": 322
+    },
+    {
+      "code": 19978,
+      "character": "上",
+      "name": "CJK UNIFIED IDEOGRAPH-4E0A",
+      "occurrences": 4
     },
     {
       "code": 19988,
       "character": "且",
       "name": "CJK UNIFIED IDEOGRAPH-4E14",
-      "occurrences": 3
+      "occurrences": 25
     },
     {
       "code": 20010,
       "character": "个",
       "name": "CJK UNIFIED IDEOGRAPH-4E2A",
-      "occurrences": 2
+      "occurrences": 12
+    },
+    {
+      "code": 20013,
+      "character": "中",
+      "name": "CJK UNIFIED IDEOGRAPH-4E2D",
+      "occurrences": 110
     },
     {
       "code": 20033,
       "character": "乁",
       "name": "CJK UNIFIED IDEOGRAPH-4E41",
-      "occurrences": 2
+      "occurrences": 47
+    },
+    {
+      "code": 20034,
+      "character": "乂",
+      "name": "CJK UNIFIED IDEOGRAPH-4E42",
+      "occurrences": 53
+    },
+    {
+      "code": 20057,
+      "character": "乙",
+      "name": "CJK UNIFIED IDEOGRAPH-4E59",
+      "occurrences": 13
+    },
+    {
+      "code": 20102,
+      "character": "了",
+      "name": "CJK UNIFIED IDEOGRAPH-4E86",
+      "occurrences": 80
     },
     {
       "code": 20108,
       "character": "二",
       "name": "CJK UNIFIED IDEOGRAPH-4E8C",
-      "occurrences": 2
+      "occurrences": 81
     },
     {
       "code": 20154,
       "character": "人",
       "name": "CJK UNIFIED IDEOGRAPH-4EBA",
-      "occurrences": 15
+      "occurrences": 760
+    },
+    {
+      "code": 20175,
+      "character": "仏",
+      "name": "CJK UNIFIED IDEOGRAPH-4ECF",
+      "occurrences": 2
+    },
+    {
+      "code": 20195,
+      "character": "代",
+      "name": "CJK UNIFIED IDEOGRAPH-4EE3",
+      "occurrences": 1
+    },
+    {
+      "code": 20491,
+      "character": "個",
+      "name": "CJK UNIFIED IDEOGRAPH-500B",
+      "occurrences": 2
+    },
+    {
+      "code": 20803,
+      "character": "元",
+      "name": "CJK UNIFIED IDEOGRAPH-5143",
+      "occurrences": 2
     },
     {
       "code": 20843,
       "character": "八",
       "name": "CJK UNIFIED IDEOGRAPH-516B",
-      "occurrences": 4
+      "occurrences": 38
+    },
+    {
+      "code": 20844,
+      "character": "公",
+      "name": "CJK UNIFIED IDEOGRAPH-516C",
+      "occurrences": 5
     },
     {
       "code": 20984,
       "character": "凸",
       "name": "CJK UNIFIED IDEOGRAPH-51F8",
-      "occurrences": 7
+      "occurrences": 82
+    },
+    {
+      "code": 20985,
+      "character": "凹",
+      "name": "CJK UNIFIED IDEOGRAPH-51F9",
+      "occurrences": 71
+    },
+    {
+      "code": 21069,
+      "character": "前",
+      "name": "CJK UNIFIED IDEOGRAPH-524D",
+      "occurrences": 6
+    },
+    {
+      "code": 21147,
+      "character": "力",
+      "name": "CJK UNIFIED IDEOGRAPH-529B",
+      "occurrences": 9
+    },
+    {
+      "code": 21213,
+      "character": "勝",
+      "name": "CJK UNIFIED IDEOGRAPH-52DD",
+      "occurrences": 2
+    },
+    {
+      "code": 21325,
+      "character": "卍",
+      "name": "CJK UNIFIED IDEOGRAPH-534D",
+      "occurrences": 149
     },
     {
       "code": 21344,
@@ -2219,118 +4074,490 @@
       "occurrences": 1
     },
     {
+      "code": 21463,
+      "character": "受",
+      "name": "CJK UNIFIED IDEOGRAPH-53D7",
+      "occurrences": 1
+    },
+    {
       "code": 21475,
       "character": "口",
       "name": "CJK UNIFIED IDEOGRAPH-53E3",
-      "occurrences": 3
+      "occurrences": 104
+    },
+    {
+      "code": 21512,
+      "character": "合",
+      "name": "CJK UNIFIED IDEOGRAPH-5408",
+      "occurrences": 6
+    },
+    {
+      "code": 21517,
+      "character": "名",
+      "name": "CJK UNIFIED IDEOGRAPH-540D",
+      "occurrences": 5
+    },
+    {
+      "code": 21610,
+      "character": "呪",
+      "name": "CJK UNIFIED IDEOGRAPH-546A",
+      "occurrences": 129
+    },
+    {
+      "code": 22675,
+      "character": "墓",
+      "name": "CJK UNIFIED IDEOGRAPH-5893",
+      "occurrences": 121
+    },
+    {
+      "code": 22823,
+      "character": "大",
+      "name": "CJK UNIFIED IDEOGRAPH-5927",
+      "occurrences": 31
+    },
+    {
+      "code": 22825,
+      "character": "天",
+      "name": "CJK UNIFIED IDEOGRAPH-5929",
+      "occurrences": 5
+    },
+    {
+      "code": 22827,
+      "character": "夫",
+      "name": "CJK UNIFIED IDEOGRAPH-592B",
+      "occurrences": 1
+    },
+    {
+      "code": 22909,
+      "character": "好",
+      "name": "CJK UNIFIED IDEOGRAPH-597D",
+      "occurrences": 25
+    },
+    {
+      "code": 23529,
+      "character": "審",
+      "name": "CJK UNIFIED IDEOGRAPH-5BE9",
+      "occurrences": 52
+    },
+    {
+      "code": 23562,
+      "character": "尊",
+      "name": "CJK UNIFIED IDEOGRAPH-5C0A",
+      "occurrences": 82
     },
     {
       "code": 23608,
       "character": "尸",
       "name": "CJK UNIFIED IDEOGRAPH-5C38",
-      "occurrences": 1
+      "occurrences": 9
+    },
+    {
+      "code": 23662,
+      "character": "屮",
+      "name": "CJK UNIFIED IDEOGRAPH-5C6E",
+      "occurrences": 22
+    },
+    {
+      "code": 24373,
+      "character": "張",
+      "name": "CJK UNIFIED IDEOGRAPH-5F35",
+      "occurrences": 11
+    },
+    {
+      "code": 24409,
+      "character": "彙",
+      "name": "CJK UNIFIED IDEOGRAPH-5F59",
+      "occurrences": 3
     },
     {
       "code": 24417,
       "character": "彡",
       "name": "CJK UNIFIED IDEOGRAPH-5F61",
-      "occurrences": 6
+      "occurrences": 519
+    },
+    {
+      "code": 24540,
+      "character": "応",
+      "name": "CJK UNIFIED IDEOGRAPH-5FDC",
+      "occurrences": 5
+    },
+    {
+      "code": 24653,
+      "character": "恍",
+      "name": "CJK UNIFIED IDEOGRAPH-604D",
+      "occurrences": 1
+    },
+    {
+      "code": 24794,
+      "character": "惚",
+      "name": "CJK UNIFIED IDEOGRAPH-60DA",
+      "occurrences": 1
+    },
+    {
+      "code": 24859,
+      "character": "愛",
+      "name": "CJK UNIFIED IDEOGRAPH-611B",
+      "occurrences": 12
+    },
+    {
+      "code": 25104,
+      "character": "成",
+      "name": "CJK UNIFIED IDEOGRAPH-6210",
+      "occurrences": 5
+    },
+    {
+      "code": 25512,
+      "character": "推",
+      "name": "CJK UNIFIED IDEOGRAPH-63A8",
+      "occurrences": 5
+    },
+    {
+      "code": 25588,
+      "character": "援",
+      "name": "CJK UNIFIED IDEOGRAPH-63F4",
+      "occurrences": 5
+    },
+    {
+      "code": 26085,
+      "character": "日",
+      "name": "CJK UNIFIED IDEOGRAPH-65E5",
+      "occurrences": 34
     },
     {
       "code": 26086,
       "character": "旦",
       "name": "CJK UNIFIED IDEOGRAPH-65E6",
+      "occurrences": 135
+    },
+    {
+      "code": 26119,
+      "character": "昇",
+      "name": "CJK UNIFIED IDEOGRAPH-6607",
       "occurrences": 5
+    },
+    {
+      "code": 26376,
+      "character": "月",
+      "name": "CJK UNIFIED IDEOGRAPH-6708",
+      "occurrences": 56
+    },
+    {
+      "code": 26412,
+      "character": "本",
+      "name": "CJK UNIFIED IDEOGRAPH-672C",
+      "occurrences": 7
+    },
+    {
+      "code": 26684,
+      "character": "格",
+      "name": "CJK UNIFIED IDEOGRAPH-683C",
+      "occurrences": 1
+    },
+    {
+      "code": 27490,
+      "character": "止",
+      "name": "CJK UNIFIED IDEOGRAPH-6B62",
+      "occurrences": 7
+    },
+    {
+      "code": 27515,
+      "character": "死",
+      "name": "CJK UNIFIED IDEOGRAPH-6B7B",
+      "occurrences": 44
+    },
+    {
+      "code": 27671,
+      "character": "気",
+      "name": "CJK UNIFIED IDEOGRAPH-6C17",
+      "occurrences": 14
+    },
+    {
+      "code": 28040,
+      "character": "消",
+      "name": "CJK UNIFIED IDEOGRAPH-6D88",
+      "occurrences": 9
+    },
+    {
+      "code": 28145,
+      "character": "深",
+      "name": "CJK UNIFIED IDEOGRAPH-6DF1",
+      "occurrences": 3
+    },
+    {
+      "code": 28780,
+      "character": "灬",
+      "name": "CJK UNIFIED IDEOGRAPH-706C",
+      "occurrences": 139
     },
     {
       "code": 28814,
       "character": "炎",
       "name": "CJK UNIFIED IDEOGRAPH-708E",
-      "occurrences": 5
+      "occurrences": 46
+    },
+    {
+      "code": 28961,
+      "character": "無",
+      "name": "CJK UNIFIED IDEOGRAPH-7121",
+      "occurrences": 42
+    },
+    {
+      "code": 28982,
+      "character": "然",
+      "name": "CJK UNIFIED IDEOGRAPH-7136",
+      "occurrences": 2
+    },
+    {
+      "code": 29190,
+      "character": "爆",
+      "name": "CJK UNIFIED IDEOGRAPH-7206",
+      "occurrences": 38
     },
     {
       "code": 29243,
       "character": "爻",
       "name": "CJK UNIFIED IDEOGRAPH-723B",
-      "occurrences": 1
+      "occurrences": 5
+    },
+    {
+      "code": 29702,
+      "character": "理",
+      "name": "CJK UNIFIED IDEOGRAPH-7406",
+      "occurrences": 23
+    },
+    {
+      "code": 30326,
+      "character": "癶",
+      "name": "CJK UNIFIED IDEOGRAPH-7676",
+      "occurrences": 164
     },
     {
       "code": 30399,
       "character": "皿",
       "name": "CJK UNIFIED IDEOGRAPH-76BF",
-      "occurrences": 6
+      "occurrences": 112
     },
     {
       "code": 30410,
       "character": "益",
       "name": "CJK UNIFIED IDEOGRAPH-76CA",
-      "occurrences": 11
+      "occurrences": 113
+    },
+    {
+      "code": 31070,
+      "character": "神",
+      "name": "CJK UNIFIED IDEOGRAPH-795E",
+      "occurrences": 114
+    },
+    {
+      "code": 31169,
+      "character": "私",
+      "name": "CJK UNIFIED IDEOGRAPH-79C1",
+      "occurrences": 1
+    },
+    {
+      "code": 31361,
+      "character": "突",
+      "name": "CJK UNIFIED IDEOGRAPH-7A81",
+      "occurrences": 3
+    },
+    {
+      "code": 32210,
+      "character": "緒",
+      "name": "CJK UNIFIED IDEOGRAPH-7DD2",
+      "occurrences": 3
+    },
+    {
+      "code": 33016,
+      "character": "胸",
+      "name": "CJK UNIFIED IDEOGRAPH-80F8",
+      "occurrences": 1
+    },
+    {
+      "code": 33400,
+      "character": "艸",
+      "name": "CJK UNIFIED IDEOGRAPH-8278",
+      "occurrences": 265
+    },
+    {
+      "code": 34920,
+      "character": "表",
+      "name": "CJK UNIFIED IDEOGRAPH-8868",
+      "occurrences": 1
+    },
+    {
+      "code": 35211,
+      "character": "見",
+      "name": "CJK UNIFIED IDEOGRAPH-898B",
+      "occurrences": 34
+    },
+    {
+      "code": 35299,
+      "character": "解",
+      "name": "CJK UNIFIED IDEOGRAPH-89E3",
+      "occurrences": 61
+    },
+    {
+      "code": 35486,
+      "character": "語",
+      "name": "CJK UNIFIED IDEOGRAPH-8A9E",
+      "occurrences": 4
+    },
+    {
+      "code": 35696,
+      "character": "議",
+      "name": "CJK UNIFIED IDEOGRAPH-8B70",
+      "occurrences": 55
+    },
+    {
+      "code": 38929,
+      "character": "頑",
+      "name": "CJK UNIFIED IDEOGRAPH-9811",
+      "occurrences": 10
+    },
+    {
+      "code": 39080,
+      "character": "風",
+      "name": "CJK UNIFIED IDEOGRAPH-98A8",
+      "occurrences": 89
+    },
+    {
+      "code": 39443,
+      "character": "験",
+      "name": "CJK UNIFIED IDEOGRAPH-9A13",
+      "occurrences": 1
+    },
+    {
+      "code": 41460,
+      "character": "ꇴ",
+      "name": "YI SYLLABLE GU",
+      "occurrences": 52
+    },
+    {
+      "code": 41538,
+      "character": "ꉂ",
+      "name": "YI SYLLABLE MGU",
+      "occurrences": 66
+    },
+    {
+      "code": 42022,
+      "character": "ꐦ",
+      "name": "YI SYLLABLE JJOP",
+      "occurrences": 50
     },
     {
       "code": 42150,
       "character": "꒦",
       "name": "YI RADICAL GGUO",
-      "occurrences": 2
+      "occurrences": 66
+    },
+    {
+      "code": 42154,
+      "character": "꒪",
+      "name": "YI RADICAL JJUT",
+      "occurrences": 382
+    },
+    {
+      "code": 42160,
+      "character": "꒰",
+      "name": "YI RADICAL SHY",
+      "occurrences": 695
+    },
+    {
+      "code": 42161,
+      "character": "꒱",
+      "name": "YI RADICAL VEP",
+      "occurrences": 710
     },
     {
       "code": 42163,
       "character": "꒳",
       "name": "YI RADICAL JO",
-      "occurrences": 8
+      "occurrences": 1222
+    },
+    {
+      "code": 42752,
+      "character": "꜀",
+      "name": "MODIFIER LETTER CHINESE TONE YIN PING",
+      "occurrences": 64
+    },
+    {
+      "code": 42756,
+      "character": "꜄",
+      "name": "MODIFIER LETTER CHINESE TONE YIN QU",
+      "occurrences": 171
+    },
+    {
+      "code": 42758,
+      "character": "꜆",
+      "name": "MODIFIER LETTER CHINESE TONE YIN RU",
+      "occurrences": 351
     },
     {
       "code": 45576,
       "character": "눈",
       "name": "HANGUL SYLLABLE NUN",
-      "occurrences": 4
+      "occurrences": 30
+    },
+    {
+      "code": 65038,
+      "character": "︎",
+      "name": "VARIATION SELECTOR-15",
+      "occurrences": 393
+    },
+    {
+      "code": 65039,
+      "character": "️",
+      "name": "VARIATION SELECTOR-16",
+      "occurrences": 498
     },
     {
       "code": 65076,
       "character": "︴",
       "name": "PRESENTATION FORM FOR VERTICAL WAVY LOW LINE",
-      "occurrences": 1
+      "occurrences": 5
     },
     {
       "code": 65077,
       "character": "︵",
       "name": "PRESENTATION FORM FOR VERTICAL LEFT PARENTHESIS",
-      "occurrences": 15
+      "occurrences": 150
     },
     {
       "code": 65078,
       "character": "︶",
       "name": "PRESENTATION FORM FOR VERTICAL RIGHT PARENTHESIS",
-      "occurrences": 16
+      "occurrences": 263
     },
     {
       "code": 65081,
       "character": "︹",
       "name": "PRESENTATION FORM FOR VERTICAL LEFT TORTOISE SHELL BRACKET",
-      "occurrences": 1
+      "occurrences": 25
     },
     {
       "code": 65082,
       "character": "︺",
       "name": "PRESENTATION FORM FOR VERTICAL RIGHT TORTOISE SHELL BRACKET",
-      "occurrences": 1
+      "occurrences": 4
     },
     {
       "code": 65083,
       "character": "︻",
       "name": "PRESENTATION FORM FOR VERTICAL LEFT BLACK LENTICULAR BRACKET",
-      "occurrences": 4
+      "occurrences": 25
     },
     {
       "code": 65087,
       "character": "︿",
       "name": "PRESENTATION FORM FOR VERTICAL LEFT ANGLE BRACKET",
-      "occurrences": 4
+      "occurrences": 155
     },
     {
       "code": 65091,
       "character": "﹃",
       "name": "PRESENTATION FORM FOR VERTICAL LEFT WHITE CORNER BRACKET",
-      "occurrences": 1
+      "occurrences": 234
     },
     {
       "code": 65100,
@@ -2342,259 +4569,1082 @@
       "code": 65103,
       "character": "﹏",
       "name": "WAVY LOW LINE",
-      "occurrences": 13
+      "occurrences": 491
+    },
+    {
+      "code": 65228,
+      "character": "ﻌ",
+      "name": "ARABIC LETTER AIN MEDIAL FORM",
+      "occurrences": 136
     },
     {
       "code": 65261,
       "character": "ﻭ",
       "name": "ARABIC LETTER WAW ISOLATED FORM",
-      "occurrences": 1
+      "occurrences": 26
+    },
+    {
+      "code": 65281,
+      "character": "！",
+      "name": "FULLWIDTH EXCLAMATION MARK",
+      "occurrences": 674
     },
     {
       "code": 65283,
       "character": "＃",
       "name": "FULLWIDTH NUMBER SIGN",
-      "occurrences": 10
+      "occurrences": 30
+    },
+    {
+      "code": 65288,
+      "character": "（",
+      "name": "FULLWIDTH LEFT PARENTHESIS",
+      "occurrences": 821
+    },
+    {
+      "code": 65289,
+      "character": "）",
+      "name": "FULLWIDTH RIGHT PARENTHESIS",
+      "occurrences": 863
+    },
+    {
+      "code": 65290,
+      "character": "＊",
+      "name": "FULLWIDTH ASTERISK",
+      "occurrences": 128
     },
     {
       "code": 65291,
       "character": "＋",
       "name": "FULLWIDTH PLUS SIGN",
-      "occurrences": 2
+      "occurrences": 14
     },
     {
       "code": 65292,
       "character": "，",
       "name": "FULLWIDTH COMMA",
-      "occurrences": 1
+      "occurrences": 11
     },
     {
       "code": 65293,
       "character": "－",
       "name": "FULLWIDTH HYPHEN-MINUS",
-      "occurrences": 10
+      "occurrences": 135
     },
     {
       "code": 65294,
       "character": "．",
       "name": "FULLWIDTH FULL STOP",
-      "occurrences": 7
+      "occurrences": 97
     },
     {
       "code": 65295,
       "character": "／",
       "name": "FULLWIDTH SOLIDUS",
-      "occurrences": 38
+      "occurrences": 493
     },
     {
       "code": 65296,
       "character": "０",
       "name": "FULLWIDTH DIGIT ZERO",
-      "occurrences": 2
+      "occurrences": 26
     },
     {
       "code": 65299,
       "character": "３",
       "name": "FULLWIDTH DIGIT THREE",
-      "occurrences": 1
+      "occurrences": 27
+    },
+    {
+      "code": 65306,
+      "character": "：",
+      "name": "FULLWIDTH COLON",
+      "occurrences": 58
     },
     {
       "code": 65307,
       "character": "；",
       "name": "FULLWIDTH SEMICOLON",
-      "occurrences": 5
+      "occurrences": 1274
     },
     {
       "code": 65308,
       "character": "＜",
       "name": "FULLWIDTH LESS-THAN SIGN",
-      "occurrences": 16
+      "occurrences": 201
+    },
+    {
+      "code": 65309,
+      "character": "＝",
+      "name": "FULLWIDTH EQUALS SIGN",
+      "occurrences": 211
     },
     {
       "code": 65310,
       "character": "＞",
       "name": "FULLWIDTH GREATER-THAN SIGN",
-      "occurrences": 15
+      "occurrences": 167
+    },
+    {
+      "code": 65311,
+      "character": "？",
+      "name": "FULLWIDTH QUESTION MARK",
+      "occurrences": 287
     },
     {
       "code": 65312,
       "character": "＠",
       "name": "FULLWIDTH COMMERCIAL AT",
-      "occurrences": 5
+      "occurrences": 137
+    },
+    {
+      "code": 65313,
+      "character": "Ａ",
+      "name": "FULLWIDTH LATIN CAPITAL LETTER A",
+      "occurrences": 18
     },
     {
       "code": 65327,
       "character": "Ｏ",
       "name": "FULLWIDTH LATIN CAPITAL LETTER O",
-      "occurrences": 1
+      "occurrences": 47
     },
     {
       "code": 65332,
       "character": "Ｔ",
       "name": "FULLWIDTH LATIN CAPITAL LETTER T",
-      "occurrences": 2
+      "occurrences": 42
     },
     {
       "code": 65333,
       "character": "Ｕ",
       "name": "FULLWIDTH LATIN CAPITAL LETTER U",
-      "occurrences": 4
+      "occurrences": 50
     },
     {
       "code": 65340,
       "character": "＼",
       "name": "FULLWIDTH REVERSE SOLIDUS",
-      "occurrences": 50
+      "occurrences": 686
     },
     {
       "code": 65342,
       "character": "＾",
       "name": "FULLWIDTH CIRCUMFLEX ACCENT",
-      "occurrences": 36
+      "occurrences": 900
     },
     {
       "code": 65343,
       "character": "＿",
       "name": "FULLWIDTH LOW LINE",
-      "occurrences": 4
+      "occurrences": 503
     },
     {
       "code": 65344,
       "character": "｀",
       "name": "FULLWIDTH GRAVE ACCENT",
-      "occurrences": 10
+      "occurrences": 4030
     },
     {
       "code": 65347,
       "character": "ｃ",
       "name": "FULLWIDTH LATIN SMALL LETTER C",
-      "occurrences": 1
+      "occurrences": 58
+    },
+    {
+      "code": 65353,
+      "character": "ｉ",
+      "name": "FULLWIDTH LATIN SMALL LETTER I",
+      "occurrences": 6
     },
     {
       "code": 65357,
       "character": "ｍ",
       "name": "FULLWIDTH LATIN SMALL LETTER M",
-      "occurrences": 1
+      "occurrences": 21
     },
     {
       "code": 65359,
       "character": "ｏ",
       "name": "FULLWIDTH LATIN SMALL LETTER O",
-      "occurrences": 6
+      "occurrences": 192
+    },
+    {
+      "code": 65366,
+      "character": "ｖ",
+      "name": "FULLWIDTH LATIN SMALL LETTER V",
+      "occurrences": 39
+    },
+    {
+      "code": 65372,
+      "character": "｜",
+      "name": "FULLWIDTH VERTICAL LINE",
+      "occurrences": 91
     },
     {
       "code": 65374,
       "character": "～",
       "name": "FULLWIDTH TILDE",
-      "occurrences": 13
+      "occurrences": 654
     },
     {
       "code": 65377,
       "character": "｡",
       "name": "HALFWIDTH IDEOGRAPHIC FULL STOP",
-      "occurrences": 68
+      "occurrences": 5860
     },
     {
       "code": 65378,
       "character": "｢",
       "name": "HALFWIDTH LEFT CORNER BRACKET",
-      "occurrences": 4
+      "occurrences": 200
+    },
+    {
+      "code": 65379,
+      "character": "｣",
+      "name": "HALFWIDTH RIGHT CORNER BRACKET",
+      "occurrences": 93
     },
     {
       "code": 65380,
       "character": "､",
       "name": "HALFWIDTH IDEOGRAPHIC COMMA",
-      "occurrences": 5
+      "occurrences": 244
     },
     {
       "code": 65381,
       "character": "･",
       "name": "HALFWIDTH KATAKANA MIDDLE DOT",
-      "occurrences": 88
+      "occurrences": 8896
+    },
+    {
+      "code": 65383,
+      "character": "ｧ",
+      "name": "HALFWIDTH KATAKANA LETTER SMALL A",
+      "occurrences": 1024
+    },
+    {
+      "code": 65384,
+      "character": "ｨ",
+      "name": "HALFWIDTH KATAKANA LETTER SMALL I",
+      "occurrences": 216
+    },
+    {
+      "code": 65385,
+      "character": "ｩ",
+      "name": "HALFWIDTH KATAKANA LETTER SMALL U",
+      "occurrences": 254
     },
     {
       "code": 65386,
       "character": "ｪ",
       "name": "HALFWIDTH KATAKANA LETTER SMALL E",
-      "occurrences": 5
+      "occurrences": 423
+    },
+    {
+      "code": 65387,
+      "character": "ｫ",
+      "name": "HALFWIDTH KATAKANA LETTER SMALL O",
+      "occurrences": 356
+    },
+    {
+      "code": 65388,
+      "character": "ｬ",
+      "name": "HALFWIDTH KATAKANA LETTER SMALL YA",
+      "occurrences": 875
+    },
+    {
+      "code": 65389,
+      "character": "ｭ",
+      "name": "HALFWIDTH KATAKANA LETTER SMALL YU",
+      "occurrences": 659
+    },
+    {
+      "code": 65390,
+      "character": "ｮ",
+      "name": "HALFWIDTH KATAKANA LETTER SMALL YO",
+      "occurrences": 684
+    },
+    {
+      "code": 65391,
+      "character": "ｯ",
+      "name": "HALFWIDTH KATAKANA LETTER SMALL TU",
+      "occurrences": 2653
     },
     {
       "code": 65392,
       "character": "ｰ",
       "name": "HALFWIDTH KATAKANA-HIRAGANA PROLONGED SOUND MARK",
-      "occurrences": 2
+      "occurrences": 2972
+    },
+    {
+      "code": 65393,
+      "character": "ｱ",
+      "name": "HALFWIDTH KATAKANA LETTER A",
+      "occurrences": 625
+    },
+    {
+      "code": 65394,
+      "character": "ｲ",
+      "name": "HALFWIDTH KATAKANA LETTER I",
+      "occurrences": 1789
+    },
+    {
+      "code": 65395,
+      "character": "ｳ",
+      "name": "HALFWIDTH KATAKANA LETTER U",
+      "occurrences": 650
     },
     {
       "code": 65396,
       "character": "ｴ",
       "name": "HALFWIDTH KATAKANA LETTER E",
-      "occurrences": 10
+      "occurrences": 346
+    },
+    {
+      "code": 65397,
+      "character": "ｵ",
+      "name": "HALFWIDTH KATAKANA LETTER O",
+      "occurrences": 867
+    },
+    {
+      "code": 65398,
+      "character": "ｶ",
+      "name": "HALFWIDTH KATAKANA LETTER KA",
+      "occurrences": 1065
+    },
+    {
+      "code": 65399,
+      "character": "ｷ",
+      "name": "HALFWIDTH KATAKANA LETTER KI",
+      "occurrences": 1459
+    },
+    {
+      "code": 65400,
+      "character": "ｸ",
+      "name": "HALFWIDTH KATAKANA LETTER KU",
+      "occurrences": 1693
+    },
+    {
+      "code": 65401,
+      "character": "ｹ",
+      "name": "HALFWIDTH KATAKANA LETTER KE",
+      "occurrences": 198
+    },
+    {
+      "code": 65402,
+      "character": "ｺ",
+      "name": "HALFWIDTH KATAKANA LETTER KO",
+      "occurrences": 1345
+    },
+    {
+      "code": 65403,
+      "character": "ｻ",
+      "name": "HALFWIDTH KATAKANA LETTER SA",
+      "occurrences": 753
+    },
+    {
+      "code": 65404,
+      "character": "ｼ",
+      "name": "HALFWIDTH KATAKANA LETTER SI",
+      "occurrences": 1742
+    },
+    {
+      "code": 65405,
+      "character": "ｽ",
+      "name": "HALFWIDTH KATAKANA LETTER SU",
+      "occurrences": 1206
+    },
+    {
+      "code": 65406,
+      "character": "ｾ",
+      "name": "HALFWIDTH KATAKANA LETTER SE",
+      "occurrences": 210
+    },
+    {
+      "code": 65407,
+      "character": "ｿ",
+      "name": "HALFWIDTH KATAKANA LETTER SO",
+      "occurrences": 430
+    },
+    {
+      "code": 65408,
+      "character": "ﾀ",
+      "name": "HALFWIDTH KATAKANA LETTER TA",
+      "occurrences": 1040
+    },
+    {
+      "code": 65409,
+      "character": "ﾁ",
+      "name": "HALFWIDTH KATAKANA LETTER TI",
+      "occurrences": 1331
+    },
+    {
+      "code": 65410,
+      "character": "ﾂ",
+      "name": "HALFWIDTH KATAKANA LETTER TU",
+      "occurrences": 151
+    },
+    {
+      "code": 65411,
+      "character": "ﾃ",
+      "name": "HALFWIDTH KATAKANA LETTER TE",
+      "occurrences": 630
+    },
+    {
+      "code": 65412,
+      "character": "ﾄ",
+      "name": "HALFWIDTH KATAKANA LETTER TO",
+      "occurrences": 936
+    },
+    {
+      "code": 65413,
+      "character": "ﾅ",
+      "name": "HALFWIDTH KATAKANA LETTER NA",
+      "occurrences": 603
+    },
+    {
+      "code": 65414,
+      "character": "ﾆ",
+      "name": "HALFWIDTH KATAKANA LETTER NI",
+      "occurrences": 742
+    },
+    {
+      "code": 65415,
+      "character": "ﾇ",
+      "name": "HALFWIDTH KATAKANA LETTER NU",
+      "occurrences": 52
+    },
+    {
+      "code": 65416,
+      "character": "ﾈ",
+      "name": "HALFWIDTH KATAKANA LETTER NE",
+      "occurrences": 334
     },
     {
       "code": 65417,
       "character": "ﾉ",
       "name": "HALFWIDTH KATAKANA LETTER NO",
-      "occurrences": 65
+      "occurrences": 4343
     },
     {
       "code": 65418,
       "character": "ﾊ",
       "name": "HALFWIDTH KATAKANA LETTER HA",
-      "occurrences": 2
+      "occurrences": 1804
+    },
+    {
+      "code": 65419,
+      "character": "ﾋ",
+      "name": "HALFWIDTH KATAKANA LETTER HI",
+      "occurrences": 363
+    },
+    {
+      "code": 65420,
+      "character": "ﾌ",
+      "name": "HALFWIDTH KATAKANA LETTER HU",
+      "occurrences": 1737
     },
     {
       "code": 65421,
       "character": "ﾍ",
       "name": "HALFWIDTH KATAKANA LETTER HE",
-      "occurrences": 1
+      "occurrences": 754
+    },
+    {
+      "code": 65422,
+      "character": "ﾎ",
+      "name": "HALFWIDTH KATAKANA LETTER HO",
+      "occurrences": 715
+    },
+    {
+      "code": 65423,
+      "character": "ﾏ",
+      "name": "HALFWIDTH KATAKANA LETTER MA",
+      "occurrences": 433
     },
     {
       "code": 65424,
       "character": "ﾐ",
       "name": "HALFWIDTH KATAKANA LETTER MI",
-      "occurrences": 4
+      "occurrences": 319
+    },
+    {
+      "code": 65425,
+      "character": "ﾑ",
+      "name": "HALFWIDTH KATAKANA LETTER MU",
+      "occurrences": 787
     },
     {
       "code": 65426,
       "character": "ﾒ",
       "name": "HALFWIDTH KATAKANA LETTER ME",
-      "occurrences": 8
+      "occurrences": 277
+    },
+    {
+      "code": 65427,
+      "character": "ﾓ",
+      "name": "HALFWIDTH KATAKANA LETTER MO",
+      "occurrences": 491
+    },
+    {
+      "code": 65428,
+      "character": "ﾔ",
+      "name": "HALFWIDTH KATAKANA LETTER YA",
+      "occurrences": 627
+    },
+    {
+      "code": 65430,
+      "character": "ﾖ",
+      "name": "HALFWIDTH KATAKANA LETTER YO",
+      "occurrences": 511
+    },
+    {
+      "code": 65431,
+      "character": "ﾗ",
+      "name": "HALFWIDTH KATAKANA LETTER RA",
+      "occurrences": 1028
+    },
+    {
+      "code": 65432,
+      "character": "ﾘ",
+      "name": "HALFWIDTH KATAKANA LETTER RI",
+      "occurrences": 784
+    },
+    {
+      "code": 65433,
+      "character": "ﾙ",
+      "name": "HALFWIDTH KATAKANA LETTER RU",
+      "occurrences": 487
+    },
+    {
+      "code": 65434,
+      "character": "ﾚ",
+      "name": "HALFWIDTH KATAKANA LETTER RE",
+      "occurrences": 259
     },
     {
       "code": 65435,
       "character": "ﾛ",
       "name": "HALFWIDTH KATAKANA LETTER RO",
-      "occurrences": 6
+      "occurrences": 677
+    },
+    {
+      "code": 65436,
+      "character": "ﾜ",
+      "name": "HALFWIDTH KATAKANA LETTER WA",
+      "occurrences": 1004
+    },
+    {
+      "code": 65437,
+      "character": "ﾝ",
+      "name": "HALFWIDTH KATAKANA LETTER N",
+      "occurrences": 2576
     },
     {
       "code": 65438,
       "character": "ﾞ",
       "name": "HALFWIDTH KATAKANA VOICED SOUND MARK",
-      "occurrences": 8
+      "occurrences": 5214
     },
     {
       "code": 65439,
       "character": "ﾟ",
       "name": "HALFWIDTH KATAKANA SEMI-VOICED SOUND MARK",
-      "occurrences": 50
+      "occurrences": 7564
     },
     {
       "code": 65506,
       "character": "￢",
       "name": "FULLWIDTH NOT SIGN",
-      "occurrences": 12
+      "occurrences": 63
     },
     {
       "code": 65507,
       "character": "￣",
       "name": "FULLWIDTH MACRON",
-      "occurrences": 218
+      "occurrences": 1882
+    },
+    {
+      "code": 65513,
+      "character": "￩",
+      "name": "HALFWIDTH LEFTWARDS ARROW",
+      "occurrences": 6
+    },
+    {
+      "code": 65515,
+      "character": "￫",
+      "name": "HALFWIDTH RIGHTWARDS ARROW",
+      "occurrences": 8
+    },
+    {
+      "code": 119056,
+      "character": "𝄐",
+      "name": "MUSICAL SYMBOL FERMATA",
+      "occurrences": 58
+    },
+    {
+      "code": 127744,
+      "character": "🌀",
+      "name": "CYCLONE",
+      "occurrences": 28
+    },
+    {
+      "code": 127752,
+      "character": "🌈",
+      "name": "RAINBOW",
+      "occurrences": 44
+    },
+    {
+      "code": 127769,
+      "character": "🌙",
+      "name": "CRESCENT MOON",
+      "occurrences": 52
+    },
+    {
+      "code": 127775,
+      "character": "🌟",
+      "name": "GLOWING STAR",
+      "occurrences": 165
+    },
+    {
+      "code": 127783,
+      "character": "🌧",
+      "name": "CLOUD WITH RAIN",
+      "occurrences": 6
+    },
+    {
+      "code": 127793,
+      "character": "🌱",
+      "name": "SEEDLING",
+      "occurrences": 79
+    },
+    {
+      "code": 127799,
+      "character": "🌷",
+      "name": "TULIP",
+      "occurrences": 38
+    },
+    {
+      "code": 127800,
+      "character": "🌸",
+      "name": "CHERRY BLOSSOM",
+      "occurrences": 232
+    },
+    {
+      "code": 127801,
+      "character": "🌹",
+      "name": "ROSE",
+      "occurrences": 60
+    },
+    {
+      "code": 127803,
+      "character": "🌻",
+      "name": "SUNFLOWER",
+      "occurrences": 19
+    },
+    {
+      "code": 127807,
+      "character": "🌿",
+      "name": "HERB",
+      "occurrences": 48
+    },
+    {
+      "code": 127808,
+      "character": "🍀",
+      "name": "FOUR LEAF CLOVER",
+      "occurrences": 32
+    },
+    {
+      "code": 127809,
+      "character": "🍁",
+      "name": "MAPLE LEAF",
+      "occurrences": 51
+    },
+    {
+      "code": 127826,
+      "character": "🍒",
+      "name": "CHERRIES",
+      "occurrences": 6
+    },
+    {
+      "code": 127827,
+      "character": "🍓",
+      "name": "STRAWBERRY",
+      "occurrences": 13
+    },
+    {
+      "code": 127833,
+      "character": "🍙",
+      "name": "RICE BALL",
+      "occurrences": 34
+    },
+    {
+      "code": 127836,
+      "character": "🍜",
+      "name": "STEAMING BOWL",
+      "occurrences": 91
+    },
+    {
+      "code": 127841,
+      "character": "🍡",
+      "name": "DANGO",
+      "occurrences": 17
+    },
+    {
+      "code": 127848,
+      "character": "🍨",
+      "name": "ICE CREAM",
+      "occurrences": 4
+    },
+    {
+      "code": 127851,
+      "character": "🍫",
+      "name": "CHOCOLATE BAR",
+      "occurrences": 53
+    },
+    {
+      "code": 127856,
+      "character": "🍰",
+      "name": "SHORTCAKE",
+      "occurrences": 26
+    },
+    {
+      "code": 127861,
+      "character": "🍵",
+      "name": "TEACUP WITHOUT HANDLE",
+      "occurrences": 89
+    },
+    {
+      "code": 127872,
+      "character": "🎀",
+      "name": "RIBBON",
+      "occurrences": 217
+    },
+    {
+      "code": 127875,
+      "character": "🎃",
+      "name": "JACK-O-LANTERN",
+      "occurrences": 76
+    },
+    {
+      "code": 127878,
+      "character": "🎆",
+      "name": "FIREWORKS",
+      "occurrences": 78
+    },
+    {
+      "code": 127881,
+      "character": "🎉",
+      "name": "PARTY POPPER",
+      "occurrences": 109
+    },
+    {
+      "code": 127882,
+      "character": "🎊",
+      "name": "CONFETTI BALL",
+      "occurrences": 58
+    },
+    {
+      "code": 127908,
+      "character": "🎤",
+      "name": "MICROPHONE",
+      "occurrences": 6
     },
     {
       "code": 127918,
       "character": "🎮",
       "name": "VIDEO GAME",
-      "occurrences": 2
+      "occurrences": 7
+    },
+    {
+      "code": 127925,
+      "character": "🎵",
+      "name": "MUSICAL NOTE",
+      "occurrences": 73
+    },
+    {
+      "code": 127926,
+      "character": "🎶",
+      "name": "MULTIPLE MUSICAL NOTES",
+      "occurrences": 38
+    },
+    {
+      "code": 127995,
+      "character": "🏻",
+      "name": "EMOJI MODIFIER FITZPATRICK TYPE-1-2",
+      "occurrences": 118
+    },
+    {
+      "code": 128008,
+      "character": "🐈",
+      "name": "CAT",
+      "occurrences": 5
+    },
+    {
+      "code": 128025,
+      "character": "🐙",
+      "name": "OCTOPUS",
+      "occurrences": 69
+    },
+    {
+      "code": 128048,
+      "character": "🐰",
+      "name": "RABBIT FACE",
+      "occurrences": 39
+    },
+    {
+      "code": 128049,
+      "character": "🐱",
+      "name": "CAT FACE",
+      "occurrences": 29
+    },
+    {
+      "code": 128054,
+      "character": "🐶",
+      "name": "DOG FACE",
+      "occurrences": 11
+    },
+    {
+      "code": 128055,
+      "character": "🐷",
+      "name": "PIG FACE",
+      "occurrences": 16
+    },
+    {
+      "code": 128057,
+      "character": "🐹",
+      "name": "HAMSTER FACE",
+      "occurrences": 11
+    },
+    {
+      "code": 128059,
+      "character": "🐻",
+      "name": "BEAR FACE",
+      "occurrences": 9
+    },
+    {
+      "code": 128061,
+      "character": "🐽",
+      "name": "PIG NOSE",
+      "occurrences": 52
+    },
+    {
+      "code": 128062,
+      "character": "🐾",
+      "name": "PAW PRINTS",
+      "occurrences": 54
+    },
+    {
+      "code": 128064,
+      "character": "👀",
+      "name": "EYES",
+      "occurrences": 32
+    },
+    {
+      "code": 128065,
+      "character": "👁",
+      "name": "EYE",
+      "occurrences": 33
+    },
+    {
+      "code": 128075,
+      "character": "👋",
+      "name": "WAVING HAND SIGN",
+      "occurrences": 54
+    },
+    {
+      "code": 128077,
+      "character": "👍",
+      "name": "THUMBS UP SIGN",
+      "occurrences": 30
+    },
+    {
+      "code": 128149,
+      "character": "💕",
+      "name": "TWO HEARTS",
+      "occurrences": 249
+    },
+    {
+      "code": 128150,
+      "character": "💖",
+      "name": "SPARKLING HEART",
+      "occurrences": 87
+    },
+    {
+      "code": 128151,
+      "character": "💗",
+      "name": "GROWING HEART",
+      "occurrences": 87
+    },
+    {
+      "code": 128152,
+      "character": "💘",
+      "name": "HEART WITH ARROW",
+      "occurrences": 13
+    },
+    {
+      "code": 128155,
+      "character": "💛",
+      "name": "YELLOW HEART",
+      "occurrences": 11
+    },
+    {
+      "code": 128162,
+      "character": "💢",
+      "name": "ANGER SYMBOL",
+      "occurrences": 203
+    },
+    {
+      "code": 128163,
+      "character": "💣",
+      "name": "BOMB",
+      "occurrences": 56
+    },
+    {
+      "code": 128164,
+      "character": "💤",
+      "name": "SLEEPING SYMBOL",
+      "occurrences": 46
+    },
+    {
+      "code": 128165,
+      "character": "💥",
+      "name": "COLLISION SYMBOL",
+      "occurrences": 209
+    },
+    {
+      "code": 128166,
+      "character": "💦",
+      "name": "SPLASHING SWEAT SYMBOL",
+      "occurrences": 352
+    },
+    {
+      "code": 128167,
+      "character": "💧",
+      "name": "DROPLET",
+      "occurrences": 115
+    },
+    {
+      "code": 128168,
+      "character": "💨",
+      "name": "DASH SYMBOL",
+      "occurrences": 144
+    },
+    {
+      "code": 128170,
+      "character": "💪",
+      "name": "FLEXED BICEPS",
+      "occurrences": 297
+    },
+    {
+      "code": 128171,
+      "character": "💫",
+      "name": "DIZZY SYMBOL",
+      "occurrences": 202
+    },
+    {
+      "code": 128173,
+      "character": "💭",
+      "name": "THOUGHT BALLOON",
+      "occurrences": 104
+    },
+    {
+      "code": 128227,
+      "character": "📣",
+      "name": "CHEERING MEGAPHONE",
+      "occurrences": 6
+    },
+    {
+      "code": 128293,
+      "character": "🔥",
+      "name": "FIRE",
+      "occurrences": 125
+    },
+    {
+      "code": 128405,
+      "character": "🖕",
+      "name": "REVERSED HAND WITH MIDDLE FINGER EXTENDED",
+      "occurrences": 50
+    },
+    {
+      "code": 128523,
+      "character": "😋",
+      "name": "FACE SAVOURING DELICIOUS FOOD",
+      "occurrences": 3
+    },
+    {
+      "code": 128546,
+      "character": "😢",
+      "name": "CRYING FACE",
+      "occurrences": 29
+    },
+    {
+      "code": 128548,
+      "character": "😤",
+      "name": "FACE WITH LOOK OF TRIUMPH",
+      "occurrences": 52
+    },
+    {
+      "code": 128557,
+      "character": "😭",
+      "name": "LOUDLY CRYING FACE",
+      "occurrences": 29
+    },
+    {
+      "code": 128562,
+      "character": "😲",
+      "name": "ASTONISHED FACE",
+      "occurrences": 9
+    },
+    {
+      "code": 128563,
+      "character": "😳",
+      "name": "FLUSHED FACE",
+      "occurrences": 7
+    },
+    {
+      "code": 128564,
+      "character": "😴",
+      "name": "SLEEPING FACE",
+      "occurrences": 9
+    },
+    {
+      "code": 128588,
+      "character": "🙌",
+      "name": "PERSON RAISING BOTH HANDS IN CELEBRATION",
+      "occurrences": 8
+    },
+    {
+      "code": 128652,
+      "character": "🚌",
+      "name": "BUS",
+      "occurrences": 72
+    },
+    {
+      "code": 128681,
+      "character": "🚩",
+      "name": "TRIANGULAR FLAG ON POST",
+      "occurrences": 1
+    },
+    {
+      "code": 129293,
+      "character": "🤍",
+      "name": "WHITE HEART",
+      "occurrences": 13
+    },
+    {
+      "code": 129724,
+      "character": "🪼",
+      "name": "JELLYFISH",
+      "occurrences": 127
     }
-  ]
+  ],
+  "expandedCorpusAudit": {
+    "validSamples": 41560,
+    "excludedMalformedSamples": 36,
+    "fullyCoveredBefore": 27265,
+    "fullyCoveredAfter": 35283,
+    "remainingIncompleteSamples": 6277
+  }
 }
