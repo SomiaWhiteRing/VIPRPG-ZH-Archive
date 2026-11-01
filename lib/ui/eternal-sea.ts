@@ -16,7 +16,7 @@ export function seaTextLeft(side: SeaDialogueSide) {
   return side === "right" ? 8 : 80;
 }
 
-const glyphs = new Map(glyphData.map(([code, width], index) => [code, { width, index }]));
+const glyphs = new Map(glyphData.map(([code, width, advance = width], index) => [code, { width, advance, index }]));
 
 export function seaGlyph(character: string) {
   return glyphs.get(character.codePointAt(0) ?? 65533) ?? glyphs.get(65533)!;
@@ -25,11 +25,11 @@ export function seaGlyph(character: string) {
 export function seaDisplayName(name: string) {
   const characters = Array.from(name);
   const maxWidth = SEA_TEXT_WIDTH - seaGlyph("：").width;
-  if (characters.reduce((width, character) => width + seaGlyph(character).width, 0) <= maxWidth) return name;
+  if (characters.reduce((width, character) => width + seaGlyph(character).advance, 0) <= maxWidth) return name;
   let result = "";
   let width = seaGlyph("…").width;
   for (const character of characters) {
-    width += seaGlyph(character).width;
+    width += seaGlyph(character).advance;
     if (width > maxWidth) break;
     result += character;
   }
@@ -42,21 +42,33 @@ function layoutSeaText(text: string, indentContinuation = false) {
   const lineIndent = indentContinuation ? "　" : "";
   const indentWidth = indentContinuation ? seaGlyph(lineIndent).width : 0;
   let width = 0;
+  let previous: SeaGlyph | undefined;
   for (const character of text) {
     if (character === "\n") {
       placements.push({ character, x: width, row: lines.length - 1, width: 0 });
       lines.push(lineIndent);
       width = indentWidth;
+      previous = undefined;
       continue;
     }
     const glyph = seaGlyph(character);
-    if (width + glyph.width > SEA_TEXT_WIDTH) {
+    if (glyph.advance === 0) {
+      // Combining marks keep their ink width but share the preceding cell.
+      // Double marks span the boundary between that cell and the next.
+      if (glyph.width > 0) placements.push({ character,
+        x: previous ? previous.x + ("͜͟͠͡".includes(character) ? previous.width - glyph.width / 2 : Math.floor((previous.width - glyph.width) / 2)) : width,
+        row: previous?.row ?? lines.length - 1, width: glyph.width });
+      lines[lines.length - 1] += character;
+      continue;
+    }
+    if (width + glyph.advance > SEA_TEXT_WIDTH) {
       lines.push(lineIndent);
       width = indentWidth;
     }
-    placements.push({ character, x: width, row: lines.length - 1, width: glyph.width });
+    previous = { character, x: width, row: lines.length - 1, width: glyph.width };
+    placements.push(previous);
     lines[lines.length - 1] += character;
-    width += glyph.width;
+    width += glyph.advance;
   }
   return { lines, placements };
 }
@@ -64,7 +76,7 @@ function layoutSeaText(text: string, indentContinuation = false) {
 function layoutSeaBody(body: string) {
   const normalized = body.replace(/\r\n?/g, "\n");
   const layout = layoutSeaText(`「${normalized}」`, true);
-  const units = Array.from(normalized).reduce((total, character) => total + (character === "\n" ? 0 : seaGlyph(character).width / 6), 0);
+  const units = Array.from(normalized).reduce((total, character) => total + (character === "\n" ? 0 : seaGlyph(character).advance / 6), 0);
   return { ...layout, units, fits: layout.lines.length <= SEA_MAX_BODY_LINES && units <= SEA_MAX_BODY_UNITS };
 }
 

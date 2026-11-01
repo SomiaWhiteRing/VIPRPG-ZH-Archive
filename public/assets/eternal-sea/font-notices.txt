@@ -1713,3 +1713,7 @@ Public License instead of this License.
    202	  6d53  (27987):  ��
    203	  704d  (28749):  ��
    204	  706e  (28782):  ��
+
+--- Eternal Sea Pixel Symbols ---
+Original hand-drawn 12px bitmap glyphs for this project.
+Source: lib/ui/eternal-sea-font-supplement.json

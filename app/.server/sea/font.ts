@@ -8,6 +8,7 @@ import { base64UrlDecodeBytes } from "@/app/.server/crypto/encoding";
 const DAY = 86400000;
 const OFFSET = 5 * 3600000; // Hong Kong 03:00 = UTC 19:00 on the previous day.
 const FIRST_CHARACTER = 0x3400;
+export const SEA_FONT_GLYPH_COUNT = glyphs.length;
 export type SeaFontState = { day: number; id: string; order: Uint16Array };
 export type SeaOriginalMessage = Omit<SeaMessage, "glyphs">;
 

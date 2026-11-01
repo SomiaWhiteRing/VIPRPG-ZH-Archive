@@ -23,7 +23,8 @@ def main():
     names = [".notdef"] + [f"g{i}" for i in range(len(metadata))]
     outlines = {".notdef": TTGlyphPen(None).glyph()}
     advances = {".notdef": 1200}
-    for index, (_, width) in enumerate(metadata):
+    for index, entry in enumerate(metadata):
+        width = entry[1]
         pen = TTGlyphPen(None)
         ax, ay = index % 128 * 14, index // 128 * 14
         for y in range(12):
@@ -49,14 +50,14 @@ def main():
 
     builder = FontBuilder(1200, isTTF=True)
     builder.setupGlyphOrder(names)
-    builder.setupCharacterMap({code: names[i + 1] for i, (code, _) in enumerate(metadata)})
+    builder.setupCharacterMap({entry[0]: names[i + 1] for i, entry in enumerate(metadata)})
     builder.setupGlyf(outlines)
     builder.setupHorizontalMetrics({name: (advance, getattr(outlines[name], "xMin", 0)) for name, advance in advances.items()})
     builder.setupHorizontalHeader(ascent=1200, descent=0)
     builder.setupNameTable({
         "familyName": "Eternal Sea", "styleName": "Regular", "fullName": "Eternal Sea",
         "psName": "EternalSea", "uniqueFontIdentifier": "EternalSea-1", "version": "Version 1.0",
-        "copyright": "WenQuanYi / Shinonome; see /assets/eternal-sea/font-notices.txt",
+        "copyright": "WenQuanYi / Shinonome / Eternal Sea Pixel Symbols; see /assets/eternal-sea/font-notices.txt",
     })
     builder.setupOS2(sTypoAscender=1200, sTypoDescender=0, sTypoLineGap=0,
                      usWinAscent=1200, usWinDescent=0, fsType=0)

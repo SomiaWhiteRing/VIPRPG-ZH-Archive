@@ -19,5 +19,14 @@
     "faceset/主人公1.png": "eb67da5cb54157d1dd5072cd5860caaa590a83a566ec155159142eea41762e4d",
     "shinonome_gothic.h": "0b3867bd0f98b53599d1ba2e6d0b6da1011ce40a7dfe479e81b4c4cd0de70da6",
     "bitmapfont_wqy.h": "ee8bfef755b78ba6bac2d89750dce90cafee6eae2cd297b08d122bcccc15a993"
+  },
+  "fontSupplement": {
+    "name": "Eternal Sea Pixel Symbols",
+    "source": "lib/ui/eternal-sea-font-supplement.json",
+    "design": "Original hand-drawn 12px bitmap glyphs",
+    "characters": 186,
+    "sizes": [
+      12
+    ]
   }
 }

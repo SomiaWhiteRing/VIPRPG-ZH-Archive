@@ -15,6 +15,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public/assets/eternal-sea"
 GLYPHS = ROOT / "lib/ui/eternal-sea-glyphs.json"
+SUPPLEMENT = ROOT / "lib/ui/eternal-sea-font-supplement.json"
 
 
 def bitmap_font(path):
@@ -79,6 +80,25 @@ def main():
     font.update(bitmap_font(generated / "bitmapfont_wqy.h"))
     font[65533] = (12, [96, 240, 504, 924, 1902, 3967, 4031, 1982, 1020, 440, 240, 96])
     ordered = sorted(font.items())
+    # Append rather than sort into the base font: yesterday's shuffled cmap
+    # must continue addressing the same base glyph IDs after an update.
+    supplement = json.loads(SUPPLEMENT.read_text(encoding="utf-8"))
+    advances = {}
+    for glyph in supplement:
+        code, rows = glyph["code"], glyph["pixels"]
+        width = len(rows[0])
+        if code in font or len(rows) != 12 or width not in (0, 6, 12) or any(
+            len(row) != width or set(row) - {".", "#"} for row in rows
+        ) or glyph["advance"] not in (0, width):
+            raise ValueError(f"Invalid supplemental glyph: U+{code:04X}")
+        bits = [sum(1 << x for x, pixel in enumerate(row) if pixel == "#") for row in rows]
+        font[code] = (width, bits)
+        ordered.append((code, (width, bits)))
+        advances[code] = glyph["advance"]
+    provenance["fontSupplement"] = {
+        "name": "Eternal Sea Pixel Symbols", "source": "lib/ui/eternal-sea-font-supplement.json",
+        "design": "Original hand-drawn 12px bitmap glyphs", "characters": len(supplement), "sizes": [12],
+    }
     atlas = Image.new("RGBA", (128 * 14, ((len(ordered) + 127) // 128) * 14))
     palette = system.convert("RGBA")
     pixels = atlas.load()
@@ -86,7 +106,8 @@ def main():
     for index, (code, (width, bits)) in enumerate(ordered):
         if len(bits) != 12:
             raise ValueError("Unexpected bitmap glyph height")
-        metadata.append([code, width])
+        advance = advances.get(code, width)
+        metadata.append([code, width] if advance == width else [code, width, advance])
         ax, ay = (index % 128) * 14, (index // 128) * 14
         # Font::RenderImpl: the shadow starts at System(16,32), the default
         # 12px text color starts at System(2,52), with a (1,1) shadow offset.
@@ -105,6 +126,8 @@ def main():
     notices = "EasyRPG CP936 bitmap font resources\n\nSources: https://github.com/EasyRPG/Player/tree/master/resources\n\n"
     for name in ["wenquanyi/README", "wenquanyi/doc/AUTHORS", "wenquanyi/doc/COPYING", "shinonome/AUTHORS"]:
         notices += f"\n--- {name} ---\n" + (args.player / "resources" / name).read_text(encoding="utf-8", errors="replace")
+    notices += "\n--- Eternal Sea Pixel Symbols ---\nOriginal hand-drawn 12px bitmap glyphs for this project.\n"
+    notices += "Source: lib/ui/eternal-sea-font-supplement.json\n"
     notices = "\n".join(line.rstrip() for line in notices.splitlines()) + "\n"
     (PUBLIC / "font-notices.txt").write_text(notices, encoding="utf-8")
     (PUBLIC / "sources.json").write_text(json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

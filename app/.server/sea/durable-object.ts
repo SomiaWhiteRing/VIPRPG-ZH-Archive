@@ -3,7 +3,7 @@ import { SEA_ROOM_LIMIT, type SeaAvatarMode, type SeaEvent, type SeaMessage, typ
 import { getUserAvatarSrc } from "@/lib/user-profile";
 import { layoutSeaDialogue } from "@/lib/ui/eternal-sea";
 import type { SeaActor } from "./identity";
-import { createSeaFontState, seaFontCodec, seaFontDay, seaFontDeadline, type SeaFontState, type SeaOriginalMessage } from "./font";
+import { createSeaFontState, seaFontCodec, seaFontDay, seaFontDeadline, SEA_FONT_GLYPH_COUNT, type SeaFontState, type SeaOriginalMessage } from "./font";
 
 type Row = { id: number; actor_key: string; user_id: number | null; name: string; body: string; avatar_mode: SeaAvatarMode; created_at: number; hidden_at: number | null };
 type Profile = { id: number; display_name: string; avatar_blob_sha256: string | null; status: string };
@@ -40,8 +40,9 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     const day = seaFontDay(Date.now());
     if (this.fontsTask?.day !== day) {
       const task = this.ctx.storage.get<{ current: SeaFontState; previous?: SeaFontState }>("fonts").then(async stored => {
-        if (stored?.current.day !== day) {
-          stored = { current: createSeaFontState(day), previous: stored?.current.day === day - 1 ? stored.current : undefined };
+        if (stored?.current.day !== day || stored.current.order.length !== SEA_FONT_GLYPH_COUNT) {
+          stored = { current: createSeaFontState(day),
+            previous: stored && (stored.current.day === day || stored.current.day === day - 1) ? stored.current : undefined };
           await this.ctx.storage.put("fonts", stored);
           this.advance();
         }
