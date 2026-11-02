@@ -5,7 +5,7 @@ import { layoutSeaDialogue } from "@/lib/ui/eternal-sea";
 import type { SeaActor } from "./identity";
 import { createSeaFontState, seaFontCodec, seaFontDay, seaFontDeadline, SEA_FONT_GLYPH_COUNT, type SeaFontState, type SeaOriginalMessage } from "./font";
 
-type Row = { id: number; actor_key: string; ip_key: string | null; user_id: number | null; name: string; body: string; avatar_mode: SeaAvatarMode; created_at: number; hidden_at: number | null };
+type Row = { id: number; actor_key: string; ip_key: string | null; user_id: number | null; name: string; body: string; avatar_mode: SeaAvatarMode; avatar_blob_sha256: string | null; created_at: number; hidden_at: number | null };
 type Profile = { id: number; display_name: string; avatar_blob_sha256: string | null; status: string };
 type Fault = { ok: false; status: number; detail: string; code: string };
 type Published = { ok: true; revision: number; font: SeaWindow["font"]; message: SeaMessage; repeated: boolean };
@@ -32,7 +32,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     `);
     // Existing rooms retain their messages and identity mutes during this additive upgrade.
     for (const [table, columns] of [
-      ["messages", [["ip_key", "TEXT"]]],
+      ["messages", [["ip_key", "TEXT"], ["avatar_blob_sha256", "TEXT"]]],
       ["moderation_log", [["scope", "TEXT NOT NULL DEFAULT 'identity'"], ["reason", "TEXT NOT NULL DEFAULT ''"]]],
     ] as const) {
       const existing = new Set(ctx.storage.sql.exec<{ name: string }>(`PRAGMA table_info(${table})`).toArray().map(column => column.name));
@@ -41,6 +41,26 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       }
     }
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    ctx.blockConcurrencyWhile(async () => {
+      if (await ctx.storage.get<boolean>("avatar-snapshots-backfilled")) return;
+      // Old messages have no avatar snapshot. Capture current avatars once,
+      // in bounded batches, before serving messages or accepting new posts.
+      let after = 0;
+      while (true) {
+        const rows = ctx.storage.sql.exec<Row>("SELECT * FROM messages WHERE id>? AND avatar_mode='own' ORDER BY id LIMIT ?", after, SEA_ROOM_LIMIT).toArray();
+        if (!rows.length) break;
+        const users = await this.profiles(rows);
+        ctx.storage.transactionSync(() => {
+          for (const row of rows) {
+            const user = users.get(row.user_id!);
+            ctx.storage.sql.exec("UPDATE messages SET avatar_blob_sha256=? WHERE id=?", user?.avatar_blob_sha256 ?? null, row.id);
+          }
+        });
+        after = rows[rows.length - 1].id;
+      }
+      await ctx.storage.put("avatar-snapshots-backfilled", true);
+      this.advance();
+    });
   }
 
   private revision() {
@@ -84,23 +104,21 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       : [];
     return new Map(profiles.map(user => [user.id, user]));
   }
-  private decorate(rows: Row[], users: Map<number, Profile>): SeaOriginalMessage[] {
+  private decorate(rows: Row[]): SeaOriginalMessage[] {
     return rows.map(row => {
-      const user = row.user_id === null ? undefined : users.get(row.user_id);
       return {
-        id: row.id, name: row.avatar_mode === "alex" ? "无名的VIPPER" : user?.status === "deleted" ? "账户已注销" : row.name,
+        id: row.id, name: row.avatar_mode === "alex" ? "无名的VIPPER" : row.name,
         body: row.body, faceIndex: 0,
-        avatarUrl: row.avatar_mode === "own" && user && user.status !== "deleted" ? getUserAvatarSrc(user.avatar_blob_sha256) : undefined,
+        avatarUrl: row.avatar_mode === "own" && row.avatar_blob_sha256 ? getUserAvatarSrc(row.avatar_blob_sha256) : undefined,
         side: row.id % 2 ? "left" : "right", createdAt: new Date(row.created_at).toISOString(),
       };
     });
   }
   async snapshot(): Promise<SeaWindow> {
     const { current } = await this.fonts();
-    // Capture the revision and rows before awaiting profile lookups.
     const revision = this.revision();
     const rows = this.ctx.storage.sql.exec<Row>("SELECT * FROM messages WHERE hidden_at IS NULL ORDER BY id DESC LIMIT ?", SEA_ROOM_LIMIT).toArray().reverse();
-    return { revision, font: current.font, messages: this.decorate(rows, await this.profiles(rows)).map(message => current.message(message)) };
+    return { revision, font: current.font, messages: this.decorate(rows).map(message => current.message(message)) };
   }
   private async socketSnapshot() {
     const { revision, messages } = await this.snapshot();
@@ -113,11 +131,12 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     const rows = this.ctx.storage.sql.exec<Row>("SELECT * FROM messages ORDER BY id DESC LIMIT ? OFFSET ?", SEA_ROOM_LIMIT, (page - 1) * SEA_ROOM_LIMIT).toArray();
     const users = await this.profiles(rows);
     return {
-      window: { revision, messages: this.decorate(rows, users).map((message, index) => {
+      window: { revision, messages: this.decorate(rows).map((message, index) => {
         const row = rows[index];
         const user = row.user_id === null ? undefined : users.get(row.user_id);
         return {
           ...message,
+          avatarUrl: user && user.status !== "deleted" ? getUserAvatarSrc(user.avatar_blob_sha256) : undefined,
           authorName: user?.status === "deleted" ? "账户已注销" : user?.display_name ?? row.name,
           authorAvatarBlobSha256: user && user.status !== "deleted" ? user.avatar_blob_sha256 : null,
           anonymous: row.avatar_mode === "alex",
@@ -158,12 +177,12 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
         this.ctx.storage.sql.exec(`INSERT INTO rates VALUES(?,?,1,?)
           ON CONFLICT(key) DO UPDATE SET count=CASE WHEN window=excluded.window THEN count+1 ELSE 1 END,window=excluded.window,last_sent=excluded.last_sent`, key, window, now);
       }
-      const id = this.ctx.storage.sql.exec<{ id: number }>("INSERT INTO messages(actor_key,ip_key,user_id,name,body,avatar_mode,client_message_id,created_at) VALUES(?,?,?,?,?,?,?,?) RETURNING id",
-        actor.key, actor.ipKey, actor.userId, actor.name, input.body, input.avatarMode, input.clientMessageId, now).one().id;
+      const id = this.ctx.storage.sql.exec<{ id: number }>("INSERT INTO messages(actor_key,ip_key,user_id,name,body,avatar_mode,avatar_blob_sha256,client_message_id,created_at) VALUES(?,?,?,?,?,?,?,?,?) RETURNING id",
+        actor.key, actor.ipKey, actor.userId, actor.name, input.body, input.avatarMode, input.avatarMode === "own" ? actor.avatarBlobSha256 : null, input.clientMessageId, now).one().id;
       return { row: this.row(id)!, revision: this.advance(), repeated: false };
     });
     if ("ok" in result) return result;
-    const message = current.message(this.decorate([result.row], await this.profiles([result.row]))[0]);
+    const message = current.message(this.decorate([result.row])[0]);
     if (!result.repeated) this.broadcast({ type: "message", revision: result.revision, message });
     return { ok: true, revision: result.revision, font: current.font, message, repeated: result.repeated };
   }
