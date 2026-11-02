@@ -392,7 +392,7 @@ function AdminDiscussionPanel({
           </div>
         ) : null}
         <div>
-          <Label htmlFor="admin-forum-reason">原因／内部备注</Label>
+          <Label htmlFor="admin-forum-reason">管理原因</Label>
           <Textarea
             id="admin-forum-reason"
             value={reason}

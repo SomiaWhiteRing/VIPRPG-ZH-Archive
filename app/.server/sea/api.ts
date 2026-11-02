@@ -53,10 +53,13 @@ seaApi.put("/api/sea/mutes", async c => {
   const runtime = c.get("runtime");
   const auth = await requirePermission(runtime, c.req.raw, "sea.user.mute_any");
   if ("response" in auth) return auth.response;
-  const body = await readJsonObject(c.req.raw, "禁言格式无效", { maximumBytes: 1024, requireJsonContentType: true });
+  const body = await readJsonObject(c.req.raw, "禁言格式无效", { maximumBytes: 4096, requireJsonContentType: true });
+  const scope = body.scope ?? "identity";
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
   if (typeof body.messageId !== "number" || !Number.isSafeInteger(body.messageId) || body.messageId <= 0
-    || typeof body.minutes !== "number" || !Number.isInteger(body.minutes) || body.minutes < 0 || body.minutes > 10080)
+    || (body.minutes !== null && (typeof body.minutes !== "number" || !Number.isInteger(body.minutes) || body.minutes < 0 || body.minutes > 5256000))
+    || (scope !== "identity" && scope !== "ip") || (body.reason !== undefined && typeof body.reason !== "string") || reason.length > 1000)
     throw new HttpError(400, "禁言参数无效");
-  if (!await seaRoom(runtime).mute(body.messageId, body.minutes, auth.user.id)) throw new HttpError(404, "对话不存在");
+  if (!await seaRoom(runtime).mute(body.messageId, body.minutes as number | null, auth.user.id, scope, reason)) throw new HttpError(404, "对话不存在或没有可用的来源记录");
   return json({ ok: true });
 });

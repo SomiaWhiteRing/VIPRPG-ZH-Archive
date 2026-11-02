@@ -200,15 +200,26 @@ export function ForumBody({
         return dice ? <span key={index} className={diceClassName} title="娱乐骰子：同一帖子、骰子位置和表达式的结果固定，刷新不重掷。"><Dice5 aria-hidden className="size-4 shrink-0" />{dice.notation}<span aria-hidden="true">→</span><strong className="min-w-0 wrap-anywhere text-primary">{dice.calculation}</strong></span>
           : <Fragment key={index}>[dice]{renderNodes(node.children, true)}[/dice]</Fragment>;
       }
-      const children = renderNodes(node.children, node.type === "code");
+      if (node.type === "url") {
+        const target = node.parameter ?? node.children.map((child) => child.type === "text" ? child.text : "").join("");
+        const link = autoLink(target);
+        if (!link || link.suffix) return <Fragment key={index}>[url{node.parameter ? `=${node.parameter}` : ""}]{renderNodes(node.children, true)}[/url]</Fragment>;
+        return <a key={index} className="text-primary underline" href={link.href} target="_blank" rel="nofollow ugc noopener noreferrer">{renderNodes(node.children, true)}</a>;
+      }
+      const children = renderNodes(node.children, literal || node.type === "code");
       switch (node.type) {
         case "b": return <strong key={index}>{children}</strong>;
         case "i": return <em key={index}>{children}</em>;
         case "u": return <u key={index}>{children}</u>;
+        case "s":
         case "del": return <s key={index}>{children}</s>;
         case "size": return <TextSize key={index} size={`${Number(node.parameter!.slice(0, -1)) * 0.009375}rem`}>{children}</TextSize>;
         case "quote": return <blockquote key={index} className="my-2 border-l-2 border-primary/40 pl-3 text-muted">{children}</blockquote>;
         case "code": return <code key={index} className="my-2 block rounded-md bg-muted/10 p-3 font-mono text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{children}</code>;
+        case "list": return <ul key={index} className="my-2 list-disc pl-6">{renderNodes(node.children.filter((child) => child.type !== "text" || child.text.trim()))}</ul>;
+        case "item": return <li key={index} className="whitespace-normal">{children}</li>;
+        case "hr": return <hr key={index} className="my-3 border-border" />;
+        case "spoiler":
         case "collapse": return <details key={index} className="my-2 rounded-md border border-border px-3 py-2"><summary className="cursor-pointer font-semibold focus-visible:outline-2 focus-visible:outline-primary">{node.parameter || "展开折叠内容"}</summary><div className="pt-2">{children}</div></details>;
       }
     });

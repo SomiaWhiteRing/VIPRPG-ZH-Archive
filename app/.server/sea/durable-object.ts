@@ -1,11 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
-import { SEA_ROOM_LIMIT, type SeaAvatarMode, type SeaEvent, type SeaMessage, type SeaModeration, type SeaSubmission, type SeaWindow } from "@/lib/dto/sea";
+import { SEA_ROOM_LIMIT, type SeaAvatarMode, type SeaEvent, type SeaMessage, type SeaModeration, type SeaMuteScope, type SeaSubmission, type SeaWindow } from "@/lib/dto/sea";
 import { getUserAvatarSrc } from "@/lib/user-profile";
 import { layoutSeaDialogue } from "@/lib/ui/eternal-sea";
 import type { SeaActor } from "./identity";
 import { createSeaFontState, seaFontCodec, seaFontDay, seaFontDeadline, SEA_FONT_GLYPH_COUNT, type SeaFontState, type SeaOriginalMessage } from "./font";
 
-type Row = { id: number; actor_key: string; user_id: number | null; name: string; body: string; avatar_mode: SeaAvatarMode; created_at: number; hidden_at: number | null };
+type Row = { id: number; actor_key: string; ip_key: string | null; user_id: number | null; name: string; body: string; avatar_mode: SeaAvatarMode; created_at: number; hidden_at: number | null };
 type Profile = { id: number; display_name: string; avatar_blob_sha256: string | null; status: string };
 type Fault = { ok: false; status: number; detail: string; code: string };
 type Published = { ok: true; revision: number; font: SeaWindow["font"]; message: SeaMessage; repeated: boolean };
@@ -30,6 +30,16 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       CREATE TABLE IF NOT EXISTS mutes (actor_key TEXT PRIMARY KEY, message_id INTEGER NOT NULL, name TEXT NOT NULL, until INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS moderation_log (id INTEGER PRIMARY KEY AUTOINCREMENT, operator_id INTEGER NOT NULL, action TEXT NOT NULL, message_id INTEGER NOT NULL, minutes INTEGER, created_at INTEGER NOT NULL);
     `);
+    // Existing rooms retain their messages and identity mutes during this additive upgrade.
+    for (const [table, columns] of [
+      ["messages", [["ip_key", "TEXT"]]],
+      ["moderation_log", [["scope", "TEXT NOT NULL DEFAULT 'identity'"], ["reason", "TEXT NOT NULL DEFAULT ''"]]],
+    ] as const) {
+      const existing = new Set(ctx.storage.sql.exec<{ name: string }>(`PRAGMA table_info(${table})`).toArray().map(column => column.name));
+      for (const [name, definition] of columns) {
+        if (!existing.has(name)) ctx.storage.sql.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+      }
+    }
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
 
@@ -112,11 +122,15 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
           authorAvatarBlobSha256: user && user.status !== "deleted" ? user.avatar_blob_sha256 : null,
           anonymous: row.avatar_mode === "alex",
           hiddenAt: row.hidden_at,
+          canMuteIp: row.ip_key !== null,
         };
       }) },
       page, total,
-      mutes: this.ctx.storage.sql.exec<{ message_id: number; name: string; until: number }>("SELECT message_id,name,until FROM mutes WHERE until>? ORDER BY until DESC", Date.now()).toArray()
-        .map(row => ({ messageId: row.message_id, name: row.name, until: row.until })),
+      mutes: this.ctx.storage.sql.exec<{ actor_key: string; message_id: number; name: string; until: number; reason: string }>(`SELECT m.actor_key,m.message_id,m.name,m.until,
+        COALESCE((SELECT reason FROM moderation_log l WHERE l.message_id=m.message_id AND l.action='mute'
+          AND l.scope=CASE WHEN m.actor_key LIKE 'ip:%' THEN 'ip' ELSE 'identity' END ORDER BY l.id DESC LIMIT 1),'') AS reason
+        FROM mutes m WHERE m.until=0 OR m.until>? ORDER BY m.until=0 DESC,m.until DESC`, Date.now()).toArray()
+        .map(row => ({ messageId: row.message_id, name: row.name, until: row.until, scope: row.actor_key.startsWith("ip:") ? "ip" : "identity", reason: row.reason })),
     };
   }
   async publish(actor: SeaActor, input: SeaSubmission): Promise<Published | Fault> {
@@ -130,7 +144,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
         if (old.body !== input.body || old.avatar_mode !== input.avatarMode) return fault(409, "同一次提交的内容发生变化", "sea_request_conflict");
         return { row: old, revision: this.revision(), repeated: true };
       }
-      if (this.ctx.storage.sql.exec("SELECT 1 FROM mutes WHERE actor_key=? AND until>?", actor.key, now).toArray().length)
+      if (this.ctx.storage.sql.exec("SELECT 1 FROM mutes WHERE actor_key IN (?,?) AND (until=0 OR until>?)", actor.key, `ip:${actor.ipKey}`, now).toArray().length)
         return fault(403, "当前身份暂时无法发言", "sea_muted");
       const window = Math.floor(now / 60000);
       for (const [key, maximum, interval] of [[actor.key, 20, 3000], [`ip:${actor.ipKey}`, 60, 0]] as const) {
@@ -139,13 +153,13 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
           return fault(429, "发言过于频繁，请稍后再试", "sea_rate_limited");
       }
       this.ctx.storage.sql.exec("DELETE FROM rates WHERE window<?", window - 2);
-      this.ctx.storage.sql.exec("DELETE FROM mutes WHERE until<=?", now);
+      this.ctx.storage.sql.exec("DELETE FROM mutes WHERE until<>0 AND until<=?", now);
       for (const key of [actor.key, `ip:${actor.ipKey}`]) {
         this.ctx.storage.sql.exec(`INSERT INTO rates VALUES(?,?,1,?)
           ON CONFLICT(key) DO UPDATE SET count=CASE WHEN window=excluded.window THEN count+1 ELSE 1 END,window=excluded.window,last_sent=excluded.last_sent`, key, window, now);
       }
-      const id = this.ctx.storage.sql.exec<{ id: number }>("INSERT INTO messages(actor_key,user_id,name,body,avatar_mode,client_message_id,created_at) VALUES(?,?,?,?,?,?,?) RETURNING id",
-        actor.key, actor.userId, actor.name, input.body, input.avatarMode, input.clientMessageId, now).one().id;
+      const id = this.ctx.storage.sql.exec<{ id: number }>("INSERT INTO messages(actor_key,ip_key,user_id,name,body,avatar_mode,client_message_id,created_at) VALUES(?,?,?,?,?,?,?,?) RETURNING id",
+        actor.key, actor.ipKey, actor.userId, actor.name, input.body, input.avatarMode, input.clientMessageId, now).one().id;
       return { row: this.row(id)!, revision: this.advance(), repeated: false };
     });
     if ("ok" in result) return result;
@@ -166,14 +180,16 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     if (found) this.broadcast(await this.socketSnapshot());
     return found;
   }
-  mute(id: number, minutes: number, operatorId: number) {
+  mute(id: number, minutes: number | null, operatorId: number, scope: SeaMuteScope = "identity", reason = "") {
     return this.ctx.storage.transactionSync(() => {
       const row = this.row(id);
       if (!row) return false;
-      if (!minutes) this.ctx.storage.sql.exec("DELETE FROM mutes WHERE actor_key=?", row.actor_key);
-      else this.ctx.storage.sql.exec("INSERT INTO mutes VALUES(?,?,?,?) ON CONFLICT(actor_key) DO UPDATE SET message_id=excluded.message_id,name=excluded.name,until=excluded.until",
-        row.actor_key, id, row.name, Date.now() + minutes * 60000);
-      this.ctx.storage.sql.exec("INSERT INTO moderation_log(operator_id,action,message_id,minutes,created_at) VALUES(?,'mute',?,?,?)", operatorId, id, minutes, Date.now());
+      if (scope === "ip" && !row.ip_key) return false;
+      const key = scope === "ip" ? `ip:${row.ip_key}` : row.actor_key;
+      if (minutes === 0) this.ctx.storage.sql.exec("DELETE FROM mutes WHERE actor_key=?", key);
+      else this.ctx.storage.sql.exec("INSERT INTO mutes(actor_key,message_id,name,until) VALUES(?,?,?,?) ON CONFLICT(actor_key) DO UPDATE SET message_id=excluded.message_id,name=excluded.name,until=excluded.until",
+        key, id, row.name, minutes === null ? 0 : Date.now() + minutes * 60000);
+      this.ctx.storage.sql.exec("INSERT INTO moderation_log(operator_id,action,message_id,minutes,created_at,scope,reason) VALUES(?,'mute',?,?,?,?,?)", operatorId, id, minutes, Date.now(), scope, reason);
       return true;
     });
   }

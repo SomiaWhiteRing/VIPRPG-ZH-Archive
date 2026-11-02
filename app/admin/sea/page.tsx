@@ -4,7 +4,7 @@ import { requireAnyPagePermission } from "@/app/.server/auth/authorize";
 import { runtimeContext } from "@/app/.server/router-context";
 import { seaRoom } from "@/app/.server/sea/service";
 import { hasPermission } from "@/lib/authz/permissions";
-import { SEA_ROOM_LIMIT, type SeaModeration } from "@/lib/dto/sea";
+import { SEA_ROOM_LIMIT, type SeaModeration, type SeaMuteScope } from "@/lib/dto/sea";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { Button } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/ui/page-header";
@@ -15,6 +15,11 @@ import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AdminListMeta } from "@/app/admin/admin-list-controls";
 import { useToast } from "@/app/components/ui/toast";
 import { requestJson } from "@/lib/ui/api-response";
+import * as Dialog from "@/app/components/ui/dialog";
+import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
+import { Textarea } from "@/app/components/ui/textarea";
+import { Checkbox } from "@/app/components/ui/checkbox";
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const runtime = context.get(runtimeContext);
@@ -31,7 +36,15 @@ export default function SeaModerationPage() {
   const { initial, canHide, canMute } = useLoaderData<typeof loader>();
   const [view, setView] = useState<SeaModeration>(initial);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<{
+    messageId: number; name: string; scope: SeaMuteScope; date: string; permanent: boolean; reason: string;
+  } | null>(null);
   const toast = useToast();
+  function editMute(messageId: number, name: string, scope: SeaMuteScope, until = Date.now() + 30 * 60000, reason = "") {
+    const date = new Date(until || Date.now() + 30 * 60000);
+    setEditing({ messageId, name, scope, permanent: until === 0, reason,
+      date: new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) });
+  }
   async function update(page = view.page, url?: string, method?: string, body?: unknown) {
     if (busy) return;
     setBusy(true);
@@ -41,6 +54,7 @@ export default function SeaModerationPage() {
       }
       setView(await requestJson<SeaModeration>(`/api/sea/moderation?page=${page}`, { cache: "no-store" }, "无法读取聊天室"));
       if (url) toast.success("已更新");
+      return true;
     } catch (error) { toast.error(error instanceof Error ? error.message : "操作失败"); }
     finally { setBusy(false); }
   }
@@ -64,18 +78,48 @@ export default function SeaModerationPage() {
           </td>
           <td className="admin-action-column"><div className="flex items-center justify-end gap-1">
             {canHide && <Button size="sm" variant="outline" className="min-h-8 px-2 text-xs" disabled={busy || message.hiddenAt !== null} onClick={() => void update(view.page, `/api/sea/messages/${message.id}`, "DELETE")}>隐藏</Button>}
-            {canMute && <Button size="sm" variant="outline" className="min-h-8 px-2 text-xs" disabled={busy} onClick={() => void update(view.page, "/api/sea/mutes", "PUT", { messageId: message.id, minutes: 30 })}>禁言 30 分钟</Button>}
+            {canMute && <>
+              <Button size="sm" variant="outline" className="min-h-8 px-2 text-xs" disabled={busy} onClick={() => editMute(message.id, message.authorName, "identity")}>禁言</Button>
+              <Button size="sm" variant="outline" className="min-h-8 px-2 text-xs" disabled={busy || !message.canMuteIp} onClick={() => editMute(message.id, message.authorName, "ip")}>IP 禁言</Button>
+            </>}
           </div></td>
         </tr>)}</tbody>
       </TableWrap> : <EmptyState title="暂无发言。" />}
     <PaginationLinks className="my-3" page={view.page} pageSize={SEA_ROOM_LIMIT} total={view.total} disabled={busy} onPageChange={page => void update(page)} />
     {canMute && <section className="mt-4 rounded-lg border border-border bg-card px-3 py-2">
       <h2 className="mb-2 text-sm font-semibold">当前禁言</h2>
-      <ul className="flex flex-wrap gap-x-4 gap-y-2">{view.mutes.map(mute => <li key={mute.messageId} className="flex flex-wrap items-center gap-2 text-sm">
-        <span>{mute.name} · {new Date(mute.until).toLocaleString("zh-CN")}</span>
-        <Button size="sm" variant="outline" className="min-h-8 px-2 text-xs" disabled={busy} onClick={() => void update(view.page, "/api/sea/mutes", "PUT", { messageId: mute.messageId, minutes: 0 })}>解除禁言</Button>
+      <ul className="grid gap-3">{view.mutes.map(mute => <li key={`${mute.scope}:${mute.messageId}`} className="flex flex-wrap items-center gap-2 text-sm">
+        <span>{mute.name} · {mute.scope === "ip" ? "IP 禁言" : "身份禁言"} · {mute.until === 0 ? "长期" : new Date(mute.until).toLocaleString("zh-CN")}</span>
+        <Button size="sm" variant="outline" className="min-h-8 px-2 text-xs" disabled={busy} onClick={() => editMute(mute.messageId, mute.name, mute.scope, mute.until, mute.reason)}>修改禁言</Button>
+        <Button size="sm" variant="outline" className="min-h-8 px-2 text-xs" disabled={busy} onClick={() => void update(view.page, "/api/sea/mutes", "PUT", { messageId: mute.messageId, scope: mute.scope, minutes: 0 })}>解除禁言</Button>
+        {mute.reason ? <p className="w-full whitespace-pre-wrap wrap-anywhere text-muted">{mute.reason}</p> : null}
       </li>)}</ul>
       {!view.mutes.length ? <p className="text-sm text-muted">当前没有禁言。</p> : null}
     </section>}
+    <Dialog.Root open={editing !== null} onOpenChange={open => { if (!open && !busy) setEditing(null); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay />
+        <Dialog.Content aria-describedby={undefined} className="left-1/2 top-1/2 max-h-[90dvh] w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-md p-5">
+          <Dialog.Title>{editing?.scope === "ip" ? "IP 禁言" : "身份禁言"} · {editing?.name}</Dialog.Title>
+          {editing ? <form className="mt-4 grid gap-4" onSubmit={async event => {
+            event.preventDefault();
+            const minutes = editing.permanent ? null : Math.ceil((new Date(editing.date).getTime() - Date.now()) / 60000);
+            if (minutes !== null && (!Number.isFinite(minutes) || minutes <= 0 || minutes > 5256000)) {
+              toast.error("请选择未来十年内的禁言到期时间");
+              return;
+            }
+            if (await update(view.page, "/api/sea/mutes", "PUT", { messageId: editing.messageId, scope: editing.scope, minutes, reason: editing.reason })) setEditing(null);
+          }}>
+            <div className="flex items-center gap-2"><Checkbox id="sea-mute-permanent" checked={editing.permanent} disabled={busy} onCheckedChange={checked => setEditing({ ...editing, permanent: checked === true })} /><Label htmlFor="sea-mute-permanent">长期禁言</Label></div>
+            <div><Label htmlFor="sea-mute-until">禁言至</Label><Input id="sea-mute-until" type="datetime-local" required disabled={busy || editing.permanent} value={editing.date} onChange={event => setEditing({ ...editing, date: event.target.value })} /></div>
+            <div><Label htmlFor="sea-mute-reason">管理原因</Label><Textarea id="sea-mute-reason" maxLength={1000} disabled={busy} value={editing.reason} onChange={event => setEditing({ ...editing, reason: event.target.value })} /></div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={busy} onClick={() => setEditing(null)}>取消</Button>
+              <Button type="submit" disabled={busy}>保存</Button>
+            </div>
+          </form> : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   </main>;
 }

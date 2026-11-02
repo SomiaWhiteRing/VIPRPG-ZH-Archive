@@ -37,6 +37,15 @@ export default function AboutPage() {
         </p>
       </Pane>
 
+      <Pane heading="这里不能做什么？">
+        <p>
+          惯例的仇恨言论，广告贴，引战贴什么的会被删掉应该不言自明了。<br/>
+          如果上传VIPRPG以外的作品，则也请做好会被不讲道理的删掉的准备。（原因见后文）<br/>
+          特别的，本站禁止言及<span className="text-destructive">ヲチスレ</span>相关的内容或作品。<br/>
+          禁止内容可能会在没有提前预警的情况下追加。处罚的尺度则也看管理者心情。<br/>
+        </p>
+      </Pane>
+
       <Pane heading="这里是如何存储作品的？">
         <p>
           在VIPRPG的世界里，作品的素材有着极高的重合度。同一张シバルバー的黑市脸图可能会在1000个ksg里出现500次。<br/>

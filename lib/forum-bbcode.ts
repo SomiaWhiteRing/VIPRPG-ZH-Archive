@@ -11,7 +11,7 @@ export const FORUM_BBCODES = [
   { tag: "collapse", label: "折叠" },
   { tag: "dice", label: "骰子", sample: "d100", sampleSelectionStart: 1 },
 ] as const;
-export type ForumBBCodeTag = (typeof FORUM_BBCODES)[number]["tag"] | "i" | "u";
+export type ForumBBCodeTag = (typeof FORUM_BBCODES)[number]["tag"] | "i" | "u" | "s" | "spoiler" | "url" | "list" | "item" | "hr";
 export type ForumBBCodeNode =
   | { type: "text"; text: string }
   | { type: "image"; index: number }
@@ -41,19 +41,33 @@ export function parseForumBBCode(body: string, imageOffsets: number[] = []): For
     }
     text(body.slice(start, end));
   }
-  const tokens = new RegExp(`${MENTION_PATTERN.source}|${FACE_EMOJI_PATTERN.source}|${FORUM_ELEMENT_PATTERN.source}|\\[(/?)(b|i|u|del|size|quote|code|collapse|dice)(?:=([^\\]\\r\\n]{1,120}))?\\]`, "gi");
+  const tokens = new RegExp(`${MENTION_PATTERN.source}|${FACE_EMOJI_PATTERN.source}|${FORUM_ELEMENT_PATTERN.source}|\\[(/?)(b|i|u|del|s|size|quote|code|collapse|spoiler|dice|url|list|hr|\\*)(?:=([^\\]\\r\\n]{1,120}))?\\]`, "gi");
   let cursor = 0;
   for (const match of body.matchAll(tokens)) {
     plain(cursor, match.index);
     const end = match.index + match[0].length;
-    const tag = /^\[(\/?)(b|i|u|del|size|quote|code|collapse|dice)(?:=([^\]\r\n]{1,120}))?\]$/i.exec(match[0]);
-    const type = tag?.[2].toLowerCase() as ForumBBCodeTag | undefined;
+    const tag = /^\[(\/?)(b|i|u|del|s|size|quote|code|collapse|spoiler|dice|url|list|hr|\*)(?:=([^\]\r\n]{1,120}))?\]$/i.exec(match[0]);
+    const type = (tag?.[2] === "*" ? "item" : tag?.[2].toLowerCase()) as ForumBBCodeTag | undefined;
     const closing = tag?.[1] === "/";
-    const literal = !type || (tag?.[3] !== undefined && (!["collapse", "size"].includes(type) || closing)) ||
+    const literal = !type || (tag?.[3] !== undefined && (!["collapse", "spoiler", "size", "url"].includes(type) || closing)) ||
       (type === "size" && !closing && !/^(?:[5-9]\d|1\d\d|200)%$/.test(tag?.[3] ?? "")) ||
+      (type === "url" && !closing && stack.some((frame) => frame.type === "url")) ||
       (["code", "dice"].includes(stack.at(-1)?.type ?? "") && !(type === stack.at(-1)?.type && closing)) ||
       imageOffsets.some((offset) => offset > match.index && offset < end);
     if (literal) plain(match.index, end);
+    else if (type === "hr" && !closing && tag?.[3] === undefined) current().push({ type, children: [] });
+    else if ((type === "item" && !closing) || (type === "list" && closing)) {
+      if (stack.at(-1)?.type === "item") {
+        const node = stack.pop()!;
+        current().push({ type: node.type, children: node.children });
+      }
+      if (type === "item" && stack.at(-1)?.type === "list" && stack.length < 24)
+        stack.push({ type, opening: match[0], children: [] });
+      else if (type === "list" && stack.at(-1)?.type === "list") {
+        const node = stack.pop()!;
+        current().push({ type: node.type, children: node.children });
+      } else text(match[0]);
+    }
     else if (closing) {
       if (stack.at(-1)?.type === type) {
         const node = stack.pop()!;

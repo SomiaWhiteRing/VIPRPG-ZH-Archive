@@ -46,8 +46,8 @@ export const PERMISSIONS = {
     description: "查看最近对话，隐藏违规发言；操作记录保存在聊天室。",
   },
   "sea.user.mute_any": {
-    category: "sea", label: "永恒之海禁言", scope: "公共聊天室内的发言身份",
-    description: "对登录用户或游客身份设置限时禁言，以及解除禁言。",
+    category: "sea", label: "永恒之海禁言", scope: "公共聊天室内的发言身份与来源 IP",
+    description: "对登录用户、游客身份或来源 IP 设置限时或长期禁言，修改期限及原因，以及解除禁言。",
   },
   "genre.manage": {
     category: "genre",

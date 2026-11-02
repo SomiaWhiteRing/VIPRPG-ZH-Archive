@@ -17,12 +17,14 @@ export type SeaEvent =
   | ({ type: "snapshot" } & Omit<SeaWindow, "font">)
   | { type: "message"; revision: number; message: SeaMessage };
 export type SeaSubmission = { clientMessageId: string; body: string; avatarMode: SeaAvatarMode };
-export type SeaMute = { messageId: number; name: string; until: number };
+export type SeaMuteScope = "identity" | "ip";
+export type SeaMute = { messageId: number; name: string; until: number; scope: SeaMuteScope; reason: string };
 export type SeaModerationMessage = Omit<SeaMessage, "glyphs"> & {
   authorName: string;
   authorAvatarBlobSha256: string | null;
   anonymous: boolean;
   hiddenAt: number | null;
+  canMuteIp: boolean;
 };
 export type SeaModeration = {
   window: { revision: number; messages: SeaModerationMessage[] };

@@ -68,7 +68,7 @@ export default function MessageReportPage() {
     </ol>
     {report.status === "pending" ? <Form method="post" className="grid gap-3">
       <div><Label htmlFor="message-report-resolution">处理结果</Label><SelectField id="message-report-resolution" name="resolution" defaultValue="resolved" options={[{ value: "resolved", label: "已处理" }, { value: "dismissed", label: "无需处理" }]} disabled={busy} /></div>
-      <div><Label htmlFor="message-report-note">原因／内部备注</Label><Textarea id="message-report-note" name="note" required maxLength={1000} disabled={busy} /></div>
+      <div><Label htmlFor="message-report-note">管理原因</Label><Textarea id="message-report-note" name="note" required maxLength={1000} disabled={busy} /></div>
       <div className="flex justify-end"><Button type="submit" disabled={busy}>确认处理</Button></div>
     </Form> : <div><p>{report.status === "resolved" ? "已处理" : "无需处理"}</p><p className="whitespace-pre-wrap wrap-anywhere">{report.note}</p></div>}
   </main>;
