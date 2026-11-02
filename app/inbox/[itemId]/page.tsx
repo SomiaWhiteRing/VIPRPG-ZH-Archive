@@ -69,6 +69,9 @@ export default function InboxTargetPage() {
           </p>
         </div> : <p>{item.type.startsWith("forum_") ? "相关内容已不可用" : item.title}</p>}
         {item.maintainerRequest ? <MaintainerRequestDetails request={item.maintainerRequest} /> : null}
+        {item.type === "role_change_request" ? <p className="mt-2 text-sm text-muted">
+          {item.targetUserId ? <Link className="text-primary hover:underline" to={`/users/${item.targetUserId}`}>{item.targetDisplayName}</Link> : item.targetDisplayName} · {item.requestedRole?.name}
+        </p> : null}
         {contentNotification ? <>
           <Link to={contentNotification.href} className="mt-2 block text-primary hover:underline">{contentNotification.targetTitle}</Link>
           <p className="mt-2 whitespace-pre-wrap">{contentNotification.excerpt}</p>

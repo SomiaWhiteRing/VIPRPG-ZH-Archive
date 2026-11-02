@@ -267,7 +267,7 @@ function InboxRow({
             {item.type === "role_change_request" ? (
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
                 <span>
-                  <span className="text-primary">{item.targetDisplayName}</span> · {item.requestedRole?.name}
+                  {item.targetUserId ? <Link className="text-primary hover:underline" to={`/users/${item.targetUserId}`}>{item.targetDisplayName}</Link> : item.targetDisplayName} · {item.requestedRole?.name}
                 </span>
                 <Badge variant="outline">{approvalLabels[item.status]}</Badge>
               </div>

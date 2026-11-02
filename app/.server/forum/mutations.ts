@@ -913,6 +913,20 @@ export async function moderateForum(
     );
   if (tags)
     statements.push(...tagStatements(ctx, topic.id, tags, actor, token));
+  if ((action === "lock" && !topic.locked) || (action === "hide" && row.status !== "hidden")) {
+    const subject = target.kind === "topic"
+      ? `主题《${topic.title}》`
+      : `主题《${topic.title}》中的第 ${row.post_number} 楼${target.kind === "comment" ? `第 ${row.comment_number} 条楼中楼回复` : "回复"}`;
+    statements.push(
+      db.prepare(`INSERT INTO inbox_items
+        (type,sender_user_id,recipient_user_id,title,body,event_key)
+        SELECT 'system_notice',?,u.id,?,?,? FROM users u
+        WHERE u.id=? AND u.status='active' AND ${gate.sql}`)
+        .bind(actor.id, action === "lock" ? "你的主题已被锁定" : "你的内容已被隐藏",
+          `${subject}\n管理原因：${reason}`, `forum:${action}:${token}`,
+          row.user_id, ...gate.args),
+    );
+  }
   if (report)
     statements.push(
       db
