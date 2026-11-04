@@ -1,11 +1,11 @@
 {
-  "version": "2026.10.7-site-75e169059-jspi-shared",
-  "revision": "75e169059c1ffc9d3b0faf71b12b87d0ae0435c5",
-  "build": "local-repack-20261030-75e169059-shared-data",
+  "version": "2026.11.5-site-cfb372db7-jspi-shared",
+  "revision": "cfb372db70a73addb607f62640862ddffcddf00d",
+  "build": "local-web-20261105-cfb372db7-shared-data",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "976ec984fcbf34b71e6167f0696640adb6ca0b30a94d220232e4a93ad7e84c1b",
+  "archiveSha256": "d62e9a88ba573ee6a77d2010eefcf40dbbc31a6eb4d94d44e1b837351c9c1592",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
@@ -42,10 +42,6 @@
     {
       "path": "scripts/runtime-patches/skip-logo.patch",
       "sha256": "0969ba36a4aaa9363f3fa66b7d37ef2297d806f61cb298d3072fd691b16ae0da"
-    },
-    {
-      "path": "scripts/runtime-patches/shared-soundfont.patch",
-      "sha256": "5da4a08bb669539d50127c44501bb3ab72ad6f779e9c850c3fe86a3d25b6cda4"
     },
     {
       "path": "scripts/runtime-patches/startup-download-progress.patch",
