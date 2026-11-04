@@ -33,6 +33,7 @@ import type {
   CommentBodySegment,
   CommentDto,
   CommentPage,
+  RootCommentPage,
   CommentReplyPage,
   FaceEmoji,
   UserCommentSummary,
@@ -286,7 +287,8 @@ export async function listRootComments(
   currentUserId: number | null,
   cursor: string | null,
   limit = 20,
-): Promise<CommentPage> {
+  requestedPage = 1,
+): Promise<RootCommentPage> {
   const parsed = decodeCursor(cursor);
   const size = clampPageSize(limit);
   const targetColumn = `${target.kind}_id`;
@@ -303,11 +305,16 @@ export async function listRootComments(
     access.sql,
   ];
   const binds: Array<string | number> = [target.id, ...access.binds];
+  const database = getD1(runtime);
+  const count = await database.prepare(`SELECT COUNT(*) AS total FROM comments c JOIN users u ON u.id=c.user_id
+    WHERE ${clauses.join(" AND ")} AND (c.pinned_at IS NULL OR c.status='deleted')`)
+    .bind(...binds).first<{ total: number }>();
+  const total = count?.total ?? 0;
+  const pageNumber = Math.min(requestedPage, Math.max(1, Math.ceil(total / size)));
   if (parsed) {
     clauses.push(`(c.created_at ${comparison} ? OR (c.created_at = ? AND c.id ${comparison} ?))`);
     binds.push(parsed.createdAt, parsed.createdAt, parsed.id);
   }
-  const database = getD1(runtime);
   // Pins are an extra first-page group; only ordinary roots advance the cursor.
   const rootStatement = (pinned: boolean) =>
     database
@@ -322,12 +329,13 @@ export async function listRootComments(
           ${currentUserId ? "EXISTS(SELECT 1 FROM comment_likes ml WHERE ml.comment_id=c.id AND ml.user_id=?)" : "0"} AS liked_by_me
        FROM comments c JOIN users u ON u.id=c.user_id
        WHERE ${[...clauses, pinned ? "(c.pinned_at IS NOT NULL AND c.status='published')" : "(c.pinned_at IS NULL OR c.status='deleted')"].join(" AND ")}
-       ORDER BY ${pinned ? "c.pinned_at DESC," : ""} c.created_at ${direction},c.id ${direction} LIMIT ?`,
+       ORDER BY ${pinned ? "c.pinned_at DESC," : ""} c.created_at ${direction},c.id ${direction} LIMIT ? OFFSET ?`,
       )
       .bind(
         ...(currentUserId
           ? [currentUserId, ...binds, pinned ? -1 : size + 1]
           : [...binds, pinned ? -1 : size + 1]),
+        pinned || parsed ? 0 : (pageNumber - 1) * size,
       );
   const knownPublic = runtime.memo.get(`public-target:${target.kind}:${target.id}`) === true;
   const targetQuery = commentTargetQuery(target, user);
@@ -351,7 +359,7 @@ export async function listRootComments(
     size,
     currentUserId,
   );
-  if (!parsed && target.kind === "work") {
+  if (!parsed && pageNumber === 1 && target.kind === "work") {
     const pinnedRows = (await rootStatement(true).all<CommentRow>()).results;
     const emojis = await emojiMap(runtime, pinnedRows);
     const images = await commentImagesById(database, pinnedRows.map((row) => row.id));
@@ -381,7 +389,7 @@ export async function listRootComments(
       );
     });
   }
-  return page;
+  return { ...page, total, page: pageNumber, pageSize: size };
 }
 
 export async function listReplies(

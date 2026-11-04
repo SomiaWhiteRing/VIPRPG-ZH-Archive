@@ -20,7 +20,7 @@ import { useToast } from "@/app/components/ui/toast";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { COMMENT_REPLY_PREVIEW_SIZE } from "@/lib/comment-pagination";
-import type { CommentBodySegment, CommentDto, CommentPage, CommentReplyPage } from "@/lib/dto/db/work-community";
+import type { CommentBodySegment, CommentDto, RootCommentPage, CommentReplyPage } from "@/lib/dto/db/work-community";
 import { MessageCircle, Pencil, ThumbsUp, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useRouteLoaderData } from "react-router";
@@ -32,7 +32,7 @@ type Props = {
   canPin?: boolean;
   currentUserId: number | null;
   initialComments: CommentDto[];
-  initialNextCursor: string | null;
+  initialTotal: number;
 };
 
 export function CommentPanel(props: Props) {
@@ -52,13 +52,16 @@ function CommentPanelContent({
   placeholder = "写下你的评论……",
   currentUserId,
   initialComments,
-  initialNextCursor,
+  initialTotal,
   hideDeletedContent,
   onChanged,
 }: Props & { hideDeletedContent: boolean }) {
   const endpoint = commentEndpoint(target);
   const [comments, setComments] = useState(initialComments);
-  const [nextCursor, setNextCursor] = useState(initialNextCursor);
+  const [total, setTotal] = useState(initialTotal);
+  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(1);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
@@ -152,10 +155,12 @@ function CommentPanelContent({
         body: JSON.stringify({ pinned: !comment.pinned }),
       });
 
-      const result = await requestJson(endpoint, { credentials: "same-origin" }) as CommentPage & { ok?: boolean };
+      const result = await requestJson(`${endpoint}?page=1`, { credentials: "same-origin" }) as RootCommentPage;
 
       setComments(result.items);
-      setNextCursor(result.nextCursor);
+      setTotal(result.total);
+      setPageSize(result.pageSize);
+      setPage(result.page);
       toast.success(comment.pinned ? "已取消置顶。" : "评论已置顶。");
     } catch (error) {
       toast.error(error instanceof ApiResponseError ? error.message : "置顶操作或列表刷新失败，请重试。");
@@ -164,26 +169,17 @@ function CommentPanelContent({
     }
   }
 
-  async function loadMore() {
-    if (!nextCursor || busy) return;
+  async function loadPage(nextPage: number) {
+    if (busy) return;
     setBusy(true);
     try {
-
-      const result = (await requestJson(`${endpoint}?cursor=${encodeURIComponent(nextCursor)}`, { credentials: "same-origin" })) as {
-        ok?: boolean;
-        items?: CommentDto[];
-        nextCursor?: string | null;
-      };
-
-      setComments((current) => {
-        const byId = new Map(current.map((comment) => [comment.id, comment]));
-        for (const comment of result.items ?? []) byId.set(comment.id, comment);
-        return [...byId.values()].sort((a, b) => {
-          const order = a.createdAt.localeCompare(b.createdAt) || a.id - b.id;
-          return (target.kind === "work" || target.kind === "catalog") ? -order : order;
-        });
-      });
-      setNextCursor(result.nextCursor ?? null);
+      const result = await requestJson(`${endpoint}?page=${nextPage}`,
+        { credentials: "same-origin" }) as RootCommentPage;
+      setComments(result.items);
+      setTotal(result.total);
+      setPageSize(result.pageSize);
+      setPage(result.page);
+      if (result.page !== page && panelRef.current) scrollElementIntoView(panelRef.current, { block: "start" });
     } catch (error) {
       toast.error(error instanceof ApiResponseError ? error.message : "评论加载失败。");
     } finally {
@@ -209,11 +205,12 @@ function CommentPanelContent({
   );
 
   return (
-    <div className="@container/comments grid gap-4" id="comments">
+    <div className="@container/comments grid scroll-mt-24 gap-4" id="comments" ref={panelRef}>
       {currentUserId ? (
         <CommentComposer endpoint={endpoint} target={target} placeholder={placeholder}
-          onCreated={(comment) => {
-            setComments((current) => (target.kind === "work" || target.kind === "catalog") ? [comment, ...current] : [...current, comment]);
+          onCreated={() => {
+            // The server clamps the requested page to the current last page for ascending lists.
+            void loadPage(target.kind === "work" || target.kind === "catalog" ? 1 : Number.MAX_SAFE_INTEGER);
             onChanged?.();
           }} />
       ) : (
@@ -249,18 +246,8 @@ function CommentPanelContent({
           <EmptyState title={comments.length ? "没有可显示的评论。" : "还没有评论。"} variant="plain" />
         )}
       </div>
-      {nextCursor ? (
-        <div>
-          <Button
-            disabled={busy}
-            onClick={() => void loadMore()}
-            type="button"
-            variant="outline"
-          >
-            加载更多评论
-          </Button>
-        </div>
-      ) : null}
+      <PaginationLinks ariaLabel="主评论分页" page={page} pageSize={pageSize} total={total}
+        disabled={busy} onPageChange={nextPage => void loadPage(nextPage)} />
     </div>
   );
 }

@@ -67,6 +67,12 @@ export type CommentPage = {
   nextCursor: string | null;
 };
 
+export type RootCommentPage = CommentPage & {
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type CommentReplyPage = {
   items: CommentDto[];
   preview: CommentDto[];

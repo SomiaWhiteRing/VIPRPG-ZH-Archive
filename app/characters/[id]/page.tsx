@@ -210,7 +210,7 @@ export default function CharacterDetailPage() {
           <CommentPanel
             currentUserId={user?.id ?? null}
             initialComments={comments.items}
-            initialNextCursor={comments.nextCursor}
+            initialTotal={comments.total}
             placeholder="聊聊这位角色的故事、登场表现或素材……"
             target={{ kind: "character", id: character.id }}
           />

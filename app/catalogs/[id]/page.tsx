@@ -175,7 +175,7 @@ export default function CatalogPage() {
               target={{ kind: "catalog", id: catalog.id }}
               currentUserId={currentUser?.id ?? null}
               initialComments={comments.items}
-              initialNextCursor={comments.nextCursor}
+              initialTotal={comments.total}
               onChanged={() => { void revalidator.revalidate(); }}
             />
           </section>

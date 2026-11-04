@@ -146,7 +146,7 @@ export default function CreatorDetailPage() {
               <CommentPanel
                 currentUserId={currentUser?.id ?? null}
                 initialComments={comments.items}
-                initialNextCursor={comments.nextCursor}
+                initialTotal={comments.total}
                 placeholder="写下你对这位作者或其作品的看法……"
                 target={{ kind: "creator", id: creator.id }}
               />

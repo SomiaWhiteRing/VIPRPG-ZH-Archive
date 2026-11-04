@@ -94,6 +94,8 @@ ArchiveVersion 回答“本站保存了哪份文件”。它直接归属于一�
 
 ### 互动与评论
 
+- 主评论使用站内 `PaginationLinks`，每页 20 条，支持数字页码和跳页。四类评论 API 的 `page` 请求返回 `total/page/pageSize`，越界收敛至末页；未指定 `page` 时保留既有 `cursor` 行为及响应字段。置顶主评论仍作为首页额外分组，不占普通主评论的分页数量。
+
 - `ViewStats` Durable Object 保存累计浏览与游玩数：两者均对所有访客统一按 UTC+8 自然日及指纹去重，登录状态及账号 ID 不参与公共计数去重。网页在线启动、ZIP 下载、外链下载页及 Android 安装完成共用作品游玩计数，Android 启动不计数。已有累计量及当日已计数的指纹保留，详见[统计说明](./view-statistics.md)。`user_work_entries` 保存登录用户最近游玩时间和收藏时间，匿名游玩不写个人历史；公共游玩计数不直接由个人记录条数计算。
 - `user_work_tags` 以 `(work_id,user_id,name)` 保存收藏标签，外键绑定 `user_work_entries`；标签必须有有效收藏，取消收藏或删除收藏关系时自动清除，游玩历史不受影响。更新标签保留原收藏时间。`PATCH /api/works/:workId/me` 接收 `favorited` 和可选 `tags`，省略 `tags` 时保留原标签，空数组清空；收藏状态与标签在同一事务中保存。`GET` 仅返回登录用户本人的收藏标签和吐槽、该作品可公开展示的标签和本人常用标签。
 - `user_work_entries.favorite_note` 保存最多 500 字的纯文本收藏吐槽，前后端按 Unicode 码点计数；数据库也限制长度及必须存在收藏。上述收藏 API 接收可选 `note`，省略时保留、空字符串清空；吐槽和标签在同一事务中保存，移除收藏时同时清空吐槽。吐槽随所属用户的收藏列表及作品的“收藏与吐槽”页展示，受收藏隐私设置保护，不进入游玩历史或全站标签统计。`0006_tags_favorites_and_read_indexes.sql` 为既有记录增加空吐槽并设置 500 字上限，不改变既有内容、时间和标签。

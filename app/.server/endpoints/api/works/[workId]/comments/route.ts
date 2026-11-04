@@ -16,16 +16,18 @@ export async function GET(
   try {
     const workId = parsePositiveId((await context.params).workId, "work id");
     const url = new URL(request.url);
+    const requestedPage = url.searchParams.has("page") ? parsePositiveId(url.searchParams.get("page")!, "page") : undefined;
     const limit = Number(url.searchParams.get("limit") ?? 20);
     const user = await getCurrentUser(runtime);
     const page = await listRootComments(
       runtime,
       { kind: "work", id: workId },
       user?.id ?? null,
-      url.searchParams.get("cursor"),
+      requestedPage === undefined ? url.searchParams.get("cursor") : null,
       limit,
+      requestedPage,
     );
-    return json({ ok: true, ...page });
+    return json({ ok: true, ...(requestedPage === undefined ? { items: page.items, nextCursor: page.nextCursor } : page) });
   } catch (error) {
     return jsonError("Comments could not be loaded", error);
   }

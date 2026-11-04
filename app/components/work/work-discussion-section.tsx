@@ -5,7 +5,7 @@ import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
-import type { CommentPage, WorkCollection } from "@/lib/dto/db/work-community";
+import type { RootCommentPage, WorkCollection } from "@/lib/dto/db/work-community";
 import { formatDate, formatExactTimestamp, formatNumber, parseTimestamp } from "@/lib/format";
 import { requestJson } from "@/lib/ui/api-response";
 
@@ -28,7 +28,7 @@ export function WorkDiscussionSection({ workId, currentUserId, canPin, commentCo
   currentUserId: number | null;
   canPin: boolean;
   commentCount: number;
-  comments: CommentPage;
+  comments: RootCommentPage;
   collections: WorkCollections;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -57,7 +57,7 @@ export function WorkDiscussionSection({ workId, currentUserId, canPin, commentCo
             currentUserId={currentUserId}
             canPin={canPin}
             initialComments={comments.items}
-            initialNextCursor={comments.nextCursor}
+            initialTotal={comments.total}
             target={{ kind: "work", id: workId }}
           />
         </TabsContent>
