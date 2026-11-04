@@ -19,6 +19,7 @@ type PaginationProps = {
   total: number;
   className?: string;
   ariaLabel?: string;
+  compact?: boolean;
 } & (
   | {
       basePath: string;
@@ -46,11 +47,12 @@ export function PaginationLinks({
   disabled = false,
   className,
   ariaLabel = "分页",
+  compact = false,
 }: PaginationProps) {
   const JumpForm = onPageChange ? "form" : Form;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (totalPages <= 1) return null;
-  const desktopPages = pageWindow(page, totalPages, DESKTOP_PAGE_COUNT);
+  const desktopPages = pageWindow(page, totalPages, compact ? MOBILE_PAGE_COUNT : DESKTOP_PAGE_COUNT);
   const mobilePages = new Set(pageWindow(page, totalPages, MOBILE_PAGE_COUNT));
   const makeHref = (nextPage: number) => {
     const query = new URLSearchParams();
@@ -69,7 +71,7 @@ export function PaginationLinks({
       aria-label={ariaLabel}
       aria-busy={disabled || undefined}
     >
-      <div className="flex max-w-full items-center justify-center gap-1.5">
+      <div className={cn("flex max-w-full items-center justify-center gap-1.5", compact && "flex-wrap")}>
         {page > 1 ? (
           <>
             <PageControl

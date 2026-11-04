@@ -164,7 +164,7 @@ export default function RakuenPage() {
           <EmptyState title="暂无活动。" variant="plain" className="p-4" />
         )}
         <div className="px-4">
-          <PaginationLinks
+          <PaginationLinks compact
             basePath="/rakuen"
             params={{ type: type === "all" ? undefined : type }}
             page={page}
