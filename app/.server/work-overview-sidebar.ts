@@ -34,6 +34,7 @@ export async function loadWorkOverviewSidebar(
     showRelationEditor: capabilities.canCreateRelation || capabilities.canCreateTranslation ||
       capabilities.canUpdate || capabilities.canDeleteRelation || capabilities.canDeleteTranslation,
     editInfoHref,
+    canReadHistory: hasPermission(currentUser, "audit.read"),
     maintainerApplication,
   };
 }

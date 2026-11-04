@@ -19,6 +19,7 @@ export type WorkOverviewSidebarData = {
   containingCatalogs: CatalogSummary[];
   showRelationEditor: boolean;
   editInfoHref: string | null;
+  canReadHistory: boolean;
   maintainerApplication: MaintainerApplication | null;
 };
 

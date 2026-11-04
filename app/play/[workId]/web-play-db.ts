@@ -5,7 +5,8 @@ import type {
 import { installObserver, observeInstallTask } from "./web-play-install-observer";
 
 const DB_NAME = "viprpg_web_play_v1";
-const DB_VERSION = 1;
+// Keep the version already opened by the withdrawn library preview; existing stores and saves stay intact.
+const DB_VERSION = 2;
 
 const STORE_INSTALLATIONS = "web_play_installations";
 const STORE_FILES = "web_play_files";

@@ -57,6 +57,7 @@ export async function loader(args: LoaderFunctionArgs) {
     character,
     user: pickPageFields(user, ["id"]),
     canEdit,
+    canReadHistory: hasPermission(user, "audit.read"),
     comments,
     pageMetadata,
   };
@@ -66,7 +67,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors(loaderData?.pageMetadata, error);
 
 export default function CharacterDetailPage() {
-  const { character, user, canEdit, comments } = useLoaderData<typeof loader>();
+  const { character, user, canEdit, canReadHistory, comments } = useLoaderData<typeof loader>();
   return (
     <DetailPageShell>
       <header className="pb-4 pt-4">
@@ -90,6 +91,7 @@ export default function CharacterDetailPage() {
         <p className="mt-1.5 text-sm text-muted" lang="ja">
           {character.originalName}
         </p>
+        {canReadHistory ? <Link className="mt-2 inline-block text-sm text-secondary hover:underline" to={`/history/character/${character.id}`} prefetch="none">编辑历史</Link> : null}
       </header>
       <CharacterContentTabs
         key={character.id}

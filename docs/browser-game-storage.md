@@ -47,3 +47,7 @@ Storage Buckets 的 `expires` 不是准时释放磁盘的承诺。浏览器可�
 浏览器到期回收机制使用现有类型检查、变更文件 ESLint 和资源构建检查，尚不能据此声称实际到期回收已经验收。Android 原生闭环已另外进行模拟器验证，范围见 [验收记录](android-native-acceptance.md)。未新增自动化测试代码。
 
 参考：[Storage Buckets 规范](https://wicg.github.io/storage-buckets/)、[Chrome Storage Buckets](https://developer.chrome.com/docs/web-platform/storage-buckets)。
+
+## 本地数据兼容
+
+浏览器安装数据库使用版本 2，兼容已经打开过该版本的浏览器，并保留既有对象仓库、存档和截图。

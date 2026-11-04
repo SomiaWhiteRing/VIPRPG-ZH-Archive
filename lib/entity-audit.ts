@@ -62,7 +62,7 @@ export function entityAuditTargetHref(target: EntityAuditTarget): string {
   return `/admin/characters/index?category=${id}`;
 }
 
-const FIELD_LABELS: Record<string, string> = {
+export const AUDIT_FIELD_LABELS: Record<string, string> = {
   name: "名称", primaryName: "中文名", originalName: "原名", originalTitle: "作品原名", chineseTitle: "中文标题",
   description: "简介", bio: "简介", aliases: "别名", links: "网站", avatarBlobSha256: "头像文件",
   genre: "类型", moreInfo: "附加信息", usesUnsupportedManiac: "特殊 Maniacs 功能", originalReleaseDate: "发布日期",
@@ -90,7 +90,7 @@ export function entityAuditChanges(before: unknown, after: unknown, path = ""): 
   const right = auditRecord(after);
   if ((left || right) && (left || before == null) && (right || after == null)) {
     return [...new Set([...Object.keys(left ?? {}), ...Object.keys(right ?? {})])].flatMap((key) =>
-      entityAuditChanges(left?.[key], right?.[key], path ? `${path} / ${FIELD_LABELS[key] ?? key}` : FIELD_LABELS[key] ?? key));
+      entityAuditChanges(left?.[key], right?.[key], path ? `${path} / ${AUDIT_FIELD_LABELS[key] ?? key}` : AUDIT_FIELD_LABELS[key] ?? key));
   }
   if (Array.isArray(before) && Array.isArray(after)) {
     const identity = (value: unknown) => {
