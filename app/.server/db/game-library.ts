@@ -278,7 +278,7 @@ export async function listHomeGameWorks(runtime: AppRuntime) {
       FROM home_recommendations r JOIN ${workSource} w ON w.id=r.work_id
       LEFT JOIN archive_versions av
         ON av.work_id=w.id AND av.status='published' AND av.is_current=1
-      WHERE w.show_on_home=1 GROUP BY w.id ORDER BY r.sort_order,r.work_id LIMIT 4`),
+      WHERE w.show_on_home=1 GROUP BY w.id ORDER BY RANDOM() LIMIT 4`),
   ]);
   const cards = await hydrateCards(runtime, [...recent.results, ...original.results, ...random.results, ...recommended.results]);
   const originalStart = recent.results.length;

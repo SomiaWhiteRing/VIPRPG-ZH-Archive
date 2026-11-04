@@ -16,7 +16,7 @@ import type {
 } from "@/lib/dto/db/inbox";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
-import type { InboxCategory, InboxCursor } from "@/lib/inbox";
+import type { InboxCategory } from "@/lib/inbox";
 import { INBOX_PAGE_SIZE } from "@/lib/inbox";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { workMaintainerRecipientSql } from "./work-maintainers";
@@ -194,9 +194,7 @@ export async function listInboxItemsForUser(
   user: ArchiveUser,
   input: {
     category: InboxCategory;
-    unread: boolean;
     page: number;
-    cursor?: InboxCursor;
   },
 ) {
   const query = inboxQuery(user, false);
@@ -211,67 +209,38 @@ export async function listInboxItemsForUser(
       "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL AND like_comment_id IS NULL AND timeline_event_id IS NULL AND COALESCE(friend_action,'') NOT IN ('added','returned')",
     pending: "can_reject=1 OR (report_kind IS NOT NULL AND status='pending')",
   }[input.category];
-  const filter = `(${categorySql}) AND ${input.unread ? "read_at IS NULL" : "1"}`;
-  // Resolve the boundary from all visible items, including ones just marked read.
-  // Filtering unread rows before resolving it would lose the pagination anchor.
-  const anchor =
-    input.unread && input.cursor
-      ? await getD1(runtime)
-          .prepare(`${query.sql} SELECT id,created_at FROM actionable WHERE id=?`)
-          .bind(...query.binds, input.cursor.itemId)
-          .first<{ id: number; created_at: string }>()
-      : null;
-  const newer = !!anchor && input.cursor?.direction === "newer";
-  const comparison = newer ? ">" : "<";
-  const order = newer ? "ASC" : "DESC";
-  const boundary = anchor
-    ? ` AND (created_at ${comparison} ? OR (created_at=? AND id ${comparison} ?))`
-    : "";
-  const boundaryBinds = anchor
-    ? [anchor.created_at, anchor.created_at, anchor.id]
-    : [];
   const totals = await getD1(runtime)
     .prepare(
       `${query.sql} SELECT
-    COUNT(CASE WHEN ${filter} THEN 1 END) AS total,
-    COUNT(CASE WHEN ${filter}${boundary} THEN 1 END) AS matching,
+    COUNT(CASE WHEN (${categorySql}) THEN 1 END) AS total,
     COUNT(CASE WHEN can_reject=1 OR (report_kind IS NOT NULL AND status='pending') THEN 1 END) AS pending,
     COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread FROM actionable`,
     )
-    .bind(...query.binds, ...boundaryBinds)
-    .first<{ total: number; matching: number; pending: number; unread: number }>();
+    .bind(...query.binds)
+    .first<{ total: number; pending: number; unread: number }>();
   const total = totals?.total ?? 0;
-  const matching = totals?.matching ?? 0;
-  const page = input.unread
-    ? 1
-    : Math.max(
-        1,
-        Math.min(input.page, Math.max(1, Math.ceil(total / INBOX_PAGE_SIZE))),
-      );
+  const page = Math.max(
+    1,
+    Math.min(input.page, Math.max(1, Math.ceil(total / INBOX_PAGE_SIZE))),
+  );
   // The LIMIT stays inside the ID subquery. Hydration and permission filtering
   // share one SQL snapshot, without scanning the audience again for each row.
   const details = inboxQuery(user, true, {
-    sql: `${query.sql} SELECT id FROM actionable WHERE ${filter}${boundary}
-      ORDER BY created_at ${order},id ${order} LIMIT ? OFFSET ?`,
+    sql: `${query.sql} SELECT id FROM actionable WHERE (${categorySql})
+      ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?`,
     binds: [
       ...query.binds,
-      ...boundaryBinds,
       INBOX_PAGE_SIZE,
       (page - 1) * INBOX_PAGE_SIZE,
     ],
   });
   const rows = await getD1(runtime)
-    .prepare(`${details.sql} SELECT * FROM actionable ORDER BY created_at ${order},id ${order}`)
+    .prepare(`${details.sql} SELECT * FROM actionable ORDER BY created_at DESC,id DESC`)
     .bind(...details.binds).all<InboxItemRow>();
   const items = (rows.results ?? []).map((row) => mapInboxItemRow(row, user));
-  if (newer) items.reverse();
   await attachInteractions(runtime, items);
   await attachCommentNotifications(runtime, items, rows.results ?? []);
   await attachTimelineNotifications(runtime, items, rows.results ?? []);
-  const firstId = items[0]?.id ?? anchor?.id;
-  const lastId = items.at(-1)?.id ?? anchor?.id;
-  const hasNewer = newer ? matching > INBOX_PAGE_SIZE : total > matching;
-  const hasOlder = newer ? total > matching : matching > INBOX_PAGE_SIZE;
   return {
     items,
     total,
@@ -279,14 +248,6 @@ export async function listInboxItemsForUser(
     pageSize: INBOX_PAGE_SIZE,
     pending: totals?.pending ?? 0,
     unread: totals?.unread ?? 0,
-    previousCursor:
-      input.unread && hasNewer && firstId
-        ? { itemId: firstId, direction: "newer" as const }
-        : undefined,
-    nextCursor:
-      input.unread && hasOlder && lastId
-        ? { itemId: lastId, direction: "older" as const }
-        : undefined,
   };
 }
 

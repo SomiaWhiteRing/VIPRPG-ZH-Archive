@@ -19,7 +19,7 @@ export default function HomeRecommendationsPage() {
   const { works } = useLoaderData<typeof loader>();
   return (
     <main>
-      <PageHeader compact title="站长推荐" subtitle="选择首页展示的游戏，并调整展示顺序。" />
+      <PageHeader compact title="站长推荐" subtitle="选择从中随机展示的游戏。" />
       <HomeRecommendationsEditor initialWorks={works} />
     </main>
   );

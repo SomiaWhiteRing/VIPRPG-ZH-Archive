@@ -9,7 +9,6 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { Badge } from "@/app/components/ui/badge";
-import { buttonVariants } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
@@ -19,7 +18,7 @@ import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatUnreadCount } from "@/lib/format";
 import { forumPage } from "@/lib/forum";
 import type { InboxCategory } from "@/lib/inbox";
-import { inboxCategory, inboxCursor, inboxHref } from "@/lib/inbox";
+import { inboxCategory, inboxHref } from "@/lib/inbox";
 import { Bell, MessageCircle, ShieldCheck, ThumbsUp } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -37,34 +36,30 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const params = await searchParams;
   const category = inboxCategory(params.category);
-  const unread = params.unread === "1";
   const page = forumPage(params.page);
-  const cursor = unread ? inboxCursor(params.before, params.after) : undefined;
   const currentUser = await getCurrentUser(runtime);
   if (!currentUser)
     redirectPage(
-      `/login?next=${encodeURIComponent(inboxHref(category, unread, page, cursor))}`,
+      `/login?next=${encodeURIComponent(inboxHref(category, page))}`,
     );
   const canResolve = canResolveInboxRequests(currentUser) || hasPermission(currentUser, "forum.content.moderate_any") || await canReviewWorkMaintainerRequests(runtime, currentUser);
   if (category === "pending" && !canResolve)
-    redirectPage(inboxHref("all", unread));
+    redirectPage(inboxHref("all"));
   const result = await listInboxItemsForUser(runtime, currentUser, {
     category,
-    unread,
     page,
-    cursor,
   });
-  if (!unread && page !== result.page)
-    redirectPage(inboxHref(category, unread, result.page));
+  if (page !== result.page)
+    redirectPage(inboxHref(category, result.page));
 
-  return { category, unread, canResolve, result };
+  return { category, canResolve, result };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: "提醒", page: loaderData?.result.page }, error);
 
 export default function InboxPage() {
-  const { category, unread, canResolve, result } =
+  const { category, canResolve, result } =
     useLoaderData<typeof loader>();
   const [autoRead, setAutoRead] = useState({ result, ids: new Set<number>() });
   const onRead = useCallback(
@@ -108,7 +103,6 @@ export default function InboxPage() {
       />
       <InboxControls
         category={category}
-        unread={unread}
         pendingCount={result.pending}
         canResolve={canResolve}
       />
@@ -123,44 +117,17 @@ export default function InboxPage() {
         </ul>
       ) : (
         <EmptyState
-          title={unread && result.total > 0 ? "本页没有未读提醒" : emptyLabel(category, unread)}
+          title={emptyLabel(category)}
         />
       )}
-      {unread ? (
-        result.previousCursor || result.nextCursor ? (
-          <nav aria-label="未读提醒分页" className="my-8 flex flex-wrap gap-2">
-            {result.previousCursor ? (
-              <Link
-                className={buttonVariants({ size: "sm", variant: "neutral" })}
-                prefetch="none"
-                to={inboxHref(category, true, 1, result.previousCursor)}
-              >
-                上一页
-              </Link>
-            ) : null}
-            {result.nextCursor ? (
-              <Link
-                className={buttonVariants({ size: "sm", variant: "neutral" })}
-                prefetch="none"
-                to={inboxHref(category, true, 1, result.nextCursor)}
-              >
-                下一页
-              </Link>
-            ) : null}
-          </nav>
-        ) : null
-      ) : (
-        <PaginationLinks
-          basePath="/inbox"
-          page={result.page}
-          pageSize={result.pageSize}
-          total={result.total}
-          prefetch={false}
-          params={{
-            category: category === "all" ? undefined : category,
-          }}
-        />
-      )}
+      <PaginationLinks
+        basePath="/inbox"
+        page={result.page}
+        pageSize={result.pageSize}
+        total={result.total}
+        prefetch={false}
+        params={{ category: category === "all" ? undefined : category }}
+      />
     </PageContainer>
   );
 }
@@ -309,8 +276,7 @@ function InboxRow({
   );
 }
 
-function emptyLabel(category: InboxCategory, unread: boolean) {
-  if (unread) return "没有未读提醒";
+function emptyLabel(category: InboxCategory) {
   return {
     all: "暂无提醒",
     comments: "还没有收到评论",

@@ -1,7 +1,7 @@
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
-import { HOME_RECOMMENDATION_LIMIT, type HomeRecommendation } from "@/lib/home-recommendations";
+import type { HomeRecommendation } from "@/lib/home-recommendations";
 import { HttpError } from "@/lib/http";
 
 export async function readHomeRecommendations(runtime: AppRuntime): Promise<HomeRecommendation[]> {
@@ -20,10 +20,10 @@ export async function readHomeRecommendations(runtime: AppRuntime): Promise<Home
 export async function saveHomeRecommendations(runtime: AppRuntime, actor: ArchiveUser, workIds: unknown) {
   if (actor.status !== "active" || !actor.isBootstrapAdmin)
     throw new HttpError(403, "只有超级管理员可以配置站长推荐。");
-  if (!Array.isArray(workIds) || workIds.length > HOME_RECOMMENDATION_LIMIT ||
+  if (!Array.isArray(workIds) ||
     workIds.some((id) => !Number.isSafeInteger(id) || id <= 0) ||
     new Set(workIds).size !== workIds.length)
-    throw new HttpError(400, `请选择最多 ${HOME_RECOMMENDATION_LIMIT} 个不重复的游戏。`);
+    throw new HttpError(400, "请选择不重复的游戏。");
 
   const database = getD1(runtime);
   const idsJson = JSON.stringify(workIds);

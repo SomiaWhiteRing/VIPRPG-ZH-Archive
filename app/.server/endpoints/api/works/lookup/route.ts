@@ -1,9 +1,9 @@
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { getD1 } from "@/app/.server/db/d1";
 import { workReadCondition } from "@/app/.server/db/work-visibility";
-import { parsePositiveId } from "@/app/.server/http/request";
+import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { json, jsonError } from "@/lib/http";
+import { HttpError, json, jsonError } from "@/lib/http";
 
 type WorkLookupRow = {
   id: number;
@@ -34,7 +34,11 @@ export async function GET(runtime: AppRuntime, request: Request) {
   try {
     const url = new URL(request.url);
     const title = url.searchParams.get("title")?.trim() ?? "";
-    const excludedWorkIds = (url.searchParams.get("excludeWorkIds") ?? "")
+    const excludedIds = request.method === "POST"
+      ? (await readJsonObject(request, "Invalid work lookup request")).excludeWorkIds
+      : url.searchParams.get("excludeWorkIds") ?? "";
+    if (typeof excludedIds !== "string") throw new HttpError(400, "Invalid excluded work id");
+    const excludedWorkIds = excludedIds
       .split(",")
       .filter(Boolean)
       .map((id) => parsePositiveId(id, "excluded work id"));
@@ -142,6 +146,8 @@ export async function GET(runtime: AppRuntime, request: Request) {
     return jsonError("Work lookup failed", error);
   }
 }
+
+export const POST = GET;
 
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);

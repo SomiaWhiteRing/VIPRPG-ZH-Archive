@@ -14,7 +14,7 @@ const directoryLinks = [
 export function HomeCommunity({ topics, className }: { topics: HomeForumTopic[]; className?: string }) {
   return (
     <aside
-      className={cn("min-w-0 shrink-0 scroll-mt-24 border-t border-foreground pt-5 min-[851px]:w-[205px] min-[851px]:border-t-0 min-[851px]:border-l min-[851px]:border-border min-[851px]:pt-0 min-[851px]:pl-5 min-[1101px]:w-[237px] min-[1101px]:pl-6", className)}
+      className={cn("min-w-0 scroll-mt-24 border-t border-foreground pt-5 min-[981px]:border-t-0 min-[981px]:border-l min-[981px]:border-border min-[981px]:pt-0 min-[981px]:pl-5 min-[1101px]:pl-6", className)}
       id="community"
       aria-labelledby="community-heading"
     >

@@ -1166,7 +1166,7 @@ await check("profile comment pagination retains public visibility and private hi
   assert.equal((await searchUserComments(f.runtime, { userId: 1, publicOnly: true })).total, 0);
 });
 
-await check("inbox indexed audiences retain deduplication, unread cursors and live maintainer access", async (f) => {
+await check("inbox indexed audiences retain deduplication, pagination and live maintainer access", async (f) => {
   f.sqlite.exec(`INSERT INTO user_roles(user_id,role_id) SELECT 1,id FROM roles WHERE key='uploader';
     INSERT INTO work_uploaders(work_id,user_id) VALUES(1,1);
     INSERT INTO work_maintainer_requests(id,work_id,applicant_user_id,submission_key) VALUES(1,1,2,'fixture-request');
@@ -1179,26 +1179,26 @@ await check("inbox indexed audiences retain deduplication, unread cursors and li
   for (let id = 1001; id <= 1037; id++) f.sqlite.prepare(
     "INSERT INTO inbox_items(id,type,recipient_user_id,sender_user_id,title,body,created_at) VALUES(?,'system_notice',1,2,'Notice','Content','2026-01-01')").run(id);
   const user = (await findUserById(f.runtime, 1))!;
-  const first = await listInboxItemsForUser(f.runtime, user, { category: "all", unread: true, page: 1 });
+  const first = await listInboxItemsForUser(f.runtime, user, { category: "all", page: 1 });
   assert.equal(first.total, 39);
   assert.equal(first.items.length, 30);
   assert.equal(first.pending, 1);
   assert.equal(await countUnreadInboxItemsForUser(f.runtime, user), first.unread);
   assert.deepEqual(first.items.slice(0, 2).map((row) => row.id), [2002, 2001]);
   for (const item of first.items) await markInboxItemRead(f.runtime, { user, itemId: item.id });
-  const older = await listInboxItemsForUser(f.runtime, user, { category: "all", unread: true, page: 1, cursor: first.nextCursor });
-  assert.equal(older.items.length, 9, "just-read boundary remains a valid cursor");
+  const older = await listInboxItemsForUser(f.runtime, user, { category: "all", page: 2 });
+  assert.equal(older.items.length, 9, "read items remain in the paginated list");
   assert.ok(older.items.every((row) => !first.items.some((item) => item.id === row.id)));
   assert.equal(await countUnreadInboxItemsForUser(f.runtime, user), 9);
   const administrator = (await findUserById(f.runtime, 3))!;
-  const adminPage = await listInboxItemsForUser(f.runtime, administrator, { category: "all", unread: false, page: 1 });
+  const adminPage = await listInboxItemsForUser(f.runtime, administrator, { category: "all", page: 1 });
   assert.ok(adminPage.items.some((row) => row.id === 2003));
   assert.ok(adminPage.items.every((row) => row.id !== 2002), "global management permission is not a maintainer audience");
   const applicant = (await findUserById(f.runtime, 2))!;
-  const ownRequest = await listInboxItemsForUser(f.runtime, applicant, { category: "all", unread: false, page: 1 });
+  const ownRequest = await listInboxItemsForUser(f.runtime, applicant, { category: "all", page: 1 });
   assert.ok(ownRequest.items.find((row) => row.id === 2002)?.readAt, "own maintainer request is not an unread notification");
   f.sqlite.exec("DELETE FROM work_uploaders WHERE work_id=1 AND user_id=1");
-  const revoked = await listInboxItemsForUser(f.runtime, user, { category: "all", unread: false, page: 1 });
+  const revoked = await listInboxItemsForUser(f.runtime, user, { category: "all", page: 1 });
   assert.equal(revoked.pending, 0);
   assert.ok(revoked.items.every((row) => row.id !== 2002));
 });

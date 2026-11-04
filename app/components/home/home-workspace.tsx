@@ -3,6 +3,7 @@ import type { HomePageData } from "@/app/.server/home-page-data";
 import type { GameCardSummary } from "@/lib/dto/db/game-library";
 import { GameCard } from "@/app/components/home/game-card";
 import { HomeCommunity } from "@/app/components/home/home-community";
+import { HomePageLayout } from "@/app/components/home/home-page-layout";
 import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
@@ -33,9 +34,9 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
   }
   return (
     <PageContainer>
-      <div className="flex flex-col gap-7 min-[561px]:gap-8 min-[851px]:flex-row min-[851px]:gap-6 min-[1101px]:gap-9">
-        <section
-          className="min-w-0 flex-1 scroll-mt-24"
+      <HomePageLayout
+        main={<section
+          className="min-w-0 scroll-mt-24"
           id="recent-updates"
           aria-labelledby="recent-heading"
         >
@@ -55,10 +56,9 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
           <div className="mt-5">
             <HomeWorkGrid works={recentWorks} prioritizeImages titleAs="h2" />
           </div>
-        </section>
-
-        <HomeCommunity topics={topics} />
-      </div>
+        </section>}
+        sidebar={<HomeCommunity topics={topics} />}
+      />
 
       <section
         className="mt-7 flex flex-col gap-4 border-t-2 border-foreground pt-5 min-[561px]:mt-8 min-[561px]:gap-5 min-[561px]:pt-6 min-[851px]:mt-11 min-[851px]:flex-row min-[851px]:gap-6 min-[1101px]:gap-8 scroll-mt-24"

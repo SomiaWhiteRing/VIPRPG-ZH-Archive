@@ -1,5 +1,3 @@
-import { Checkbox } from "@/app/components/ui/checkbox";
-import { Label } from "@/app/components/ui/label";
 import type { InboxCategory } from "@/lib/inbox";
 import { inboxHref } from "@/lib/inbox";
 import { useTransition } from "react";
@@ -7,12 +5,10 @@ import { Link, useNavigate } from "react-router";
 
 export function InboxControls({
   category,
-  unread,
   pendingCount,
   canResolve,
 }: {
   category: InboxCategory;
-  unread: boolean;
   pendingCount: number;
   canResolve: boolean;
 }) {
@@ -45,7 +41,7 @@ export function InboxControls({
         {categories.map(([value, label]) => (
           <Link
             key={value}
-            to={inboxHref(value, unread)}
+            to={inboxHref(value)}
             prefetch="none"
             aria-current={category === value ? "page" : undefined}
             aria-disabled={pending}
@@ -54,7 +50,7 @@ export function InboxControls({
               event.preventDefault();
               if (!pending)
                 startTransition(() =>
-                  navigate(inboxHref(value, unread), {
+                  navigate(inboxHref(value), {
                     preventScrollReset: true,
                   }),
                 );
@@ -64,24 +60,6 @@ export function InboxControls({
           </Link>
         ))}
       </nav>
-      <Label
-        htmlFor="inbox-unread"
-        className="flex min-h-10 cursor-pointer items-center gap-2 text-sm"
-      >
-        <Checkbox
-          id="inbox-unread"
-          checked={unread}
-          disabled={pending}
-          onCheckedChange={(checked) =>
-            startTransition(() =>
-              navigate(inboxHref(category, checked === true), {
-                preventScrollReset: true,
-              }),
-            )
-          }
-        />
-        只看未读
-      </Label>
     </div>
   );
 }

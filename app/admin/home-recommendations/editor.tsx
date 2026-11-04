@@ -6,7 +6,7 @@ import { Notice } from "@/app/components/ui/notice";
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { useToast } from "@/app/components/ui/toast";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
-import { HOME_RECOMMENDATION_LIMIT, type HomeRecommendation } from "@/lib/home-recommendations";
+import type { HomeRecommendation } from "@/lib/home-recommendations";
 import { requestJson } from "@/lib/ui/api-response";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
@@ -35,8 +35,9 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
     const controller = new AbortController();
     const timer = setTimeout(() => {
       void requestJson<{ ok: true; works: Candidate[] }>(
-        `/api/works/lookup?scope=home&title=${encodeURIComponent(query.trim())}&excludeWorkIds=${selectedIds}`,
-        { signal: controller.signal }, "游戏搜索失败",
+        `/api/works/lookup?scope=home&title=${encodeURIComponent(query.trim())}`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ excludeWorkIds: selectedIds }), signal: controller.signal }, "游戏搜索失败",
       ).then((result) => { if (!controller.signal.aborted) setCandidates(result.works); })
         .catch((error) => { if (!controller.signal.aborted) setSearchError(error instanceof Error ? error.message : "游戏搜索失败。"); })
         .finally(() => { if (!controller.signal.aborted) setSearching(false); });
@@ -46,14 +47,6 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
 
   function changeQuery(value: string) {
     setQuery(value); setCandidates([]); setSearchError(""); setSearching(Boolean(value.trim()));
-  }
-
-  function move(index: number, offset: number) {
-    setWorks((current) => {
-      const reordered = [...current];
-      [reordered[index], reordered[index + offset]] = [reordered[index + offset], reordered[index]];
-      return reordered;
-    });
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -76,10 +69,10 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
 
   return (
     <form className="grid gap-5" onSubmit={(event) => void save(event)}>
-      <FormField label="添加游戏" controlId={inputId} hint={`最多推荐 ${HOME_RECOMMENDATION_LIMIT} 个允许首页展示的游戏，首页按下方顺序显示前 4／3／4 个；登录用户可见的游戏仅向登录用户展示。`}>
+      <FormField label="添加游戏" controlId={inputId}>
         <SearchComboBox id={inputId} label="添加推荐游戏" query={query} onQueryChange={changeQuery}
           placeholder="搜索游戏标题或别名" maxLength={200} loading={searching}
-          disabled={busy || works.length >= HOME_RECOMMENDATION_LIMIT}
+          disabled={busy}
           items={candidates.filter((candidate) => !works.some((work) => work.id === candidate.id))}
           selectedKey={null} getKey={(work) => work.id} getText={(work) => work.chineseTitle || work.originalTitle}
           renderItem={(work) => <span className="grid gap-0.5">
@@ -87,7 +80,7 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
             {work.chineseTitle ? <span className="text-xs text-muted">{work.originalTitle}</span> : null}
           </span>}
           onChoose={(candidate) => {
-            setWorks((current) => current.length < HOME_RECOMMENDATION_LIMIT && !current.some((work) => work.id === candidate.id)
+            setWorks((current) => !current.some((work) => work.id === candidate.id)
               ? [...current, { ...candidate, isPublic: true }] : current);
             changeQuery("");
           }}
@@ -96,10 +89,9 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
       </FormField>
       {works.some((work) => !work.isPublic) ? <Notice tone="warning">存在不允许首页展示或已不可访问的游戏，请移除后保存。</Notice> : null}
       {works.length ? (
-        <ol className="admin-panel m-0 grid list-none divide-y divide-border" aria-label="推荐展示顺序">
-          {works.map((work, index) => (
+        <ul className="admin-panel m-0 grid list-none divide-y divide-border" aria-label="推荐游戏">
+          {works.map((work) => (
             <li key={work.id} className="flex flex-wrap items-center gap-3 py-3">
-              <span className="text-sm text-muted">{index + 1}</span>
               <div className="min-w-0 flex-1 basis-40">
                 <Link className="wrap-anywhere font-semibold hover:underline" to={`/admin/works/${work.id}`}>
                   {work.chineseTitle || work.originalTitle}
@@ -107,21 +99,15 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
                 {work.chineseTitle ? <p className="mt-0.5 wrap-anywhere text-xs text-muted">{work.originalTitle}</p> : null}
                 {!work.isPublic ? <span className="text-xs text-muted">不可在首页展示</span> : null}
               </div>
-              <div className="flex shrink-0 gap-1">
-                <Button type="button" variant="outline" size="sm" disabled={busy || index === 0}
-                  aria-label={`上移 ${work.chineseTitle || work.originalTitle}`} onClick={() => move(index, -1)}>上移</Button>
-                <Button type="button" variant="outline" size="sm" disabled={busy || index === works.length - 1}
-                  aria-label={`下移 ${work.chineseTitle || work.originalTitle}`} onClick={() => move(index, 1)}>下移</Button>
-                <Button type="button" variant="ghost" size="sm" disabled={busy}
-                  aria-label={`移除 ${work.chineseTitle || work.originalTitle}`}
-                  onClick={() => setWorks((current) => current.filter((item) => item.id !== work.id))}>移除</Button>
-              </div>
+              <Button type="button" variant="ghost" size="sm" className="shrink-0" disabled={busy}
+                aria-label={`移除 ${work.chineseTitle || work.originalTitle}`}
+                onClick={() => setWorks((current) => current.filter((item) => item.id !== work.id))}>移除</Button>
             </li>
           ))}
-        </ol>
+        </ul>
       ) : <EmptyState title="尚未配置站长推荐。" />}
       <StickySaveBar><Button type="submit" disabled={busy || !dirty}>{busy ? "保存中…" : "保存推荐"}</Button>
-        <span className="text-xs text-muted" role="status">{dirty ? "有未保存修改" : "推荐顺序已保存"}</span>
+        <span className="text-xs text-muted" role="status">{dirty ? "有未保存修改" : "推荐已保存"}</span>
       </StickySaveBar>
     </form>
   );

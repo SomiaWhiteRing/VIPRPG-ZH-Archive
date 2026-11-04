@@ -182,19 +182,19 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
 
   return (
     <div className="grid w-full min-w-0 gap-3">
-      {!profile && !focused && <div className="rounded-xl border border-border bg-card">
+      {!readOnlyInteractions && !focused && <div className="rounded-xl border border-border bg-card">
         {canCompose && !settings?.enabled && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">时间线已停止记录业务动态。<Link className="ml-1 text-secondary hover:underline" to="/me/timeline">开启时间线</Link>，记录操作和发布吐槽。</p>}
         {canCompose && settings?.enabled && !canPublish && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">当前账号暂时不能发布新吐槽，仍可查看动态。</p>}
         {allowCreate && <section aria-label="发布吐槽" className="p-3 sm:p-4">{editor()}</section>}
-        <div className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-x-2 px-2 py-2 sm:px-3", viewerId && "sm:grid-cols-[auto_minmax(0,1fr)_auto]", canCompose && "border-t border-border")}>
-          {!!viewerId && <nav aria-label="时间线范围" className="hidden min-w-0 items-center sm:flex">
+        <div className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-x-2 px-2 py-2 sm:px-3", viewerId && !profile && "sm:grid-cols-[auto_minmax(0,1fr)_auto]", canCompose && "border-t border-border")}>
+          {!!viewerId && !profile && <nav aria-label="时间线范围" className="hidden min-w-0 items-center sm:flex">
             {rangeToggle(false)}
           </nav>}
           <nav aria-label="动态类型" className="flex min-w-0 items-center gap-0.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {!!viewerId && !allowCreate && <span className="mr-1 shrink-0 sm:hidden">{rangeToggle(true)}</span>}
+            {!!viewerId && !profile && !allowCreate && <span className="mr-1 shrink-0 sm:hidden">{rangeToggle(true)}</span>}
             {[undefined, ...TIMELINE_FILTER_KINDS].map((value) => <Link key={value ?? "all"} to={timelineHref(basePath, view, value)} aria-current={kind === value ? "page" : undefined} className={cn("inline-flex h-8 shrink-0 items-center rounded-full px-2 text-xs transition-colors hover:bg-muted/10", kind === value ? "bg-primary/10 font-medium text-secondary" : "text-muted")}>{value ? TIMELINE_KIND_LABELS[value] : "全部"}</Link>)}
           </nav>
-          {!!viewerId && <div className="hidden shrink-0 items-center justify-end gap-1 sm:flex">
+          {!!viewerId && !profile && <div className="hidden shrink-0 items-center justify-end gap-1 sm:flex">
             <Button asChild variant="ghost" size="icon" className="size-8 text-muted"><Link to="/me/timeline" aria-label="时间线设置"><Settings aria-hidden /></Link></Button>
             <Button variant="ghost" size="icon" className="size-8 text-muted" type="button" aria-label="刷新时间线" disabled={busy || anyReplyBusy || revalidator.state !== "idle"} onClick={() => void revalidator.revalidate()}><RefreshCw aria-hidden className={revalidator.state !== "idle" ? "motion-safe:animate-spin" : undefined} /></Button>
           </div>}

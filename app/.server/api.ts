@@ -601,12 +601,15 @@ api.all("/api/works/external", (_c) =>
 api.on(["GET", "HEAD"], "/api/works/lookup", (c) =>
   endpoint35.GET(c.get("runtime"), c.req.raw),
 );
+api.post("/api/works/lookup", (c) =>
+  endpoint35.POST(c.get("runtime"), c.req.raw),
+);
 api.options("/api/works/lookup", (c) =>
-  c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }),
+  c.body(null, 204, { Allow: "GET, HEAD, POST, OPTIONS" }),
 );
 api.all("/api/works/lookup", (_c) =>
   jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: {
-    Allow: "GET, HEAD, OPTIONS",
+    Allow: "GET, HEAD, POST, OPTIONS",
   } }),
 );
 api.on(["GET", "HEAD"], "/discussions/sitemap.xml", (c) =>
