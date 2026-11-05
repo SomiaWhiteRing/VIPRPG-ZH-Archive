@@ -4,6 +4,8 @@ import { scrollElementIntoView } from "@/lib/ui/scroll.js";
 
 
 import { MentionText } from "./mention-text";
+import { usePushReply } from "@/app/components/use-push-reply";
+import { useInboxAutoRead } from "@/app/inbox/use-auto-read";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
@@ -23,7 +25,7 @@ import { COMMENT_REPLY_PREVIEW_SIZE } from "@/lib/comment-pagination";
 import type { CommentBodySegment, CommentDto, RootCommentPage, CommentReplyPage } from "@/lib/dto/db/work-community";
 import { MessageCircle, Pencil, ThumbsUp, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useRouteLoaderData } from "react-router";
+import { Link, useLocation, useRouteLoaderData } from "react-router";
 
 type Props = {
   target: CommentTarget;
@@ -70,6 +72,18 @@ function CommentPanelContent({
     Record<number, Partial<CommentDto>>
   >({});
   const pendingLikes = useRef(new Set<number>());
+  const pushReply = usePushReply();
+  const location = useLocation();
+  const addressedInbox = pushReply.value ?? new URLSearchParams(location.search).get("inbox");
+  const [notificationReply, setNotificationReply] = useState<{ itemId: number; root: CommentDto; reply: CommentDto; open: boolean } | null>(null);
+  useEffect(() => {
+    if (!currentUserId || !addressedInbox || !/^[1-9]\d*$/.test(addressedInbox)) return;
+    let cancelled = false;
+    void requestJson<{ itemId: number; root: CommentDto; reply: CommentDto }>(`/api/push/inbox/${addressedInbox}/comment`).then(result => {
+      if (!cancelled && result.root.target.kind === target.kind && result.root.target.id === target.id) setNotificationReply({ ...result, open: !!pushReply.value });
+    }).catch(() => { /* Keep the normal page usable when the addressed content is no longer available. */ });
+    return () => { cancelled = true; };
+  }, [currentUserId, addressedInbox, pushReply.value, pushReply.key, target.kind, target.id]);
 
   async function toggleLike(comment: CommentDto) {
     if (
@@ -200,7 +214,9 @@ function CommentPanelContent({
     const current = { ...comment, ...commentUpdates[comment.id] };
     return current.status === "published" && current.pinned;
   });
-  const visibleComments = comments.filter((comment) =>
+  const displayedComments = notificationReply && !comments.some(comment => comment.id === notificationReply.root.id)
+    ? [notificationReply.root, ...comments] : comments;
+  const visibleComments = displayedComments.filter((comment) =>
     !hideDeletedContent || (commentUpdates[comment.id]?.status ?? comment.status) !== "deleted",
   );
 
@@ -222,6 +238,9 @@ function CommentPanelContent({
           visibleComments.map((comment) => (
             <CommentCard
               comment={comment}
+              notificationReply={notificationReply?.root.id === comment.id ? notificationReply.reply : null}
+              notificationItemId={notificationReply?.root.id === comment.id ? notificationReply.itemId : undefined}
+              openNotificationReply={notificationReply?.root.id === comment.id && notificationReply.open}
               pinControl={canPin && (comment.pinned || !hasPinnedComment) ? <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void togglePin(comment)}>{comment.pinned ? "取消置顶" : "置顶"}</Button> : null}
               commentUpdates={commentUpdates}
               currentUserId={currentUserId}
@@ -259,6 +278,9 @@ function commentEndpoint(target: CommentTarget): string {
 
 function CommentCard({
   comment,
+  notificationReply,
+  notificationItemId,
+  openNotificationReply,
   pinControl,
   commentUpdates,
   currentUserId,
@@ -271,6 +293,9 @@ function CommentCard({
   onUpdated,
 }: {
   comment: CommentDto;
+  notificationReply: CommentDto | null;
+  notificationItemId?: number;
+  openNotificationReply: boolean;
   pinControl: React.ReactNode;
   commentUpdates: Record<number, Partial<CommentDto>>;
   currentUserId: number | null;
@@ -286,6 +311,18 @@ function CommentCard({
   const [replyBusy, setReplyBusy] = useState(false);
   const [editTarget, setEditTarget] = useState<CommentDto | null>(null);
   const editTrigger = useRef<HTMLButtonElement | null>(null);
+  const handledNotificationReply = useRef<number | null>(null);
+  const notificationReadTarget = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    notificationReadTarget.current = notificationReply ? document.getElementById(`comment-${notificationReply.id}`) : null;
+  }, [notificationReply]);
+  useInboxAutoRead({ id: notificationItemId ?? 0, readAt: notificationItemId ? null : "", canApprove: false, canReject: false }, notificationReadTarget);
+  useEffect(() => {
+    if (!openNotificationReply || !notificationReply || handledNotificationReply.current === notificationReply.id || !currentUserId || editTarget || replyBusy) return;
+    handledNotificationReply.current = notificationReply.id;
+    if (!replyTarget) setReplyTarget(notificationReply);
+    requestAnimationFrame(() => document.getElementById(`comment-reply-input-${comment.id}`)?.focus());
+  }, [openNotificationReply, notificationReply, currentUserId, editTarget, replyBusy, replyTarget, comment.id]);
   function closeEdit() {
     setEditTarget(null);
     requestAnimationFrame(() => editTrigger.current?.focus());
@@ -359,7 +396,10 @@ function CommentCard({
   }, [focusedReplyId, replies]);
 
   const preview = replies?.preview ?? comment.replyPreview ?? [];
-  const visibleReplies = (expanded && replies ? replies.items : preview)
+  const previewCount = preview.length + (notificationReply?.rootCommentId === comment.id && !preview.some(reply => reply.id === notificationReply.id) ? 1 : 0);
+  const displayedReplies = expanded && replies ? replies.items : preview;
+  const visibleReplies = (notificationReply?.rootCommentId === comment.id && !displayedReplies.some(reply => reply.id === notificationReply.id)
+    ? [...displayedReplies, notificationReply] : displayedReplies)
     .filter((reply) => !hideDeletedContent || (commentUpdates[reply.id]?.status ?? reply.status) !== "deleted");
   const replyCount = replies?.total ?? comment.replyCount ?? 0;
   const currentComment = { ...comment, ...commentUpdates[comment.id] };
@@ -438,7 +478,7 @@ function CommentCard({
                 />
               );
             })}
-            {replyCount > COMMENT_REPLY_PREVIEW_SIZE ? (
+            {expanded || replyCount > previewCount ? (
               <Button
                 aria-controls={`comment-replies-${comment.id}`}
                 aria-expanded={expanded}
@@ -458,7 +498,7 @@ function CommentCard({
                   ? "正在加载…"
                   : expanded
                     ? "收起回复"
-                    : `展开剩余 ${replyCount - preview.length} 条回复`}
+                    : `展开剩余 ${replyCount - previewCount} 条回复`}
               </Button>
             ) : null}
             {expanded && replies && replies.total > replies.pageSize ? (

@@ -144,6 +144,23 @@ export function DiscussionWorkspace({
     setUnavailable(false);
   }
   const [uploadProgress, setUploadProgress] = useState("");
+  const [replyFocusRequest, setReplyFocusRequest] = useState(0);
+  const userId = viewer?.id;
+  const canUseForum = !!viewer?.use;
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || !canUseForum) return;
+    function receive(event: MessageEvent) {
+      if (event.data?.type !== "viprpg-push-reply" || typeof event.data.url !== "string") return;
+      const url = new URL(event.data.url);
+      const reply = url.searchParams.get("reply");
+      if (url.origin !== window.location.origin || url.pathname !== window.location.pathname
+        || !/^\/discussions\/[1-9]\d*$/.test(url.pathname) || !(reply === "topic" || /^[1-9]\d*$/.test(reply ?? ""))) return;
+      if (draft) setReplyFocusRequest(value => value + 1);
+      else if (!busy) window.location.assign(url.href);
+    }
+    navigator.serviceWorker.addEventListener("message", receive);
+    return () => navigator.serviceWorker.removeEventListener("message", receive);
+  }, [canUseForum, draft, busy]);
   const listHref = forumHref("/discussions", {
     view: featured ? "featured" : null,
     tag: selected.map((tag) => tag.id),
@@ -158,8 +175,6 @@ export function DiscussionWorkspace({
     cacheErrorShown.current = true;
     toast.error("无法读写本地草稿，请检查浏览器存储空间或权限。");
   }, [toast]);
-  const userId = viewer?.id;
-  const canUseForum = !!viewer?.use;
   const topicId = initialDetail?.topic.id;
   const preparedDrafts = useRef(new Map<string, PreparedDraft>());
   const prepareDraft = useCallback((key: string) => {
@@ -253,7 +268,8 @@ export function DiscussionWorkspace({
       if (typeof reply === "number") {
         const post = initial.posts.items.find((item) => item.postNumber === reply);
         if (post?.capabilities.reply)
-          void restoreDraft(createDraft("comment", initial.topic.title, post));
+          void restoreDraft(createDraft("comment", initial.topic.title, post,
+            initial.comment ? post.comments.items.find(comment => comment.id === initial.comment && comment.capabilities.reply) : undefined));
       } else if (initial.topic.capabilities.reply) {
         void restoreDraft(createDraft("post", initial.topic.title), !reply);
       }
@@ -677,6 +693,7 @@ export function DiscussionWorkspace({
       <ForumEditor
         key={draft.editorId}
         draft={draft}
+        focusRequest={replyFocusRequest}
         canInsertElements={viewer?.elements}
         onChange={(next) => {
           if (draftValue(next) !== draftValue(draft))

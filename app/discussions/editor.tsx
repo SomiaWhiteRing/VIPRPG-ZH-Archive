@@ -50,6 +50,7 @@ export function ForumEditor({
   loginExpired,
   emojis,
   canInsertElements = false,
+  focusRequest = 0,
 }: {
   draft: ForumDraft;
   onChange: (draft: ForumDraft) => void;
@@ -62,6 +63,7 @@ export function ForumEditor({
   loginExpired: boolean;
   emojis: FaceEmoji[];
   canInsertElements?: boolean;
+  focusRequest?: number;
 }) {
   // Local image preparation locks editor actions without marking a publish
   // request in flight or enabling the page's unload guard on an empty draft.
@@ -84,6 +86,7 @@ export function ForumEditor({
   const setFullscreen = replyLayout?.setFullscreen;
   const [overflowing, setOverflowing] = useState(false);
   const composing = useRef(false);
+  const handledFocusRequest = useRef(0);
   const topic = draft.mode === "topic";
   const inline = draft.mode === "comment";
   const previewing = bbcodeOpen && !inline && preview;
@@ -96,6 +99,13 @@ export function ForumEditor({
   const remaining = limit - (inline ? bodyLength : forumBodyLength)(draft.body);
   const showRemaining = remaining <= Math.ceil(limit * 0.1);
   const canSubmit = (!!draft.body.trim() || draft.images.length > 0) && remaining >= 0;
+  useEffect(() => {
+    if (!focusRequest || handledFocusRequest.current === focusRequest || busy) return;
+    handledFocusRequest.current = focusRequest;
+    setCollapsed(false);
+    const frame = requestAnimationFrame(() => mixed.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [focusRequest, busy]);
   const label = draft.target
     ? "保存修改"
     : topic

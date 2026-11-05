@@ -1,8 +1,8 @@
 import { requestJsonValue } from "@/lib/ui/api-response";
-import { INBOX_CHANGED_EVENT } from "@/lib/inbox-events";
+import { INBOX_CHANGED_EVENT, notifyInboxChanged } from "@/lib/inbox-events";
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 
-import { useLocation, useRouteLoaderData, useSearchParams } from "react-router";
+import { useLocation, useRevalidator, useRouteLoaderData, useSearchParams } from "react-router";
 
 const InboxUnreadContext = createContext({ unread: 0, messagesUnread: 0 });
 export function useInboxUnread() { return useContext(InboxUnreadContext); }
@@ -19,6 +19,17 @@ export function InboxIndicator({
   children: ReactNode;
 }) {
   const pathname = useLocation().pathname;
+  const revalidator = useRevalidator();
+  useEffect(() => {
+    if (!enabled || !("serviceWorker" in navigator)) return;
+    const receive = (event: MessageEvent) => {
+      if (event.data?.type !== "viprpg-inbox-changed") return;
+      notifyInboxChanged();
+      void revalidator.revalidate();
+    };
+    navigator.serviceWorker.addEventListener("message", receive);
+    return () => navigator.serviceWorker.removeEventListener("message", receive);
+  }, [enabled, revalidator]);
   const navigationParams = new URLSearchParams(useSearchParams()[0]);
   if (pathname === "/me/permissions") navigationParams.delete("role");
   const query = navigationParams.toString();

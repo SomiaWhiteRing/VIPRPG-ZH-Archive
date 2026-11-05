@@ -22,6 +22,8 @@ export type InboxItem = {
   status: InboxItemStatus;
   senderUserId: number | null;
   senderDisplayName: string | null;
+  senderAvatar: string | null;
+  contentUnavailable: boolean;
   recipientUserId: number | null;
   requiredPermissionKey: PermissionKey | null;
   targetUserId: number | null;
@@ -62,12 +64,15 @@ export type InboxItem = {
     action: string;
   } | null;
   commentNotification: {
+    commentId: number;
+    rootCommentId: number;
     kind: "comment" | "reply" | "like" | "mention";
     targetTitle: string;
     href: string;
     excerpt: string;
     actorName: string;
     actorHref: string | null;
+    actorAvatar: string | null;
     action: string;
   } | null;
 };
@@ -88,6 +93,7 @@ export type InboxFriendNotification = {
 };
 
 export type InboxInteraction = {
+  replyAllowed: boolean;
   topicId: number;
   postNumber: number;
   commentId: number | null;

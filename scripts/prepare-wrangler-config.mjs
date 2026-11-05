@@ -18,7 +18,7 @@ if (errors.length || !resources || Array.isArray(resources) || typeof resources 
 const selected = values.env === "staging" && resources.env ? resources.env.staging : resources;
 if (!selected) throw new Error(`Missing deployment environment: ${values.env}`);
 const infrastructure = ["name", "routes", "workers_dev", "preview_urls", "d1_databases", "r2_buckets",
-  "send_email", "ratelimits", "vars", "triggers", "observability", "limits", "placement"];
+  "send_email", "ratelimits", "vars", "triggers", "observability", "limits", "placement", "queues"];
 const target = structuredClone(base);
 for (const key of infrastructure) if (Object.hasOwn(selected, key)) target[key] = selected[key];
 if (values.env === "production") {
@@ -46,6 +46,7 @@ if (values.env === "staging") {
   template.env.staging = target;
   template.name = "viprpg-deployment-disabled";
   for (const key of ["d1_databases", "r2_buckets", "send_email", "ratelimits", "routes"]) template[key] = [];
+  template.queues = { producers: [], consumers: [] };
   template.durable_objects = { bindings: [] };
   template.triggers = { crons: [] };
   template.vars = { APP_ORIGIN: "http://127.0.0.1:3000", EMAIL_FROM: "noreply@viprpg.org", SITE_NOINDEX: "true" };

@@ -3,9 +3,9 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
+import { useState } from "react";
 
 import { requireAccountUser } from "@/app/.server/auth/account-user";
-import { CheckboxField } from "@/app/components/ui/checkbox-field";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Label } from "@/app/components/ui/label";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
@@ -13,6 +13,8 @@ import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 import { AccountPreferencesFields } from "./account-preferences-fields";
+import { WebPushSettings } from "./web-push-settings";
+import { webPushConfiguration } from "@/app/.server/push/service";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -63,14 +65,16 @@ export async function loader(args: LoaderFunctionArgs) {
     },
   ];
 
-  return { params, profileSettings, preferences: user.preferences };
+  return { params, profileSettings, preferences: user.preferences, userId: user.id, pushPublicKey: webPushConfiguration(runtime.env)?.publicKey ?? null };
 }
 
 export const meta: MetaFunction = ({ error }) =>
   pageMetaDescriptors({ title: ["隐私与偏好", "个人中心"] }, error);
 
 export default function PrivacyPage() {
-  const { profileSettings, preferences } = useLoaderData<typeof loader>();
+  const { profileSettings, preferences, userId, pushPublicKey } = useLoaderData<typeof loader>();
+  const [notificationPreferences, setNotificationPreferences] = useState(preferences);
+  const [pushBusy, setPushBusy] = useState(false);
   return (
     <div>
       <AccountPageHeader title="隐私与偏好" />
@@ -84,10 +88,18 @@ export default function PrivacyPage() {
         <input name="receivePrivateMessages" type="hidden" value="0" />
         <div className="divide-y divide-border border-b border-border">
           <div className="py-2">
-            <CheckboxField name="receivePrivateMessages" label="接收私信" defaultChecked={preferences.receivePrivateMessages} />
+            <Label className="flex min-h-10 cursor-pointer items-center gap-2">
+              <Checkbox name="receivePrivateMessages" value="1" checked={notificationPreferences.receivePrivateMessages}
+                onCheckedChange={checked => setNotificationPreferences(current => ({ ...current, receivePrivateMessages: checked === true }))} />
+              接收私信
+            </Label>
           </div>
           <div className="py-2">
-            <CheckboxField name="notifyFriendAdditions" label="接收他人的好友提醒" defaultChecked={preferences.notifyFriendAdditions} />
+            <Label className="flex min-h-10 cursor-pointer items-center gap-2">
+              <Checkbox name="notifyFriendAdditions" value="1" checked={notificationPreferences.notifyFriendAdditions}
+                onCheckedChange={checked => setNotificationPreferences(current => ({ ...current, notifyFriendAdditions: checked === true }))} />
+              接收他人的好友提醒
+            </Label>
           </div>
           <fieldset className="py-4">
             <legend className="sr-only">在个人主页展示</legend>
@@ -102,8 +114,11 @@ export default function PrivacyPage() {
             </div>
           </fieldset>
         </div>
-        <AccountPreferencesFields preferences={preferences} />
-        <div className="mt-5"><Rm2kButton type="submit">保存设置</Rm2kButton></div>
+        <AccountPreferencesFields preferences={notificationPreferences}
+          onNotifyUploadedWorkCommentsChange={checked => setNotificationPreferences(current => ({ ...current, notifyUploadedWorkComments: checked }))}>
+          <WebPushSettings key={userId} publicKey={pushPublicKey} preferences={notificationPreferences} onBusyChange={setPushBusy} />
+        </AccountPreferencesFields>
+        <div className="mt-5"><Rm2kButton type="submit" disabled={pushBusy}>保存设置</Rm2kButton></div>
       </RedirectForm>
     </div>
   );

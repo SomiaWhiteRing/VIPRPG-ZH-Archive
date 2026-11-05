@@ -12,6 +12,7 @@ import { cleanupDirectMessageImages } from "./app/.server/messages/image-cleanup
 import { drainViewMerges } from "./app/.server/views/service";
 import { runScheduledAuditReports } from "./app/.server/db/audit-reports";
 import { DAILY_AUDIT_CRON } from "./lib/audit-report-config.mjs";
+import { consumeWebPush, enqueueWebPush } from "./app/.server/push/service";
 import { crawlerResponse, publicRobots, isFilteredGameList } from "./lib/crawl-policy";
 
 export { ViewStats } from "./app/.server/views/durable-object";
@@ -48,6 +49,10 @@ app.use("*", async (c, next) => {
     createRuntime(c.req.raw, c.env, c.executionCtx, import.meta.env.DEV),
   );
   await next();
+  if (c.req.path.startsWith("/api/") && !["GET", "HEAD", "OPTIONS"].includes(c.req.method)
+    && c.req.path !== "/api/push/subscription") {
+    c.executionCtx.waitUntil(enqueueWebPush(c.env).catch(() => console.error("Web Push enqueue failed")));
+  }
   if (c.env.SITE_NOINDEX === "true") {
     c.header("X-Robots-Tag", "noindex, nofollow");
   } else if (/^\/games(?:\.data)?\/?$/.test(c.req.path) &&
@@ -73,7 +78,7 @@ app.all(
 app.route("/", api);
 app.all("*", async (c) => {
   if (
-    /^\/(?:assets\/|icon\/|play\/runtime\/|play\/sw\.js$|play\/player(?:\.html)?$)/.test(
+    /^\/(?:assets\/|icon\/|notification-sw\.js$|play\/runtime\/|play\/sw\.js$|play\/player(?:\.html)?$)/.test(
       c.req.path,
     )
   )
@@ -96,6 +101,9 @@ export default {
   async fetch(request, env, ctx) {
     return (await maybeHandleEasyRpgAsset(request, env.ASSETS)) ?? app.fetch(request, env, ctx);
   },
+  async queue(batch, env, ctx) {
+    await consumeWebPush(batch, createRuntime(new Request(env.APP_ORIGIN), env, ctx));
+  },
   scheduled(controller, env, ctx) {
     if (controller.cron === DAILY_AUDIT_CRON) {
       ctx.waitUntil(runScheduledAuditReports(env.DB, controller.scheduledTime));
@@ -104,6 +112,7 @@ export default {
     ctx.waitUntil(drainViewMerges(env).catch(() => {
       console.error("Scheduled view merge retry failed");
     }));
+    ctx.waitUntil(enqueueWebPush(env).catch(() => console.error("Web Push outbox retry failed")));
     ctx.waitUntil(
       runScheduledArchiveGc(env, {
         trigger: "scheduled",

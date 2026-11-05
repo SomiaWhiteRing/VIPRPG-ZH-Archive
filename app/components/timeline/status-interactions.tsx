@@ -1,6 +1,7 @@
 import { requestJson } from "@/lib/ui/api-response";
 
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { usePushReply } from "@/app/components/use-push-reply";
 import { Link, useRevalidator } from "react-router";
 import { MessageSquare, Send, ThumbsUp, Trash2 } from "lucide-react";
 import { NestedReply, nestedRepliesClassName } from "@/app/components/comments/nested-reply";
@@ -45,19 +46,29 @@ export function StatusInteractions({ item, viewerId, readOnly = false, expandRep
   const draft = useTimelineDraft({ userId: readOnly ? null : viewerId, kind: "reply", eventId: item.id, onError: onCacheError });
   const confirm = useConfirm(), toast = useToast(), revalidator = useRevalidator();
   const regionId = `timeline-replies-${item.id}`, editorId = `timeline-reply-${item.id}`;
+  const pushReply = usePushReply();
+  const handledPushReply = useRef<string | null>(null);
 
-  async function run(action: () => Promise<void>) {
+  const run = useCallback(async (action: () => Promise<void>) => {
     if (pending.current) return;
     pending.current = true; setBusy(true); onBusyChange(true); setError("");
     try { await action(); }
     catch (error) { setError(error instanceof Error ? error.message : "操作失败，请重试。"); }
     finally { pending.current = false; setBusy(false); onBusyChange(false); }
-  }
-  async function load(cursor?: number | null) {
+  }, [onBusyChange]);
+  const load = useCallback(async (cursor?: number | null) => {
     const result = await request(`/api/timeline/${item.id}/replies${cursor ? `?cursor=${cursor}` : ""}`) as TimelineReplyPage;
     setPage((current) => ({ ...result, items: cursor && current ? [...current.items, ...result.items.filter((reply) => !current.items.some((old) => old.id === reply.id))] : result.items }));
     if (!cursor) setAddressed(false);
-  }
+  }, [item.id]);
+  useEffect(() => {
+    if (pushReply.value !== String(item.id) || handledPushReply.current === pushReply.key || readOnly || !item.canReply || !expandReplies) return;
+    handledPushReply.current = pushReply.key;
+    setOpen(true);
+    if (!page) void run(() => load());
+    requestAnimationFrame(() => document.getElementById(editorId)?.focus());
+  }, [pushReply.value, pushReply.key, item.id, item.canReply, readOnly, expandReplies, page, run, load, editorId]);
+
   function toggle() {
     if (busy || !expandReplies) return;
     if (open) { setOpen(false); return; }

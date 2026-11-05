@@ -21,6 +21,18 @@ import { INBOX_PAGE_SIZE } from "@/lib/inbox";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { workMaintainerRecipientSql } from "./work-maintainers";
 import type { MaintainerRequestStatus } from "@/lib/work-maintainers";
+import type { PushCategory } from "@/lib/push";
+
+const inboxCategorySql: Record<InboxCategory, string> = {
+  all: "1",
+  comments: "work_comment_id IS NOT NULL",
+  replies: "reply_comment_id IS NOT NULL OR timeline_reply_id IS NOT NULL",
+  forum: "type='forum_reply'",
+  likes: "(type='forum_like' OR like_comment_id IS NOT NULL OR (timeline_event_id IS NOT NULL AND timeline_reply_id IS NULL))",
+  friends: "friend_action IN ('added','returned')",
+  system: "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL AND like_comment_id IS NULL AND timeline_event_id IS NULL AND COALESCE(friend_action,'') NOT IN ('added','returned')",
+  pending: "can_reject=1 OR (report_kind IS NOT NULL AND status='pending')",
+};
 
 type InboxItemRow = {
   id: number;
@@ -198,17 +210,7 @@ export async function listInboxItemsForUser(
   },
 ) {
   const query = inboxQuery(user, false);
-  const categorySql = {
-    all: "1",
-    comments: "work_comment_id IS NOT NULL",
-    replies: "reply_comment_id IS NOT NULL OR timeline_reply_id IS NOT NULL",
-    forum: "type='forum_reply'",
-    likes: "(type='forum_like' OR like_comment_id IS NOT NULL OR (timeline_event_id IS NOT NULL AND timeline_reply_id IS NULL))",
-    friends: "friend_action IN ('added','returned')",
-    system:
-      "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL AND like_comment_id IS NULL AND timeline_event_id IS NULL AND COALESCE(friend_action,'') NOT IN ('added','returned')",
-    pending: "can_reject=1 OR (report_kind IS NOT NULL AND status='pending')",
-  }[input.category];
+  const categorySql = inboxCategorySql[input.category];
   const totals = await getD1(runtime)
     .prepare(
       `${query.sql} SELECT
@@ -296,6 +298,17 @@ export async function countUnreadInboxItemsForUser(
     .bind(...audience.binds, user.id)
     .first<{ count: number }>();
   return row?.count ?? 0;
+}
+
+export async function isUnreadInboxItem(runtime: AppRuntime, user: ArchiveUser, id: number, categories: PushCategory[]): Promise<boolean> {
+  const filters = categories.filter(category => category !== "messages").map(category => `(${inboxCategorySql[category]})`);
+  if (!filters.length) return false;
+  const query = inboxQuery(user, false);
+  const row = await getD1(runtime).prepare(`${query.sql}
+    SELECT 1 FROM actionable WHERE id=? AND read_at IS NULL
+      AND (${filters.join(" OR ")})`)
+    .bind(...query.binds, id).first();
+  return row !== null;
 }
 
 export async function markInboxItemRead(
@@ -401,6 +414,8 @@ function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser): InboxItem {
     status: row.status,
     senderUserId: row.sender_user_id,
     senderDisplayName: friendNotification?.actorName ?? row.sender_display_name,
+    senderAvatar: row.sender_status === "active" ? row.sender_avatar : null,
+    contentUnavailable: false,
     recipientUserId: row.recipient_user_id,
     requiredPermissionKey: parseOptionalPermissionKey(
       row.required_permission_key,
@@ -430,10 +445,10 @@ function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser): InboxItem {
 async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[]) {
   const ids = source.filter((row) => row.work_comment_id !== null || row.reply_comment_id !== null || row.like_comment_id !== null).map((row) => row.id);
   if (!ids.length) return;
-  const rows = await getD1(runtime).prepare(`SELECT i.id,json_extract(i.metadata_json,'$.mention') AS mention,c.body,i.reply_comment_id,i.like_comment_id,c.root_comment_id,
+  const rows = await getD1(runtime).prepare(`SELECT i.id,c.id AS comment_id,json_extract(i.metadata_json,'$.mention') AS mention,c.body,i.reply_comment_id,i.like_comment_id,c.root_comment_id,
       c.work_id,c.creator_id,c.character_id,c.catalog_id,
       COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.primary_name,catalog.title) AS target_title,
-      sender.id AS sender_id,sender.display_name,sender.status AS sender_status,
+      sender.id AS sender_id,sender.display_name,sender.status AS sender_status,sender.avatar_blob_sha256,
       (SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count
     FROM inbox_items i JOIN published_comments c ON c.id=COALESCE(i.like_comment_id,i.reply_comment_id,i.work_comment_id)
     LEFT JOIN works w ON w.id=c.work_id
@@ -447,9 +462,9 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
         SELECT 1 FROM published_comments target WHERE target.id=COALESCE(c.reply_to_comment_id,c.root_comment_id)
       ))`)
     .bind(JSON.stringify(ids)).all<{
-      id: number; mention: number | null; body: string; reply_comment_id: number | null; like_comment_id: number | null; root_comment_id: number | null;
+      id: number; comment_id: number; mention: number | null; body: string; reply_comment_id: number | null; like_comment_id: number | null; root_comment_id: number | null;
       work_id: number | null; creator_id: number | null; character_id: number | null; catalog_id: number | null; target_title: string;
-      sender_id: number; display_name: string; sender_status: string; image_count: number;
+      sender_id: number; display_name: string; sender_status: string; avatar_blob_sha256: string | null; image_count: number;
     }>();
   const byId = new Map(rows.results.map((row) => [row.id, row]));
   const noticeIds = new Set(ids);
@@ -457,18 +472,23 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
     if (!noticeIds.has(item.id)) continue;
     item.senderUserId = null;
     item.senderDisplayName = null;
+    item.contentUnavailable = true;
     item.title = "相关内容已不可用";
     item.body = "";
     const row = byId.get(item.id);
     if (!row) continue;
+    item.contentUnavailable = false;
     const name = row.sender_status === "deleted" ? "账户已注销" : row.display_name;
     const action = row.mention ? "在评论中提及了你" : row.like_comment_id
       ? `赞了你的${row.root_comment_id ? "回复" : "评论"}`
       : row.reply_comment_id ? "回复了你的评论" : row.catalog_id ? "评论了你的目录" : "评论了你上传的作品";
     item.title = `${name}${action}`;
     item.commentNotification = {
+      commentId: row.comment_id,
+      rootCommentId: row.root_comment_id ?? row.comment_id,
       actorName: name,
       actorHref: row.sender_status === "active" ? `/users/${row.sender_id}` : null,
+      actorAvatar: row.sender_status === "active" ? row.avatar_blob_sha256 : null,
       action,
       kind: row.mention ? "mention" : row.like_comment_id ? "like" : row.reply_comment_id ? "reply" : "comment",
       targetTitle: row.target_title,
@@ -502,10 +522,12 @@ async function attachTimelineNotifications(runtime: AppRuntime, items: InboxItem
     if (!noticeIds.has(item.id)) continue;
     item.senderUserId = null;
     item.senderDisplayName = null;
+    item.contentUnavailable = true;
     item.title = "相关内容已不可用";
     item.body = "";
     const row = byId.get(item.id);
     if (!row) continue;
+    item.contentUnavailable = false;
     const action = row.reply_id === null ? "赞了你的吐槽" : "回复了你的吐槽";
     item.title = row.display_name + action;
     item.timelineNotification = {
@@ -536,10 +558,11 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
     actor_avatar: string | null;
     reply_to_id: number | null;
     mention: number | null;
+    locked: number;
   };
   const rows = await getD1(runtime)
     .prepare(
-      `SELECT i.id,json_extract(i.metadata_json,'$.mention') AS mention,t.id AS topic_id,p.post_number,c.id AS comment_id,
+      `SELECT i.id,json_extract(i.metadata_json,'$.mention') AS mention,t.locked,t.id AS topic_id,p.post_number,c.id AS comment_id,
     t.title AS topic_title,CASE WHEN i.forum_comment_id IS NOT NULL THEN c.body ELSE p.body END AS excerpt,
     sender.id AS actor_id,sender.display_name AS actor_name,sender.status AS actor_status,
     sender.avatar_blob_sha256 AS actor_avatar,c.reply_to_id
@@ -560,10 +583,12 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
     // No private actor identity or content is serialized for an unavailable interaction.
     item.senderUserId = null;
     item.senderDisplayName = null;
+    item.contentUnavailable = true;
     item.title = "相关内容已不可用";
     item.body = "";
     const row = byId.get(item.id);
     if (!row) continue;
+    item.contentUnavailable = false;
     const name = row.actor_status === "deleted" ? "账户已注销" : row.actor_name;
     const action =
       row.mention ? "在讨论中提及了你" : item.type === "forum_like"
@@ -577,6 +602,7 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
           : "回复了你的主题";
     item.title = `${name}${action}`;
     item.interaction = {
+      replyAllowed: !row.locked,
       topicId: row.topic_id,
       postNumber: row.post_number,
       commentId: row.comment_id,

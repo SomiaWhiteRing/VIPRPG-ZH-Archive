@@ -10,6 +10,7 @@ import { MESSAGE_BODY_LENGTH, MESSAGE_IMAGE_BYTES } from "@/lib/messages";
 import { bodyLength } from "@/lib/face-emojis";
 import { randomUuid } from "@/lib/browser/random-uuid";
 import { requestJson } from "@/lib/ui/api-response";
+import { usePushReply } from "@/app/components/use-push-reply";
 
 export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: number; lastMessageId: number; onSent: () => Promise<void> }) {
   const [body, setBody] = useState("");
@@ -23,6 +24,8 @@ export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: num
   const processor = useRef<ReturnType<typeof createImageProcessor> | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
+  const pushReply = usePushReply();
+  useEffect(() => { if (pushReply.value === "1") editor.current?.focus(); }, [pushReply.value, pushReply.key]);
   useEffect(() => () => processor.current?.dispose(), []);
 
   async function sendText() {
@@ -84,7 +87,7 @@ export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: num
         event.preventDefault(); event.stopPropagation(); void sendText();
       }
     }}>
-      <BodyEditor ref={editor} body={body} images={[]} busy={busy} topic={false} textOnly allowMentions={false}
+      <BodyEditor ref={editor} body={body} images={[]} busy={busy} topic={false} textOnly allowMentions={false} autoFocus={pushReply.value === "1"}
         maxLength={MESSAGE_BODY_LENGTH} inputId="private-message-body" inputLabel="短信正文"
         onChange={value => setBody(value)} onBusyChange={setBusy} onError={message => { if (message) toast.error(message); }}
         onCompositionChange={value => { composing.current = value; }} />

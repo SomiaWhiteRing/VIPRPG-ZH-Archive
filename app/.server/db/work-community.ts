@@ -265,7 +265,7 @@ export async function pinComment(
   pinned: unknown,
 ): Promise<CommentDto> {
   if (typeof pinned !== "boolean") throw new HttpError(400, "置顶状态无效");
-  const comment = await requiredComment(runtime, id, user.id);
+  const comment = await readCommentForUser(runtime, id, user.id);
   if (comment.target.kind !== "work" || comment.rootCommentId !== null)
     throw new HttpError(400, "只能置顶游戏主楼评论");
   if (!(await canPinWorkComments(runtime, comment.target.id, user)))
@@ -278,7 +278,7 @@ export async function pinComment(
         WHERE other.work_id=comments.work_id AND other.pinned_at IS NOT NULL AND other.id<>comments.id))`)
     .bind(pinned ? 1 : 0, id, ...access.binds, hasPermission(user, "comment.manage_any") ? 1 : 0, user.id, pinned ? 1 : 0).run();
   if (result.meta.changes !== 1) throw new HttpError(pinned ? 409 : 404, "评论不可用");
-  return requiredComment(runtime, id, user.id);
+  return readCommentForUser(runtime, id, user.id);
 }
 
 export async function listRootComments(
@@ -657,7 +657,7 @@ export async function createComment(
     return previous;
   };
   const previous = await previousRequest();
-  if (previous) return requiredComment(runtime, previous.id, userId);
+  if (previous) return readCommentForUser(runtime, previous.id, userId);
   await validateBodyEmojis(db, body);
   await validateMentions(db, body);
   const guard = commentImageGuard(ids, userId);
@@ -707,10 +707,10 @@ export async function createComment(
       mentionNotification(db, userId, body, "", "comment", source, [userId, requestKey]),
     ]);
     const id = Number((results[0].results[0] as { id: number }).id);
-    return requiredComment(runtime, id, userId);
+    return readCommentForUser(runtime, id, userId);
   } catch (error) {
     const committed = await previousRequest();
-    if (committed) return requiredComment(runtime, committed.id, userId);
+    if (committed) return readCommentForUser(runtime, committed.id, userId);
     const valid = await db.prepare(`SELECT 1 AS ok WHERE ${guard.sql}`).bind(...guard.args).first();
     if (!valid) throw new HttpError(409, "图片不可用或已被其他评论使用，请移除后重新选择。");
     await assertReadableCommentTarget(runtime, target);
@@ -772,7 +772,7 @@ export async function updateComment(
     permission: null, authorizationBasis: "content_author", source: "owned", operation: "edit" });
   if ((results[0].meta.changes ?? 0) !== 1)
     throw new HttpError(404, "评论不存在或不可编辑");
-  return requiredComment(runtime, id, userId);
+  return readCommentForUser(runtime, id, userId);
 }
 
 export async function deleteComment(
@@ -835,7 +835,7 @@ export async function moderateComment(
         JSON.stringify({ commentId: id, from: current.status, to: status }),
       ),
   ]);
-  return requiredComment(runtime, id, actor.id);
+  return readCommentForUser(runtime, id, actor.id);
 }
 
 export async function likeComment(
@@ -871,7 +871,7 @@ export async function unlikeComment(
     .run();
 }
 
-async function requiredComment(
+export async function readCommentForUser(
   runtime: AppRuntime,
   id: number,
   viewerId: number | null,

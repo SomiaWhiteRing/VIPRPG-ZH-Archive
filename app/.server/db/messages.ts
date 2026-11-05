@@ -100,6 +100,15 @@ export function countUnreadDirectMessages(runtime: AppRuntime, userId: number): 
   });
 }
 
+export async function isUnreadDirectMessage(runtime: AppRuntime, userId: number, id: number): Promise<boolean> {
+  const row = await runtime.db.prepare(`SELECT 1 FROM direct_conversation_states s
+    JOIN direct_messages m ON m.conversation_id=s.conversation_id AND m.recipient_user_id=s.user_id
+      AND m.delivered=1 AND m.id>COALESCE(s.last_read_message_id,0)
+    WHERE s.user_id=? AND s.receive_messages=1 AND m.id=?`)
+    .bind(userId, id).first();
+  return row !== null;
+}
+
 export async function findSentDirectMessage(runtime: AppRuntime, senderId: number, peerId: number,
   input: { clientId: string } & ({ kind: "text"; body: string } | { kind: "image" })) {
   const existing = await runtime.db.prepare(`SELECT ${columns} ${joins} WHERE m.sender_user_id=? AND m.client_id=?`)

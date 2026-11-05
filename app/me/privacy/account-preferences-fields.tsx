@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useState, type ReactNode } from "react";
 import { ToggleGroup } from "radix-ui";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -11,7 +11,11 @@ import { ACCOUNT_SHORTCUTS, COLOR_THEME_OPTIONS, parseColorTheme, type AccountPr
 import { CheckboxField } from "@/app/components/ui/checkbox-field";
 import { useColorThemePreview } from "@/app/components/color-theme-preview";
 
-export function AccountPreferencesFields({ preferences }: { preferences: AccountPreferences }) {
+export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkCommentsChange, children }: {
+  preferences: AccountPreferences;
+  onNotifyUploadedWorkCommentsChange: (checked: boolean) => void;
+  children?: ReactNode;
+}) {
   const [colorTheme, setColorTheme] = useState(preferences.colorTheme);
   const setThemePreview = useColorThemePreview();
   useLayoutEffect(() => {
@@ -65,8 +69,13 @@ export function AccountPreferencesFields({ preferences }: { preferences: Account
         </ToggleGroup.Root>
       </div>
       <div className="mb-3">
-        <CheckboxField name="notifyUploadedWorkComments" label="接收上传的作品的评论提醒" defaultChecked={preferences.notifyUploadedWorkComments} />
+        <Label className="flex min-h-10 cursor-pointer items-center gap-2">
+          <Checkbox name="notifyUploadedWorkComments" value="1" checked={preferences.notifyUploadedWorkComments}
+            onCheckedChange={checked => onNotifyUploadedWorkCommentsChange(checked === true)} />
+          接收上传的作品的评论提醒
+        </Label>
       </div>
+      {children}
       <CheckboxField name="includePlayerInZip" label="下载ZIP时附带EasyRPG Player（若有）" defaultChecked={preferences.includePlayerInZip} />
       <div className="mt-3">
         <input name="showGameCardInteractionData" type="hidden" value="0" />

@@ -16,3 +16,6 @@
 
 /play/player.html
   Cache-Control: no-store
+
+/notification-sw.js
+  Cache-Control: no-cache

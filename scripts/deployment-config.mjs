@@ -80,6 +80,13 @@ export function validateDeployment(target, environment, directory = ".") {
   if (target.vars.EMAIL_FROM !== "noreply@viprpg.org" ||
       !target.send_email?.find((binding) => binding.name === "EMAIL")?.allowed_sender_addresses?.includes(target.vars.EMAIL_FROM))
     throw new Error("Configure the noreply@viprpg.org EMAIL sender binding");
+  if (target.vars.WEB_PUSH_ENABLED === "true") {
+    const producer = target.queues?.producers?.find(item => item.binding === "WEB_PUSH_QUEUE");
+    const consumer = target.queues?.consumers?.find(item => item.queue === producer?.queue);
+    if (!concrete(producer?.queue) || !consumer || consumer.max_batch_size !== 10
+      || consumer.max_retries !== 3 || consumer.max_concurrency !== 1 || consumer.max_batch_timeout !== 5)
+      throw new Error("Web Push requires WEB_PUSH_QUEUE and its consumer: batch size 10, timeout 5, retries 3, concurrency 1");
+  }
   return target;
 }
 
@@ -94,6 +101,12 @@ export function validateIsolation(config) {
   const productionIds = new Set(config.ratelimits?.map((binding) => binding.namespace_id));
   if (staging.ratelimits?.some((binding) => productionIds.has(binding.namespace_id)))
     throw new Error("Production and staging share a rate-limit namespace");
+  const productionQueues = new Set([
+    ...(config.queues?.producers ?? []).map(item => item.queue),
+    ...(config.queues?.consumers ?? []).map(item => item.queue),
+  ]);
+  if ([...(staging.queues?.producers ?? []), ...(staging.queues?.consumers ?? [])]
+    .some(item => productionQueues.has(item.queue))) throw new Error("Production and staging share a Queue");
 }
 
 export function migrationManifest() {
@@ -113,6 +126,7 @@ export function deploymentSummary(target, environment) {
     routes: target.routes,
     database: target.d1_databases.map(({ binding, database_name, database_id }) => ({ binding, database_name, database_id })),
     buckets: target.r2_buckets.map(({ binding, bucket_name }) => ({ binding, bucket_name })),
+    queues: target.queues ?? { producers: [], consumers: [] },
     migrations: migrationManifest(),
   };
 }

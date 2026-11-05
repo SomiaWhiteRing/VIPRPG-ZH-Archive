@@ -144,7 +144,7 @@ function InboxRow({
   const interaction = item.interaction;
   const contentNotification = item.timelineNotification ?? item.commentNotification;
   const actor = interaction ?? item.friendNotification ?? contentNotification;
-  const avatar = interaction ?? item.friendNotification ?? item.timelineNotification;
+  const avatar = interaction ?? item.friendNotification ?? contentNotification;
   const Icon =
     item.type === "forum_like" || contentNotification?.kind === "like"
       ? ThumbsUp

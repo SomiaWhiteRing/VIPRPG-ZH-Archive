@@ -441,6 +441,7 @@ export async function updateOwnProfileVisibility(
     notifyFriendAdditions?: boolean;
     receivePrivateMessages?: boolean;
     preferencesForm?: FormData;
+    webPushStatement?: D1PreparedStatement | null;
   },
 ): Promise<void> {
   await getD1(runtime).batch([
@@ -470,6 +471,7 @@ export async function updateOwnProfileVisibility(
       )
       .bind(input.user.id, input.user.email),
     ...(input.preferencesForm ? [accountPreferencesUpdateStatement(runtime, input.user.id, input.preferencesForm)] : []),
+    ...(input.webPushStatement ? [input.webPushStatement] : []),
   ]);
 }
 

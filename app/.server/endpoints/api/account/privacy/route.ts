@@ -4,6 +4,7 @@ import { updateOwnProfileVisibility } from "@/app/.server/db/users";
 import { redirectWithParams } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { accountPreferencesUpdateStatement } from "@/app/.server/db/account-preferences";
+import { webPushSettingsStatement } from "@/app/.server/push/settings";
 
 export async function POST(runtime: AppRuntime, request: Request) {
   try {
@@ -23,6 +24,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     await updateOwnProfileVisibility(runtime, {
       user: auth.user,
       preferencesForm: combined ? form : undefined,
+      webPushStatement: combined ? await webPushSettingsStatement(runtime, auth.user.id, auth.session.id, form) : null,
       notifyFriendAdditions: form.has("notifyFriendAdditions") ? form.getAll("notifyFriendAdditions").includes("1") : undefined,
       receivePrivateMessages: form.has("receivePrivateMessages") ? form.getAll("receivePrivateMessages").includes("1") : undefined,
       visibility: {
