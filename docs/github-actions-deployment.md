@@ -29,7 +29,7 @@ production Environment 不设置 required reviewers，只保留正式 secrets �
 
 部署资源配置留在本地或 Environment secret，代码不保存真实 ID 或 token。prepare-wrangler-config.mjs 必须指定 --env staging 或 --env production；可读取完整本地结构并选择目标，也支持只保存该环境自己的资源。Worker 入口和资产规则由仓库模板维护，staging 构建的未选中顶层没有远端绑定，正式构建移除 staging 段；不携带另一环境的私有资源。
 
-不能从仓库级旧 secret 名称判断目标或权限。核实消费者后再移除／轮换具有正式写权限的旧副本；不要破坏 staging 的现有凭据。配置与 token 的实际启用状态见[上线调整记录](./production-readiness.md)，文档声明不等于 Environment 已完成设置。
+不能从仓库级旧 secret 名称判断目标或权限。核实消费者后再移除／轮换具有正式写权限的旧副本；不要破坏 staging 的现有凭据。配置与 token 的实际启用状态以当前 Environment 和部署绑定为准；首次上线过程见[上线调整记录](./production-readiness.md)。
 
 ## 运行时与首次上线
 

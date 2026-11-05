@@ -192,7 +192,7 @@ ZIP 下载、解包和 OPFS 写入都必须在 Web Worker 内执行。主线程�
 - 小于分段阈值的游戏生成 1 个 pack 是预期行为。Pack 的第一目标是减少 OPFS 文件数量和 `createWritable/close` 成本，不是按目录制造并行写入。
 - ZIP 网络流的 chunk 可能很碎，不能把每个 chunk 都直接 `writable.write()` 到 OPFS。安装器必须先在 Worker 内聚合到约 1 MB 再写入 pack，降低 OPFS write 调用次数和 backpressure。
 - 生成 `pack-index.json`，记录原始相对路径到 `{ pack, offset, length, crc32, contentType }` 的映射。查找 key 使用小写规范化路径，记录值保留真实路径。
-- OPFS 不再为每个资源创建独立文件，因此不需要目录 handle cache 或小文件写入并发调度。
+- OPFS 按 pack 保存资源，资源路径及切片位置由索引描述。
 - 文件清单写入 IndexedDB 时批量提交，进度状态按时间节流聚合更新；不能每个文件创建一次独立 IndexedDB 事务。
 - 持续更新 IndexedDB 进度：已下载字节、已安装文件、当前文件。
 - 安装日志必须能区分 ZIP 响应头等待、CDN/Workers Cache 状态、ZIP 下载速率、本地写入速率、OPFS write 等待耗时、write 调用次数、IndexedDB 文件记录耗时和索引写入耗时。
@@ -205,7 +205,7 @@ ZIP 下载、解包和 OPFS 写入都必须在 Web Worker 内执行。主线程�
 
 安装器只写 `pack-index.json`，不生成另一份文件名索引。启动时校验安装版本、manifest 摘要、pack 长度、文件切片边界、重复路径、文件/目录冲突与 WORKERFS 不能安全表示的路径名，再传递 `{ blob: File, metadata: { files } }`。
 
-WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 Worker 内的 `FileReaderSync` 取得所需字节。大小写、去扩展名和 NFKC 查找交由引擎现有的 FileFinder/DirectoryTree 处理，不再在安装器、Service Worker 和引擎之间复制三套名字映射。
+WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 Worker 内的 `FileReaderSync` 取得所需字节。大小写、去扩展名和 NFKC 查找由引擎的 FileFinder/DirectoryTree 统一处理。
 
 当前安装器版本为 `opfs-v12-workerfs`。安装身份变化需重新安装；存档身份仍为 Work ID。资源包就绪不代表每张图片已经解码，解码和引擎图片缓存仍按游戏需要发生。
 
@@ -311,7 +311,7 @@ Kai 默认使用 FluidSynth 与 `.data` 中的 `/builtin/recommended.sf2`。音�
 在线游玩产生的存档不放入 OPFS 游戏目录。
 
 - EasyRPG 存档沿用 Emscripten IDBFS，固定挂载于 `/work-saves/<workId>`。安装键不参与存档身份；归档、播放器、安装器升级沿用同一 Work 的存档。不同 Work（包括其他译版）互不共用，同一浏览器内也不按账号区分。
-- 勾选“上传存档”后归档中的 LSD 文件保留在在线安装包内。浏览器启动游戏前将游戏根目录直属的 LSD 补入该 Work 的 IDBFS 存档目录；已有同名存档优先（忽略大小写和 Unicode 规范化差异），不覆盖玩家进度。此步骤复用本地安装包，无需修改或重新下载播放器运行时。
+- 历史归档或既有安装包包含根目录直属的 LSD 时，浏览器启动游戏前将其补入该 Work 的 IDBFS 存档目录；已有同名存档优先（忽略大小写和 Unicode 规范化差异），保留玩家进度。新上传的存档通过[追加文件](./archive-storage.md#附加区)随普通下载保留，不进入在线安装清单。
 - 游戏资源安装和存档生命周期分开。
 - 卸载游戏时不删除存档。
 - 诊断区“导出存档”旁提供“导入存档”。操作前须停止游戏并等待 IDBFS 写入完成；操作及游玩使用按 Work ID 的独占 Web Lock，避免同作品不同版本或其他标签页并发回写。导入确认期间保持锁，并持有同作品已安装版本的资源独占锁以兼容升级前的旧页面；提交前补查新安装版本，旧记录缺少作品编号时保守纳入。取消和离页释放锁，不写存档。
@@ -349,7 +349,11 @@ const persisted = await navigator.storage.persist();
 - OPFS 和 IDBFS 均为同源存储；当前构建只服务本站，不支持跨域官方播放器嵌入。
 - 本地索引、pack 长度或路径校验失败时中止启动并提示重装；引擎中的素材缺失通过运行日志诊断。
 
-## 15. 当前验收边界
+## 15. 验收与交互边界
+
+### 历史运行包验证
+
+验收结论以各次记录的版本与范围为准；当前固定版本见 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json)，检查入口见[维护与回归手册](./maintenance-regression.md#easyrpg-官方游戏回归)。
 
 2026-09-22 在 Chromium 151.0.7922.34 验证了首版 Worker 运行包 `2026.9.2-site-d65072755356`：
 
@@ -364,13 +368,15 @@ const persisted = await navigator.storage.persist();
 
 2026-09-24 音频独立 Worker 版本 `2026.9.2-site-8f05deecdd5c` 完成以下定向验证：
 
-- 当前网站包连续换图 47 次没有缺图帧，运行期间没有素材 HTTP 请求；采样 288 帧，帧间隔 P95 为 19.6 毫秒、最大 23.1 毫秒。
+- 该版本网站包连续换图 47 次没有缺图帧，运行期间没有素材 HTTP 请求；采样 288 帧，帧间隔 P95 为 19.6 毫秒、最大 23.1 毫秒。
 - 分别在游戏 Worker、页面线程注入 500 毫秒忙等待后，音频仍持续输出，欠载计数为 0。退出时两个 Worker 均释放；存档失败保留会话并允许重试。
 - 使用预生产作品 2 的 WAV、OGG、MP3 原始音频和官方 TestGame 的 MIDI，在隔离场景中验证首次播放、重复切换、暂停恢复、音量与 SoundFont 切换。该轮欠载为 0，排除故意注入停顿后的最大帧间隔为 24.5 毫秒。原始文件 SHA-256 已与游戏清单核对；这不是原游戏所有场景的逐一实玩。
 - 缓存单元检查覆盖小读取合并、随机定位、跨块读取、EOF 和 32 MiB 上限下的淘汰重读；供音检查覆盖欠载淡出和恢复水位。
-- 当前包的隔离 D1/R2 完整 `flow --game` 回归通过：游戏菜单存档、IDBFS 写入、离页释放两个 Worker、返回与刷新读档、全屏、WASM/AudioWorklet 启动取消、卸载后中断安装及重装保留存档。旧检查中的固定标题、已移除的重装按钮和中断安装状态等待已与当前界面对齐。
+- 该版本的隔离 D1/R2 完整 `flow --game` 回归通过：游戏菜单存档、IDBFS 写入、离页释放两个 Worker、返回与刷新读档、全屏、WASM/AudioWorklet 启动取消、卸载后中断安装及重装保留存档。
 
 上述结果是本机观测，不是所有游戏或物理手机的兼容认证。超大图片首次解码仍可能卡帧；音频已独立，但非常昂贵的音频解码仍可能耗尽供音缓冲。尚未验证 Android 实机、非 Chromium 浏览器和所有 Maniac 扩展。
+
+### 功能核对
 
 - 已发布且存在当前已发布归档版本的作品显示在线游玩入口。
 - RPG Maker 2003 Maniac 作品显示兼容性提示。
@@ -402,10 +408,9 @@ const persisted = await navigator.storage.persist();
 
 ## 16. 当前非目标
 
-- 独立的本地缓存管理页。
 - 半成品续传。
 - 按 `pack-index.json` 中的 CRC32 和 canonical manifest SHA-256 修复 pack 切片。
-- 存档导出、导入和云同步。
+- 存档云同步。
 - 超大游戏的排队安装和后台恢复。
 
 ## 17. 参考链接

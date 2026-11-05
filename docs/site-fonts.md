@@ -8,14 +8,13 @@
 - 等宽文字：IBM Plex Mono，使用 `app/shared.css` 的既有等宽栈。
 
 字体文件使用原始 WOFF2 压缩分片和 `unicode-range`，浏览器按实际使用的
-字体、字重和字符加载所需分片。保留原有字形、字重范围和字符覆盖，
-不再进行额外的字体子集化。`font-display: swap` 允许字体到达前先显示
+字体、字重和字符加载所需分片。字形、字重范围和字符覆盖使用原包提供的分片，
+`font-display: swap` 允许字体到达前先显示
 回退字体；首次加载仍可能发生字体切换，分片缓存后可复用。
 
 `public/assets/fonts/` 保留哈希 URL、来源记录和许可证。Vite 将 `public/`
 复制到 `build/client/`，由现有 Workers Static Assets 提供；不依赖外部字体
-CDN、运行时代理或 R2。网站没有修改 `app/shared.css`，Android 离线页保持
-现有字体栈，也不加载这些网站字体资源。
+CDN、运行时代理或 R2。Android 离线页使用共享字体栈；上述网站字体仅由网站入口加载。
 
 ## 来源与更新
 

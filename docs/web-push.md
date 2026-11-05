@@ -26,7 +26,7 @@
 
 ## 配置与迁移
 
-- `0050_web_push_subscriptions.sql` 增加订阅、类别、接收起点和待办触发器；固定开发种子同步该结构与迁移账本。当前为待发布迁移草稿。
+- `0050_web_push_subscriptions.sql` 增加订阅、类别、接收起点和待办触发器；固定开发种子同步该结构与迁移账本。
 - 启用需要 `WEB_PUSH_ENABLED=true`、`WEB_PUSH_QUEUE` 绑定、`WEB_PUSH_PUBLIC_KEY`、`WEB_PUSH_PRIVATE_KEY` 和 `WEB_PUSH_SUBJECT`。页面读取公钥，服务端持有私钥。
 - 开关在功能配置完整、浏览器支持通知 API 且处于安全上下文时显示；浏览器拒绝权限后开关禁用。该入口用于浏览器环境。
 - 正式配置、迁移和部署遵循[正式操作确认边界](./production-deployment.md)。

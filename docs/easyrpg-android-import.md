@@ -8,13 +8,13 @@ VIPRPG Android App 的主站 WebView 会解析此 Intent，确认指定 Kai 包�
 
 正式目标为 [viprpg.org](https://viprpg.org)，预生产入口为 [staging.viprpg.org](https://staging.viprpg.org)，环境来源见[部署手册](./staging-deployment.md#环境地址与配置来源)。不要把来源白名单当作已部署站点清单。
 
-网站按钮的来源判断位于 `app/games/[id]/kai-import-link.tsx`。它允许 viprpg.org 和 staging.viprpg.org，旧 Workers.dev 来源已移除。正式网站已于 2026-09-26 上线；独立 Kai 项目的 `0b5aabae5` 提交同步更新了 Android 白名单，本地 Java／资源编译通过。后续 `c4bd3179e` 修复仓库改名后的 Windows CI 缓存，使同一轮多平台 Nightly 能正常构建。APK 应使用包含这些提交的新 Nightly，历史安装包需手动更新。
+网站按钮的来源判断位于 `app/games/[id]/kai-import-link.tsx`，允许 viprpg.org 和 staging.viprpg.org。APK 应使用支持对应来源的版本；首次来源切换与构建记录见本文[历史交付与验收边界](#历史交付与验收边界)。
 
 APK 内的来源白名单不可被链接参数扩充，HTTP、跨源及重定向均拒绝。客户端代码与发行包位于独立 Kai 项目，本仓库不能证明用户安装包的实际白名单。更换域名须核对网站与 APK 两端并发布支持该来源的 APK；只改网站文档或配置不能使旧 APK 获得接收能力。
 
 `GET/HEAD /api/archive-versions/:id/kai-import` 由 `worker.ts` 注册，复用 `worker/archive-download.mjs` 的发布状态查询、原归档清单哈希校验和 ZIP 大小计算。无需登录；只有已发布作品的已发布当前快照可获取。不存在／隐藏／不再当前返回 404，不支持的引擎或超限快照返回 422，其他方法返回 405。
 
-返回 `Cache-Control: no-store` 的 `viprpg-kai.import.v1` JSON：`archiveVersionId`、`workId`、`title`、同源 `coverUrl`（无封面为 `null`）、`engineFamily`、`manifestSha256`、同源 `downloadUrl`、`zipSizeBytes` 和 `files: [{path,size,sha256}]`。不暴露 R2 对象键或管理凭据，也不增加 D1 表。下载复用在线游玩的 `/download?profile=web-play-v1`，保留状态验证、缓存、统计及响应头。清单文件列表和 ZIP 大小同步按 `shouldSkipWebPlayLocalWrite` 过滤：排除 EXE、普通 DLL 和 TXT，保留规定的根目录引擎识别 DLL；共享 Windows Player.exe 不补入此 ZIP。过滤适用于已有归档，不重写其 manifest；`manifestSha256` 仍表示原归档身份。更改前已入队的下载仍沿其保存的完整清单和原下载地址完成，新导入才使用过滤 ZIP。
+返回 `Cache-Control: no-store` 的 `viprpg-kai.import.v1` JSON：`archiveVersionId`、`workId`、`title`、同源 `coverUrl`（无封面为 `null`）、`engineFamily`、`manifestSha256`、同源 `downloadUrl`、`zipSizeBytes` 和 `files: [{path,size,sha256}]`。下载复用在线游玩的 `/download?profile=web-play-v2`，保留状态验证、缓存、统计及响应头。清单文件列表和 ZIP 大小均从 manifest 的主游戏文件列表中按 `shouldSkipWebPlayDownloadFile` 排除根目录 `Player.exe`（不区分大小写），其余主游戏文件保留；附加区不进入导入清单。`manifestSha256` 表示原归档身份，原 manifest 保持不可变。已发布的 `web-play-v1` URL 保留其原过滤语义，既有客户端和在途下载继续使用保存的清单、下载地址及 builder。
 
 限制为 1 GiB ZIP、50,000 文件、8 MiB 导入清单，必须包含根目录 `RPG_RT.ldb` 和 `RPG_RT.lmt`。使用当前网站生成的 UTF-8 STORE ZIP。客户端核对下载长度、`X-Manifest-SHA256`、`X-Download-Zip-Builder` 和全部文件 SHA-256，拒绝额外／重复／大小写冲突条目、越界路径和异常大小。manifestSha256 是原归档清单身份，不是重新打包 ZIP 的哈希。
 
@@ -29,5 +29,7 @@ Kai 确认页显示「从VIPRPG.org导入游戏」和封面，并在导入前查
 游戏导入独立于工具下载托管和 Windy 更新 API。游戏由本站已发布快照提供，工具版本和内容继续由管理员独立管理；不引入 GitHub 同步，也不修改网站 Web runtime。
 
 ## 历史交付与验收边界
+
+2026-09-26，独立 Kai 项目的 `0b5aabae5` 提交同步更新了 Android 来源白名单，本地 Java／资源编译通过。后续 `c4bd3179e` 修复仓库改名后的 Windows CI 缓存，使同一轮多平台 Nightly 能正常构建。
 
 首次交付记录运行了 Android Java／资源编译与 Lint，以及网站接口语法、ESLint 和差异检查；未新增测试，也未做人工浏览器、模拟器或真机操作。网站接口更新与 Kai Nightly 通过各自自动发布流程交付；Kai 版本号保持 2026.9.2，已有正式版不覆盖，是否支持导入应核对所安装 APK 的对应构建与来源白名单，不能仅凭版本号或浮动的 Nightly 标签判断。以上为历史交付记录，不代表本次重新编译或验证了客户端。设备上的封面、暂停续传、锁屏后台行为仍需实际验收。

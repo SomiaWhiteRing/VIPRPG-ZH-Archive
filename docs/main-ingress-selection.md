@@ -2,8 +2,6 @@
 
 主站已经是 Worker，采用作者[配套文章](https://b.acofork.com/posts/cf-fastip/#worker项目优选-最简单)的 Worker 方案：使用原正式 Worker 的 `viprpg.org/*` Route，将主站 DNS CNAME 到社区优选域名。页面、API 和公开下载仍使用 `https://viprpg.org`。
 
-仓库已移除自建候选发现、Globalping 测量、DNS 自动选点和到期恢复代码。这里不运行选点任务，不维护固定 IP，也不新增 Worker 反代、SaaS 或 R2 公共域名。
-
 ## 配置与当前状态
 
 | 配置项 | 简单方案 |
@@ -16,9 +14,9 @@
 | TTL | Auto；根域名 CNAME 由 Cloudflare flattening 处理 |
 | staging | 继续使用原 `staging.viprpg.org` Custom Domain |
 
-`cf.090227.xyz` 是文章列出的社区入口，维护者负责更新其候选地址。本仓库不再扫描或修改它的地址。2026-10-08 已读到该域名的有效 CNAME/A 解析；这不是全国三网或完整大文件速度验收。
+`cf.090227.xyz` 是文章列出的社区入口，其维护者负责更新候选地址。2026-10-08 已读到该域名的有效 CNAME/A 解析；这不是全国三网或完整大文件速度验收。
 
-2026-10-08 已按负责人授权完成入口切换：原 Worker 的 `viprpg.org/*` Route 配合灰云 CNAME `cf.090227.xyz`，主站 managed Custom Domain 已解除。旧选点／恢复工作流、两个入口开关及两项专用试用 secret 已清理；正式配置 secret 和本地配置已同步为持久 Route。HTTPS 传播约 20 秒后恢复，九项正式 smoke 均返回 200；公开 ZIP 的 8 KiB Range 返回 206，ETag 和字节摘要与切换前一致。后续正式操作仍按[正式手册](./production-deployment.md#环境与授权)确认。
+2026-10-08 已按负责人授权完成入口切换：原 Worker 的 `viprpg.org/*` Route 配合灰云 CNAME `cf.090227.xyz`，正式配置 secret 和本地配置同步为持久 Route。HTTPS 传播约 20 秒后恢复，九项正式 smoke 均返回 200；公开 ZIP 的 8 KiB Range 返回 206，ETag 和字节摘要与切换前一致。后续正式操作仍按[正式手册](./production-deployment.md#环境与授权)确认。
 
 ## Wrangler 持久配置
 
@@ -30,7 +28,7 @@
 ]
 ```
 
-应同步更新 production Environment 的 `PRODUCTION_WRANGLER_CONFIG_JSONC`，只替换其 `routes`；原 Worker、DB、R2、DO、邮件、限流、变量及其他设置从已核实的原配置保留。CI 不再读取旧试用配置，也不按时间覆盖 routes。
+应同步更新 production Environment 的 `PRODUCTION_WRANGLER_CONFIG_JSONC`，只替换其 `routes`；原 Worker、DB、R2、DO、邮件、限流、变量及其他设置从已核实的原配置保留。CI 使用该配置中保存的 routes。
 
 仅修改本地文件或模板不会更新 GitHub secret、Cloudflare Route 或 DNS。正式配置校验也接受原 Custom Domain，供实际回退；staging 仅接受其原 Custom Domain。
 
