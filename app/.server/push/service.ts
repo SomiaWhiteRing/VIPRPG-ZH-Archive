@@ -49,7 +49,7 @@ export async function consumeWebPush(batch: MessageBatch<unknown>, runtime: AppR
         const kind = job.kind === "deliver" ? job.eventKind : job.kind;
         const start = kind === "inbox" ? "inbox_after_id" : "message_after_id";
         const source = await runtime.db.prepare(kind === "inbox"
-          ? "SELECT recipient_user_id,created_at,required_permission_key,type,work_maintainer_request_id FROM inbox_items WHERE id=? AND suppressed=0"
+          ? "SELECT recipient_user_id,created_at,required_permission_key,type,work_maintainer_request_id FROM inbox_items WHERE id=?"
           : "SELECT recipient_user_id,created_at,NULL AS required_permission_key,NULL AS type,NULL AS work_maintainer_request_id FROM direct_messages WHERE id=? AND delivered=1")
           .bind(job.id).first<{ recipient_user_id: number | null; created_at: string; required_permission_key: string | null; type: string | null; work_maintainer_request_id: number | null }>();
         const timestamp = source ? parseTimestamp(source.created_at).getTime() : 0;
