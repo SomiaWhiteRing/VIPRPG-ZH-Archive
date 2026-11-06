@@ -90,7 +90,7 @@ type InboxItemRow = {
 function inboxSelect(details: boolean) {
   return `SELECT
   i.id,
-  i.interaction_kind,
+  CASE WHEN json_extract(i.metadata_json,'$.mention')=1 THEN 'mention' ELSE i.interaction_kind END AS interaction_kind,
   json_extract(i.metadata_json,'$.reportKind') AS report_kind,
   json_extract(i.metadata_json,'$.reportId') AS report_id,
   (SELECT target_id FROM forum_content_reports WHERE id=json_extract(i.metadata_json,'$.reportId') AND json_extract(i.metadata_json,'$.reportKind')='forum') AS report_target_id,

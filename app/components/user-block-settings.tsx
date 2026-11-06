@@ -67,7 +67,7 @@ export function UserBlockDialog({ peer, initial, onClose, onSaved }: {
           </Label>)}</div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="ghost" size="sm" className="mr-auto" disabled={busy}
-              onClick={() => setSettings({ blockPrivateMessages: !all, muteComments: !all, muteReplies: !all, muteLikes: !all, muteFriends: !all })}>{all ? "全部取消" : "全部屏蔽"}</Button>
+              onClick={() => setSettings({ blockPrivateMessages: !all, muteComments: !all, muteReplies: !all, muteMentions: !all, muteLikes: !all, muteFriends: !all })}>{all ? "全部取消" : "全部屏蔽"}</Button>
             <Button type="button" variant="outline" disabled={busy} onClick={onClose}>取消</Button>
             <Button type="submit" disabled={busy}>保存</Button>
           </div>

@@ -51,9 +51,9 @@ export function mentionNotification(db: D1Database, actorId: number, body: strin
       : "i.forum_comment_id=s.id AND i.type='forum_reply'";
   return db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,metadata_json,${fields},interaction_kind,suppressed)
     SELECT '${ordinary ? "system_notice" : "forum_reply"}',?,u.id,'','','mention:${kind}:'||s.id||':'||u.id,'{"mention":true}',${values},
-      'reply',${interactionSuppressedSql("u.id", String(actorId), "'reply'")}
+      'reply',${interactionSuppressedSql("u.id", String(actorId), "'mention'")}
     FROM ${table} s JOIN users u ON u.id IN (SELECT value FROM json_each(?)) AND u.status='active'
     WHERE s.id IN (${source}) AND u.id<>? ${ordinary ? `AND ${commentRecipientReadSql("s", "u.id")}` : ""} AND NOT EXISTS
-      (SELECT 1 FROM inbox_items i WHERE i.recipient_user_id=u.id AND ${sameContent})
+      (SELECT 1 FROM inbox_items i WHERE i.recipient_user_id=u.id AND i.suppressed=0 AND ${sameContent})
     ON CONFLICT(event_key) DO NOTHING`).bind(actorId, JSON.stringify(ids), ...args, actorId);
 }

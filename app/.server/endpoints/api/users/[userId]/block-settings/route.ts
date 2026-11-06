@@ -19,6 +19,8 @@ export async function PUT(runtime: AppRuntime, request: Request, userId: string)
   if ("response" in auth) return auth.response;
   const peerId = parsePositiveId(userId);
   const input = await readJsonObject(request, "屏蔽设置无效", { maximumBytes: 1024, requireJsonContentType: true });
+  // Older clients submit the combined replies/mentions switch.
+  if (!Object.hasOwn(input, "muteMentions")) input.muteMentions = input.muteReplies;
   if (Object.keys(input).length !== USER_BLOCK_OPTIONS.length || USER_BLOCK_OPTIONS.some(option => typeof input[option.key] !== "boolean"))
     throw new HttpError(400, "屏蔽设置无效");
   const settings = Object.fromEntries(USER_BLOCK_OPTIONS.map(option => [option.key, input[option.key]])) as UserBlockSettings;
