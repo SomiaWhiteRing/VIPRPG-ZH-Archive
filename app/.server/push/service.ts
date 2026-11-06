@@ -66,7 +66,7 @@ export async function consumeWebPush(batch: MessageBatch<unknown>, runtime: AppR
           const payload = await buildPushPayload({ data: JSON.stringify(content),
             options: { ttl: Math.max(1, Math.floor((timestamp + 86_400_000 - now) / 1000)) } },
           { endpoint: subscription.endpoint, expirationTime: null, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, config);
-          try { await requestOk(subscription.endpoint, { ...payload, redirect: "error", signal: AbortSignal.timeout(10_000) }); }
+          try { await requestOk(subscription.endpoint, { ...payload, redirect: "manual", signal: AbortSignal.timeout(10_000) }); }
           catch (error) {
             if (!(error instanceof ApiResponseError) || (error.status !== 404 && error.status !== 410)) throw error;
             await runtime.db.prepare("DELETE FROM web_push_subscriptions WHERE id=? AND session_id=?")

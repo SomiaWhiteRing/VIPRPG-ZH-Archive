@@ -3,9 +3,9 @@
   "capturedAt": "2026-10-03T17:08:34.857Z",
   "database": {
     "file": "data/local-seed/database.sqlite.gz",
-    "sha256": "27bc792b6a2fc7de1c452842f806fd850abd9d964118eefd982cea6735c31111",
+    "sha256": "1024abb754677cc0a3636c207d990223621f9b62d60cdeac1a7e1d19e7b88553",
     "size": 13406208,
-    "gzipSha256": "64ac710822e002111299d4cc0398002d329c8ae673b4b12d58a0fba8b59a5995",
+    "gzipSha256": "e9ede920699740401ec4825ece6cb6dd73bc44efba5bcb59c2faae65c173a3da",
     "tables": {
       "_cf_METADATA": 1,
       "archive_gc_cursors": 0,

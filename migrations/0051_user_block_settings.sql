@@ -13,7 +13,7 @@ CREATE TABLE user_block_settings (
 INSERT INTO user_block_settings(user_id,blocked_user_id,block_private_messages)
 SELECT s.user_id,CASE WHEN c.lower_user_id=s.user_id THEN c.upper_user_id ELSE c.lower_user_id END,1
 FROM direct_conversation_states s JOIN direct_conversations c ON c.id=s.conversation_id WHERE s.receive_messages=0;
-ALTER TABLE direct_conversation_states DROP COLUMN receive_messages;
+-- 发布切换期间旧 Worker 仍读取此列；当前代码统一使用 user_block_settings。
 
 ALTER TABLE inbox_items ADD COLUMN interaction_kind TEXT CHECK(interaction_kind IN('comment','reply','like','friend'));
 ALTER TABLE inbox_items ADD COLUMN suppressed INTEGER NOT NULL DEFAULT 0 CHECK(suppressed IN(0,1));
