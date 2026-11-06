@@ -1,12 +1,12 @@
 import { useEffect, useId, useLayoutEffect, useState, type ReactNode } from "react";
 import { ToggleGroup } from "radix-ui";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Label } from "@/app/components/ui/label";
 import { Button } from "@/app/components/ui/button";
 import { SortableListItem, SortableOverlay } from "@/app/components/ui/sortable-list-item";
-import { Check, GripVertical } from "lucide-react";
+import { GripVertical, Plus, X } from "lucide-react";
 import { ACCOUNT_SHORTCUTS, COLOR_THEME_OPTIONS, parseColorTheme, type AccountPreferences } from "@/lib/account-preferences";
 import { CheckboxField } from "@/app/components/ui/checkbox-field";
 import { useColorThemePreview } from "@/app/components/color-theme-preview";
@@ -29,11 +29,7 @@ export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkComm
     window.addEventListener("pageshow", restoreSavedTheme);
     return () => window.removeEventListener("pageshow", restoreSavedTheme);
   }, [preferences.colorTheme]);
-  const [order, setOrder] = useState(() => [
-    ...preferences.shortcuts,
-    ...ACCOUNT_SHORTCUTS.map((item) => item.href).filter((href) => !preferences.shortcuts.includes(href)),
-  ]);
-  const [selected, setSelected] = useState(new Set(preferences.shortcuts));
+  const [shortcuts, setShortcuts] = useState(preferences.shortcuts);
   const dndId = useId();
   const themeId = useId();
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -42,11 +38,11 @@ export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkComm
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const rowClassName = (checked: boolean) => `flex min-h-11 items-center gap-3 rounded px-2 py-1 ${checked ? "bg-primary/10" : ""}`;
+  const shortcutClassName = "flex min-h-11 items-center rounded-full border border-primary bg-primary/10";
 
   return (
     <div className="mt-6">
-      <input name="shortcuts" type="hidden" value={JSON.stringify(order.filter((href) => selected.has(href)))} />
+      <input name="shortcuts" type="hidden" value={JSON.stringify(shortcuts)} />
       <h2 className="mb-3 text-lg font-semibold">偏好</h2>
       <input name="colorTheme" type="hidden" value={colorTheme} />
       <div className="mb-5 flex items-center gap-3">
@@ -86,6 +82,7 @@ export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkComm
         <CheckboxField name="hideDeletedContent" label="隐藏已删除的帖子和评论" defaultChecked={preferences.hideDeletedContent} />
       </div>
       <h3 className="mb-2 mt-5 text-sm font-semibold" id="shortcut-heading">头像菜单显示的快捷入口</h3>
+      <h4 className="mb-2 text-sm font-medium text-muted" id="shortcut-selected-heading">已显示</h4>
       <DndContext
         id={dndId}
         sensors={sensors}
@@ -94,8 +91,8 @@ export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkComm
           screenReaderInstructions: { draggable: "按 Enter 开始排序，用方向键移动，按 Enter 确认，按 Escape 取消。" },
           announcements: {
             onDragStart: ({ active }) => `开始排序：${ACCOUNT_SHORTCUTS.find((item) => item.href === active.id)?.label}。`,
-            onDragOver: ({ over }) => over ? `移动到第 ${order.indexOf(String(over.id)) + 1} 项。` : "已离开排序区域。",
-            onDragEnd: ({ over }) => over ? `排序完成，位于第 ${order.indexOf(String(over.id)) + 1} 项。` : "排序取消。",
+            onDragOver: ({ over }) => over ? `移动到第 ${shortcuts.indexOf(String(over.id)) + 1} 项。` : "已离开排序区域。",
+            onDragEnd: ({ over }) => over ? `排序完成，位于第 ${shortcuts.indexOf(String(over.id)) + 1} 项。` : "排序取消。",
             onDragCancel: () => "排序取消。",
           },
         }}
@@ -104,19 +101,20 @@ export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkComm
         onDragEnd={({ active, over }) => {
           setActiveKey(null);
           if (!over || active.id === over.id) return;
-          setOrder((current) => {
+          setShortcuts((current) => {
             const from = current.indexOf(String(active.id));
             const to = current.indexOf(String(over.id));
             return from < 0 || to < 0 ? current : arrayMove(current, from, to);
           });
         }}
       >
-        <SortableContext items={order} strategy={verticalListSortingStrategy}>
-          <ul aria-labelledby="shortcut-heading" aria-describedby="shortcut-help" className="grid gap-1 rounded-md border border-border p-2">
-            {order.map((href) => {
+        <SortableContext items={shortcuts} strategy={rectSortingStrategy}>
+          <ul aria-labelledby="shortcut-selected-heading" className="flex min-h-11 flex-wrap gap-2">
+            {shortcuts.length === 0 && <li className="flex min-h-11 items-center text-sm text-muted">未选择入口</li>}
+            {shortcuts.map((href) => {
               const item = ACCOUNT_SHORTCUTS.find((shortcut) => shortcut.href === href)!;
               return (
-                <SortableListItem key={href} id={href} className={rowClassName(selected.has(href))}>
+                <SortableListItem key={href} id={href} className={shortcutClassName}>
                   {({ attributes, listeners, setActivatorNodeRef }) => <>
                     <Button
                       {...attributes}
@@ -126,20 +124,16 @@ export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkComm
                       variant="ghost"
                       size="icon"
                       aria-label={`排序：${item.label}`}
-                      className="size-9 touch-none select-none cursor-grab text-muted active:cursor-grabbing"
+                      className="size-11 touch-none select-none cursor-grab rounded-full text-muted active:cursor-grabbing"
                       onContextMenu={(event) => event.preventDefault()}
                     >
                       <GripVertical aria-hidden size={18} />
                     </Button>
-                    <Label className="flex min-h-9 cursor-pointer items-center gap-2">
-                    <Checkbox checked={selected.has(href)} onCheckedChange={(checked) => setSelected((current) => {
-                      const next = new Set(current);
-                      if (checked === true) next.add(href);
-                      else next.delete(href);
-                      return next;
-                    })} aria-label={`显示${item.label}`} />
-                    <span>{item.label}</span>
-                    </Label>
+                    <span className="whitespace-nowrap text-sm">{item.label}</span>
+                    <Button type="button" variant="ghost" size="icon" className="size-11 rounded-full text-muted"
+                      aria-label={`移除${item.label}`} onClick={() => setShortcuts((current) => current.filter((entry) => entry !== href))}>
+                      <X aria-hidden />
+                    </Button>
                   </>}
                 </SortableListItem>
               );
@@ -147,17 +141,26 @@ export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkComm
           </ul>
         </SortableContext>
         <SortableOverlay>
-          {activeItem && <div aria-hidden inert className="rounded bg-card text-foreground shadow-lg ring-1 ring-primary/20">
-            <div className={rowClassName(selected.has(activeItem.href))}>
-              <span className="grid size-9 shrink-0 place-items-center text-muted"><GripVertical size={16} /></span>
-              <span className="flex min-h-9 items-center gap-2">
-                <span className="grid size-4 place-items-center rounded-sm border border-border">{selected.has(activeItem.href) && <Check size={14} />}</span>
-                <span>{activeItem.label}</span>
-              </span>
+          {activeItem && <div aria-hidden inert className="rounded-full bg-card text-foreground shadow-lg">
+            <div className={shortcutClassName}>
+              <span className="grid size-11 shrink-0 place-items-center text-muted"><GripVertical size={16} /></span>
+              <span className="whitespace-nowrap text-sm">{activeItem.label}</span>
+              <span className="grid size-11 shrink-0 place-items-center text-muted"><X size={16} /></span>
             </div>
           </div>}
         </SortableOverlay>
       </DndContext>
+      {shortcuts.length < ACCOUNT_SHORTCUTS.length && <div className="mt-5 border-t border-border pt-4" role="group" aria-labelledby="shortcut-available-heading">
+        <h4 className="mb-2 text-sm font-medium text-muted" id="shortcut-available-heading">可添加</h4>
+        <div className="flex flex-wrap gap-2">
+          {ACCOUNT_SHORTCUTS.filter((item) => !shortcuts.includes(item.href)).map((item) => (
+            <Button key={item.href} type="button" variant="outline" className="min-h-11 font-normal shadow-none"
+              aria-label={`添加${item.label}`} onClick={() => setShortcuts((current) => [...current, item.href])}>
+              <Plus aria-hidden />{item.label}
+            </Button>
+          ))}
+        </div>
+      </div>}
     </div>
   );
 }
