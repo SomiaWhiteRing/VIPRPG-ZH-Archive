@@ -1,4 +1,5 @@
 import type { FaceEmoji } from "@/lib/face-emojis";
+import type { UserBlockSettings } from "@/lib/user-blocks";
 
 export type MessagePeer = {
   id: number;
@@ -7,6 +8,7 @@ export type MessagePeer = {
   canSend: boolean;
   receiveMessages: boolean;
   acceptsMessages: boolean;
+  blockSettings: UserBlockSettings;
 };
 
 export type DirectMessage = {

@@ -1,5 +1,6 @@
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { readDirectMessageReport } from "./message-reports";
+import { readUserBlockSettings, setUserBlockSettings } from "./user-blocks";
 import { bodyEmojis } from "@/app/.server/emojis/service";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { memoizeRequest } from "@/app/.server/runtime";
@@ -26,23 +27,23 @@ function mapMessage(row: MessageRow): DirectMessage {
 export async function directMessagePeer(runtime: AppRuntime, user: ArchiveUser, peerId: number): Promise<MessagePeer> {
   if (peerId === user.id) throw new HttpError(404, "会话不存在");
   const row = await runtime.db.prepare(`SELECT u.id,u.display_name,u.avatar_blob_sha256,u.status,u.receive_private_messages,
-    COALESCE((SELECT s.receive_messages FROM direct_conversation_states s JOIN direct_conversations c ON c.id=s.conversation_id
-      WHERE s.user_id=? AND c.lower_user_id=MIN(?,u.id) AND c.upper_user_id=MAX(?,u.id)),1) AS receive_messages,
-    COALESCE((SELECT s.receive_messages FROM direct_conversation_states s JOIN direct_conversations c ON c.id=s.conversation_id
-      WHERE s.user_id=u.id AND c.lower_user_id=MIN(?,u.id) AND c.upper_user_id=MAX(?,u.id)),1) AS accepts_messages,
+    NOT EXISTS(SELECT 1 FROM user_block_settings b WHERE b.user_id=? AND b.blocked_user_id=u.id AND b.block_private_messages=1) AS receive_messages,
+    NOT EXISTS(SELECT 1 FROM user_block_settings b WHERE b.user_id=u.id AND b.blocked_user_id=? AND b.block_private_messages=1) AS accepts_messages,
     EXISTS(SELECT 1 FROM direct_conversations c JOIN direct_messages m ON m.conversation_id=c.id
       WHERE c.lower_user_id=MIN(?,u.id) AND c.upper_user_id=MAX(?,u.id)) AS has_history
-    FROM users u WHERE u.id=?`).bind(user.id, user.id, user.id, user.id, user.id, user.id, user.id, peerId)
+    FROM users u WHERE u.id=?`).bind(user.id, user.id, user.id, user.id, peerId)
     .first<{ id: number; display_name: string; avatar_blob_sha256: string | null; status: string; receive_private_messages: number; has_history: number; receive_messages: number; accepts_messages: number }>();
   if (!row || (!row.has_history && (row.status !== "active" || row.receive_private_messages !== 1)))
     throw new HttpError(404, "会话不存在");
   return { id: row.id, displayName: row.display_name, avatarBlobSha256: row.avatar_blob_sha256,
     canSend: row.status === "active" && row.receive_private_messages === 1 && hasPermission(user, "message.send"),
-    receiveMessages: row.receive_messages === 1, acceptsMessages: row.accepts_messages === 1 };
+    receiveMessages: row.receive_messages === 1, acceptsMessages: row.accepts_messages === 1,
+    blockSettings: await readUserBlockSettings(runtime, user.id, peerId) };
 }
 
 export async function listDirectConversations(runtime: AppRuntime, user: ArchiveUser, before = Number.MAX_SAFE_INTEGER) {
-  const rows = await runtime.db.prepare(`SELECT u.id AS peer_id,u.display_name,u.avatar_blob_sha256,s.receive_messages,
+  const rows = await runtime.db.prepare(`SELECT u.id AS peer_id,u.display_name,u.avatar_blob_sha256,
+    NOT EXISTS(SELECT 1 FROM user_block_settings b WHERE b.user_id=s.user_id AND b.blocked_user_id=u.id AND b.block_private_messages=1) AS receive_messages,
     m.id AS last_id,m.kind,m.body,m.created_at,
     (SELECT COUNT(*) FROM direct_messages unread WHERE unread.conversation_id=c.id AND unread.recipient_user_id=?
       AND unread.delivered=1 AND unread.id>COALESCE(s.last_read_message_id,0)) AS unread
@@ -104,7 +105,8 @@ export async function isUnreadDirectMessage(runtime: AppRuntime, userId: number,
   const row = await runtime.db.prepare(`SELECT 1 FROM direct_conversation_states s
     JOIN direct_messages m ON m.conversation_id=s.conversation_id AND m.recipient_user_id=s.user_id
       AND m.delivered=1 AND m.id>COALESCE(s.last_read_message_id,0)
-    WHERE s.user_id=? AND s.receive_messages=1 AND m.id=?`)
+    WHERE s.user_id=? AND m.id=? AND NOT EXISTS(SELECT 1 FROM user_block_settings b
+      WHERE b.user_id=s.user_id AND b.blocked_user_id=m.sender_user_id AND b.block_private_messages=1)`)
     .bind(userId, id).first();
   return row !== null;
 }
@@ -138,14 +140,15 @@ export async function sendDirectMessage(runtime: AppRuntime, user: ArchiveUser, 
       UNION ALL SELECT id,upper_user_id FROM direct_conversations WHERE lower_user_id=MIN(?,?) AND upper_user_id=MAX(?,?)
       ON CONFLICT(conversation_id,user_id) DO NOTHING`).bind(user.id, peerId, user.id, peerId, user.id, peerId, user.id, peerId),
     db.prepare(`INSERT INTO direct_messages(conversation_id,sender_user_id,recipient_user_id,client_id,kind,body,image_id,delivered)
-      SELECT c.id,?,?,?,?,?,?,(SELECT receive_messages FROM direct_conversation_states WHERE conversation_id=c.id AND user_id=?)
+      SELECT c.id,?,?,?,?,?,?,NOT EXISTS(SELECT 1 FROM user_block_settings b
+        WHERE b.user_id=? AND b.blocked_user_id=? AND b.block_private_messages=1)
       FROM direct_conversations c WHERE c.lower_user_id=MIN(?,?) AND c.upper_user_id=MAX(?,?)
         AND ${allowed}
         AND (SELECT COUNT(*) FROM direct_messages recent WHERE recent.sender_user_id=? AND recent.created_at>=datetime('now','-1 minute'))<30
         AND NOT EXISTS(SELECT 1 FROM json_each(?) e WHERE NOT EXISTS(SELECT 1 FROM available_face_emojis a WHERE a.id=e.value))
       ON CONFLICT(sender_user_id,client_id) DO NOTHING`)
       .bind(user.id, peerId, input.clientId, input.kind, input.kind === "text" ? input.body : null,
-        input.kind === "image" ? input.imageId : null, peerId, user.id, peerId, user.id, peerId, peerId, user.id, JSON.stringify(ids)),
+        input.kind === "image" ? input.imageId : null, peerId, user.id, user.id, peerId, user.id, peerId, peerId, user.id, JSON.stringify(ids)),
     db.prepare(`INSERT INTO direct_message_emojis(message_id,emoji_id)
       SELECT m.id,e.value FROM direct_messages m,json_each(?) e WHERE m.sender_user_id=? AND m.client_id=?
       ON CONFLICT(message_id,emoji_id) DO NOTHING`).bind(JSON.stringify(ids), user.id, input.clientId),
@@ -170,17 +173,5 @@ export async function markDirectMessagesRead(runtime: AppRuntime, userId: number
 
 export async function setDirectMessageReceiving(runtime: AppRuntime, user: ArchiveUser, peerId: number, receive: boolean) {
   await directMessagePeer(runtime, user, peerId);
-  await runtime.db.batch([
-    runtime.db.prepare(`INSERT INTO direct_conversations(lower_user_id,upper_user_id) VALUES(MIN(?,?),MAX(?,?))
-      ON CONFLICT(lower_user_id,upper_user_id) DO NOTHING`).bind(user.id, peerId, user.id, peerId),
-    runtime.db.prepare(`INSERT INTO direct_conversation_states(conversation_id,user_id)
-      SELECT id,lower_user_id FROM direct_conversations WHERE lower_user_id=MIN(?,?) AND upper_user_id=MAX(?,?)
-      UNION ALL SELECT id,upper_user_id FROM direct_conversations WHERE lower_user_id=MIN(?,?) AND upper_user_id=MAX(?,?)
-      ON CONFLICT(conversation_id,user_id) DO NOTHING`).bind(user.id, peerId, user.id, peerId, user.id, peerId, user.id, peerId),
-    runtime.db.prepare(`UPDATE direct_conversation_states SET receive_messages=? WHERE user_id=?
-      AND conversation_id=(SELECT id FROM direct_conversations WHERE lower_user_id=MIN(?,?) AND upper_user_id=MAX(?,?))`)
-      .bind(receive ? 1 : 0, user.id, user.id, peerId, user.id, peerId),
-  ]);
-  runtime.execution.waitUntil(runtime.env.MESSAGE_ROOM.getByName(`${Math.min(user.id, peerId)}:${Math.max(user.id, peerId)}`)
-    .changed().catch(error => console.error("Private message notification failed", error)));
+  await setUserBlockSettings(runtime, user, peerId, { blockPrivateMessages: !receive });
 }

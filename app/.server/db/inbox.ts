@@ -22,6 +22,7 @@ import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { workMaintainerRecipientSql } from "./work-maintainers";
 import type { MaintainerRequestStatus } from "@/lib/work-maintainers";
 import type { PushCategory } from "@/lib/push";
+import { interactionSuppressedSql } from "./user-blocks";
 
 const inboxCategorySql: Record<InboxCategory, string> = {
   all: "1",
@@ -89,6 +90,7 @@ type InboxItemRow = {
 function inboxSelect(details: boolean) {
   return `SELECT
   i.id,
+  i.interaction_kind,
   json_extract(i.metadata_json,'$.reportKind') AS report_kind,
   json_extract(i.metadata_json,'$.reportId') AS report_id,
   (SELECT target_id FROM forum_content_reports WHERE id=json_extract(i.metadata_json,'$.reportId') AND json_extract(i.metadata_json,'$.reportKind')='forum') AS report_target_id,
@@ -151,12 +153,12 @@ export function buildInboxVisibilityClause(
   audienceBinds: readonly (PermissionKey | number)[];
 } {
   return {
-    sql: `i.recipient_user_id = ? OR (i.type='role_change_request' AND ${administratorSql("?", "COALESCE((SELECT key FROM roles WHERE id=i.requested_role_id),i.requested_role_key_snapshot)")})
+    sql: `i.suppressed=0 AND (i.recipient_user_id = ? OR (i.type='role_change_request' AND ${administratorSql("?", "COALESCE((SELECT key FROM roles WHERE id=i.requested_role_id),i.requested_role_key_snapshot)")})
       OR (i.type<>'role_change_request' AND ${user.permissionKeys.length
         ? `i.required_permission_key IN (${user.permissionKeys.map(() => "?").join(",")})` : "0"})
       OR EXISTS(SELECT 1 FROM work_maintainer_requests mr JOIN works mw ON mw.id=mr.work_id
         WHERE mr.id=i.work_maintainer_request_id AND mw.status<>'deleted'
-          AND ${workMaintainerRecipientSql('mr.work_id', String(user.id))})`,
+          AND ${workMaintainerRecipientSql('mr.work_id', String(user.id))}))`,
     audienceBinds: [user.id, ...user.permissionKeys],
   };
 }
@@ -290,8 +292,8 @@ export async function countUnreadInboxItemsForUser(
   const row = await getD1(runtime)
     .prepare(
       `WITH ${audience.sql}
-      SELECT COUNT(*) AS count FROM audience i
-      WHERE NOT EXISTS (
+      SELECT COUNT(*) AS count FROM audience a JOIN inbox_items i ON i.id=a.id
+      WHERE i.suppressed=0 AND NOT EXISTS (
         SELECT 1 FROM inbox_item_reads reads WHERE reads.item_id=i.id AND reads.user_id=?
       )`,
     )
@@ -306,6 +308,7 @@ export async function isUnreadInboxItem(runtime: AppRuntime, user: ArchiveUser, 
   const query = inboxQuery(user, false);
   const row = await getD1(runtime).prepare(`${query.sql}
     SELECT 1 FROM actionable WHERE id=? AND read_at IS NULL
+      AND NOT ${interactionSuppressedSql("recipient_user_id", "sender_user_id", "interaction_kind")}
       AND (${filters.join(" OR ")})`)
     .bind(...query.binds, id).first();
   return row !== null;

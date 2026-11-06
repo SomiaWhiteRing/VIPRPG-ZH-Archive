@@ -1,4 +1,5 @@
 import { mentionNotification, validateMentions } from "@/app/.server/mentions";
+import { interactionSuppressedSql } from "./user-blocks";
 import { timelineStatement } from "@/app/.server/db/timeline";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { workReadCondition } from "@/app/.server/db/work-visibility";
@@ -672,9 +673,9 @@ export async function createComment(
       ...contentEmojiStatements(db, "comment", source, [userId, requestKey], body, userId, true),
       ...commentImageStatements(db, ids, userId, source, [userId, requestKey]),
       // Same transaction as publication; retries return the existing comment above.
-      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,work_comment_id)
+      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,work_comment_id,interaction_kind,suppressed)
         SELECT 'system_notice',c.user_id,recipient.id,'','',
-          'work-comment:'||c.id||':'||recipient.id,c.id
+          'work-comment:'||c.id||':'||recipient.id,c.id,'comment',${interactionSuppressedSql("recipient.id", "c.user_id", "'comment'")}
         FROM published_comments c
         JOIN users recipient ON recipient.id IN (
           SELECT user_id FROM work_uploaders WHERE work_id=c.work_id
@@ -685,9 +686,9 @@ export async function createComment(
           AND recipient.notify_uploaded_work_comments=1
           AND ${commentRecipientReadSql("c", "recipient.id")}
         ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
-      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,reply_comment_id)
+      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,reply_comment_id,interaction_kind,suppressed)
         SELECT 'system_notice',c.user_id,recipient.id,'','',
-          'comment-reply:'||c.id||':'||recipient.id,c.id
+          'comment-reply:'||c.id||':'||recipient.id,c.id,'reply',${interactionSuppressedSql("recipient.id", "c.user_id", "'reply'")}
         FROM published_comments c
         JOIN published_comments target ON target.id=COALESCE(c.reply_to_comment_id,c.root_comment_id)
         JOIN users recipient ON recipient.id=target.user_id
@@ -696,9 +697,9 @@ export async function createComment(
           AND ${commentRecipientReadSql("c", "recipient.id")}
         ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
       // Catalog owners receive new root comments; replies use the shared reply notice.
-      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,work_comment_id)
+      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,work_comment_id,interaction_kind,suppressed)
         SELECT 'system_notice',c.user_id,recipient.id,'','',
-          'catalog-comment:'||c.id||':'||recipient.id,c.id
+          'catalog-comment:'||c.id||':'||recipient.id,c.id,'comment',${interactionSuppressedSql("recipient.id", "c.user_id", "'comment'")}
         FROM published_comments c JOIN catalogs catalog ON catalog.id=c.catalog_id
         JOIN users recipient ON recipient.id=catalog.owner_user_id
         WHERE c.user_id=? AND c.request_key=? AND c.root_comment_id IS NULL
@@ -852,8 +853,9 @@ export async function likeComment(
       SELECT c.id,? FROM published_comments c WHERE c.id=? AND ${access.sql}
         AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active')`)
       .bind(userId, id, ...access.binds, userId),
-    db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,like_comment_id)
-      SELECT 'system_notice',?,c.user_id,'','','comment-like:'||?||':'||c.id||':'||c.user_id,c.id
+    db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,like_comment_id,interaction_kind,suppressed)
+      SELECT 'system_notice',?,c.user_id,'','','comment-like:'||?||':'||c.id||':'||c.user_id,c.id,
+        'like',${interactionSuppressedSql("c.user_id", String(userId), "'like'")}
       FROM published_comments c JOIN users recipient ON recipient.id=c.user_id AND recipient.status='active'
       WHERE c.id=? AND c.user_id<>? AND changes()=1 AND ${commentRecipientReadSql("c", "recipient.id")}
       ON CONFLICT(event_key) DO NOTHING`).bind(userId, userId, id, userId),

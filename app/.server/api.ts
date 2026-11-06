@@ -1,4 +1,5 @@
 import * as catalogCommentsEndpoint from "./endpoints/api/catalogs/[id]/comments/route";
+import * as userBlockSettingsEndpoint from "./endpoints/api/users/[userId]/block-settings/route";
 import { json as jsonResponse, jsonError } from "@/lib/http";
 import * as materialSearchEndpoint from "./endpoints/api/material-search/route";
 import { searchMentionUsers } from "./mentions";
@@ -139,6 +140,11 @@ api.route("/", sitemapApi);
 api.route("/", seaApi);
 api.route("/", messageApi);
 api.route("/", pushApi);
+api.get("/api/users/:userId/block-settings", c => userBlockSettingsEndpoint.GET(c.get("runtime"), c.req.raw, c.req.param("userId")));
+api.put("/api/users/:userId/block-settings", c => userBlockSettingsEndpoint.PUT(c.get("runtime"), c.req.raw, c.req.param("userId")));
+api.options("/api/users/:userId/block-settings", c => c.body(null, 204, { Allow: "GET, PUT, OPTIONS" }));
+api.all("/api/users/:userId/block-settings", () => jsonResponse({ ok: false, error: "Method not allowed" },
+  { status: 405, headers: { Allow: "GET, PUT, OPTIONS" } }));
 api.get("/api/works/local-library", c => localLibraryWorksEndpoint.GET(c.get("runtime"), c.req.raw));
 api.get("/api/admin/audit/reports/:date/export", (c) => auditReportExportEndpoint.GET(c.get("runtime"), c.req.raw,
   { params: Promise.resolve({ date: c.req.param("date") }) }));

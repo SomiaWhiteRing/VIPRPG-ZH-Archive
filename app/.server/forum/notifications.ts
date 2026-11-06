@@ -1,4 +1,5 @@
 import type { ForumRuntime } from "./runtime";
+import { interactionSuppressedSql } from "@/app/.server/db/user-blocks";
 
 // Only rows created by the current publication token can produce a reply event.
 export function replyNotificationStatement(
@@ -19,9 +20,10 @@ export function replyNotificationStatement(
   return ctx.db
     .prepare(
       `INSERT INTO inbox_items
-    (type,sender_user_id,recipient_user_id,title,body,event_key,forum_topic_id,forum_post_id,forum_comment_id)
+    (type,sender_user_id,recipient_user_id,title,body,event_key,forum_topic_id,forum_post_id,forum_comment_id,interaction_kind,suppressed)
     SELECT 'forum_reply',?,s.recipient,'','',
-      'reply:${kind}:'||COALESCE(s.comment_id,s.post_id)||':'||s.recipient,s.topic_id,s.post_id,s.comment_id
+      'reply:${kind}:'||COALESCE(s.comment_id,s.post_id)||':'||s.recipient,s.topic_id,s.post_id,s.comment_id,
+      'reply',${interactionSuppressedSql("s.recipient", String(actorId), "'reply'")}
     FROM (${source}) s JOIN users recipient ON recipient.id=s.recipient AND recipient.status='active'
     WHERE s.recipient<>? ON CONFLICT(event_key) DO NOTHING`,
     )
@@ -38,9 +40,9 @@ export function likeNotificationStatement(
   return ctx.db
     .prepare(
       `INSERT INTO inbox_items
-    (type,sender_user_id,recipient_user_id,title,body,event_key,forum_topic_id,forum_post_id,forum_comment_id)
+    (type,sender_user_id,recipient_user_id,title,body,event_key,forum_topic_id,forum_post_id,forum_comment_id,interaction_kind,suppressed)
     SELECT 'forum_like',?,p.user_id,'','','${comment ? "like:comment:" : "like:"}'||?||':'||p.id||':'||p.user_id,
-      p.topic_id,${comment ? "p.post_id,p.id" : "p.id,NULL"}
+      p.topic_id,${comment ? "p.post_id,p.id" : "p.id,NULL"},'like',${interactionSuppressedSql("p.user_id", String(actorId), "'like'")}
     FROM ${comment ? "forum_public_comments" : "forum_public_posts"} p
     JOIN users recipient ON recipient.id=p.user_id AND recipient.status='active'
     WHERE p.id=? AND p.user_id<>? AND changes()=1 ON CONFLICT(event_key) DO NOTHING`,

@@ -1,4 +1,5 @@
 import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { interactionSuppressedSql } from "./user-blocks";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { sha256Hex } from "@/lib/sha256";
 import { getD1 } from "./d1";
@@ -25,8 +26,9 @@ export async function setTimelineLike(runtime: AppRuntime, eventId: number, user
       SELECT ?,id FROM users WHERE id=? AND status='active' AND ${userPermissionSql("users.id", "timeline.status.like")}
       AND EXISTS(${PUBLIC_STATUS}) ON CONFLICT(event_id,user_id) DO NOTHING`).bind(eventId, userId, eventId),
       // Immediately follow the relationship INSERT; unlike/re-like preserves the original event.
-      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,timeline_event_id)
-        SELECT 'system_notice',?,e.user_id,'','','timeline:like:'||?||':'||e.id||':'||e.user_id,e.id
+      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,timeline_event_id,interaction_kind,suppressed)
+        SELECT 'system_notice',?,e.user_id,'','','timeline:like:'||?||':'||e.id||':'||e.user_id,e.id,
+          'like',${interactionSuppressedSql("e.user_id", String(userId), "'like'")}
         FROM timeline_events e WHERE e.id=? AND e.user_id<>? AND EXISTS(${PUBLIC_STATUS})
         AND changes()=1 ON CONFLICT(event_key) DO NOTHING`).bind(userId, userId, eventId, userId, eventId),
     ]);
@@ -81,8 +83,9 @@ export async function createTimelineReply(runtime: AppRuntime, eventId: number, 
       AND EXISTS(${PUBLIC_STATUS})
       AND (SELECT COUNT(*) FROM timeline_status_replies WHERE user_id=? AND created_at>=datetime('now','-1 minute'))<10
       ON CONFLICT(event_id,user_id,request_key) DO NOTHING`).bind(eventId, body, key, hash, userId, ...guard.args, eventId, userId),
-    db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,timeline_event_id,timeline_reply_id)
-      SELECT 'system_notice',r.user_id,e.user_id,'','','timeline:reply:'||r.id||':'||e.user_id,e.id,r.id
+    db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,timeline_event_id,timeline_reply_id,interaction_kind,suppressed)
+      SELECT 'system_notice',r.user_id,e.user_id,'','','timeline:reply:'||r.id||':'||e.user_id,e.id,r.id,
+        'reply',${interactionSuppressedSql("e.user_id", "r.user_id", "'reply'")}
       FROM timeline_status_replies r JOIN timeline_events e ON e.id=r.event_id
       WHERE r.event_id=? AND r.user_id=? AND r.request_key=? AND r.request_hash=?
         AND r.hidden_at IS NULL AND r.user_id<>e.user_id AND EXISTS(${PUBLIC_STATUS})

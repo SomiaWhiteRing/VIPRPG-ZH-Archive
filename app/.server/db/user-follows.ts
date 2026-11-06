@@ -5,6 +5,7 @@ import { hasPermission, type PermissionKey } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import type { FollowDirection, FollowPage, FollowSummary } from "@/lib/dto/db/user-follows";
 import { HttpError } from "@/lib/http";
+import { interactionSuppressedSql } from "./user-blocks";
 
 export async function readFollowSummary(runtime: AppRuntime, userId: number, viewer: ArchiveUser | null): Promise<FollowSummary | null> {
   const row = await getD1(runtime).prepare(`SELECT
@@ -42,14 +43,15 @@ export async function setUserFollow(runtime: AppRuntime, actorId: number, target
       ON CONFLICT(follower_user_id,followed_user_id) DO NOTHING`).bind(targetId, actorId),
       // changes() belongs to the preceding relation insert. A retry cannot send
       // another notice, and a notification failure rolls the relation back.
-      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,metadata_json)
+      db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,metadata_json,interaction_kind,suppressed)
         SELECT 'system_notice',f.follower_user_id,f.followed_user_id,'好友提醒','',?,json_object('friend',
           CASE WHEN EXISTS(SELECT 1 FROM user_follows back WHERE back.follower_user_id=f.followed_user_id AND back.followed_user_id=f.follower_user_id)
-            THEN 'returned' ELSE 'added' END)
+            THEN 'returned' ELSE 'added' END),'friend',${interactionSuppressedSql("f.followed_user_id", "f.follower_user_id", "'friend'")}
         FROM user_follows f JOIN users recipient ON recipient.id=f.followed_user_id AND recipient.status='active' AND recipient.notify_friend_additions=1
         WHERE f.follower_user_id=? AND f.followed_user_id=? AND changes()=1
           AND NOT EXISTS(SELECT 1 FROM inbox_items i WHERE i.type='system_notice'
             AND i.sender_user_id=f.follower_user_id AND i.recipient_user_id=f.followed_user_id
+            AND i.suppressed=0
             AND json_extract(i.metadata_json,'$.friend')=CASE WHEN EXISTS
               (SELECT 1 FROM user_follows back WHERE back.follower_user_id=f.followed_user_id AND back.followed_user_id=f.follower_user_id)
               THEN 'returned' ELSE 'added' END

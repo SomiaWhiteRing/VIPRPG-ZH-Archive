@@ -10,29 +10,24 @@ import { Textarea } from "@/app/components/ui/textarea";
 import type { MessagePeer } from "@/lib/dto/db/messages";
 import { FORUM_REPORT_REASONS } from "@/lib/forum";
 import { requestJson } from "@/lib/ui/api-response";
+import { UserBlockDialog } from "@/app/components/user-block-settings";
 
 export function MessageMenu({ peer, onChanged }: { peer: MessagePeer; onChanged: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
+  const [blocking, setBlocking] = useState(false);
   const [reporting, setReporting] = useState(false);
   const toast = useToast();
-  async function toggleReceiving() {
-    setBusy(true);
-    try {
-      await requestJson(`/api/messages/${peer.id}/receiving`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ receive: !peer.receiveMessages }) });
-      await onChanged();
-    } catch (error) { toast.error(error instanceof Error ? error.message : "操作失败。"); }
-    finally { setBusy(false); }
-  }
   return <>
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild><Button type="button" variant="ghost" size="icon" aria-label="更多操作" disabled={busy}><EllipsisVertical aria-hidden /></Button></DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild><Button type="button" variant="ghost" size="icon" aria-label="更多操作"><EllipsisVertical aria-hidden /></Button></DropdownMenu.Trigger>
       <DropdownMenu.Portal><DropdownMenu.Content align="end" className="z-50 min-w-48 rounded-md border border-border bg-card p-1 shadow-surface">
-        <DropdownMenu.Item className="cursor-pointer rounded-sm px-3 py-2 text-sm outline-none focus:bg-primary/10" onSelect={() => void toggleReceiving()}>
-          {peer.receiveMessages ? "不再接收此用户的信息" : "重新接收此用户的信息"}
+        <DropdownMenu.Item className="cursor-pointer rounded-sm px-3 py-2 text-sm outline-none focus:bg-primary/10" onSelect={() => setBlocking(true)}>
+          屏蔽设置
         </DropdownMenu.Item>
         <DropdownMenu.Item className="cursor-pointer rounded-sm px-3 py-2 text-sm text-destructive outline-none focus:bg-primary/10" onSelect={() => setReporting(true)}>举报用户</DropdownMenu.Item>
       </DropdownMenu.Content></DropdownMenu.Portal>
     </DropdownMenu.Root>
+    {blocking ? <UserBlockDialog peer={peer} initial={peer.blockSettings} onClose={() => setBlocking(false)}
+      onSaved={() => { void onChanged().catch(error => toast.error(error instanceof Error ? error.message : "读取失败")); }} /> : null}
     {reporting ? <MessageReportDialog peer={peer} onClose={() => setReporting(false)} /> : null}
   </>;
 }

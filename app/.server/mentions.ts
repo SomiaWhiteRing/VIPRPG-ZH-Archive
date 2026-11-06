@@ -2,6 +2,7 @@ import { json as jsonResponse, HttpError } from "@/lib/http";
 import { getCurrentUser } from "./auth/current-user";
 import { getD1 } from "./db/d1";
 import { commentRecipientReadSql } from "./db/comment-visibility";
+import { interactionSuppressedSql } from "./db/user-blocks";
 import type { AppRuntime } from "./runtime";
 
 import { MENTION_LIMIT, mentions, type MentionSearchUser } from "@/lib/mentions";
@@ -35,7 +36,6 @@ export async function validateMentions(db: D1Database, body: string, previous = 
     throw new HttpError(409, "被提及用户的资料已变化或不可用，请重新搜索选择。");
 }
 
-// Existing inbox references and metadata support mentions without changing the database schema.
 // The source must be gated by this write's revision/request identity in the publication batch.
 export function mentionNotification(db: D1Database, actorId: number, body: string, previous: string,
   kind: "comment" | "post" | "forum-comment", source: string, args: (number | string)[]) {
@@ -49,8 +49,9 @@ export function mentionNotification(db: D1Database, actorId: number, body: strin
     ? "(i.work_comment_id=s.id OR i.reply_comment_id=s.id)"
     : kind === "post" ? "i.forum_post_id=s.id AND i.forum_comment_id IS NULL AND i.type='forum_reply'"
       : "i.forum_comment_id=s.id AND i.type='forum_reply'";
-  return db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,metadata_json,${fields})
-    SELECT '${ordinary ? "system_notice" : "forum_reply"}',?,u.id,'','','mention:${kind}:'||s.id||':'||u.id,'{"mention":true}',${values}
+  return db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,metadata_json,${fields},interaction_kind,suppressed)
+    SELECT '${ordinary ? "system_notice" : "forum_reply"}',?,u.id,'','','mention:${kind}:'||s.id||':'||u.id,'{"mention":true}',${values},
+      'reply',${interactionSuppressedSql("u.id", String(actorId), "'reply'")}
     FROM ${table} s JOIN users u ON u.id IN (SELECT value FROM json_each(?)) AND u.status='active'
     WHERE s.id IN (${source}) AND u.id<>? ${ordinary ? `AND ${commentRecipientReadSql("s", "u.id")}` : ""} AND NOT EXISTS
       (SELECT 1 FROM inbox_items i WHERE i.recipient_user_id=u.id AND ${sameContent})
