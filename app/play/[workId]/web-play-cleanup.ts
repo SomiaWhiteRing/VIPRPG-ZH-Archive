@@ -1,10 +1,11 @@
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
-import { deleteWebPlayInstallation, getWebPlayInstallation, listWebPlayInstallations } from "./web-play-db";
+import { deleteWebPlayInstallation, getWebPlayInstallation, listLocalLibraryWorks, listWebPlayInstallations } from "./web-play-db";
 import { gameResourceLockName, withGameResourceWriteLock } from "./web-play-locks";
 import { hasGameResources, resetGameOpfsDirectory } from "./web-play-opfs";
 import type { WebPlayInstallation, WebPlayMetadata } from "./web-play-types";
 import { isAndroidClient } from "@/lib/browser/client-environment";
-import { gameResourceExpiresAt } from "./web-play-storage";
+import { gameResourceExpiresAt, renewGameBucket } from "./web-play-storage";
+import { readGameRetentionDays, saveGameRetentionDays, type GameRetentionDays } from "./web-play-retention";
 import { deleteUnusedWebPlayCovers } from "./web-play-cover";
 import { notifyGameResourcesChanged } from "./web-play-events";
 
@@ -20,7 +21,9 @@ async function removeInstallation(installation: WebPlayInstallation): Promise<vo
 async function cleanupCovers(removed: WebPlayInstallation[]): Promise<void> {
   if (!removed.length) return;
   const retained = await listWebPlayInstallations();
-  await deleteUnusedWebPlayCovers(removed.map(row => row.coverBlobSha256), retained.map(row => row.coverBlobSha256));
+  const works = await listLocalLibraryWorks();
+  await deleteUnusedWebPlayCovers(removed.map(row => row.coverBlobSha256),
+    [...retained.map(row => row.coverBlobSha256), ...works.map(work => work.coverBlobSha256)]);
 }
 
 export async function deleteLocalGame(playKey: string): Promise<void> {
@@ -48,6 +51,7 @@ export function cleanupExpiredGameResources(): Promise<void> {
 
 async function sweepExpiredGameResources(): Promise<void> {
   await navigator.locks.request("viprpg:game-resource-cleanup", async () => {
+    const retention = await readGameRetentionDays();
     const removed: WebPlayInstallation[] = [];
     const failures: unknown[] = [];
     for (const row of await listWebPlayInstallations()) {
@@ -56,7 +60,7 @@ async function sweepExpiredGameResources(): Promise<void> {
           if (!lock) return;
           const current = await getWebPlayInstallation(row.playKey);
           if (!current) return;
-          const expires = gameResourceExpiresAt(current);
+          const expires = gameResourceExpiresAt(current, retention);
           // One-time reset of the old browser cache. Android never enters this sweep.
           const obsolete = !current.storageKind || (expires !== null && expires <= Date.now());
           if (!obsolete && await hasGameResources(current, current.status === "ready")) return;
@@ -69,6 +73,19 @@ async function sweepExpiredGameResources(): Promise<void> {
     if (removed.length) notifyGameResourcesChanged();
     if (failures.length) throw failures[0];
   });
+}
+
+export async function changeGameRetentionDays(days: GameRetentionDays): Promise<void> {
+  await navigator.locks.request("viprpg:game-resource-cleanup", async () => {
+    await saveGameRetentionDays(days);
+    for (const row of await listWebPlayInstallations()) {
+      if (row.storageKind !== "browser-bucket") continue;
+      const expires = gameResourceExpiresAt(row, days);
+      if (expires !== null && expires <= Date.now()) continue;
+      if (await hasGameResources(row, false)) await renewGameBucket(row, days);
+    }
+  });
+  notifyGameResourcesChanged();
 }
 
 export async function busyGameResourceKeys(): Promise<Set<string>> {

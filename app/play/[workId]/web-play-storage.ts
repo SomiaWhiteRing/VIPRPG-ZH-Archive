@@ -1,7 +1,10 @@
 import { sha256Hex } from "@/lib/sha256";
 import type { WebPlayInstallation, WebPlayStorageKind } from "./web-play-types";
+import { readGameRetentionDays, type GameRetentionDays } from "./web-play-retention";
 
-export const GAME_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+// Existing Chromium buckets cannot clear an expiry. Use the largest Date value
+// for "never"; application expiry remains null and no resource files are moved.
+const noAutomaticExpiry = 8_640_000_000_000_000;
 
 type GameBucket = {
   getDirectory(): Promise<FileSystemDirectoryHandle>;
@@ -27,13 +30,13 @@ export function chooseGameStorage(): WebPlayStorageKind {
   return supportsGameBuckets() ? "browser-bucket" : "browser-opfs";
 }
 
-export function gameResourceExpiresAt(installation: WebPlayInstallation): number | null {
-  if (!installation.storageKind) return null;
+export function gameResourceExpiresAt(installation: WebPlayInstallation, retention: GameRetentionDays): number | null {
+  if (!installation.storageKind || retention === "never") return null;
   const base = installation.status === "ready"
     ? installation.lastPlayedAt ?? installation.readyAt ?? installation.createdAt
     : installation.updatedAt;
   const time = Date.parse(base);
-  return Number.isFinite(time) ? time + GAME_RETENTION_MS : 0;
+  return Number.isFinite(time) ? time + retention * 24 * 60 * 60 * 1000 : 0;
 }
 
 export function validatePlayKey(playKey: string): void {
@@ -46,16 +49,16 @@ async function bucketName(playKey: string): Promise<string> {
   return `viprpg-game-${digest.slice(0, 48)}`;
 }
 
-export async function openGameBucket(installation: WebPlayInstallation, create: boolean): Promise<GameBucket> {
+export async function openGameBucket(installation: WebPlayInstallation, create: boolean, retention?: GameRetentionDays): Promise<GameBucket> {
   const manager = buckets();
   if (!manager) throw new Error("当前浏览器无法读取已安装的游戏资源。");
   const name = await bucketName(installation.playKey);
-  const expires = gameResourceExpiresAt(installation);
-  if (expires === null || expires <= Date.now()) throw new DOMException("游戏资源已过期。", "NotFoundError");
+  const expires = gameResourceExpiresAt(installation, retention ?? await readGameRetentionDays());
+  if (expires !== null && expires <= Date.now()) throw new DOMException("游戏资源已过期。", "NotFoundError");
   // Opening an absent bucket would silently create it. Check first when reading.
   if (!create && !(await manager.keys()).includes(name)) throw new DOMException("游戏资源已被清理。", "NotFoundError");
   // Always supply the existing deadline: opening a bucket must not renew it just by browsing.
-  return manager.open(name, { expires, persisted: false });
+  return manager.open(name, { expires: expires ?? noAutomaticExpiry, persisted: false });
 }
 
 export async function deleteGameBucket(playKey: string): Promise<void> {
@@ -64,8 +67,9 @@ export async function deleteGameBucket(playKey: string): Promise<void> {
   await manager.delete(await bucketName(playKey));
 }
 
-export async function renewGameBucket(installation: WebPlayInstallation): Promise<void> {
+export async function renewGameBucket(installation: WebPlayInstallation, retention?: GameRetentionDays): Promise<void> {
   if (installation.storageKind !== "browser-bucket") return;
-  const bucket = await openGameBucket(installation, false);
-  await bucket.setExpires(gameResourceExpiresAt(installation)!);
+  const days = retention ?? await readGameRetentionDays();
+  const bucket = await openGameBucket(installation, false, days);
+  await bucket.setExpires(gameResourceExpiresAt(installation, days) ?? noAutomaticExpiry);
 }

@@ -10,6 +10,7 @@ import { playerConfigDirectory, preparePlayerConfig } from "./web-play-player-co
 import { acquireGameResourceReadLock, acquireGameSaveLock } from "./web-play-locks";
 import { getWebPlayInstallation, markWebPlayLastPlayed } from "./web-play-db";
 import { gameResourceExpiresAt, renewGameBucket } from "./web-play-storage";
+import { readGameRetentionDays } from "./web-play-retention";
 import { notifyGameResourcesChanged } from "./web-play-events";
 import { keyboardKeys } from "./web-play-keyboard-keys";
 import playerStyles from "../player.css?inline";
@@ -105,15 +106,15 @@ export function createPlayerSession(
   frame.className = "block h-full w-full border-0";
   frame.allow = "autoplay; fullscreen";
 
-  function touchResources(): Promise<void> {
+  function touchResources(recordLaunch = false): Promise<void> {
     if (native) return Promise.resolve();
     renewal = renewal.catch(() => {}).then(async () => {
       const current = await getWebPlayInstallation(metadata.playKey);
-      const expires = current && gameResourceExpiresAt(current);
+      const expires = current && gameResourceExpiresAt(current, await readGameRetentionDays());
       if (!current || current.status !== "ready" || (expires != null && expires <= Date.now()) || !await hasGameResources(current)) {
         throw new Error("本地游戏资源已清理，请重新安装。存档和截图保留。");
       }
-      const updated = await markWebPlayLastPlayed(metadata.playKey);
+      const updated = await markWebPlayLastPlayed(metadata.playKey, recordLaunch);
       if (updated) await renewGameBucket(updated);
     });
     return renewal;
@@ -195,7 +196,7 @@ export function createPlayerSession(
       releaseSaves = await acquireGameSaveLock(metadata.workId, resourceLifetime.signal);
       lifetime.signal.throwIfAborted();
       const installation = await getWebPlayInstallation(metadata.playKey);
-      const expires = installation && gameResourceExpiresAt(installation);
+      const expires = installation && gameResourceExpiresAt(installation, await readGameRetentionDays());
       if (installation?.status !== "ready" || (expires != null && expires <= Date.now())) {
         throw new Error("本地游戏资源已更新或清理，请刷新页面后重新安装。");
       }
@@ -263,7 +264,7 @@ export function createPlayerSession(
     });
     runtime = await untilAborted(runtimeCreation, lifetime.signal);
     lifetime.signal.throwIfAborted();
-    await touchResources();
+    await touchResources(true);
     lifetime.signal.throwIfAborted();
     played = true;
     renewalTimer = setInterval(refreshResources, 60_000);

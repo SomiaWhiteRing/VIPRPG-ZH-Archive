@@ -26,14 +26,14 @@ function acquireSaveOperationLock(name: string, signal: AbortSignal): Promise<()
 }
 
 /** Older open pages know only resource locks; keep their engines out of imports too. */
-export async function acquireGameSaveTransferLock(workId: number, playKey: string, signal: AbortSignal): Promise<() => Promise<void>> {
+export async function acquireGameSaveTransferLock(workId: number, playKey: string | null, signal: AbortSignal): Promise<() => Promise<void>> {
   await acquireGameSaveLock(workId, signal);
   const held = new Set<string>();
   const refresh = async () => {
     const installations = await listWebPlayInstallations();
     signal.throwIfAborted();
     // Legacy records without a Work ID cannot safely be ruled out.
-    const keys = new Set([playKey, ...installations.filter(row => row.workId == null || row.workId === workId).map(row => row.playKey)]);
+    const keys = new Set([...(playKey ? [playKey] : []), ...installations.filter(row => row.workId == null || row.workId === workId).map(row => row.playKey)]);
     for (const key of keys) {
       if (held.has(key)) continue;
       await acquireSaveOperationLock(gameResourceLockName(key), signal);

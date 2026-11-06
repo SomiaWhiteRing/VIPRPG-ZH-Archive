@@ -8,6 +8,26 @@ import {
 import { engineLabel, languageLabel } from "@/lib/labels";
 import type { ReactNode } from "react";
 
+export function WorkHeader({ title, originalTitle, coverSrc, beforeTitle, children, titleAs: Title = "h1", variant = "page" }: {
+  title: ReactNode;
+  originalTitle?: string | null;
+  coverSrc?: string;
+  beforeTitle?: ReactNode;
+  children?: ReactNode;
+  titleAs?: "h1" | "h2";
+  variant?: "page" | "dialog";
+}) {
+  return <header className={variant === "dialog" ? "local-library-heading relative isolate overflow-hidden px-5 py-5 sm:px-7" : "relative isolate pt-4"}>
+      {coverSrc ? <img alt="" className={`pointer-events-none absolute right-0 top-0 -z-10 w-[70%] object-cover object-right [mask-image:linear-gradient(to_right,transparent,black)] max-[560px]:opacity-30 ${variant === "dialog" ? "h-full" : "h-[calc(100%+1rem)] max-[560px]:-right-3 max-[560px]:w-[calc(70%+0.75rem)]"}`} src={coverSrc} /> : null}
+      {beforeTitle}
+      <Title className="mt-2 font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
+        {title}
+        {originalTitle ? <span className="ml-2 font-mono text-base font-normal text-muted" lang="ja">{originalTitle}</span> : null}
+      </Title>
+      {children}
+  </header>;
+}
+
 export function WorkPageHeader({
   chineseTitle,
   coverBlobSha256,
@@ -29,27 +49,9 @@ export function WorkPageHeader({
 
   return (
     <>
-      <header className="pt-4">
-        <div className="relative isolate">
-          {coverBlobSha256 ? (
-            <img
-              alt=""
-              className="pointer-events-none absolute -top-4 right-0 -z-10 h-[calc(100%+2rem)] w-[70%] object-cover object-right [mask-image:linear-gradient(to_right,transparent,black)] max-[560px]:-right-3 max-[560px]:w-[calc(70%+0.75rem)] max-[560px]:opacity-30"
-              src={`/api/media/blobs/${coverBlobSha256}`}
-            />
-          ) : null}
-          <BackLink href="/games" label="作品库" variant="text" />
-          <h1 className="mt-2 font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
-            {title}
-            {chineseTitle ? (
-              <span
-                className="ml-2 font-mono text-base font-normal text-muted"
-                lang="ja"
-              >
-                {originalTitle}
-              </span>
-            ) : null}
-          </h1>
+      <WorkHeader title={title} originalTitle={chineseTitle ? originalTitle : null}
+        coverSrc={coverBlobSha256 ? `/api/media/blobs/${coverBlobSha256}` : undefined}
+        beforeTitle={<BackLink href="/games" label="作品库" variant="text" />}>
           <div
             aria-label="元信息"
             className="mt-[0.7rem] flex flex-wrap items-center gap-2"
@@ -61,8 +63,7 @@ export function WorkPageHeader({
               {languageLabel(language)}
             </span>
           </div>
-        </div>
-      </header>
+      </WorkHeader>
 
       <SectionNavigation
         className="sticky top-[var(--site-header-height,3.5rem)] z-30 bg-background"

@@ -1563,7 +1563,7 @@ async function waitForNoUploadDrafts(currentPage: Page): Promise<void> {
 async function inspectOpfs(currentPage: Page, playKey: string) {
   return currentPage.evaluate(async (key) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("viprpg_web_play_v1", 1);
+      const request = indexedDB.open("viprpg_web_play_v1");
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });

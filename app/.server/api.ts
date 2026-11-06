@@ -6,6 +6,7 @@ import * as workMaintainersEndpoint from './endpoints/api/works/[workId]/maintai
 import * as workMaintainerRequestsEndpoint from './endpoints/api/works/[workId]/maintainer-requests/route';
 import { timelineApi } from "./timeline/api";
 import { pushApi } from "./push/api";
+import * as localLibraryWorksEndpoint from "./endpoints/api/works/local-library/route";
 import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
 import * as genresEndpoint from "@/app/.server/endpoints/api/genres/route";
 import * as homeRecommendationsEndpoint from "@/app/.server/endpoints/api/admin/home-recommendations/route";
@@ -138,6 +139,7 @@ api.route("/", sitemapApi);
 api.route("/", seaApi);
 api.route("/", messageApi);
 api.route("/", pushApi);
+api.get("/api/works/local-library", c => localLibraryWorksEndpoint.GET(c.get("runtime"), c.req.raw));
 api.get("/api/admin/audit/reports/:date/export", (c) => auditReportExportEndpoint.GET(c.get("runtime"), c.req.raw,
   { params: Promise.resolve({ date: c.req.param("date") }) }));
 api.options("/api/admin/audit/reports/:date/export", (c) => c.body(null, 204, { Allow: "GET, OPTIONS" }));

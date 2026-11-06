@@ -492,7 +492,7 @@ function UserMenu({
             </DropdownMenu.Item>
             {environment === "browser" ? (
               <DropdownMenu.Item asChild>
-                <Link className={itemClass} to="/installed" prefetch="none">已安装游戏</Link>
+                <Link className={itemClass} to="/installed" prefetch="none">本地游戏库</Link>
               </DropdownMenu.Item>
             ) : null}
             {inAdmin ? (

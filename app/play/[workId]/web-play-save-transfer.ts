@@ -348,6 +348,29 @@ export async function hasSaveFiles(workId: number): Promise<boolean> {
   } finally { db.close(); }
 }
 
+export async function readSaveNames(workId: number): Promise<string[]> {
+  const directory = saveDirectory(workId);
+  const db = await openExistingDatabase(directory);
+  if (!db) return [];
+  try {
+    return await new Promise((resolve, reject) => {
+      const names: string[] = [];
+      const tx = db.transaction("FILE_DATA", "readonly");
+      const store = tx.objectStore("FILE_DATA");
+      const keys = store.openKeyCursor();
+      keys.onsuccess = () => {
+        const cursor = keys.result;
+        if (!cursor) return;
+        const name = fileNameAtKey(directory, cursor.key);
+        if (name) names.push(name);
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve(names.sort((a, b) => a.localeCompare(b)));
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally { db.close(); }
+}
+
 export async function readSaveFiles(workId: number): Promise<SaveFile[]> {
   const directory = saveDirectory(workId);
   const db = await openExistingDatabase(directory);
@@ -374,6 +397,26 @@ export async function readSaveFiles(workId: number): Promise<SaveFile[]> {
       };
       tx.oncomplete = () => resolve(files.sort((a, b) => a.name.localeCompare(b.name)));
       tx.onabort = () => reject(failure ?? tx.error ?? request.error);
+    });
+  } finally { db.close(); }
+}
+
+/** Delete only selected save slots; configuration and other IDBFS files remain. Caller holds the transfer lock. */
+export async function deleteSaveFiles(workId: number, files: SaveFile[], signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  const directory = saveDirectory(workId);
+  const db = await openExistingDatabase(directory);
+  if (!db) return;
+  try {
+    signal.throwIfAborted();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("FILE_DATA", "readwrite");
+      const abort = () => tx.abort();
+      signal.addEventListener("abort", abort, { once: true });
+      tx.oncomplete = () => { signal.removeEventListener("abort", abort); resolve(); };
+      tx.onabort = () => { signal.removeEventListener("abort", abort); reject(tx.error ?? signal.reason); };
+      const store = tx.objectStore("FILE_DATA");
+      for (const file of files) store.delete(file.sourcePath ?? `${directory}/${file.name}`);
     });
   } finally { db.close(); }
 }

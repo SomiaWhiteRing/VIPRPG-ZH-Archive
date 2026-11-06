@@ -14,12 +14,15 @@ import {
 
 type ImportPreview = { incoming: SaveFile[]; existing: SaveFile[]; conflicts: SaveFile[] };
 
-export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy }: {
+export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy, onChanged, onBusyChange, exportNames }: {
   workId: number;
-  playKey: string;
+  playKey: string | null;
   title: string;
   active: boolean;
   playerBusy: boolean;
+  onChanged?: () => void;
+  onBusyChange?: (busy: boolean) => void;
+  exportNames?: string[];
 }) {
   const toast = useToast();
   const [hasSaves, setHasSaves] = useState(false);
@@ -33,6 +36,8 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy }
   const importButtonRef = useRef<HTMLButtonElement>(null);
   const dialogId = useId();
   const busy = operation !== null || preview !== null;
+
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
 
   useEffect(() => () => operationRef.current?.abort(), [workId]);
 
@@ -83,7 +88,7 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy }
     setOperation("export");
     try {
       await acquireGameSaveTransferLock(workId, playKey, controller.signal);
-      const files = await readSaveFiles(workId);
+      const files = (await readSaveFiles(workId)).filter(file => !exportNames || exportNames.includes(file.name));
       controller.signal.throwIfAborted();
       setHasSaves(files.length > 0);
       if (!files.length) return;
@@ -138,6 +143,7 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy }
       const count = await importSaveFiles(workId, preview.incoming, preview.existing, overwrite, controller.signal);
       controller.signal.throwIfAborted();
       setHasSaves(true);
+      onChanged?.();
       toast.success(`已为「${title}」导入 ${count} 个存档。启动游戏后可读取。`);
     } catch (error) {
       if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : "导入存档失败，请重试。");
@@ -152,7 +158,7 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy }
       <Button disabled={!hasSaves || busy || playerBusy} onClick={() => void exportSaves()} size="sm"
         title={playerBusy ? "请先停止游戏，等待存档写入完成" : hasSaves ? "导出当前游戏的存档" : "没有可导出的存档"}
         type="button" variant="outline">
-        {operation === "export" ? "正在导出…" : "导出存档"}
+        {operation === "export" ? "正在导出…" : exportNames ? "导出所选" : "导出存档"}
       </Button>
       <Button aria-controls={dialogId} aria-expanded={preview !== null} aria-haspopup="dialog"
         disabled={busy || playerBusy} onClick={() => inputRef.current?.click()} ref={importButtonRef} size="sm"

@@ -10,6 +10,26 @@ export type WebPlayScreenshot = PlayerScreenshot & {
 const DATABASE_NAME = "viprpg_web_play_screenshots_v1";
 const STORE_NAME = "screenshots";
 
+export async function listScreenshotCounts(): Promise<Map<number, number>> {
+  const db = await openDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const counts = new Map<number, number>();
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const request = tx.objectStore(STORE_NAME).index("workId").openKeyCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        const workId = cursor.key as number;
+        counts.set(workId, (counts.get(workId) ?? 0) + 1);
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve(counts);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally { db.close(); }
+}
+
 export async function listWebPlayScreenshots(
   workId: number,
 ): Promise<WebPlayScreenshot[]> {
