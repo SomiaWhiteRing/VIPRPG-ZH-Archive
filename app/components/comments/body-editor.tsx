@@ -41,6 +41,7 @@ const UserMentionNode = TiptapNode.create({
 const EMPTY_EMOJIS: FaceEmoji[] = [];
 
 export type BodyEditorHandle = {
+  readContent: () => Promise<ReturnType<typeof readDocument> | null>;
   mention: () => void;
   insertFiles: (files: File[]) => void;
   insertText: (text: string) => void;
@@ -529,6 +530,14 @@ export function BodyEditor({
     setMentionOpen(false);
   }
   useImperativeHandle(ref, () => ({
+    readContent: async () => {
+      if (!editor || editor.isDestroyed || composing.current || editor.view.composing || pending.current) return null;
+      // compositionend can precede the final ProseMirror transaction.
+      if (compositionFrame.current !== null)
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (editor.isDestroyed) return null;
+      return readDocument(editor.state.doc, assets);
+    },
     mention: () => {
       if (!allowMentions || !editor || busy || pending.current) return;
       if (mentionOpen) { closeMention(); return; }

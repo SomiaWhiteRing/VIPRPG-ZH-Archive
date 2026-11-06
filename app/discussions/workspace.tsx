@@ -43,11 +43,6 @@ function preloadEditor() {
 }
 const ForumEditor = lazy(preloadEditor);
 
-type PreparedDraft = {
-  value?: ForumDraft | null;
-  pending: Promise<ForumDraft | null>;
-};
-
 type Props = {
   viewer: ForumViewer;
   emojis: FaceEmoji[];
@@ -176,40 +171,10 @@ export function DiscussionWorkspace({
     toast.error("无法读写本地草稿，请检查浏览器存储空间或权限。");
   }, [toast]);
   const topicId = initialDetail?.topic.id;
-  const preparedDrafts = useRef(new Map<string, PreparedDraft>());
-  const prepareDraft = useCallback((key: string) => {
-    const existing = preparedDrafts.current.get(key);
-    if (existing) return existing;
-    const entry: PreparedDraft = {
-      pending: readForumDraft(key).then((value) => {
-        entry.value = value;
-        return value;
-      }).catch((error) => {
-        // A failed preload must not turn into a cached "empty draft".
-        if (preparedDrafts.current.get(key) === entry)
-          preparedDrafts.current.delete(key);
-        throw error;
-      }),
-    };
-    preparedDrafts.current.set(key, entry);
-    return entry;
-  }, []);
   useEffect(() => {
     if (userId === undefined) return;
     void preloadEditor().catch(() => undefined);
-    const drafts = [createDraft("topic", "")];
-    if (detail) {
-      drafts.push(createDraft("post", detail.topic.title));
-      for (const post of detail.posts.items) {
-        if (post.capabilities.reply)
-          drafts.push(createDraft("comment", detail.topic.title, post));
-      }
-    }
-    for (const candidate of drafts) {
-      void prepareDraft(forumDraftKey(userId, topicId, candidate))
-        .pending.catch(reportCacheError);
-    }
-  }, [userId, topicId, detail, prepareDraft, reportCacheError]);
+  }, [userId]);
   const restoreDraft = useCallback(
     async (next: ForumDraft, onlyCached = false) => {
       if (userId === undefined) return;
@@ -217,10 +182,7 @@ export function DiscussionWorkspace({
       const cacheKey = forumDraftKey(userId, topicId, next);
       let saved: ForumDraft | null = null;
       try {
-        const prepared = prepareDraft(cacheKey);
-        saved = prepared.value !== undefined
-          ? prepared.value
-          : await prepared.pending;
+        saved = await readForumDraft(cacheKey);
       } catch {
         reportCacheError();
       }
@@ -243,18 +205,12 @@ export function DiscussionWorkspace({
       setError("");
       setRequestError(null);
     },
-    [userId, topicId, reportCacheError, prepareDraft],
+    [userId, topicId, reportCacheError],
   );
   // Commit every edit without a debounce that could lose the last keystrokes
   // when the user follows a link or closes the editor immediately afterward.
   useLayoutEffect(() => {
     if (draft) {
-      if (draft.cacheKey) {
-        preparedDrafts.current.set(draft.cacheKey, {
-          value: draft,
-          pending: Promise.resolve(draft),
-        });
-      }
       void saveForumDraft(draft).catch(reportCacheError);
     }
   }, [draft, reportCacheError]);
@@ -452,8 +408,9 @@ export function DiscussionWorkspace({
       toast.error(e instanceof Error ? e.message : "读取失败。");
     }
   }
-  async function submitDraft() {
-    if (!draft || busy) return;
+  async function submitDraft(draft: ForumDraft) {
+    if (busy) return;
+    setDraft(draft);
     setBusy(true);
     setError("");
     setRequestError(null);
@@ -494,10 +451,6 @@ export function DiscussionWorkspace({
       );
       restoreSequence.current++;
       if (draft.cacheKey) {
-        preparedDrafts.current.set(draft.cacheKey, {
-          value: null,
-          pending: Promise.resolve(null),
-        });
         void deleteForumDraft(draft.cacheKey).catch(reportCacheError);
       }
       setDraft(null);
@@ -702,7 +655,11 @@ export function DiscussionWorkspace({
         }}
         onError={setError}
         onCancel={() => void switchDraft(null)}
-        onSubmit={() => void submitDraft()}
+        onSubmit={(next) => {
+          if (draftValue(next) !== draftValue(draft))
+            next.requestKey = crypto.randomUUID();
+          void submitDraft(next);
+        }}
         busy={busy}
         error={error}
         progress={uploadProgress}

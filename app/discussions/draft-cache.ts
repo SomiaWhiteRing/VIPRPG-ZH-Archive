@@ -73,8 +73,8 @@ export function readForumDraft(key: string) {
   });
 }
 
-// Preloading keeps File data only. Each editor owns fresh preview URLs so an
-// earlier editor's cleanup cannot invalidate a restored draft's images.
+// Each editor owns fresh preview URLs so an earlier editor's cleanup cannot
+// invalidate a restored draft's images.
 export function restoreForumDraft(stored: ForumDraft): ForumDraft {
   return {
     cacheKey: stored.cacheKey,

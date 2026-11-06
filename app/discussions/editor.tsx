@@ -56,7 +56,7 @@ export function ForumEditor({
   onChange: (draft: ForumDraft) => void;
   onError: (message: string) => void;
   onCancel: () => void;
-  onSubmit: () => void;
+  onSubmit: (draft: ForumDraft) => void;
   busy: boolean;
   error: string;
   progress: string;
@@ -304,10 +304,13 @@ export function ForumEditor({
               }`
             : "")
         }
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          if (!busy && canSubmit)
-            onSubmit();
+          if (busy) return;
+          const content = await mixed.current?.readContent();
+          if (!content || (!content.body.trim() && !content.images.length) ||
+            (inline ? bodyLength : forumBodyLength)(content.body) > limit) return;
+          onSubmit({ ...draft, ...content });
         }}
       >
         <div
