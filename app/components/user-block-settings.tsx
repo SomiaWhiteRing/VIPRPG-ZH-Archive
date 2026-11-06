@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { Bell, BellOff } from "lucide-react";
+import { Ban, CircleMinus, SlidersHorizontal } from "lucide-react";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
@@ -21,13 +21,13 @@ export function UserBlockButton({ peer, initial, onSaved }: {
   const state = userBlockState(settings);
   const label = `屏蔽设置：${state === "none" ? "未屏蔽" : state === "partial" ? "部分屏蔽" : "全部屏蔽"}`;
   return <>
-    <Button type="button" size="sm" variant={state === "all" ? "default" : "outline"}
-      className={state === "partial" ? "w-9 bg-primary/10 px-0 text-primary" : "w-9 px-0"}
+    <Button type="button" size="sm" variant="outline"
+      className={`w-9 px-0 ${state === "all"
+        ? "border-[color-mix(in_srgb,var(--color-destructive)_55%,var(--color-border))] bg-[color-mix(in_srgb,var(--color-destructive)_10%,var(--color-card))] text-destructive hover:border-destructive hover:text-destructive"
+        : state === "partial" ? "text-accent hover:border-accent hover:text-accent"
+          : "hover:border-foreground hover:text-foreground"}`}
       aria-label={label} title={label} aria-haspopup="dialog" onClick={() => setOpen(true)}>
-      {state === "all" ? <BellOff aria-hidden /> : state === "partial" ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path fill="currentColor" stroke="none" d="M12 3a6 6 0 0 0-6 6c0 7-3 7-3 9h9Z" />
-        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
-      </svg> : <Bell aria-hidden />}
+      {state === "all" ? <Ban aria-hidden /> : state === "partial" ? <CircleMinus aria-hidden /> : <SlidersHorizontal aria-hidden />}
     </Button>
     {open ? <UserBlockDialog peer={peer} initial={settings} onClose={() => setOpen(false)} onSaved={next => {
       setSettings(next); onSaved?.(next);
