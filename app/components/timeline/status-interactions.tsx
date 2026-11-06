@@ -62,12 +62,12 @@ export function StatusInteractions({ item, viewerId, readOnly = false, expandRep
     if (!cursor) setAddressed(false);
   }, [item.id]);
   useEffect(() => {
-    if (pushReply.value !== String(item.id) || handledPushReply.current === pushReply.key || readOnly || !item.canReply || !expandReplies) return;
+    if (pushReply.value !== String(item.id) || handledPushReply.current === pushReply.key || readOnly || !item.canReply || !expandReplies || !draft.ready || busy) return;
     handledPushReply.current = pushReply.key;
     setOpen(true);
-    if (!page) void run(() => load());
-    requestAnimationFrame(() => document.getElementById(editorId)?.focus());
-  }, [pushReply.value, pushReply.key, item.id, item.canReply, readOnly, expandReplies, page, run, load, editorId]);
+    const loaded = page ? Promise.resolve() : run(() => load());
+    void loaded.then(() => requestAnimationFrame(() => document.getElementById(editorId)?.focus()));
+  }, [pushReply.value, pushReply.key, item.id, item.canReply, readOnly, expandReplies, page, run, load, editorId, draft.ready, busy]);
 
   function toggle() {
     if (busy || !expandReplies) return;
