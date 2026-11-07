@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { createRequestHandler, RouterContextProvider } from "react-router";
 import { api } from "./app/.server/api";
-import { refreshSessionCookie, SESSION_COOKIE_NAME } from "./app/.server/auth/session";
+import { getSiteAnalyticsConfig } from "./app/.server/analytics";
+import { refreshSessionCookie } from "./app/.server/auth/session";
+import { parseCookie, SESSION_COOKIE_NAME } from "./app/.server/auth/session-token";
 import { createRuntime } from "./app/.server/runtime";
 import type { AppRuntime } from "./app/.server/runtime";
 import { runtimeContext } from "./app/.server/router-context";
@@ -24,15 +26,47 @@ const developmentRender = createRequestHandler(
   () => import("virtual:react-router/server-build"),
   import.meta.env.MODE,
 );
-let productionRender: Promise<ReturnType<typeof createRequestHandler>> | undefined;
-function render(request: Request, context: RouterContextProvider) {
+let productionRender: Promise<{ handler: ReturnType<typeof createRequestHandler>; version: string }> | undefined;
+async function render(request: Request, context: RouterContextProvider, runtime: AppRuntime) {
   if (import.meta.env.DEV) return developmentRender(request, context);
   // A function build asks React Router to derive its route matcher on every call.
   // Production builds are immutable for the lifetime of this Worker isolate.
-  productionRender ??= import("virtual:react-router/server-build").then((build) =>
-    createRequestHandler(build, import.meta.env.MODE),
-  );
-  return productionRender.then((handler) => handler(request, context));
+  productionRender ??= import("virtual:react-router/server-build").then((build) => ({
+    handler: createRequestHandler(build, import.meta.env.MODE),
+    version: build.assets.version,
+  }));
+  const { handler, version } = await productionRender;
+  const url = new URL(request.url);
+  if (request.method !== "GET" || url.origin !== runtime.origin || url.search
+    || !["/", "/explore", "/games"].includes(url.pathname)
+    || request.headers.has("Authorization")
+    || parseCookie(request.headers.get("Cookie"), SESSION_COOKIE_NAME)
+    || request.headers.get("Sec-Fetch-Dest") === "iframe") {
+    return handler(request, context);
+  }
+
+  // HTML embeds build-specific asset URLs and network dimensions for analytics.
+  const analytics = encodeURIComponent(JSON.stringify(getSiteAnalyticsConfig(runtime)));
+  const cacheKey = `${url.origin}/__cache/anonymous-pages/${version}/${analytics}${url.pathname}`;
+  const cache = await caches.open("viprpg-public-pages");
+  const cached = await cache.match(cacheKey).catch(() => undefined);
+  if (cached) {
+    const response = new Response(cached.body, cached);
+    response.headers.append("Server-Timing", "public-page-cache;desc=HIT");
+    return response;
+  }
+
+  const response = await handler(request, context);
+  if (response.status === 200 && response.headers.get("Content-Type")?.startsWith("text/html")
+    && !response.headers.has("Set-Cookie") && !response.headers.has("Vary")) {
+    // The shared copy is short-lived. The client response remains private, no-store.
+    const shared = new Response(response.clone().body, response);
+    shared.headers.set("Cache-Control", "public, max-age=30");
+    runtime.execution.waitUntil(cache.put(cacheKey, shared).catch(() => {
+      console.error("Public page cache write failed");
+    }));
+  }
+  return response;
 }
 const app = new Hono<{
   Bindings: CloudflareEnv;
@@ -94,8 +128,9 @@ app.all("*", async (c) => {
   )
     return c.env.ASSETS.fetch(c.req.raw);
   const context = new RouterContextProvider();
-  context.set(runtimeContext, c.get("runtime"));
-  const response = await render(c.req.raw, context);
+  const runtime = c.get("runtime");
+  context.set(runtimeContext, runtime);
+  const response = await render(c.req.raw, context, runtime);
   const headers = new Headers(response.headers);
   if (c.req.path !== "/__manifest" || response.status !== 200) {
     headers.set("Cache-Control", "private, no-store");

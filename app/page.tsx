@@ -1,11 +1,14 @@
+import { lazy, Suspense } from "react";
 import { data, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { readHomePage } from "@/app/.server/home-page-data";
 import { readTimelinePage } from "@/app/.server/timeline/page-data";
 import { runtimeContext } from "@/app/.server/router-context";
 import { HomeWorkspace } from "@/app/components/home/home-workspace";
-import { TimelinePageContent } from "@/app/components/timeline/timeline-page-content";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+
+const TimelinePageContent = lazy(() => import("@/app/components/timeline/timeline-page-content")
+  .then(({ TimelinePageContent }) => ({ default: TimelinePageContent })));
 
 export async function loader({ url, context }: LoaderFunctionArgs) {
   const runtime = context.get(runtimeContext);
@@ -23,6 +26,6 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function HomePage() {
   const result = useLoaderData<typeof loader>();
   return result.mode === "timeline"
-    ? <TimelinePageContent values={result.values} basePath="/" />
+    ? <Suspense fallback={null}><TimelinePageContent values={result.values} basePath="/" /></Suspense>
     : <HomeWorkspace {...result.values} />;
 }
