@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Settings2, X } from "lucide-react";
+import { Info, Settings2, X } from "lucide-react";
 import { Switch } from "radix-ui";
 import * as Dialog from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
@@ -167,10 +167,10 @@ export function WebPushSettings({ userId, publicKey, preferences }: {
       className="relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full bg-muted transition-colors data-[state=checked]:bg-primary disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
       <Switch.Thumb className="block size-4 translate-x-1 rounded-full bg-background transition-transform data-[state=checked]:translate-x-5" />
     </Switch.Root>
-    {blocked ? <InfoTooltip label="查看通知开启引导" className="w-[min(21rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] p-3">
-      {native ? <Button type="button" variant="ghost" className="h-auto px-2 py-1" onClick={() => {
+    {blocked ? native ? <Button type="button" variant="ghost" size="icon" className="size-9" aria-label="打开系统通知设置" onClick={() => {
         void androidNotificationRequest("openSettings").catch(error => console.error("Android notification settings failed", error));
-      }}>打开系统通知设置</Button> : client && <WebPushPermissionGuide guide={client.guide} supported={client.supported} />}
+      }}><Info aria-hidden className="size-3.5" /></Button> : <InfoTooltip label="查看通知开启引导" className="w-[min(21rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] p-3">
+      {client && <WebPushPermissionGuide guide={client.guide} supported={client.supported} />}
     </InfoTooltip> : <Button ref={settingsButton} type="button" variant="ghost" size="icon" className="size-9" disabled={busy}
       aria-label="系统通知接收类型" aria-haspopup="dialog" onClick={() => { setDraft(selected); setOpen(true); }}>
       <Settings2 aria-hidden />
