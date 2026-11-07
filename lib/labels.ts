@@ -100,6 +100,14 @@ export const TRANSLATION_ROLE_LABELS = {
   translation: "译版",
 } as const;
 
+export const WORK_EXTERNAL_LINK_OPTIONS = [
+  { value: "official", label: "官方网站" },
+  { value: "wiki", label: "Wiki" },
+  { value: "source", label: "来源" },
+  { value: "video", label: "视频" },
+  { value: "other", label: "其他" },
+] as const;
+
 export const IMPORT_TASK_STATUS_OPTIONS = [
   { value: "created", label: "已创建" },
   { value: "preflighted", label: "准备上传文件" },

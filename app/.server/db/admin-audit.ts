@@ -38,9 +38,7 @@ export async function searchAdminAuditLogs(
     targetType?: string;
     targetId?: string;
     logId?: number;
-    snapshotsOnly?: boolean;
     before?: { createdAt: string; id: number };
-    after?: { createdAt: string; id: number };
     page?: number;
     pageSize?: number;
   },
@@ -56,16 +54,9 @@ export async function searchAdminAuditLogs(
   const detailSql = "CASE WHEN json_valid(a.detail_json) THEN a.detail_json ELSE NULL END";
   const binds: Array<string | number> = [];
   if (input.logId) { clauses.push("a.id=?"); binds.push(input.logId); }
-  if (input.snapshotsOnly) {
-    clauses.push(`json_type(${detailSql},'$.before') IS NOT NULL AND json_type(${detailSql},'$.after') IS NOT NULL`);
-  }
   if (input.before) {
     clauses.push("(datetime(a.created_at)<datetime(?) OR (datetime(a.created_at)=datetime(?) AND a.id<?))");
     binds.push(input.before.createdAt, input.before.createdAt, input.before.id);
-  }
-  if (input.after) {
-    clauses.push("(datetime(a.created_at)>datetime(?) OR (datetime(a.created_at)=datetime(?) AND a.id>?))");
-    binds.push(input.after.createdAt, input.after.createdAt, input.after.id);
   }
   if (input.query?.trim()) {
     const value = `%${input.query.trim()}%`;

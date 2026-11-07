@@ -2,6 +2,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { SelectField } from "@/app/components/ui/select";
 import type { GameExternalLink } from "@/lib/dto/db/game-library";
+import { WORK_EXTERNAL_LINK_OPTIONS } from "@/lib/labels";
 
 type ExternalLink = Pick<GameExternalLink, "label" | "url" | "linkType">;
 
@@ -45,13 +46,7 @@ export function ExternalLinkList({
             aria-label={"链接 " + (index + 1) + " 类型"}
             value={link.linkType}
             onValueChange={(value) => update(index, { linkType: value })}
-            options={[
-              { value: "official", label: "官方网站" },
-              { value: "wiki", label: "Wiki" },
-              { value: "source", label: "来源" },
-              { value: "video", label: "视频" },
-              { value: "other", label: "其他" },
-            ]}
+            options={[...WORK_EXTERNAL_LINK_OPTIONS]}
           />
           <Button
             onClick={() =>

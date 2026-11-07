@@ -21,7 +21,6 @@ import { InfoRow } from "@/app/components/ui/info-row";
 import { SectionNavigation } from "@/app/components/ui/section-navigation";
 import { CreatorWorkList } from "@/app/creators/creator-work-list";
 import { canEditPublicCreator } from "@/lib/authz/creator-permissions";
-import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { formatNumber } from "@/lib/format";
 import { ExternalLink } from "lucide-react";
@@ -48,7 +47,6 @@ export async function loader(args: LoaderFunctionArgs) {
   return {
     currentUser: pickPageFields(currentUser, ["id"]),
     canEdit: canEditPublicCreator(currentUser),
-    canReadHistory: hasPermission(currentUser, "audit.read"),
     creator,
     comments,
     works,
@@ -59,7 +57,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: loaderData?.creator.name || "作者详情" }, error);
 
 export default function CreatorDetailPage() {
-  const { currentUser, creator, comments, works, canEdit, canReadHistory } =
+  const { currentUser, creator, comments, works, canEdit } =
     useLoaderData<typeof loader>();
   return (
     <DetailPageShell>
@@ -68,7 +66,6 @@ export default function CreatorDetailPage() {
         <h1 className="mt-2 font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
           {creator.name}
         </h1>
-        {canReadHistory ? <Link className="mt-2 inline-block text-sm text-secondary hover:underline" to={`/history/creator/${creator.id}`} prefetch="none">编辑历史</Link> : null}
         <SectionNavigation
           items={[
             ...(creator.bio ? [{ href: "#sec-intro", label: "概览", active: true }] : []),
@@ -176,6 +173,15 @@ export default function CreatorDetailPage() {
                 <InfoRow label="别名">{creator.aliases.join("、")}</InfoRow>
               ) : null}
             </dl>
+            {canEdit ? (
+              <Link
+                className="mt-3 flex min-h-8 items-center text-sm font-medium text-secondary hover:underline"
+                to={`/history/creator/${creator.id}`}
+                prefetch="none"
+              >
+                编辑历史
+              </Link>
+            ) : null}
             {creator.links.map((link, index) => (
               <a
                 key={index}
