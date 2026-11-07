@@ -59,7 +59,7 @@ App 默认每次冷启动检查一次更新；版本页可关闭启动检查或�
 
 共享样式的准入条件见 [AGENTS.md](../AGENTS.md)：须核实网站与 APK 离线页两端的实际消费者，并在样式块注释中记录。网站组件之间的复用不等于跨端共享；导航进度条、网站选择器和通知动画均留在网站样式入口。
 
-- CI 版本名为 `0.3.<run_number>`，`versionCode = 100000 + run_number`；递增由 workflow 负责，不用逐次修改 Gradle。不要重建 workflow 或降低此序号基数；手动重建旧提交使用新的运行序号。
+- 自动构建和留空 `version_name` 的手动构建使用 `0.3.<run_number>`。手动构建可填写 `version_name`（如 `0.4.0`），只改变 APK 显示版本。所有构建均使用 `versionCode = 100000 + run_number`，不用逐次修改 Gradle。不要重建 workflow 或降低此序号基数；手动重建旧提交使用新的运行序号。
 - tag 为 `android-<staging|production>-<versionCode>`，附件包含 `viprpg-release.apk` 与 `SHA256SUMS.txt`，说明自动结算该次提交的 GitHub release notes。所有附件就绪后才公开 Release；已经发布的运行重跑时跳过打包，避免同一构建身份对应不同文件。
 - 手动构建勾选 `draft` 时，仍分配独立递增版本号、使用固定签名并验包，但 GitHub Release 保持未公开草稿，供后台准备更新使用。默认不勾选，既有自动发布行为不变；站内版本仍须单独保存或发布。
 - main 自动构建和手动 staging 构建连接 staging，Release 标为预发布；手动 production 构建连接 `https://viprpg.org`，先保存已验证 APK 和 SHA-256 artifact，再由发布 job 下载同一 artifact 并核对摘要后公开正式 Release，不增加第二次 review。两者都不自动更改 Latest 或网站推荐频道；正式构建与其他正式维护串行。切换来源不会迁移原来源的离线游戏或存档。
