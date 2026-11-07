@@ -256,6 +256,8 @@ WORKERFS 使用 `Blob.slice()` 表示文件，并在引擎实际读取时通过 
 
 ## 11. EasyRPG runtime
 
+运行包升级、双引擎验收及发布顺序见[维护与回归手册](./maintenance-regression.md#easyrpg-网页运行包更新)。
+
 `public/play/runtime/easyrpg/{version}/` 只保留一套当前运行组件：
 
 - `index.js`：播放器页面入口，原始构建文件名为 `player-host.js`。

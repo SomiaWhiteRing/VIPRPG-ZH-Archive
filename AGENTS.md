@@ -8,7 +8,7 @@
 - 网站正常业务与已批准的既有自动任务仍按原权限及策略运行，不增加逐次运维审批。Codex 手动触发清理或修改自动任务策略仍遵守正式操作确认边界。
 - 使用唯一当前领域模型；保护真实数据、已发布 API/manifest/更新协议和用户存档。为实际升级或回退所需的兼容不能当作废弃内部实现直接删除。
 - `app/shared.css` 只存放网站与 Android APK 离线页实际共用的样式。新增或修改前核对两端入口、实际导入的组件和 Tailwind `@source`，并在对应样式块注释中记录两端消费者；仅被网站多个页面使用、位于 `components/ui` 或可能将来复用不算跨端共享。网站专用样式放 `app/globals.css` 或网站组件样式，Android 专用样式放 `android/web/`；失去一端消费者时移出共享文件，不为保留样式而扩大 Android 扫描或构建触发范围。
-- EasyRPG Web runtime 只保留 `lib/archive/easyrpg-runtime.json` 指定的当前版本；升级使用导入脚本清理旧目录，保留版本化 URL 以隔离缓存，不并存发布旧运行时。
+- EasyRPG Web runtime 只保留 `lib/archive/easyrpg-runtime.json` 指定的当前版本；按[网页运行包更新手册](docs/maintenance-regression.md#easyrpg-网页运行包更新)构建、导入和发布。先合入并核对本地 `main`，再推送与部署；保留版本化 URL 以隔离缓存，旧目录由导入脚本清理。
 - `migrations/0001_init_archive_schema.sql` 为首发基线；正式初始化后冻结已应用文件，结构、内置权限和触发器通过后续有序增量迁移更新。固定开发种子同步 schema 与迁移账本。不得通过修改已登记的 0001 或重建正式库代替升级；备份、重建和恢复按批准范围执行。
 - 分类、角色和归属关系是不同对象。修改当前分类库时先核实实际数据源及目标 ID；删除一个分类归属不代表角色没有其他归属。
 - 默认运行与改动直接相关的最小既有检查，不默认新增测试，不将全套 check、test、build 或浏览器流程作为每项任务的验收。涉及 `app` 下 TSX 控件或样式的改动，最小检查包含既有 UI 静态检查，入口见维护手册；不能仅以 TypeScript 和 ESLint 通过代替。

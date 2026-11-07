@@ -64,3 +64,20 @@
 同一份 6,311,434 字节的 Brotli 音色库经 101 个探测节点进行对照，探测上限为 10 秒；电信完整传输由 22/30 提升至 30/30，但联通由 20/30 降为 14/30、移动由 24/29 降为 1/29。因此采用客户端按传输进度选择入口，不能全量替换为社区入口，也不能把超时／部分字节的 HTTP 200 当作完整下载。正式域名、Route 及持久配置的启用须有对应批准。
 
 运行包备用入口目标由 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json) 同时提供给网页和部署校验器：正式为 `runtime.viprpg.org`，预生产为 `runtime-staging.viprpg.org`。灰云 CNAME 指向 `cf.090227.xyz`，只将 `/play/runtime/easyrpg/*` Route 绑定到各自原有 Worker。两环境的 Environment 配置 secret 应保留已批准的额外 Route；部署校验只接受对应环境的这个精确路径，不接受另一个环境、其他域名或覆盖全部业务路径的宽泛 Route。原单入口配置继续可用于撤销备用入口的回退。
+
+## 境外 CDN 对照候选
+
+2026-11-07 复查了电信、联通、移动的 ECS 查询。主域名仍返回相同的两个 IPv4 地址，两个运行包子域均保留社区 CNAME 的运营商分支。正式及预生产各自的主入口和备用入口对当前 Brotli 音色库的 HEAD 请求均返回 200，ETag、编码和跨源响应头一致。两个预生产入口请求原始音色库的前 8 KiB 时均返回 200 和完整的 7,557,598 字节，ETag 一致。
+
+2026-11-08 接入 `runtime-edgeone-staging.viprpg.org`，使用 [EdgeOne 全球不含中国大陆](https://intl.cloud.tencent.com/document/product/1145/63620)的 CNAME 模式。Cloudflare 灰云 CNAME 指向 `runtime-edgeone-staging.viprpg.org.eo.dnse4.com`；EdgeOne 使用免费 HTTPS 证书，HTTPS 回源至 `staging.viprpg.org:443`，回源 Host 使用源站域名。独立域名策略 `Runtime assets only` 拦截 `/play/runtime/easyrpg/*` 之外的路径。两个运行包文件通过 HTTPS 完整下载后与预生产主入口逐字节一致，保留 Brotli、ETag、CORS 和 `Timing-Allow-Origin`；根路径与 `/api/health` 均被 EdgeOne 拦截。
+
+同一组 87 个大陆探针通过 HTTPS 下载同一份 6,311,434 字节的 Brotli 音色库，每个探针最多等待 10 秒。电信完整下载数为主入口 26/30、社区入口 16/30、EdgeOne 22/30；联通为 3/29、5/29、16/29；移动为 23/28、0/28、16/28。EdgeOne 在本轮最适合作为联通的候选备用线路，电信和移动保留预生产主入口优先。探测原始记录和中位速度位于本机 `output/edgeone-staging-probe/`。对照入口保持独立于客户端选路。
+
+1. 接入客户端选路前，覆盖晚高峰复测，按运营商比较首字节、完整下载率和传输速度，区分 EdgeOne 缓存命中和回源请求。
+2. 2026-11-08 在预生产 EdgeOne 规则 `2181426784` 增加公开样本 `/api/archive-versions/1/download` 的精确路径。三轮均使用同一组 87 个大陆探针，下载 1,859,365 字节的 ZIP。按主入口、首轮 `MISS`、复测 `HIT` 的顺序，电信完成数为 30/30、30/30、30/30，联通为 15/29、27/28、27/28，移动为 28/28、3/6、16/25。移动首轮 21 个 `HIT` 缺少实际接收字节数。热缓存下验证整包、匹配 `If-Range` 时返回 `206` 且字节一致、过期 ETag 触发整包重下、越界返回 `416`。原始数据位于本机 `output/edgeone-staging-probe/`。单独撤销 ZIP 试用时从规则移除此路径。撤销整个候选入口时删除候选 CNAME、所有权验证 TXT 和对应 CDN 配置。
+
+同日将已公开的《GO TO HELL》复制到预生产归档版本 4，下载 ZIP 为 33,073,868 字节。当前出口使用 60 秒上限，两次 EdgeOne 整包均为 `MISS`，用时 48.53 和 48.03 秒，字节与预生产主入口一致。主动中断于 12 MiB 后，以原 ETag 续传剩余 20,490,956 字节，EdgeOne 返回 `206 HIT`，拼接结果与主入口一致。核对 [EdgeOne 免费版说明](https://edgeone.ai/document/70405) 后移除了大包路径，样本保留在预生产主入口。这轮未执行三网批量拨测。
+
+## 匿名页面缓存验收
+
+候选发布到预生产后，分别连续请求 `/`、`/explore`、`/games`，在同一边缘节点观察第二次请求的 `Server-Timing: public-page-cache;desc=HIT`。再确认带会话 cookie、iframe 请求头及查询参数的请求各自使用原处理路径，并核对预生产 noindex。边缘副本最多缓存 30 秒，发送给浏览器的响应保留 `private, no-store`。比较匿名首页 HTML 的模块预加载清单，确认时间线模块退出普通首页的静态依赖。
