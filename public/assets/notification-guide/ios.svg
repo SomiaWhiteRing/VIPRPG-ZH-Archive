@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="210" viewBox="0 0 320 210">
+  <style>
+    :root{color-scheme:light dark;--bg:#fff;--bar:#edf0ed;--ink:#17212b;--line:#d9ddd9;--accent:#238477;--tint:#edf5f1} @media(prefers-color-scheme:dark){:root{--bg:#222b34;--bar:#333d45;--ink:#e5ecee;--line:#53616b;--accent:#77c9b9;--tint:#293d3b}}
+    text{font:14px "Noto Sans SC","Microsoft YaHei",sans-serif;fill:var(--ink)}
+  </style>
+  <rect x="30" y="1" width="260" height="208" rx="15" fill="var(--bg)" stroke="var(--line)"/>
+  <text x="51" y="36">viprpg.org</text>
+  <path d="M252 22V41H230V22M241 32V13m-6 6 6-6 6 6" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="43" y="61" width="234" height="52" rx="6" fill="var(--tint)" stroke="var(--accent)" stroke-width="2"/>
+  <rect x="56" y="76" width="20" height="20" rx="3" fill="none" stroke="var(--accent)" stroke-width="2"/><path d="M60 86H72M66 80V92" stroke="var(--accent)" stroke-width="2"/><text x="88" y="92">添加到主屏幕</text>
+  <path d="M160 125V143m-5-5 5 5 5-5" fill="none" stroke="var(--accent)" stroke-width="2"/>
+  <rect x="48" y="155" width="35" height="35" rx="8" fill="var(--tint)" stroke="var(--accent)"/><text x="58" y="179">V</text><text x="96" y="177">从主屏幕打开本站</text>
+</svg>

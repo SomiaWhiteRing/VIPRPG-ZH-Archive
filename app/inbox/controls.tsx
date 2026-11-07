@@ -1,16 +1,18 @@
 import type { InboxCategory } from "@/lib/inbox";
 import { inboxHref } from "@/lib/inbox";
-import { useTransition } from "react";
+import { useTransition, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 
 export function InboxControls({
   category,
   pendingCount,
   canResolve,
+  actions,
 }: {
   category: InboxCategory;
   pendingCount: number;
   canResolve: boolean;
+  actions?: ReactNode;
 }) {
   const navigate = useNavigate();
 
@@ -60,6 +62,7 @@ export function InboxControls({
           </Link>
         ))}
       </nav>
+      {actions}
     </div>
   );
 }

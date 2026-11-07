@@ -29,6 +29,8 @@ import { useInboxAutoRead } from "./use-auto-read";
 import { canReviewWorkMaintainerRequests } from '@/app/.server/db/work-maintainers';
 import { MaintainerRequestDetails } from './maintainer-request-details';
 import { hasPermission } from "@/lib/authz/permissions";
+import { webPushConfiguration } from "@/app/.server/push/service";
+import { WebPushSettings } from "./web-push-settings";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -52,14 +54,15 @@ export async function loader(args: LoaderFunctionArgs) {
   if (page !== result.page)
     redirectPage(inboxHref(category, result.page));
 
-  return { category, canResolve, result };
+  return { category, canResolve, result, userId: currentUser.id, preferences: currentUser.preferences,
+    pushPublicKey: webPushConfiguration(runtime.env)?.publicKey ?? null };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: "提醒", page: loaderData?.result.page }, error);
 
 export default function InboxPage() {
-  const { category, canResolve, result } =
+  const { category, canResolve, result, userId, preferences, pushPublicKey } =
     useLoaderData<typeof loader>();
   const [autoRead, setAutoRead] = useState({ result, ids: new Set<number>() });
   const onRead = useCallback(
@@ -96,8 +99,8 @@ export default function InboxPage() {
           </span>
         }
         actions={
-          <div className="min-h-9">
-            {unreadCount > 0 ? <InboxActions all /> : null}
+          <div className="flex min-h-9 items-center gap-3">
+            <WebPushSettings key={userId} publicKey={pushPublicKey} preferences={preferences} />
           </div>
         }
       />
@@ -105,6 +108,7 @@ export default function InboxPage() {
         category={category}
         pendingCount={result.pending}
         canResolve={canResolve}
+        actions={unreadCount > 0 ? <InboxActions all /> : null}
       />
       {result.items.length ? (
         <ul

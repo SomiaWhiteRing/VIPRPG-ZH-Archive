@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="182" viewBox="0 0 320 182">
+  <style>
+    :root{color-scheme:light dark;--bg:#fff;--bar:#edf0ed;--ink:#17212b;--line:#d9ddd9;--accent:#238477;--tint:#edf5f1} @media(prefers-color-scheme:dark){:root{--bg:#222b34;--bar:#333d45;--ink:#e5ecee;--line:#53616b;--accent:#77c9b9;--tint:#293d3b}}
+    text{font:14px "Noto Sans SC","Microsoft YaHei",sans-serif;fill:var(--ink)}
+  </style>
+  <rect x="1" y="1" width="318" height="180" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+  <path d="M9 1H311Q319 1 319 9V46H1V9Q1 1 9 1" fill="var(--bar)"/>
+  <rect x="12" y="9" width="29" height="28" rx="4" fill="var(--tint)" stroke="var(--accent)" stroke-width="2"/>
+  <g stroke="var(--accent)" stroke-width="2" fill="var(--bg)"><path d="M18 18H35M18 28H35"/><circle cx="23" cy="18" r="3"/><circle cx="30" cy="28" r="3"/></g>
+  <text x="52" y="29">viprpg.org</text>
+  <text x="20" y="79">viprpg.org</text>
+  <path d="M20 94H300" stroke="var(--line)"/>
+  <text x="22" y="133">通知</text>
+  <rect x="192" y="110" width="106" height="36" rx="5" fill="var(--tint)" stroke="var(--accent)" stroke-width="2"/>
+  <text x="222" y="133">允许</text><path d="m278 124 5 5 5-5" fill="none" stroke="var(--accent)" stroke-width="2"/>
+</svg>

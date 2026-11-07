@@ -7,6 +7,8 @@ import type { PushCategory } from "@/lib/push";
 import { getInboxItemForUser, markInboxItemRead } from "@/app/.server/db/inbox";
 import { setUserFollow } from "@/app/.server/db/user-follows";
 import { listReplies, readCommentForUser } from "@/app/.server/db/work-community";
+import { getAuthContext } from "@/app/.server/auth/current-user";
+import { webPushSubscriptionStatement } from "./settings";
 
 export const pushApi = new Hono<{ Bindings: CloudflareEnv; Variables: { runtime: AppRuntime } }>();
 
@@ -23,6 +25,17 @@ pushApi.post("/api/push/subscription", async c => {
     .bind(auth.user.id, input.endpoint).first<{ categories_json: string }>();
   return json({ ok: true, categories: row ? JSON.parse(row.categories_json) as PushCategory[] : null },
     { headers: { "Cache-Control": "private, no-store" } });
+});
+
+pushApi.put("/api/push/subscription", async c => {
+  const runtime = c.get("runtime");
+  const auth = await requireUser(runtime, c.req.raw);
+  if ("response" in auth) return auth.response;
+  const context = (await getAuthContext(runtime))!;
+  const input = await readJsonObject(c.req.raw, "订阅信息无效", { maximumBytes: 8192, requireJsonContentType: true });
+  const { statement, categories } = await webPushSubscriptionStatement(runtime, auth.user.id, context.session.id, input, auth.user.preferences);
+  await statement.run();
+  return json({ ok: true, categories });
 });
 
 pushApi.post("/api/push/inbox/:id/friend", async c => {

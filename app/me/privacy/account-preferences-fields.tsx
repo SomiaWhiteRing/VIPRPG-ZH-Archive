@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useState } from "react";
 import { ToggleGroup } from "radix-ui";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
@@ -11,10 +11,9 @@ import { ACCOUNT_SHORTCUTS, COLOR_THEME_OPTIONS, parseColorTheme, type AccountPr
 import { CheckboxField } from "@/app/components/ui/checkbox-field";
 import { useColorThemePreview } from "@/app/components/color-theme-preview";
 
-export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkCommentsChange, children }: {
+export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkCommentsChange }: {
   preferences: AccountPreferences;
   onNotifyUploadedWorkCommentsChange: (checked: boolean) => void;
-  children?: ReactNode;
 }) {
   const [colorTheme, setColorTheme] = useState(preferences.colorTheme);
   const setThemePreview = useColorThemePreview();
@@ -71,7 +70,6 @@ export function AccountPreferencesFields({ preferences, onNotifyUploadedWorkComm
           接收上传的作品的评论提醒
         </Label>
       </div>
-      {children}
       <CheckboxField name="includePlayerInZip" label="下载ZIP时附带EasyRPG Player（若有）" defaultChecked={preferences.includePlayerInZip} />
       <div className="mt-3">
         <input name="showGameCardInteractionData" type="hidden" value="0" />

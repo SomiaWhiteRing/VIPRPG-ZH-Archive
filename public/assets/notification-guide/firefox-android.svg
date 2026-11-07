@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="230" viewBox="0 0 320 230">
+  <style>
+    :root{color-scheme:light dark;--bg:#fff;--bar:#edf0ed;--ink:#17212b;--line:#d9ddd9;--accent:#238477;--tint:#edf5f1} @media(prefers-color-scheme:dark){:root{--bg:#222b34;--bar:#333d45;--ink:#e5ecee;--line:#53616b;--accent:#77c9b9;--tint:#293d3b}}
+    text{font:14px "Noto Sans SC","Microsoft YaHei",sans-serif;fill:var(--ink)}
+  </style>
+  <rect x="30" y="1" width="260" height="228" rx="15" fill="var(--bg)" stroke="var(--line)"/>
+  <path d="M45 1H275Q290 1 290 16V47H30V16Q30 1 45 1" fill="var(--bar)"/>
+  <path d="m52 18-7 7 7 7M46 25H62" fill="none" stroke="var(--ink)" stroke-width="2"/><text x="78" y="30">网站权限</text>
+  <text x="51" y="83">通知</text>
+  <rect x="44" y="103" width="232" height="43" rx="6" fill="var(--tint)" stroke="var(--accent)" stroke-width="2"/>
+  <circle cx="64" cy="125" r="7" fill="var(--bg)" stroke="var(--accent)" stroke-width="2"/><circle cx="64" cy="125" r="3.5" fill="var(--accent)"/><text x="84" y="130">询问是否允许</text>
+  <circle cx="64" cy="173" r="7" fill="var(--bg)" stroke="var(--line)"/><text x="84" y="178">已阻止</text>
+  <path d="M131 214H189" stroke="var(--line)" stroke-width="4" stroke-linecap="round"/>
+</svg>

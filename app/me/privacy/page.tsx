@@ -13,8 +13,6 @@ import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 import { AccountPreferencesFields } from "./account-preferences-fields";
-import { WebPushSettings } from "./web-push-settings";
-import { webPushConfiguration } from "@/app/.server/push/service";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -65,16 +63,15 @@ export async function loader(args: LoaderFunctionArgs) {
     },
   ];
 
-  return { params, profileSettings, preferences: user.preferences, userId: user.id, pushPublicKey: webPushConfiguration(runtime.env)?.publicKey ?? null };
+  return { params, profileSettings, preferences: user.preferences };
 }
 
 export const meta: MetaFunction = ({ error }) =>
   pageMetaDescriptors({ title: ["隐私与偏好", "个人中心"] }, error);
 
 export default function PrivacyPage() {
-  const { profileSettings, preferences, userId, pushPublicKey } = useLoaderData<typeof loader>();
+  const { profileSettings, preferences } = useLoaderData<typeof loader>();
   const [notificationPreferences, setNotificationPreferences] = useState(preferences);
-  const [pushBusy, setPushBusy] = useState(false);
   return (
     <div>
       <AccountPageHeader title="隐私与偏好" />
@@ -115,10 +112,8 @@ export default function PrivacyPage() {
           </fieldset>
         </div>
         <AccountPreferencesFields preferences={notificationPreferences}
-          onNotifyUploadedWorkCommentsChange={checked => setNotificationPreferences(current => ({ ...current, notifyUploadedWorkComments: checked }))}>
-          <WebPushSettings key={userId} publicKey={pushPublicKey} preferences={notificationPreferences} onBusyChange={setPushBusy} />
-        </AccountPreferencesFields>
-        <div className="mt-5"><Rm2kButton type="submit" disabled={pushBusy}>保存设置</Rm2kButton></div>
+          onNotifyUploadedWorkCommentsChange={checked => setNotificationPreferences(current => ({ ...current, notifyUploadedWorkComments: checked }))} />
+        <div className="mt-5"><Rm2kButton type="submit">保存设置</Rm2kButton></div>
       </RedirectForm>
     </div>
   );
