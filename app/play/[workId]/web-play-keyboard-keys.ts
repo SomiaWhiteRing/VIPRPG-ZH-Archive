@@ -51,7 +51,7 @@ export const keyboardGroups = [
   { id: "move", label: "移动 / 选择", keysLabel: "方向键 · W A S D", keys: ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"] },
   { id: "confirm", label: "确认 / 对话", keysLabel: "Z · Enter · Space", keys: ["KeyZ", "Enter", "Space"] },
   { id: "cancel", label: "取消 / 打开菜单", keysLabel: "X · Esc", keys: ["KeyX", "Escape"] },
-  { id: "engine", label: "播放器功能", keysLabel: "F1 系统设置 · F2 帧率 · F7 截图 · F9 Debug 菜单 · E 交互高亮 · ` 会话历史", keys: ["F1", "F2", "F7", "F9", "KeyE", "Backquote", "KeyF", "KeyG", "ShiftLeft", "ShiftRight"] },
+  { id: "engine", label: "播放器功能", keysLabel: "F1 系统设置 · F2 帧率 · F7 截图 · F9 Debug 菜单 · E 交互高亮 · ` 会话历史 · 按住 F / G 加速（默认 3× / 10×） · Shift 由游戏决定", keys: ["F1", "F2", "F7", "F9", "KeyE", "Backquote", "KeyF", "KeyG", "ShiftLeft", "ShiftRight"] },
 ];
 
 // NumpadEnter shares Enter's engine input; reserve it along with the default controls.

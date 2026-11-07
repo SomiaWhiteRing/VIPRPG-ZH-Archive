@@ -59,7 +59,7 @@ export function WebPlayControlsHelp() {
               </div>
             ))}
           </div>
-          <p className="mb-0 mt-2.5 text-xs text-muted">游戏启动后，点击游戏画面再按 F1 打开系统设置。按住 F / G 加速（默认 3× / 10×），按住 E 显示交互位置；Shift 功能由游戏决定。Debug 菜单和交互高亮需在「追加功能」中分别开启「强制TestPlay」和「场景交互高亮」，加速倍率可在系统设置调整。移动端可在布局编辑中添加 Debug 和高亮按钮，通过 Menu 打开系统设置。</p>
+          <p className="mb-0 mt-2.5 text-xs text-muted">F9 和 E 需在「追加功能」中分别开启「强制TestPlay」和「场景交互高亮」。</p>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
