@@ -274,9 +274,9 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 停止与站内离页须等待 `player.stop()`：先退出引擎，再等待串行 `IDBFS.syncfs(false)`，最后关闭音频、终止 Worker、移除 iframe、释放资源共享锁和 Work 级存档独占锁。写入失败保留 Worker 与锁并允许重试。浏览器强制关页或进程被杀时，异步写入完成没有保证，因此游戏正常保存时也会同步 IDBFS。安装 Worker 在离页时终止；普通页面数据刷新不重建播放器。
 
-当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。当前包基于 [Player 提交 cfb372db7](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/commit/cfb372db70a73addb607f62640862ddffcddf00d)，在该提交上应用配置中的三个 `sourcePatches`，通过既有 Docker Web 构建入口生成，记录为 `sourceState: patched-commit`。此次更新优化 Maniac 大型动画图片：按逻辑更新捕获状态并延迟准备资源帧，无效果帧共享只读视图，调色使用批处理和复用缓冲，同时扩展等待中的预读并减少大图缓存堆积。保留精确调色、透明像素和可变图片历史像素语义，以及既有原生 Wasm 异常、JSPI／Asyncify 双入口、共用音色库、pf、镜头、字体、拼音输入及交互高亮行为；字体来源声明继续随 `NOTICE-Zfull.txt`、`LICENSE-smallfonts.txt` 和拼音词库许可分发。
+当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。当前包基于 [Player 提交 cb1b27425](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/commit/cb1b27425ed7a7ef576d20895410a773ce0f392c)，应用配置中的三个 `sourcePatches`，记录为 `sourceState: patched-commit`。新版纳入 Maniac 战斗结算与事件续行、淡入时序和音画同步修正。
 
-既有 Player 构建入口为 `Build and Release`（`.github/workflows/nightly-release.yml`），Web 产物为 `nightly-web`。网站使用应用配置中三个源码补丁后的本地 Docker 构建，与上游原始 ZIP 分开记录。构建工具链和内置 liblcf 基础版本继续锁定；libpng、FreeType 从同版 SDK 来源重建为 native longjmp ABI。音色库、视频解码器及其许可与前版逐字节一致。
+网站使用 [GitHub Actions 的 Web 候选构建](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/actions/runs/42411174928)，从应用源码补丁的 [构建提交 d27b7aedf](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/commit/d27b7aedf88b32078019e3b55b42cc9ddcc0f830) 运行既有 Docker Web 构建入口，产物名为 `viprpg-web`。构建工具链和内置 liblcf 基础版本继续锁定。libpng、FreeType 从同版 SDK 来源重建为 native longjmp ABI，字体来源声明随 `NOTICE-Zfull.txt`、`LICENSE-smallfonts.txt` 和拼音词库许可分发。
 
 `patches` 由导入脚本应用于未压缩的宿主文件；`sourcePatches` 则需要在构建前应用，导入脚本仅校验并随包保存。当前源码补丁为 [skip-logo.patch](../scripts/runtime-patches/skip-logo.patch)、[startup-download-progress.patch](../scripts/runtime-patches/startup-download-progress.patch) 和 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)。构建工具链与依赖由固定 Player 提交的构建脚本锁定。Web ZIP 根目录同时包含固定源码中的 `resources/pinyin/LICENSE-rime-pinyin-simp.txt`，词库来源及许可摘要记录在 `pinyinDictionary`。核对音色库、许可证和 Web ZIP 摘要后导入，运行目录内的 `SOURCE.json` 记录真实源码、构建来源、补丁和文件摘要。
 

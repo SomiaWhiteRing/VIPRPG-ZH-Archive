@@ -759,17 +759,18 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     if (data.type === 'startup-progress') startupProgress();
   });
   async function loadRuntimeAsset(name) {
+    signal.throwIfAborted();
     const urls = [...new Set([new URL(name, base).href, new URL(name, options.assetBase || base).href])];
     const preferenceKey = 'easyrpg-runtime-asset:' + base + name;
     if (urls.length > 1) {
       try { if (sessionStorage.getItem(preferenceKey) === urls[1]) urls.reverse(); } catch {}
     }
     const controllers = urls.map(() => new AbortController());
+    const abortDownloads = () => controllers.forEach(controller => controller.abort(signal.reason));
+    signal.addEventListener('abort', abortDownloads, {once: true});
     const probe = async index => {
       try {
-        const response = await fetch(urls[index], {
-          signal: AbortSignal.any([signal, controllers[index].signal]),
-        });
+        const response = await fetch(urls[index], {signal: controllers[index].signal});
         if (!response.ok) throw new Error('Runtime download failed: ' + response.status + ' ' + urls[index]);
         startupProgress();
         const reader = response.body.getReader();
@@ -805,6 +806,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       throw error;
     } finally {
       clearTimeout(delayedStart);
+      if (!selected) signal.removeEventListener('abort', abortDownloads);
       controllers.forEach((controller, index) => { if (index !== selected?.index) controller.abort(); });
     }
     const {index, response, reader, prefix} = selected;
@@ -814,6 +816,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
         try {
           const {done, value} = await reader.read();
           if (done) {
+            signal.removeEventListener('abort', abortDownloads);
             if (urls.length > 1) {
               try { sessionStorage.setItem(preferenceKey, urls[index]); } catch {}
             }
@@ -822,9 +825,17 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
             startupProgress();
             controller.enqueue(value);
           }
-        } catch (error) { controller.error(error); controllers[index].abort(error); }
+        } catch (error) {
+          signal.removeEventListener('abort', abortDownloads);
+          controller.error(error);
+          controllers[index].abort(error);
+        }
       },
-      async cancel(reason) { controllers[index].abort(reason); await reader.cancel(reason).catch(() => {}); },
+      async cancel(reason) {
+        signal.removeEventListener('abort', abortDownloads);
+        controllers[index].abort(reason);
+        await reader.cancel(reason).catch(() => {});
+      },
     });
     return new Response(body, {headers: {'Content-Type': response.headers.get('Content-Type') || 'application/octet-stream'}});
   }
