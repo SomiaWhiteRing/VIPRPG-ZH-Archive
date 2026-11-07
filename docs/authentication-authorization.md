@@ -115,7 +115,8 @@ node scripts/rotate-bootstrap-admin.mjs --email admin@example.com --production -
 ## 3. Session 与认证
 
 - session cookie 只保存随机 opaque token；D1 的 `user_sessions` 只保存 token SHA-256。
-- session 使用固定绝对有效期，不滑动延期。当前数值由 `app/.server/auth/session.ts` 的 `SESSION_TTL_SECONDS` 决定。
+- session 使用 365 天滚动有效期。通过请求级认证的网页和 API 成功响应会同步 Cookie 到期时间。会话到期时间距今不足 364 天时，将它延长到当前时间起 365 天，每个会话约每 24 小时写入一次。仍有效的旧会话在首次符合条件的请求中自动续期。
+- Android 通知后台轮询、使用独立会话校验的论坛接口和归档下载仅检查会话有效性。续期沿用原会话 ID 与令牌，Web Push 订阅继续按该会话的到期时间判断有效性。
 - 每次读取 session 都检查到期、撤销和用户状态。
 - 登录与注册验证成功后创建 session；退出撤销当前 session；密码重置和账户禁用撤销该用户全部 session。
 - 注册与密码重置验证码只能原子消费一次；登录失败计数必须原子更新。

@@ -26,14 +26,18 @@ import { interactionSuppressedSql } from "./user-blocks";
 
 const inboxCategorySql: Record<InboxCategory, string> = {
   all: "1",
-  comments: "work_comment_id IS NOT NULL",
-  replies: "reply_comment_id IS NOT NULL OR timeline_reply_id IS NOT NULL",
+  comments: "work_comment_id IS NOT NULL AND interaction_kind<>'mention'",
+  replies: "reply_comment_id IS NOT NULL OR timeline_reply_id IS NOT NULL OR (work_comment_id IS NOT NULL AND interaction_kind='mention')",
   forum: "type='forum_reply'",
   likes: "(type='forum_like' OR like_comment_id IS NOT NULL OR (timeline_event_id IS NOT NULL AND timeline_reply_id IS NULL))",
   friends: "friend_action IN ('added','returned')",
   system: "type IN ('role_change_request','role_change_notice','system_notice') AND work_comment_id IS NULL AND reply_comment_id IS NULL AND like_comment_id IS NULL AND timeline_event_id IS NULL AND COALESCE(friend_action,'') NOT IN ('added','returned')",
   pending: "can_reject=1 OR (report_kind IS NOT NULL AND status='pending')",
 };
+
+const inboxMentionSql = `(COALESCE(json_extract(i.metadata_json,'$.mention'),0)=1
+  OR (json_extract(i.metadata_json,'$.alsoMention')=1
+    AND ${interactionSuppressedSql("i.recipient_user_id", "i.sender_user_id", "i.interaction_kind")}))`;
 
 type InboxItemRow = {
   id: number;
@@ -90,7 +94,8 @@ type InboxItemRow = {
 function inboxSelect(details: boolean) {
   return `SELECT
   i.id,
-  CASE WHEN json_extract(i.metadata_json,'$.mention')=1 THEN 'mention' ELSE i.interaction_kind END AS interaction_kind,
+  CASE WHEN ${inboxMentionSql} THEN 'mention' ELSE i.interaction_kind END AS interaction_kind,
+  json_extract(i.metadata_json,'$.alsoMention') AS also_mention,
   json_extract(i.metadata_json,'$.reportKind') AS report_kind,
   json_extract(i.metadata_json,'$.reportId') AS report_id,
   (SELECT target_id FROM forum_content_reports WHERE id=json_extract(i.metadata_json,'$.reportId') AND json_extract(i.metadata_json,'$.reportKind')='forum') AS report_target_id,
@@ -302,16 +307,37 @@ export async function countUnreadInboxItemsForUser(
   return row?.count ?? 0;
 }
 
-export async function isUnreadInboxItem(runtime: AppRuntime, user: ArchiveUser, id: number, categories: PushCategory[]): Promise<boolean> {
+function inboxNotificationFilter(categories: PushCategory[]) {
   const filters = categories.filter(category => category !== "messages").map(category => `(${inboxCategorySql[category]})`);
-  if (!filters.length) return false;
+  if (categories.includes("replies")) filters.push(`(work_comment_id IS NOT NULL AND also_mention=1
+    AND NOT ${interactionSuppressedSql("recipient_user_id", "sender_user_id", "'mention'")})`);
+  return filters.length ? `read_at IS NULL
+      AND NOT ${interactionSuppressedSql("recipient_user_id", "sender_user_id", "interaction_kind", "also_mention")}
+      AND (${filters.join(" OR ")})` : null;
+}
+
+export async function isUnreadInboxItem(runtime: AppRuntime, user: ArchiveUser, id: number, categories: PushCategory[]): Promise<boolean> {
+  const filter = inboxNotificationFilter(categories);
+  if (!filter) return false;
   const query = inboxQuery(user, false);
-  const row = await getD1(runtime).prepare(`${query.sql}
-    SELECT 1 FROM actionable WHERE id=? AND read_at IS NULL
-      AND NOT ${interactionSuppressedSql("recipient_user_id", "sender_user_id", "interaction_kind")}
-      AND (${filters.join(" OR ")})`)
+  const row = await getD1(runtime).prepare(`${query.sql} SELECT 1 FROM actionable WHERE id=? AND ${filter}`)
     .bind(...query.binds, id).first();
   return row !== null;
+}
+
+export async function listUnreadInboxNotificationIds(runtime: AppRuntime, user: ArchiveUser,
+  categories: PushCategory[], after: number, through: number, limit: number) {
+  const filter = inboxNotificationFilter(categories);
+  if (!filter || after >= through) return [];
+  const visibility = buildInboxVisibilityClause(user);
+  const query = inboxQuery(user, false, {
+    sql: `SELECT i.id FROM inbox_items i WHERE i.id>? AND i.id<=?
+      AND datetime(i.created_at)>datetime('now','-1 day') AND (${visibility.sql})`,
+    binds: [after, through, user.id, ...visibility.audienceBinds],
+  });
+  const rows = await getD1(runtime).prepare(`${query.sql}
+    SELECT id FROM actionable WHERE ${filter} ORDER BY id LIMIT ?`).bind(...query.binds, limit).all<{ id: number }>();
+  return rows.results.map(row => row.id);
 }
 
 export async function markInboxItemRead(
@@ -448,7 +474,7 @@ function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser): InboxItem {
 async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[]) {
   const ids = source.filter((row) => row.work_comment_id !== null || row.reply_comment_id !== null || row.like_comment_id !== null).map((row) => row.id);
   if (!ids.length) return;
-  const rows = await getD1(runtime).prepare(`SELECT i.id,c.id AS comment_id,json_extract(i.metadata_json,'$.mention') AS mention,c.body,i.reply_comment_id,i.like_comment_id,c.root_comment_id,
+  const rows = await getD1(runtime).prepare(`SELECT i.id,c.id AS comment_id,${inboxMentionSql} AS mention,c.body,i.reply_comment_id,i.like_comment_id,c.root_comment_id,
       c.work_id,c.creator_id,c.character_id,c.catalog_id,
       COALESCE(NULLIF(w.chinese_title,''),w.original_title,cr.name,ch.primary_name,catalog.title) AS target_title,
       sender.id AS sender_id,sender.display_name,sender.status AS sender_status,sender.avatar_blob_sha256,
@@ -565,7 +591,7 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
   };
   const rows = await getD1(runtime)
     .prepare(
-      `SELECT i.id,json_extract(i.metadata_json,'$.mention') AS mention,t.locked,t.id AS topic_id,p.post_number,c.id AS comment_id,
+      `SELECT i.id,${inboxMentionSql} AS mention,t.locked,t.id AS topic_id,p.post_number,c.id AS comment_id,
     t.title AS topic_title,CASE WHEN i.forum_comment_id IS NOT NULL THEN c.body ELSE p.body END AS excerpt,
     sender.id AS actor_id,sender.display_name AS actor_name,sender.status AS actor_status,
     sender.avatar_blob_sha256 AS actor_avatar,c.reply_to_id

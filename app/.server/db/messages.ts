@@ -101,14 +101,24 @@ export function countUnreadDirectMessages(runtime: AppRuntime, userId: number): 
   });
 }
 
-export async function isUnreadDirectMessage(runtime: AppRuntime, userId: number, id: number): Promise<boolean> {
-  const row = await runtime.db.prepare(`SELECT 1 FROM direct_conversation_states s
+const unreadDirectMessageSql = `FROM direct_conversation_states s
     JOIN direct_messages m ON m.conversation_id=s.conversation_id AND m.recipient_user_id=s.user_id
       AND m.delivered=1 AND m.id>COALESCE(s.last_read_message_id,0)
-    WHERE s.user_id=? AND m.id=? AND NOT EXISTS(SELECT 1 FROM user_block_settings b
-      WHERE b.user_id=s.user_id AND b.blocked_user_id=m.sender_user_id AND b.block_private_messages=1)`)
+    WHERE s.user_id=? AND NOT EXISTS(SELECT 1 FROM user_block_settings b
+      WHERE b.user_id=s.user_id AND b.blocked_user_id=m.sender_user_id AND b.block_private_messages=1)`;
+
+export async function isUnreadDirectMessage(runtime: AppRuntime, userId: number, id: number): Promise<boolean> {
+  const row = await runtime.db.prepare(`SELECT 1 ${unreadDirectMessageSql} AND m.id=?`)
     .bind(userId, id).first();
   return row !== null;
+}
+
+export async function listUnreadDirectNotificationIds(runtime: AppRuntime, userId: number, after: number, through: number, limit: number) {
+  if (after >= through) return [];
+  const rows = await runtime.db.prepare(`SELECT m.id ${unreadDirectMessageSql}
+    AND m.id>? AND m.id<=? AND datetime(m.created_at)>datetime('now','-1 day') ORDER BY m.id LIMIT ?`)
+    .bind(userId, after, through, limit).all<{ id: number }>();
+  return rows.results.map(row => row.id);
 }
 
 export async function findSentDirectMessage(runtime: AppRuntime, senderId: number, peerId: number,

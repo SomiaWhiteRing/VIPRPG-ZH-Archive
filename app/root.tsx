@@ -3,7 +3,8 @@ import { copyFaceEmojis } from "@/app/components/emojis/client";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useIsSSR } from "react-aria/SSRProvider";
 import { useFocusVisible } from "react-aria/useFocusVisible";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { androidNotificationBridge, androidNotificationRequest } from "@/lib/browser/android-notifications";
 import { DEFAULT_COLOR_THEME, type ColorTheme } from "@/lib/account-preferences";
 import {
   isRouteErrorResponse,
@@ -116,6 +117,11 @@ export default function App() {
   const { session, embedded, analytics } = useLoaderData<typeof loader>();
   const inFrame = useSyncExternalStore(subscribeFrame, frameSnapshot, () => embedded);
   const { hideSiteHeader, hideSiteFooter } = usePageLayout();
+  useEffect(() => {
+    if (inFrame || !androidNotificationBridge()) return;
+    void androidNotificationRequest("state", { userId: session?.id ?? 0 })
+      .catch(error => console.error("Android notification account sync failed", error));
+  }, [inFrame, session?.id]);
   return (
     <InboxIndicator initialUnread={session?.unread ?? 0} initialMessagesUnread={session?.messagesUnread ?? 0} enabled={!!session}>
       <SiteAnalytics config={analytics} embedded={inFrame} />

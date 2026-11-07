@@ -1,4 +1,4 @@
-import { mentionNotification, validateMentions } from "@/app/.server/mentions";
+import { mentionNotificationStatements, validateMentions } from "@/app/.server/mentions";
 import { interactionSuppressedSql } from "./user-blocks";
 import { timelineStatement } from "@/app/.server/db/timeline";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
@@ -705,7 +705,7 @@ export async function createComment(
         WHERE c.user_id=? AND c.request_key=? AND c.root_comment_id IS NULL
           AND recipient.id<>c.user_id AND recipient.status='active'
         ON CONFLICT(event_key) DO NOTHING`).bind(userId, requestKey),
-      mentionNotification(db, userId, body, "", "comment", source, [userId, requestKey]),
+      ...mentionNotificationStatements(db, userId, body, "", "comment", source, [userId, requestKey]),
     ]);
     const id = Number((results[0].results[0] as { id: number }).id);
     return readCommentForUser(runtime, id, userId);
@@ -758,7 +758,7 @@ export async function updateComment(
       WHERE id=? AND user_id=? AND status IN('published','hidden') AND ${access.sql}`,
       )
       .bind(...guard.args, body, ...sourceBinds),
-    mentionNotification(db, userId, body, previous.body, "comment", `${source} AND changes()=1`, sourceBinds),
+    ...mentionNotificationStatements(db, userId, body, previous.body, "comment", source, sourceBinds),
     ...contentEmojiStatements(
       db,
       "comment",

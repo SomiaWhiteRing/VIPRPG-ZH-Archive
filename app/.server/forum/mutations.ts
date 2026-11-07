@@ -1,4 +1,4 @@
-import { mentionNotification, validateMentions } from "@/app/.server/mentions";
+import { mentionNotificationStatements, validateMentions } from "@/app/.server/mentions";
 import { validateBodyEmojis } from "@/app/.server/emojis/service";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { auditedEntityBatch, forumEditAuditSnapshot } from "@/app/.server/db/entity-audit";
@@ -358,7 +358,7 @@ export async function publishForum(
           identity.key,
           token,
         ),
-      mentionNotification(db, actor.id, body, "", "post", "SELECT id FROM forum_posts WHERE user_id=? AND revision=?", [actor.id, token]),
+      ...mentionNotificationStatements(db, actor.id, body, "", "post", "SELECT id FROM forum_posts WHERE user_id=? AND revision=?", [actor.id, token]),
       ...imageStatements(ctx, images, actor.id, token, offsets),
       ...contentIndexStatements(
         ctx,
@@ -500,7 +500,7 @@ export async function publishForum(
     ...contentIndexStatements(ctx, kind, actor.id, token, "", body, "insert"),
   );
   statements.push(replyNotificationStatement(ctx, kind, actor.id, token));
-  statements.push(mentionNotification(db, actor.id, body, "", kind === "post" ? "post" : "forum-comment", `SELECT id FROM ${table} WHERE user_id=? AND revision=?`, [actor.id, token]));
+  statements.push(...mentionNotificationStatements(db, actor.id, body, "", kind === "post" ? "post" : "forum-comment", `SELECT id FROM ${table} WHERE user_id=? AND revision=?`, [actor.id, token]));
   await db.batch(statements);
   const result = await db
     .prepare(
@@ -580,7 +580,7 @@ export async function editForum(
       "edit",
     ),
   );
-  statements.push(mentionNotification(ctx.db, actor.id, body, row.body ?? "", target.kind === "comment" ? "forum-comment" : "post", `SELECT id FROM ${table} WHERE user_id=? AND revision=?`, [actor.id, token]));
+  statements.push(...mentionNotificationStatements(ctx.db, actor.id, body, row.body ?? "", target.kind === "comment" ? "forum-comment" : "post", `SELECT id FROM ${table} WHERE user_id=? AND revision=?`, [actor.id, token]));
   const result = await auditedEntityBatch(ctx.db, statements, {
     actor, eventType: "forum_edit", targets: [{ type: target.kind === "topic" ? "forum_topic" : target.kind === "post" ? "forum_post" : "forum_comment", id: target.id }],
     snapshot: forumEditAuditSnapshot(target), permission: "forum.use", authorizationBasis: "content_author",

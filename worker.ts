@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { createRequestHandler, RouterContextProvider } from "react-router";
 import { api } from "./app/.server/api";
+import { refreshSessionCookie, SESSION_COOKIE_NAME } from "./app/.server/auth/session";
 import { createRuntime } from "./app/.server/runtime";
 import type { AppRuntime } from "./app/.server/runtime";
 import { runtimeContext } from "./app/.server/router-context";
@@ -44,11 +45,20 @@ app.use("*", async (c, next) => {
     if (c.env.SITE_NOINDEX === "true") crawlResponse.headers.set("X-Robots-Tag", "noindex, nofollow");
     return crawlResponse;
   }
-  c.set(
-    "runtime",
-    createRuntime(c.req.raw, c.env, c.executionCtx, import.meta.env.DEV),
-  );
+  const runtime = createRuntime(c.req.raw, c.env, c.executionCtx, import.meta.env.DEV);
+  c.set("runtime", runtime);
   await next();
+  if (runtime.sessionCookieRefresh && c.res.status >= 200 && c.res.status < 400
+    && c.req.path !== "/api/inbox/device-notifications"
+    && !c.res.headers.getSetCookie().some((cookie) => cookie.startsWith(`${SESSION_COOKIE_NAME}=`))) {
+    const cookie = await refreshSessionCookie(runtime, runtime.sessionCookieRefresh).catch(() => {
+      console.error("Session renewal failed");
+    });
+    if (cookie) {
+      c.header("Cache-Control", "private, no-store");
+      c.header("Set-Cookie", cookie, { append: true });
+    }
+  }
   if (c.req.path.startsWith("/api/") && !["GET", "HEAD", "OPTIONS"].includes(c.req.method)
     && c.req.path !== "/api/push/subscription") {
     c.executionCtx.waitUntil(enqueueWebPush(c.env).catch(() => console.error("Web Push enqueue failed")));

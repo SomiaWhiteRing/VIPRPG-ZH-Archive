@@ -74,6 +74,8 @@ public final class MainActivity extends Activity {
     private LinearLayout galleryTab;
     private LinearLayout versionTab;
     private ScreenshotController screenshots;
+    private DeviceNotifications deviceNotifications;
+    private String pendingNotificationUrl;
     private LocalGames localGames;
     private SaveTransfers saveTransfers;
 
@@ -205,6 +207,7 @@ public final class MainActivity extends Activity {
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         browser.addJavascriptInterface(new OnlineBridge(), "VIPRPGAndroid");
         offlineBrowser.addJavascriptInterface(new LibraryBridge(), "VIPRPGAndroid");
+        deviceNotifications = new DeviceNotifications(this, browser);
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             for (WebView view : new WebView[]{browser, offlineBrowser}) {
                 WebViewCompat.addDocumentStartJavaScript(view, SYSTEM_THEME_SCRIPT,
@@ -260,7 +263,10 @@ public final class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (view == browser) onlineRefresh.setRefreshing(false);
+                if (view == browser) {
+                    onlineRefresh.setRefreshing(false);
+                    if (resumed && sameOrigin(Uri.parse(url))) deviceNotifications.syncSessionSchedule(false);
+                }
                 sendSystemTheme(view);
                 updateNavigation();
             }
@@ -354,13 +360,15 @@ public final class MainActivity extends Activity {
         libraryTab.setOnClickListener(view -> showLibrary());
         galleryTab.setOnClickListener(view -> showGallery());
         versionTab.setOnClickListener(view -> showVersion());
+        pendingNotificationUrl = DeviceNotifications.target(getIntent());
         if (savedInstanceState != null) {
             Bundle onlineState = savedInstanceState.getBundle("onlineState");
             Bundle offlineState = savedInstanceState.getBundle("offlineState");
             if (onlineState != null) browser.restoreState(onlineState);
             if (offlineState != null) offlineBrowser.restoreState(offlineState);
             library = savedInstanceState.getBoolean("library");
-            if (savedInstanceState.getBoolean("gallery")) showGallery();
+            if (pendingNotificationUrl != null) showOnline();
+            else if (savedInstanceState.getBoolean("gallery")) showGallery();
             else if (savedInstanceState.getBoolean("version")) showVersion();
             else if (library) showLibrary();
             else showOnline();
@@ -476,6 +484,10 @@ public final class MainActivity extends Activity {
 
     private void showOnline(String destination) {
         if (playing || onlineImmersive || fullscreenView != null || screenshots.isBusy()) return;
+        if (destination == null) {
+            destination = pendingNotificationUrl;
+            pendingNotificationUrl = null;
+        }
         hideGallery();
         version = false;
         versionPage.setVisibility(View.GONE);
@@ -490,6 +502,22 @@ public final class MainActivity extends Activity {
             browser.loadUrl(destination != null ? destination : BuildConfig.SITE_ORIGIN + "/");
         }
         updateNavigation();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        String target = DeviceNotifications.target(intent);
+        if (target != null) {
+            pendingNotificationUrl = target;
+            showOnline();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == DeviceNotifications.PERMISSION_REQUEST) deviceNotifications.permissionResult(grantResults.length > 0);
     }
 
     private void showLibrary() {
@@ -926,6 +954,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onPause() {
         resumed = false;
+        deviceNotifications.foregroundChanged(false);
         pauseOnlineBrowser();
         offlineBrowser.evaluateJavascript("window.dispatchEvent(new Event('blur'))", null);
         offlineBrowser.onPause();
@@ -939,6 +968,7 @@ public final class MainActivity extends Activity {
         if (!library && !gallery && !version) resumeOnlineBrowser();
         offlineBrowser.onResume();
         resumed = true;
+        deviceNotifications.foregroundChanged(true);
         if (localGames.store.next() != null) InstallService.start(this);
         restoreOfflinePlayerFocus();
         if (gallery) galleryPanel.refreshOnResume();

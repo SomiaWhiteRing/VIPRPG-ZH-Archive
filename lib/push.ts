@@ -37,6 +37,13 @@ export type PushNotificationContent = {
   actions: { action: "reply" | "friend-accept" | "friend-ignore"; title: string; url?: string }[];
 };
 
+export type DeviceNotificationPosition = {
+  userId: number;
+  sessionId: number;
+  inboxAfter: number;
+  messageAfter: number;
+};
+
 export function availablePushCategories(preferences: Pick<AccountPreferences,
   "notifyUploadedWorkComments" | "notifyFriendAdditions" | "receivePrivateMessages">): PushCategory[] {
   return PUSH_CATEGORIES.map(item => item.value).filter(category =>

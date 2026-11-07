@@ -9,12 +9,13 @@ const columns: Record<keyof UserBlockSettings, string> = {
 };
 
 // Expressions are supplied by the notification writers, never by request input.
-export function interactionSuppressedSql(recipient: string, actor: string, kind: string): string {
+export function interactionSuppressedSql(recipient: string, actor: string, kind: string, alsoMention = "0"): string {
   return `EXISTS(SELECT 1 FROM user_block_settings blocks WHERE blocks.user_id=${recipient}
     AND blocks.blocked_user_id=${actor} AND CASE ${kind}
       WHEN 'comment' THEN blocks.mute_comments WHEN 'reply' THEN blocks.mute_replies
       WHEN 'mention' THEN blocks.mute_mentions
-      WHEN 'like' THEN blocks.mute_likes WHEN 'friend' THEN blocks.mute_friends ELSE 0 END=1)`;
+      WHEN 'like' THEN blocks.mute_likes WHEN 'friend' THEN blocks.mute_friends ELSE 0 END=1
+      AND (COALESCE(${alsoMention},0)=0 OR blocks.mute_mentions=1))`;
 }
 
 export async function readUserBlockSettings(runtime: AppRuntime, userId: number, peerId: number): Promise<UserBlockSettings> {
@@ -41,7 +42,8 @@ export async function setUserBlockSettings(runtime: AppRuntime, user: ArchiveUse
     db.prepare(`INSERT INTO inbox_item_reads(item_id,user_id,read_at)
       SELECT i.id,?,CURRENT_TIMESTAMP FROM inbox_items i WHERE i.recipient_user_id=? AND i.sender_user_id=?
         AND i.suppressed=0 AND ${interactionSuppressedSql("i.recipient_user_id", "i.sender_user_id",
-          "CASE WHEN json_extract(i.metadata_json,'$.mention')=1 THEN 'mention' ELSE i.interaction_kind END")}
+          "CASE WHEN json_extract(i.metadata_json,'$.mention')=1 THEN 'mention' ELSE i.interaction_kind END",
+          "json_extract(i.metadata_json,'$.alsoMention')")}
         AND NOT EXISTS(SELECT 1 FROM inbox_item_reads r WHERE r.item_id=i.id AND r.user_id=?)
       ON CONFLICT(item_id,user_id) DO NOTHING`).bind(user.id, user.id, peerId, user.id),
     ...(patch.blockPrivateMessages ? [db.prepare(`UPDATE direct_conversation_states AS s SET last_read_message_id=

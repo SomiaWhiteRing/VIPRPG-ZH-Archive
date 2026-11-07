@@ -9,7 +9,8 @@ import { hasPermission } from "@/lib/authz/permissions";
 import type { PushNotificationContent } from "@/lib/push";
 import { HttpError } from "@/lib/http";
 
-export async function webPushContent(runtime: AppRuntime, user: ArchiveUser, kind: "inbox" | "messages", id: number): Promise<PushNotificationContent | null> {
+export async function webPushContent(runtime: AppRuntime, user: ArchiveUser, kind: "inbox" | "messages", id: number,
+  includeActions = true): Promise<PushNotificationContent | null> {
   const content: PushNotificationContent = { id: `${kind}:${id}`, userId: user.id, group: kind,
     title: "VIPRPG.org", body: "", icon: "/icon/windI.png", url: "", timestamp: 0, actions: [] };
   if (kind === "messages") {
@@ -23,7 +24,7 @@ export async function webPushContent(runtime: AppRuntime, user: ArchiveUser, kin
     content.icon = getUserAvatarSrc(message.avatar_blob_sha256);
     content.timestamp = parseTimestamp(message.created_at).getTime();
     content.url = `/me/messages/${message.sender_user_id}`;
-    if (hasPermission(user, "message.send") && await runtime.db.prepare(`SELECT 1 FROM users WHERE id=? AND receive_private_messages=1`)
+    if (includeActions && hasPermission(user, "message.send") && await runtime.db.prepare(`SELECT 1 FROM users WHERE id=? AND receive_private_messages=1`)
       .bind(message.sender_user_id).first()) content.actions.push({ action: "reply", title: "回复", url: `${content.url}?pushReply=1` });
   } else {
     let item;
@@ -39,12 +40,12 @@ export async function webPushContent(runtime: AppRuntime, user: ArchiveUser, kin
     content.icon = avatar || actor || item.maintainerRequest || item.senderDisplayName ? getUserAvatarSrc(avatar) : "/icon/windI.png";
     content.timestamp = parseTimestamp(item.createdAt).getTime();
     content.url = `/inbox/${id}`;
-    if (item.friendNotification?.kind === "added" && !item.friendNotification.isFollowing) {
+    if (includeActions && item.friendNotification?.kind === "added" && !item.friendNotification.isFollowing) {
       if (item.friendNotification.canFollow) content.actions.push({ action: "friend-accept", title: "同意" });
       content.actions.push({ action: "friend-ignore", title: "忽略" });
-    } else if ((item.commentNotification && item.commentNotification.kind !== "like")
+    } else if (includeActions && ((item.commentNotification && item.commentNotification.kind !== "like")
       || (item.timelineNotification?.kind === "reply" && hasPermission(user, "timeline.reply.create"))
-      || (item.interaction?.replyAllowed && item.type === "forum_reply" && hasPermission(user, "forum.use"))) {
+      || (item.interaction?.replyAllowed && item.type === "forum_reply" && hasPermission(user, "forum.use")))) {
       const replyUrl = await webPushReplyLocation(runtime, item);
       if (replyUrl) content.actions.push({ action: "reply", title: "回复", url: replyUrl });
     }

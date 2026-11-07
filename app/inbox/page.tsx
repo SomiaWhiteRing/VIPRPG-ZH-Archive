@@ -99,8 +99,9 @@ export default function InboxPage() {
           </span>
         }
         actions={
-          <div className="flex min-h-9 items-center gap-3">
-            <WebPushSettings key={userId} publicKey={pushPublicKey} preferences={preferences} />
+          // Match the compact title's mobile line height (24px × 1.2).
+          <div className="flex h-[28.8px] items-center gap-3 sm:h-9">
+            <WebPushSettings key={userId} userId={userId} publicKey={pushPublicKey} preferences={preferences} />
           </div>
         }
       />

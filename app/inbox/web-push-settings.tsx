@@ -8,15 +8,20 @@ import { InfoTooltip } from "@/app/components/ui/info-tooltip";
 import { Label } from "@/app/components/ui/label";
 import { useClientEnvironment } from "@/app/components/use-client-environment";
 import { requestJson } from "@/lib/ui/api-response";
-import { availablePushCategories, PUSH_CATEGORIES, type PushCategory } from "@/lib/push";
+import { availablePushCategories, PUSH_CATEGORIES, type DeviceNotificationPosition, type PushCategory } from "@/lib/push";
+import { androidNotificationBridge, androidNotificationRequest } from "@/lib/browser/android-notifications";
 import type { AccountPreferences } from "@/lib/account-preferences";
 import { WebPushPermissionGuide, type PushPermissionGuide } from "./web-push-permission-guide";
 
-export function WebPushSettings({ publicKey, preferences }: {
+type AndroidNotificationSettings = { enabled: boolean; permission: NotificationPermission; categories: PushCategory[] | null };
+
+export function WebPushSettings({ userId, publicKey, preferences }: {
+  userId: number;
   publicKey: string | null;
   preferences: AccountPreferences;
 }) {
   const environment = useClientEnvironment();
+  const native = environment === "android";
   const id = useId();
   const settingsButton = useRef<HTMLButtonElement>(null);
   const [client, setClient] = useState<{ supported: boolean; guide: PushPermissionGuide } | null>(null);
@@ -29,7 +34,30 @@ export function WebPushSettings({ publicKey, preferences }: {
   const [draft, setDraft] = useState(selected);
   const [open, setOpen] = useState(false);
   const available = availablePushCategories(preferences);
-  const blocked = client !== null && (!client.supported || permission === "denied");
+  const blocked = permission === "denied" || client?.supported === false;
+
+  useEffect(() => {
+    if (!native || !androidNotificationBridge()) return;
+    let cancelled = false;
+    function load() {
+      void androidNotificationRequest<AndroidNotificationSettings>("state", { userId }).then(state => {
+        if (cancelled) return;
+        setPermission(state.permission);
+        setEnabled(state.enabled);
+        if (state.categories) setSelected(state.categories);
+        setReady(true);
+      }).catch(error => { if (!cancelled) console.error("Android notification settings load failed", error); });
+    }
+    function onVisibilityChange() { if (document.visibilityState === "visible") load(); }
+    load();
+    window.addEventListener("focus", load);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", load);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [native, userId]);
 
   useEffect(() => {
     if (!publicKey || environment !== "browser") return;
@@ -82,6 +110,12 @@ export function WebPushSettings({ publicKey, preferences }: {
   }, [environment, publicKey]);
 
   async function save(checked: boolean, current: PushSubscription | null, categories: PushCategory[]) {
+    if (native) {
+      const selected = PUSH_CATEGORIES.map(item => item.value).filter(category => categories.includes(category) && available.includes(category));
+      const position = checked ? await requestJson<DeviceNotificationPosition>("/api/inbox/device-notifications") : null;
+      if (position && position.userId !== userId) throw new Error("Notification account changed");
+      return androidNotificationRequest<AndroidNotificationSettings>("save", { userId, enabled: checked, categories: selected, position });
+    }
     return requestJson<{ ok: true; categories: PushCategory[] | null }>("/api/push/subscription", {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled: checked, endpoint: current?.endpoint ?? null,
@@ -90,11 +124,15 @@ export function WebPushSettings({ publicKey, preferences }: {
   }
 
   async function toggle(checked: boolean) {
-    if (busy || !publicKey || blocked) return;
+    if (busy || (!native && !publicKey) || blocked) return;
     setBusy(true);
     try {
       let current = subscription;
-      if (checked) {
+      if (checked && native) {
+        const granted = await androidNotificationRequest<NotificationPermission>("permission");
+        setPermission(granted);
+        if (granted !== "granted") return;
+      } else if (checked && publicKey) {
         const granted = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
         setPermission(granted);
         if (granted !== "granted") return;
@@ -122,15 +160,17 @@ export function WebPushSettings({ publicKey, preferences }: {
     finally { setBusy(false); }
   }
 
-  if (!publicKey || !ready || !client || environment !== "browser") return null;
+  if (!ready || (!native && (!publicKey || !client || environment !== "browser"))) return null;
   return <div className="flex shrink-0 items-center gap-2">
     <Label htmlFor={id} className="whitespace-nowrap text-sm">系统通知</Label>
-    <Switch.Root id={id} checked={enabled} disabled={busy || blocked} onCheckedChange={checked => void toggle(checked)}
+    <Switch.Root id={id} checked={enabled && !blocked} disabled={busy || blocked} onCheckedChange={checked => void toggle(checked)}
       className="relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full bg-muted transition-colors data-[state=checked]:bg-primary disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
       <Switch.Thumb className="block size-4 translate-x-1 rounded-full bg-background transition-transform data-[state=checked]:translate-x-5" />
     </Switch.Root>
     {blocked ? <InfoTooltip label="查看通知开启引导" className="w-[min(21rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] p-3">
-      <WebPushPermissionGuide guide={client.guide} supported={client.supported} />
+      {native ? <Button type="button" variant="ghost" className="h-auto px-2 py-1" onClick={() => {
+        void androidNotificationRequest("openSettings").catch(error => console.error("Android notification settings failed", error));
+      }}>打开系统通知设置</Button> : client && <WebPushPermissionGuide guide={client.guide} supported={client.supported} />}
     </InfoTooltip> : <Button ref={settingsButton} type="button" variant="ghost" size="icon" className="size-9" disabled={busy}
       aria-label="系统通知接收类型" aria-haspopup="dialog" onClick={() => { setDraft(selected); setOpen(true); }}>
       <Settings2 aria-hidden />
@@ -141,7 +181,7 @@ export function WebPushSettings({ publicKey, preferences }: {
           onCloseAutoFocus={event => { event.preventDefault(); (settingsButton.current ?? document.getElementById(id))?.focus(); }}>
           <div className="flex items-start justify-between gap-3"><div>
             <Dialog.Title id={`${id}-title`}>接收类型</Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm text-muted">设置仅影响当前浏览器。</Dialog.Description>
+            <Dialog.Description className="mt-1 text-sm text-muted">{native ? "设置仅影响当前应用。" : "设置仅影响当前浏览器。"}</Dialog.Description>
           </div><Button type="button" variant="ghost" size="icon" className="size-9" disabled={busy} aria-label="关闭设置" onClick={() => setOpen(false)}><X aria-hidden /></Button></div>
           <form onSubmit={event => { event.preventDefault(); void saveCategories(); }}>
             <fieldset aria-labelledby={`${id}-title`} disabled={!enabled || blocked || busy} className="mb-5 grid disabled:opacity-50">

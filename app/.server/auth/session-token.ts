@@ -1,12 +1,9 @@
 import { toArrayBuffer, utf8Encode } from "@/app/.server/crypto/encoding";
 import { sha256Hex } from "@/lib/sha256";
 export const SESSION_COOKIE_NAME = "viprpg_session";
-export async function getSessionHashFromCookieHeader(
-  cookieHeader: string | null,
-): Promise<string | null> {
+export function getSessionTokenFromCookieHeader(cookieHeader: string | null): string | null {
   const token = parseCookie(cookieHeader, SESSION_COOKIE_NAME);
-  if (!isSessionToken(token)) return null;
-  return hashSessionToken(token);
+  return isSessionToken(token) ? token : null;
 }
 
 export async function hashSessionToken(token: string): Promise<string> {

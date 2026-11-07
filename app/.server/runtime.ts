@@ -1,4 +1,5 @@
 import { normalizeAppOrigin } from "./auth/config";
+import type { SessionCookieRefresh } from "./auth/session";
 
 export type AppRuntime = {
   request: Request;
@@ -8,6 +9,7 @@ export type AppRuntime = {
   bucket: R2Bucket;
   origin: string;
   memo: Map<string, unknown>;
+  sessionCookieRefresh?: SessionCookieRefresh;
 };
 
 export function createRuntime(

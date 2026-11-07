@@ -37,10 +37,11 @@ export async function validateMentions(db: D1Database, body: string, previous = 
 }
 
 // The source must be gated by this write's revision/request identity in the publication batch.
-export function mentionNotification(db: D1Database, actorId: number, body: string, previous: string,
+export function mentionNotificationStatements(db: D1Database, actorId: number, body: string, previous: string,
   kind: "comment" | "post" | "forum-comment", source: string, args: (number | string)[]) {
   const old = new Set(mentions(previous).map((user) => user.id));
   const ids = [...new Set(mentions(body).map((user) => user.id))].filter((id) => !old.has(id));
+  if (!ids.length) return [];
   const ordinary = kind === "comment";
   const table = ordinary ? "published_comments" : kind === "post" ? "forum_public_posts" : "forum_public_comments";
   const fields = ordinary ? "work_comment_id" : "forum_topic_id,forum_post_id,forum_comment_id";
@@ -49,11 +50,28 @@ export function mentionNotification(db: D1Database, actorId: number, body: strin
     ? "(i.work_comment_id=s.id OR i.reply_comment_id=s.id)"
     : kind === "post" ? "i.forum_post_id=s.id AND i.forum_comment_id IS NULL AND i.type='forum_reply'"
       : "i.forum_comment_id=s.id AND i.type='forum_reply'";
-  return db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,metadata_json,${fields},interaction_kind,suppressed)
+  const mergeMatch = `i.sender_user_id=${actorId} AND i.recipient_user_id IN (SELECT value FROM json_each(?))
+    AND i.interaction_kind IN ('comment','reply') AND COALESCE(json_extract(i.metadata_json,'$.mention'),0)=0
+    AND EXISTS(SELECT 1 FROM ${table} s WHERE s.id IN (${source}) AND ${sameContent}
+      ${ordinary ? `AND ${commentRecipientReadSql("s", "i.recipient_user_id")}` : ""})`;
+  return [
+    // The publication batch commits the newly eligible outbox event and merged notice together.
+    db.prepare(`INSERT INTO web_push_outbox(kind,event_id)
+      SELECT 'inbox',i.id FROM inbox_items i WHERE ${mergeMatch} AND i.suppressed=1
+        AND NOT ${interactionSuppressedSql("i.recipient_user_id", String(actorId), "'mention'")}
+        AND EXISTS(SELECT 1 FROM web_push_subscriptions WHERE user_id=i.recipient_user_id)
+        AND NOT EXISTS(SELECT 1 FROM inbox_item_reads WHERE item_id=i.id AND user_id=i.recipient_user_id)
+      ON CONFLICT(kind,event_id) DO NOTHING`).bind(JSON.stringify(ids), ...args),
+    db.prepare(`UPDATE inbox_items AS i
+      SET metadata_json=json_set(COALESCE(i.metadata_json,'{}'),'$.alsoMention',json('true')),
+        suppressed=i.suppressed AND ${interactionSuppressedSql("i.recipient_user_id", String(actorId), "'mention'")}
+      WHERE ${mergeMatch}`).bind(JSON.stringify(ids), ...args),
+    db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,metadata_json,${fields},interaction_kind,suppressed)
     SELECT '${ordinary ? "system_notice" : "forum_reply"}',?,u.id,'','','mention:${kind}:'||s.id||':'||u.id,'{"mention":true}',${values},
       'reply',${interactionSuppressedSql("u.id", String(actorId), "'mention'")}
     FROM ${table} s JOIN users u ON u.id IN (SELECT value FROM json_each(?)) AND u.status='active'
     WHERE s.id IN (${source}) AND u.id<>? ${ordinary ? `AND ${commentRecipientReadSql("s", "u.id")}` : ""} AND NOT EXISTS
-      (SELECT 1 FROM inbox_items i WHERE i.recipient_user_id=u.id AND i.suppressed=0 AND ${sameContent})
-    ON CONFLICT(event_key) DO NOTHING`).bind(actorId, JSON.stringify(ids), ...args, actorId);
+      (SELECT 1 FROM inbox_items i WHERE i.recipient_user_id=u.id AND ${sameContent})
+    ON CONFLICT(event_key) DO NOTHING`).bind(actorId, JSON.stringify(ids), ...args, actorId),
+  ];
 }
