@@ -24,7 +24,7 @@
     "name": "Eternal Sea Pixel Symbols",
     "source": "lib/ui/eternal-sea-font-supplement.json",
     "design": "Original hand-drawn 12px bitmap glyphs",
-    "characters": 397,
+    "characters": 1024,
     "sizes": [
       12
     ]

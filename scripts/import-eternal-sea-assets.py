@@ -87,7 +87,7 @@ def main():
     for glyph in supplement:
         code, rows = glyph["code"], glyph["pixels"]
         width = len(rows[0])
-        if code in font or len(rows) != 12 or width not in (0, 6, 12) or any(
+        if code in font or len(rows) != 12 or width not in range(13) or any(
             len(row) != width or set(row) - {".", "#"} for row in rows
         ) or glyph["advance"] not in (0, width):
             raise ValueError(f"Invalid supplemental glyph: U+{code:04X}")

@@ -56,7 +56,7 @@ function layoutSeaText(text: string, indentContinuation = false) {
       // Combining marks keep their ink width but share the preceding cell.
       // Double marks span the boundary between that cell and the next.
       if (glyph.width > 0) placements.push({ character,
-        x: previous ? previous.x + ("͜͟͞͠͡".includes(character) ? previous.width - glyph.width / 2 : Math.floor((previous.width - glyph.width) / 2)) : width,
+        x: previous ? previous.x + ("͜͟͢͝͞͠͡".includes(character) ? previous.width - glyph.width / 2 : Math.floor((previous.width - glyph.width) / 2)) : width,
         row: previous?.row ?? lines.length - 1, width: glyph.width });
       lines[lines.length - 1] += character;
       continue;
@@ -76,7 +76,7 @@ function layoutSeaText(text: string, indentContinuation = false) {
 function layoutSeaBody(body: string) {
   const normalized = body.replace(/\r\n?/g, "\n");
   const layout = layoutSeaText(`「${normalized}」`, true);
-  const units = Array.from(normalized).reduce((total, character) => total + (character === "\n" ? 0 : seaGlyph(character).advance / 6), 0);
+  const units = Array.from(normalized).reduce((total, character) => total + (character === "\n" ? 0 : seaGlyph(character).advance), 0) / 6;
   return { ...layout, units, fits: layout.lines.length <= SEA_MAX_BODY_LINES && units <= SEA_MAX_BODY_UNITS };
 }
 

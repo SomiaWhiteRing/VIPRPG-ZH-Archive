@@ -29,15 +29,19 @@ python scripts/import-eternal-sea-assets.py --rtp-collection ../RPGRewriter-Ownu
 
 生成脚本需要 Pillow，只读取源 RTP、Player 和手绘补充字形。RTP 字节与当前目录指纹核对；来源摘要写在 `public/assets/eternal-sea/sources.json`。生成字体来源与声明保存在同目录 `font-notices.txt`。
 
-`lib/ui/eternal-sea-font-supplement.json` 保存本项目手绘的 Eternal Sea Pixel Symbols：337 个普通符号和单色 emoji、52 个组合附加符号，以及 8 个不单独绘制的格式／呈现字符，共 397 个字符。每个记录包含 Unicode 码点、横向步进与 12 行点阵；`#` 表示笔画，`.` 表示空白。所有字形直接按 12px 字框绘制，普通字符宽 6px 或 12px，不依赖外部补字字体。仅补缺字，不替换基础字库中的已有字形。
+`lib/ui/eternal-sea-font-supplement.json` 保存本项目手绘的 Eternal Sea Pixel Symbols：856 个普通符号、空白和单色 emoji、153 个组合附加符号，以及 15 个不单独绘制的格式／呈现字符，共 1,024 个字符。每个记录包含 Unicode 码点、横向步进与 12 行点阵；`#` 表示笔画，`.` 表示空白。所有字形直接按 12px 字框绘制，普通字符宽 6px 或 12px，U+200A 细空格为 1px，不依赖外部补字字体。仅补缺字，不替换基础字库中的已有字形。
 
 修改补字时直接编辑点阵，再运行上述导入命令与下方字体模板生成命令。补字按表中顺序追加到基础字库末尾，保留既有基础字形编号，兼容更新前的每日字体映射。字符元数据的前两项为码点与绘制宽度，第三项仅在步进不同于绘制宽度时出现。
 
-组合附加符号叠在前一字符上，U+035C、U+035E、U+035F、U+0360、U+0361 双字符附加符号跨前后字符的边界；不推进字距、不占容量，也不单独折行。U+200B、U+200D、U+200E、U+202A、U+2060、U+FE0E、U+FE0F 不绘制、不推进字距。emoji 使用手绘单色简化图形，U+1F3FB 肤色修饰符不增加独立图形，不提供彩色 emoji 或任意 ZWJ 序列塑形。
+组合附加符号叠在前一字符上，U+035C—U+0362 双字符附加符号跨前后字符的边界；不推进字距、不占容量，也不单独折行。U+034F、U+200B、U+200D、U+200E、U+202A、U+202C、U+2060、U+FE0E、U+FE0F、U+FEFF 不绘制、不推进字距。emoji 使用手绘单色简化图形，U+1F3FB—U+1F3FF 肤色修饰符不增加独立图形，不提供彩色 emoji 或任意 ZWJ 序列塑形。
 
-颜文字字表覆盖 [Kaomoji 合集](https://kaomoji.you/en/) 的 805 个示例、[kaomojikan](https://github.com/kaomojikan/kaomoji-data) 的 1,808 条样本，以及 [Kaomojiya](https://github.com/kaomojiya-collection/kaomoji-collection) 中出现至少 50 次的字符，并合入生产消息 1—3010 发现的缺字，共选定 937 种字符，均已覆盖。字符清单、频次、固定数据版本、选取规则与完整覆盖数量保存在 [eternal-sea-kaomoji-characters.json](./eternal-sea-kaomoji-characters.json)，新增数据来源许可保存在 [eternal-sea-kaomoji-source-licenses.txt](./eternal-sea-kaomoji-source-licenses.txt)。长度限制仍按对话框容量执行。
+颜文字字表继续覆盖 805 个初始示例与 Kaomojikan 的 1,808 条样本，将 [Kaomojiya](https://github.com/kaomojiya-collection/kaomoji-collection) 的字符选取阈值从出现 50 次降至 10 次，并补充 [Emoticon / Kaomoji Dataset](https://github.com/ekohrt/emoticon_kaomoji_dataset) 中出现至少 50 次的字符。还完整收录 U+0300—U+036F 已分配的组合附加符号、U+02C2—U+02FF 的修饰符号、U+1F600—U+1F64F 表情脸及常用手势系列。连同正式消息缺字，共选定 1,564 种字符，均已覆盖；本轮追加 627 个字符，原有字形编号与像素保持不变。
 
-Kaomojikan 的 1,808 条样本（去重 1,708 条、606 种字符）全部无缺字。Kaomojiya 原始 41,596 条样本中，36 条含替代字符或无效代理项，入口审计时排除；余下 41,560 条样本的完整字符覆盖由 27,265 条增至 35,315 条，仍有 6,245 条含低频缺字，不宣称全量覆盖。与前一版相比追加 211 个手绘／格式字符，不改变原有字形编号或笔画。
+字符、频次、固定来源版本、选取规则和覆盖数量记录在 [eternal-sea-kaomoji-characters.json](./eternal-sea-kaomoji-characters.json)。两套 MIT 数据来源的许可保存在 [eternal-sea-kaomoji-source-licenses.txt](./eternal-sea-kaomoji-source-licenses.txt)；额外数据仅记录字符覆盖统计，不收录原始颜文字文本或标签。长度限制仍按对话框容量执行。
+
+Kaomojikan 的 1,808 条样本（去重 1,708 条、606 种字符）全部无缺字。Kaomojiya 的 41,560 条有效样本中，完整覆盖从 35,315 条增至 39,279 条，剩余 2,281 条；新增数据的 62,144 条有效样本中，完整覆盖从 43,359 条增至 56,069 条，剩余 6,075 条。两套来源分别在入口排除 36 条与 5 条含替代字符或无效代理项的记录，不宣称全量覆盖。
+
+2026-11-07 只读核对消息 3011—4115，共 1,105 条，发现 7 条消息中的 6 种缺字、58 次出现：`🤪`、`🫵`、`🦉`、`👓`、`˰`、`꒨`，本轮均已补齐。
 
 2026-11-01 对正式环境消息 1—2941 的原文统计：正文 45,310 个非换行字符，补字前 42 种字符缺失、出现 59 次、影响 22 条发言；手绘补充覆盖其中 41 种、58 次，只剩消息 2063 中的私用字符 U+E610。该字符原貌无法确定，按维护者选择保留缺字标记。署名没有缺字。这是字符覆盖与静态字形核对，未做浏览器画面验收。
 
