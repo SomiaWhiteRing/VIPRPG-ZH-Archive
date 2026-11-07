@@ -1,2 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../../public/play/player.html";
+
+#canvas {
+  width: min(100vw, calc(100vh * var(--player-aspect, 4 / 3)));
+  height: min(100vh, calc(100vw / (var(--player-aspect, 4 / 3))));
+}

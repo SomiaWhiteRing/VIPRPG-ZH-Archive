@@ -3,7 +3,7 @@ import { localRequest, type NativePlayerResources } from "@/lib/browser/android-
 import type { WebPlayMetadata } from "./web-play-types";
 import { easyRpgConfigArguments } from "@/lib/archive/easyrpg-config";
 import { hasGameResources, readGamePackages } from "./web-play-opfs";
-import { interceptPlayerDownloads } from "./web-play-player-download";
+import { interceptPlayerWorker } from "./web-play-player-worker";
 import { seedBundledWebPlaySaves } from "./web-play-bundled-saves";
 import { upgradeWebPlaySaves } from "./web-play-save-upgrade";
 import { playerConfigDirectory, preparePlayerConfig } from "./web-play-player-config";
@@ -214,7 +214,8 @@ export function createPlayerSession(
     });
     const playerWindow = frame.contentWindow as PlayerWindow | null;
     const playerDocument = frame.contentDocument;
-    if (!playerWindow || !playerDocument?.getElementById("canvas"))
+    const canvas = playerDocument?.getElementById("canvas");
+    if (!playerWindow || !playerDocument || !canvas)
       throw new Error("无法创建游戏画面，请刷新后重试。");
 
     // The isolated document needs its own compiled Tailwind utilities.
@@ -238,9 +239,10 @@ export function createPlayerSession(
     if (!playerWindow.createEasyRpgPlayer)
       throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
 
-    restoreWorker = interceptPlayerDownloads(playerWindow, {
+    restoreWorker = interceptPlayerWorker(playerWindow, {
       workId: metadata.workId, title: metadata.title, runtimeBasePath: metadata.runtimeBasePath,
       nativeUrl: nativeResources?.url, signal: lifetime.signal,
+      onSize: (width, height) => canvas.style.setProperty("--player-aspect", String(width / height)),
       onScreenshot,
       onError: error => onLog("error", `处理播放器文件失败：${formatLogValue(error)}`),
     });

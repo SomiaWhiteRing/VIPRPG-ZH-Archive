@@ -35,7 +35,7 @@ on:
       - 'app/play/*/web-play-opfs.ts'
       - 'app/play/*/web-play-player.ts'
       - 'app/play/*/web-play-player-config.ts'
-      - 'app/play/*/web-play-player-download.ts'
+      - 'app/play/*/web-play-player-worker.ts'
       - 'app/play/*/web-play-bundled-saves.ts'
       - 'app/play/*/web-play-save-transfer.ts'
       - 'app/play/*/web-play-save-upgrade.ts'

@@ -5,20 +5,36 @@ import { parseSaveImports, saveArchiveBlob, saveArchiveFilename } from "./web-pl
 
 type RuntimeWindow = Window & { Worker: typeof Worker };
 
-/** Route engine screenshots and saves through the site's existing storage paths. */
-export function interceptPlayerDownloads(
+/** Read frame dimensions and route engine downloads through the site's storage paths. */
+export function interceptPlayerWorker(
   frame: RuntimeWindow,
-  options: { workId: number; title: string; runtimeBasePath: string; nativeUrl?: string; signal: AbortSignal; onScreenshot: (image: PlayerScreenshot) => void; onError: (error: unknown) => void },
+  options: {
+    workId: number;
+    title: string;
+    runtimeBasePath: string;
+    nativeUrl?: string;
+    signal: AbortSignal;
+    onSize: (width: number, height: number) => void;
+    onScreenshot: (image: PlayerScreenshot) => void;
+    onError: (error: unknown) => void;
+  },
 ): () => void {
   const NativeWorker = frame.Worker;
   const playerWorkerUrl = new URL(`${options.runtimeBasePath}/player-worker.js`, window.location.href).href;
   let exporting = false;
-  const WorkerWithPlayerDownloads = class extends NativeWorker {
+  const PlayerWorker = class extends NativeWorker {
     constructor(url: string | URL, workerOptions?: WorkerOptions) {
       super(url, workerOptions);
       if (new URL(String(url), frame.location.href).href !== playerWorkerUrl) return;
       this.addEventListener("message", event => {
-        const data = event.data as { type?: string; filename?: string; bytes?: Uint8Array };
+        const data = event.data as
+          | { type: "size"; width: number; height: number }
+          | { type: "download"; filename?: string; bytes?: Uint8Array }
+          | undefined;
+        if (data?.type === "size") {
+          options.onSize(data.width, data.height);
+          return;
+        }
         if (data?.type !== "download" || typeof data.filename !== "string") return;
         const screenshot = /^screenshot_.+\.png$/i.test(data.filename);
         if (!screenshot && !/\.lsd$/i.test(data.filename)) return;
@@ -67,6 +83,6 @@ export function interceptPlayerDownloads(
       }, { capture: true });
     }
   };
-  frame.Worker = WorkerWithPlayerDownloads;
-  return () => { if (frame.Worker === WorkerWithPlayerDownloads) frame.Worker = NativeWorker; };
+  frame.Worker = PlayerWorker;
+  return () => { if (frame.Worker === PlayerWorker) frame.Worker = NativeWorker; };
 }
