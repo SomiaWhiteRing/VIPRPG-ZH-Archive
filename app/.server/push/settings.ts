@@ -42,7 +42,8 @@ export async function webPushSubscriptionStatement(runtime: AppRuntime, userId: 
     || typeof keys.auth !== "string" || !/^[A-Za-z0-9_-]{22}$/.test(keys.auth)) throw new HttpError(400, "订阅密钥无效");
   await crypto.subtle.importKey("raw", toArrayBuffer(base64UrlDecodeBytes(keys.p256dh)), { name: "ECDH", namedCurve: "P-256" }, false, []);
   const available = availablePushCategories(preferences);
-  const categories = (input.categories as PushCategory[]).filter(category => available.includes(category));
+  const requested = input.categories as PushCategory[];
+  const categories = PUSH_CATEGORIES.map(item => item.value).filter(category => available.includes(category) && requested.includes(category));
   return { categories, statement: runtime.db.prepare(`INSERT INTO web_push_subscriptions
     (user_id,session_id,endpoint,p256dh,auth,categories_json,inbox_after_id,message_after_id)
     VALUES(?,?,?,?,?,?,COALESCE((SELECT MAX(id) FROM inbox_items),0),COALESCE((SELECT MAX(id) FROM direct_messages),0))
