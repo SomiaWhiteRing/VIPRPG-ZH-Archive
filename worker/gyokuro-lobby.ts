@@ -4,10 +4,10 @@ import { createRuntime } from "../app/.server/runtime";
 import { GyokuroRoom } from "../lib/netplay/gyokuro-room.mjs";
 import { getUserAvatarSrc } from "../lib/user-profile";
 
-const staging = "https://staging.viprpg.org";
+import { gyokuroEndpoint as socketPath, gyokuroRuntime, gyokuroStagingOrigin as staging, gyokuroWorkTitle } from "../lib/netplay/gyokuro-web-play";
+
 const lobbyPath = "/play/244/netplay";
 const assetPath = "/play/gyokuro-lobby/";
-const socketPath = "/api/netplay/244/lobby";
 
 type Identity = { name: string; avatar: string };
 type Room = { id: string; logic: GyokuroRoom; members: Client[]; playing: boolean };
@@ -148,8 +148,13 @@ export async function maybeHandleGyokuroLobby(request: Request, env: CloudflareE
     return env.GYOKURO_LOBBY.getByName("244").fetch(new Request(request, { headers }));
   }
 
-  if (url.pathname === lobbyPath) url.pathname = assetPath + "index.html";
-  const asset = await env.ASSETS.fetch(new Request(url, request));
+  if (url.pathname === lobbyPath) {
+    const work = await env.DB.prepare("SELECT id FROM works WHERE original_title=? AND status='published' AND audience='public' ORDER BY id LIMIT 1")
+      .bind(gyokuroWorkTitle).first<{ id: number }>();
+    return work ? Response.redirect(new URL("/play/" + work.id, url), 302) : new Response(null, { status: 404 });
+  }
+  if (!url.pathname.startsWith(gyokuroRuntime + "/")) return new Response(null, { status: 404 });
+  const asset = await env.ASSETS.fetch(request);
   const response = new Response(asset.body, asset);
   response.headers.set("X-Robots-Tag", "noindex, nofollow");
   if (url.pathname.endsWith(".html")) response.headers.set("Cache-Control", "no-store");

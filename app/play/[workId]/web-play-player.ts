@@ -74,7 +74,7 @@ export type PlayerScreenshot = {
 };
 
 type PlayerMetadata = Pick<WebPlayMetadata,
-  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "runtimeAssetBasePath" | "engineFamily" | "easyRpg"
+  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "runtimeAssetBasePath" | "gyokuroEndpoint" | "engineFamily" | "easyRpg"
 >;
 
 /** EasyRPG owns document-wide input, audio and timers. Destroy that document on exit. */
@@ -246,8 +246,11 @@ export function createPlayerSession(
       onScreenshot,
       onError: error => onLog("error", `处理播放器文件失败：${formatLogValue(error)}`),
     });
-    const args = metadata.easyRpg ? easyRpgConfigArguments(metadata.easyRpg) : [];
-    if (!metadata.easyRpg && metadata.engineFamily === "rpg_maker_2003_maniac") args.push("--patch-maniac");
+    const args = metadata.gyokuroEndpoint
+      ? ["--encoding", "936", "--engine", "rpg2k3e", "--patch-maniac", "--no-pause-focus-lost"]
+      : metadata.easyRpg ? easyRpgConfigArguments(metadata.easyRpg) : [];
+    if (!metadata.gyokuroEndpoint && !metadata.easyRpg && metadata.engineFamily === "rpg_maker_2003_maniac")
+      args.push("--patch-maniac");
     args.push("--skip-logo", "--config-path", playerConfigDirectory);
     const loadId = new URLSearchParams(window.location.search).get("load-game-id");
     if (loadId && /^\d+$/.test(loadId)) args.push("--load-game-id", loadId);
@@ -259,6 +262,7 @@ export function createPlayerSession(
       runtimeBase: `${metadata.runtimeBasePath}/`,
       assetBase: new URL(`${metadata.runtimeAssetBasePath || metadata.runtimeBasePath}/`, playerWindow.location.href).href,
       arguments: args,
+      gyokuroEndpoint: metadata.gyokuroEndpoint,
       signal: lifetime.signal,
       onError: (error: unknown) => onLog("error", formatLogValue(error)),
       onFullscreen,

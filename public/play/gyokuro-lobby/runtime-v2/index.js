@@ -16,7 +16,23 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   masterVolume.connect(context.destination);
   const worker = new Worker(new URL('player-worker.js', base));
   const audioWorker = new Worker(new URL('player-audio-worker.js', base));
-  let gyokuroActive = false;
+  let netplaySocket, netplayRetry;
+  const connectGyokuro = () => {
+    if (signal.aborted) return;
+    const url = new URL(options.gyokuroEndpoint, location.href);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    netplaySocket = new WebSocket(url);
+    netplaySocket.onmessage = ({data}) => worker.postMessage({type: 'gyokuro-receive', message: data});
+    netplaySocket.onclose = () => {
+      if (signal.aborted) return;
+      worker.postMessage({type: 'gyokuro-receive', message: 'X'});
+      netplayRetry = setTimeout(connectGyokuro, 2000);
+    };
+  };
+  signal.addEventListener('abort', () => {
+    clearTimeout(netplayRetry);
+    netplaySocket?.close();
+  }, {once: true});
   let audioReadyResolve, audioReadyReject;
   const audioReady = new Promise((resolve, reject) => { audioReadyResolve = resolve; audioReadyReject = reject; });
   void audioReady.catch(() => {});
@@ -578,10 +594,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       };
       input.click();
     } else if (data.type === 'cursor') canvas.style.cursor = data.visible ? 'default' : 'none';
-    else if (data.type === 'gyokuro-send') options.gyokuroSend?.(data.message);
-    else if (data.type === 'gyokuro-view') {
-      gyokuroActive = data.active;
-      options.gyokuroView?.(data.active);
+    else if (data.type === 'gyokuro-send') {
+      if (netplaySocket?.readyState === WebSocket.OPEN) netplaySocket.send(data.message);
     }
     else if (data.type === 'fullscreen') options.onFullscreen?.();
     else if (data.type === 'url') {
@@ -617,7 +631,6 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     Equal: 'EQUALS', Minus: 'MINUS', NumpadMultiply: 'KP_MULTIPLY', NumpadAdd: 'KP_ADD',
     NumpadSubtract: 'KP_SUBTRACT', NumpadDecimal: 'KP_PERIOD', NumpadDivide: 'KP_DIVIDE'};
   const keyEvent = event => {
-    if (options.gyokuroSend && !gyokuroActive) return;
     const name = special[event.code] || (/^Key[A-Z]$/.test(event.code) ? event.code.slice(3) :
       /^Digit\d$/.test(event.code) ? `N${event.code.slice(5)}` :
       /^Numpad\d$/.test(event.code) ? `KP${event.code.slice(6)}` : event.code);
@@ -742,10 +755,11 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, engineName, packages: options.packages,
       workId: options.workId, sampleRate: context.sampleRate, arguments: options.arguments || [],
       joystickAvailable: joystickAvailable(),
-      gyokuro: Boolean(options.gyokuroSend),
+      gyokuro: Boolean(options.gyokuroEndpoint),
       systemNameInput,
       audioPort: controlChannel.port2, audioCapabilities}, [offscreen, controlChannel.port2]);
     await ready;
+    if (options.gyokuroEndpoint) connectGyokuro();
     focus();
     gamepadFrame = requestAnimationFrame(pollGamepad);
     void context.resume().catch(() => {});
@@ -753,9 +767,6 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     await shutdown(); throw error;
   } finally { clearTimeout(startupTimer); }
   return {
-    gyokuroReceive(message) {
-      send({type: 'gyokuro-receive', message});
-    },
     captureScreenshot() {
       if (screenshot) return Promise.reject(new Error('正在截取图片，请稍后重试。'));
       return new Promise((resolve, reject) => {

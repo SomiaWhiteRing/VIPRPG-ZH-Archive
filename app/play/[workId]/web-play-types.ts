@@ -16,6 +16,7 @@ export type WebPlayMetadata = {
   easyRpgRuntimeVersion: string;
   runtimeBasePath: string;
   runtimeAssetBasePath?: string;
+  gyokuroEndpoint?: string;
   playKey: string;
   downloadUrl: string;
   totalFiles: number;

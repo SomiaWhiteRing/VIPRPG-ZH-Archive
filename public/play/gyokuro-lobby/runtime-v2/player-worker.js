@@ -148,6 +148,32 @@ function createRenderer(canvas) {
 }
 
 const gyokuroInbox = [];
+function gyokuroBridge() {
+  const avatars = new Map();
+  return {
+    gyokuroReceive: () => gyokuroInbox.shift(),
+    gyokuroSend: message => {
+      postMessage({type: 'gyokuro-send', message});
+      return true;
+    },
+    gyokuroAvatar: (path, pointer) => {
+      if (!avatars.has(path)) {
+        avatars.set(path, null);
+        fetch(path).then(response => response.blob()).then(createImageBitmap).then(image => {
+          const canvas = new OffscreenCanvas(20, 20);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(image, 0, 0, 20, 20);
+          image.close();
+          avatars.set(path, ctx.getImageData(0, 0, 20, 20).data);
+        }).catch(() => {});
+      }
+      const bytes = avatars.get(path);
+      if (!bytes) return 0;
+      engine.HEAPU8.set(bytes, pointer);
+      return 1;
+    },
+  };
+}
 self.onmessage = async ({data}) => {
   try {
     if (data.type === 'joystick-availability') {
@@ -170,14 +196,7 @@ self.onmessage = async ({data}) => {
         canvas: data.canvas, workId: data.workId, sampleRate: data.sampleRate,
         audioCapabilities: data.audioCapabilities,
         gamePackages: data.packages, gameArguments: data.arguments, keyNames: {},
-        ...(data.gyokuro ? {
-          gyokuroReceive: () => gyokuroInbox.shift(),
-          gyokuroSend: message => {
-            postMessage({type: 'gyokuro-send', message});
-            return true;
-          },
-          gyokuroView: active => postMessage({type: 'gyokuro-view', active}),
-        } : {}),
+        ...(data.gyokuro ? gyokuroBridge() : {}),
         audioCommand: command => {
           if (command.op === 'config' && command.soundfont?.startsWith('/') && engine && command.soundfont !== forwardedSoundfont) {
             try {

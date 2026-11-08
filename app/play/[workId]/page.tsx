@@ -31,6 +31,7 @@ import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { WebPlayClient } from "@/app/play/[workId]/web-play-client";
 import type { WebPlayMetadata } from "@/app/play/[workId]/web-play-types";
 import { downloadZipBuilderVersion } from "@/lib/archive/download";
+import { gyokuroWebPlayOptions } from "@/lib/netplay/gyokuro-web-play";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import {
   buildWebPlayDownloadUrl,
@@ -112,6 +113,7 @@ export async function loader(args: LoaderFunctionArgs) {
     estimatedR2GetCount: record.estimatedR2GetCount,
     engineFamily: record.engineFamily,
     easyRpg: await readArchiveEasyRpgConfig(runtime, record.manifestSha256),
+    ...gyokuroWebPlayOptions(runtime.origin, record.workOriginalTitle),
   };
 
   return {
