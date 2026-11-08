@@ -82,10 +82,15 @@ async function importWork() {
 }
 
 async function tap(page, key) {
+  await gameCanvas(page).focus();
   await page.keyboard.down(key);
   await page.waitForTimeout(90);
   await page.keyboard.up(key);
   await page.waitForTimeout(100);
+}
+
+function gameCanvas(page) {
+  return page.frameLocator('iframe[title$="游戏画面"]').locator("canvas");
 }
 
 async function start(page, path, probe) {
@@ -97,7 +102,7 @@ async function start(page, path, probe) {
   await page.goto(origin + path);
   await page.locator('[data-web-play-action="install"]').click({ timeout: 45_000 });
   await page.locator('[data-web-play-action="start"]').click({ timeout: 180_000 });
-  const canvas = page.frameLocator('iframe[title$="游戏画面"]').locator("canvas");
+  const canvas = gameCanvas(page);
   await canvas.waitFor({ timeout: 90_000 });
   await canvas.focus();
 }
@@ -120,6 +125,7 @@ try {
     const message = packets[side].findLast((packet) => packet.startsWith("<{"));
     return message ? JSON.parse(message.slice(1)) : undefined;
   };
+  await waitUntil(() => packets.every((set) => set.includes(">K")), "Both engines entered the in-game lobby");
   await waitUntil(() => [0, 1].every((side) => latest(side)?.self?.name.startsWith("访客 ")), "Anonymous identities in game");
   await tap(pages[0], "ArrowDown");
   await tap(pages[0], "z");
@@ -168,6 +174,7 @@ try {
     if (new URL(response.url()).pathname === expectedAvatar && response.ok()) drawnAvatar = true;
   });
   await start(page, path, (message) => seen.push(message));
+  await waitUntil(() => seen.includes(">K"), "Signed-in engine entered the in-game lobby");
   await waitUntil(() => seen.some((message) => message.startsWith("<{") &&
     JSON.parse(message.slice(1)).self?.name === displayName &&
     JSON.parse(message.slice(1)).self?.avatar === expectedAvatar), "Signed-in profile arrived in the game Worker");
