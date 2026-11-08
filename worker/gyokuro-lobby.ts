@@ -12,7 +12,7 @@ const stages = [6, 5, 7, 8, 11, 9, 12, 1, 14, 15, 13];
 const roster = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18];
 type Identity = { name: string; avatar: string };
 type Room = { id: string; members: Client[]; stage: number; phase: "room" | "select" | "battle"; epoch: number };
-type Client = { socket: WebSocket; identity: Identity; room?: Room; ready: number; fighter: number; next: number; winner: number };
+type Client = { socket: WebSocket; identity: Identity; room?: Room; ready: number; fighter: number; next: number };
 
 export class GyokuroLobby extends DurableObject<CloudflareEnv> {
   private clients = new Set<Client>();
@@ -22,7 +22,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
     const pair = new WebSocketPair();
     const socket = pair[1];
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Gyokuro-Identity")!)) as Identity;
-    const client: Client = { socket, identity, ready: 0, fighter: 0, next: 1, winner: 0 };
+    const client: Client = { socket, identity, ready: 0, fighter: 0, next: 1 };
     socket.accept();
     this.clients.add(client);
     socket.addEventListener("message", ({ data }) => this.receive(client, data));
@@ -73,7 +73,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
       this.reset(room, "Q");
       return;
     }
-    if (!/^[AFVICD](?: \d{1,10}){1,3}$/.test(message)) return;
+    if (!/^[AHFVICD](?: \d{1,10}){1,3}$/.test(message)) return;
     const [type, ...words] = message.split(" ");
     const [a, b, c] = words.map(Number);
     if (room.phase === "room") {
@@ -93,9 +93,16 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
       return;
     }
 
+    const peer = room.members[room.members[0] === client ? 1 : 0];
     if (room.phase === "select") {
-      if (type !== "F" || words.length !== 1 || client.fighter || (!roster.includes(a) && a !== 16)) return;
+      if (words.length !== 1 || client.fighter) return;
+      if (type === "H" && a >= 1 && a <= 16) {
+        this.send(peer, "H " + a + " 0");
+        return;
+      }
+      if (type !== "F" || (!roster.includes(a) && a !== 16)) return;
       client.fighter = a;
+      this.send(peer, "H " + a + " 1");
       if (!room.members.every((member) => member.fighter)) return;
       const random = crypto.getRandomValues(new Uint32Array(3));
       const picks = room.members.flatMap((member, slot) => {
@@ -108,15 +115,13 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
     }
 
     if (a !== room.epoch) return;
-    const peer = room.members.find((member) => member !== client)!;
     if (type === "I" && words.length === 3 && b === client.next && c <= 31) {
       client.next++;
       this.send(peer, message);
     } else if (type === "C" && words.length === 3 && b % 60 === 59 && b < client.next && c <= 0xffffffff) {
       this.send(peer, message);
-    } else if (type === "D" && words.length === 2 && (b === 1 || b === 2)) {
-      client.winner = b;
-      if (peer.winner) this.reset(room, peer.winner === b ? "D " + b : "E desync");
+    } else if (type === "D" && words.length === 2 && room.members[0] === client && (b === 1 || b === 2)) {
+      this.reset(room, "D " + b);
     }
   }
 
@@ -132,7 +137,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
     const room = client.room;
     if (!room) return;
     client.room = undefined;
-    client.ready = client.fighter = client.winner = 0;
+    client.ready = client.fighter = 0;
     room.members.splice(room.members.indexOf(client), 1);
     this.send(client, "L");
     if (room.members.length === 0) this.rooms.delete(room.id);
@@ -145,7 +150,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
 
   private reset(room: Room, message: string) {
     room.phase = "room";
-    for (const client of room.members) client.ready = client.fighter = client.winner = 0;
+    for (const client of room.members) client.ready = client.fighter = 0;
     this.broadcast(room, message);
     this.roomState(room);
   }

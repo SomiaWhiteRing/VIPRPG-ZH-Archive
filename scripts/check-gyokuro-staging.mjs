@@ -97,6 +97,7 @@ async function start(page, path, probe) {
   let titleLoaded = false;
   page.on("console", (message) => {
     if (message.text().includes("Loaded Map Map0002")) titleLoaded = true;
+    if (message.text().startsWith("Gyokuro netplay: match ")) probe(message.text());
   });
   page.on("websocket", (socket) => {
     if (!socket.url().endsWith(gyokuroEndpoint)) return;
@@ -150,7 +151,13 @@ try {
   await waitUntil(() => packets.every((set) => set.includes("<B")), "Both opened the original character selection");
   await pages[0].waitForTimeout(3000);
   await tap(pages[1], "ArrowDown");
-  await Promise.all(pages.map((page) => tap(page, "z")));
+  await waitUntil(() => packets[0].includes("<H 2 0"), "The host saw the guest browse to the second fighter");
+  await tap(pages[1], "z");
+  await waitUntil(() => packets[0].includes("<H 2 1"), "The host saw the guest confirm");
+  await tap(pages[0], "ArrowDown");
+  await waitUntil(() => packets[1].includes("<H 2 0"), "The guest could still see the host browse while confirmed");
+  await tap(pages[0], "ArrowUp");
+  await tap(pages[0], "z");
   await waitUntil(() => packets.every((set) => set.some((packet) => /^<S \d+ \d+ 5 1 0 2 0$/.test(packet))), "Both selected fighters and started the same match");
   await Promise.all(pages.map(async (page) => {
     await page.keyboard.down("ArrowRight");
@@ -163,7 +170,9 @@ try {
     const value = /^>C \d+ (\d+) (\d+)$/.exec(p);
     return value ? [[Number(value[1]), value[2]]] : [];
   }));
-  await waitUntil(() => packets.every((set) => checksum(set).has(179)), "Both game engines confirmed frame 179");
+  await waitUntil(() => packets.every((set) => checksum(set).has(179)), "Both game engines confirmed inputs through frame 179");
+  assert.ok(packets[0].some((packet) => packet.includes("fighters 1/2, stage 5")), "The host selected fighter 1 in the native 1P slot");
+  assert.ok(packets[1].some((packet) => packet.includes("fighters 2/1, stage 5")), "The guest selected fighter 2 in the native 1P slot");
   const [first, second] = packets.map(checksum);
   for (const [frame, sum] of first) if (second.has(frame)) assert.equal(sum, second.get(frame), "Frame " + frame);
   assert.ok(packets.every((set) => set.some((p) => p.startsWith(">I ") && Number(p.split(" ").at(-1)) === 18)), "Both browsers sent right and attack in stage coordinates");
@@ -177,7 +186,7 @@ try {
   await tap(pages[1], "x");
   await waitUntil(() => !latest(0)?.rooms.some((room) => room.id === roomId), "The empty room disappeared");
   await Promise.all(contexts.map((context) => context.close()));
-  console.log("Verified staging work " + workId + " title, character selection, battle and room ownership transfer.");
+  console.log("Verified staging work " + workId + " title, live character selection, native 1P slots and room ownership transfer.");
 
   const [asset] = await query("SELECT u.avatar_blob_sha256 AS avatar FROM users u JOIN blobs b ON b.sha256=u.avatar_blob_sha256 WHERE b.status='active' LIMIT 1");
   const avatar = asset?.avatar ?? null;
