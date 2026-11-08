@@ -198,10 +198,12 @@ try {
   const replacementContext = await browser.newContext();
   const replacement = await replacementContext.newPage();
   let replacementState;
+  let replacementActive = false;
   await start(replacement, path, (packet) => {
+    if (packet === ">K") replacementActive = true;
     if (packet.startsWith("<{")) replacementState = JSON.parse(packet.slice(1));
   });
-  await waitUntil(() => replacementState?.rooms?.some((room) => room.id === roomId), "The replacement saw the surviving room");
+  await waitUntil(() => replacementActive && replacementState?.rooms?.some((room) => room.id === roomId), "The replacement entered the lobby and saw the surviving room");
   const replacementRow = replacementState.rooms.findIndex((room) => room.id === roomId);
   for (let i = 0; i <= replacementRow; ++i) await tap(replacement, "ArrowDown");
   await tap(replacement, "z");
