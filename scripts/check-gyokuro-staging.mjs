@@ -185,6 +185,7 @@ try {
   assert.ok(packets.every((set) => set.some((p) => p.startsWith(">I ") && Number(p.split(" ").at(-1)) === 18)), "Both browsers sent right and attack in stage coordinates");
   await tap(pages[0], "Escape");
   await waitUntil(() => packets.every((set) => set.includes("<Q")), "Both returned to the same room");
+  await pages[0].waitForTimeout(1200);
   const previews = packets.map((set) => set.filter((packet) => packet === ">H 1").length);
   await Promise.all(pages.map((page) => tap(page, "z")));
   await waitUntil(() => packets.every((set, i) => set.filter((packet) => packet === ">H 1").length > previews[i]), "Both entered rematch selection");
