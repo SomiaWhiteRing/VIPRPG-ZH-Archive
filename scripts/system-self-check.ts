@@ -877,7 +877,8 @@ async function verifyPermissionHistory(
     const matrix = await rootContext.newPage();
     await matrix.goto(origin + "/admin", { waitUntil: "networkidle" });
     await matrix.locator('a[href="/admin/permissions"]').first().click();
-    await matrix.waitForURL(origin + "/admin/permissions");
+    const permissionsUrl = origin + "/admin/permissions";
+    await matrix.waitForURL(permissionsUrl);
     const createRole = matrix.locator("details").filter({
       has: matrix.locator("summary", { hasText: "新建自定义角色" }),
     });
@@ -885,11 +886,18 @@ async function verifyPermissionHistory(
     const field = createRole.getByRole("textbox", { name: "中文名称", exact: true });
     await field.fill("Unsaved role");
     const confirmation = matrix.getByRole("alertdialog");
-    await matrix.goBack();
+    // A blocked POP triggers a second traversal that restores the current entry.
+    // Wait for that event instead of matching a URL that may already be current.
+    await Promise.all([
+      matrix.waitForEvent("framenavigated", {
+        predicate: (frame) => frame === matrix.mainFrame() && frame.url() === permissionsUrl,
+      }),
+      matrix.evaluate(() => history.back()),
+    ]);
     await confirmation.getByRole("button", { name: "取消", exact: true }).click();
-    await matrix.waitForURL(origin + "/admin/permissions");
+    await confirmation.waitFor({ state: "hidden" });
     assert.equal(await field.inputValue(), "Unsaved role");
-    await matrix.goBack();
+    await matrix.evaluate(() => history.back());
     await confirmation.getByRole("button", { name: "继续", exact: true }).click();
     await matrix.waitForURL(origin + "/admin");
   } finally {
