@@ -148,9 +148,15 @@ try {
   await tap(pages[0], "ArrowRight");
   await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<R 1 6 "))), "The host stage was synchronized");
   await tap(pages[0], "ArrowDown");
+  await tap(pages[0], "ArrowRight");
+  await waitUntil(() => packets.every((set) => set.some((packet) => packet === "<R 1 6 0 0 3")), "Both players received the host's best-of-five rule");
+  await tap(pages[0], "ArrowDown");
   await Promise.all(pages.map((page) => tap(page, "z")));
   await waitUntil(() => packets.every((set) => set.includes("<B")), "Both opened the original character selection");
   await pages[0].waitForTimeout(3000);
+  await tap(pages[0], "x");
+  await tap(pages[1], "Escape");
+  assert.ok(packets.every((set) => !set.includes(">Q") && !set.includes("<Q")), "Cancel while browsing did not exit character selection");
   await tap(pages[1], "ArrowDown");
   await waitUntil(() => packets[0].includes("<H 2 0"), "The host saw the guest browse to the second fighter");
   await tap(pages[1], "z");
@@ -165,7 +171,9 @@ try {
   await waitUntil(() => packets[1].includes("<H 2 0"), "The guest could still see the host browse while confirmed");
   await tap(pages[0], "ArrowUp");
   await tap(pages[0], "z");
-  await waitUntil(() => packets.every((set) => set.some((packet) => /^<S \d+ \d+ 6 1 0 2 0$/.test(packet))), "Both selected fighters and started the same match");
+  await waitUntil(() => packets.every((set) => set.some((packet) => /^<S \d+ \d+ 6 1 0 2 0 3$/.test(packet))), "Both selected fighters for the same best-of-five match");
+  await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<G "))), "Both clients loaded the arena and negotiated the start");
+  assert.equal(packets[0].find((packet) => packet.startsWith("<G ")), packets[1].find((packet) => packet.startsWith("<G ")));
   await Promise.all(pages.map(async (page) => {
     await page.keyboard.down("ArrowRight");
     await page.keyboard.down("z");
@@ -215,7 +223,7 @@ try {
   await tap(pages[1], "x");
   await waitUntil(() => !latest(1)?.rooms.some((room) => room.id === roomId), "The empty room disappeared");
   await Promise.all(contexts.map((context) => context.close()));
-  console.log("Verified staging work " + workId + " title, stage controls, character selection and cancellation, latency probes, native 1P slots and both room departure paths.");
+  console.log("Verified staging work " + workId + " title, match rules, selection and cancellation, synchronized arena start, native 1P slots and both room departure paths.");
 
   const [asset] = await query("SELECT u.avatar_blob_sha256 AS avatar FROM users u JOIN blobs b ON b.sha256=u.avatar_blob_sha256 WHERE b.status='active' LIMIT 1");
   const avatar = asset?.avatar ?? null;
