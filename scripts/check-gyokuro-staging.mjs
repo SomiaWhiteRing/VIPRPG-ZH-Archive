@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { unzipSync } from "fflate";
-import { gyokuroWorkTitle } from "../lib/netplay/gyokuro-web-play.ts";
+import { gyokuroEndpoint, gyokuroWorkTitle } from "../lib/netplay/gyokuro-web-play.ts";
 import { chromium } from "playwright";
 import { readConfig, selectDeployment, validateDeployment } from "./deployment-config.mjs";
 
@@ -95,7 +95,7 @@ function gameCanvas(page) {
 
 async function start(page, path, probe) {
   page.on("websocket", (socket) => {
-    if (!socket.url().endsWith("/api/netplay/244/lobby")) return;
+    if (!socket.url().endsWith(gyokuroEndpoint)) return;
     socket.on("framesent", ({ payload }) => probe(">" + payload.toString()));
     socket.on("framereceived", ({ payload }) => probe("<" + payload.toString()));
   });

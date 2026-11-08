@@ -66,7 +66,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
         do {
           id = String(100000 + crypto.getRandomValues(new Uint32Array(1))[0] % 900000);
         } while (this.rooms.has(id));
-        const room = { id, logic: new GyokuroRoom(), members: [], playing: false };
+        const room = { id, logic: new GyokuroRoom(1), members: [], playing: false };
         this.rooms.set(id, room);
         this.enter(client, room);
       }
