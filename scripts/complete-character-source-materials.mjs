@@ -71,7 +71,6 @@ export function appendGeneratedCharacterMaterials(materials, faces) {
         width >= 48 &&
         height >= 48 &&
         width <= 192 &&
-        height <= 192 &&
         width % 48 === 0 &&
         height % 48 === 0;
       const kind = item.kind === "faceset" && !isFace ? "other" : item.kind;

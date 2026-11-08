@@ -25,11 +25,13 @@ export async function GET(
     const references = `SELECT wm.work_id FROM work_media_assets wm JOIN media_assets ma ON ma.id=wm.media_asset_id WHERE ma.blob_sha256=?
       UNION SELECT wc.work_id FROM work_characters wc JOIN character_portrait_refs ref ON ref.id=wc.portrait_ref_id
         JOIN face_sheets fs ON fs.id=ref.face_sheet_id WHERE fs.blob_sha256=?`;
-    const restricted = await runtime.db.prepare(`SELECT 1 FROM blobs b WHERE b.sha256=? AND b.public_at IS NULL
+    const blob = await runtime.db.prepare(`SELECT b.status, b.public_at IS NULL
       AND (EXISTS(SELECT 1 FROM media_assets ma WHERE ma.blob_sha256=b.sha256)
-        OR EXISTS(SELECT 1 FROM works w WHERE w.id IN (${references}) AND (w.audience<>'public' OR w.status<>'published')))`)
-      .bind(sha256, sha256, sha256).first();
-    if (restricted) {
+        OR EXISTS(SELECT 1 FROM works w WHERE w.id IN (${references}) AND (w.audience<>'public' OR w.status<>'published'))) AS restricted
+      FROM blobs b WHERE b.sha256=?`).bind(sha256, sha256, sha256).first<{ status: string; restricted: number }>();
+    if (blob?.status === "purging" || blob?.status === "purged")
+      throw new HttpError(404, "图片不存在或无权访问");
+    if (blob?.restricted) {
       const access = workReadCondition(await getCurrentUser(runtime));
       if (!await runtime.db.prepare(`SELECT 1 FROM works w WHERE w.id IN (${references}) AND ${access.sql}`)
         .bind(sha256, sha256, ...access.binds).first()) throw new HttpError(404, "图片不存在或无权访问");
@@ -40,7 +42,6 @@ export async function GET(
         "Content-Length": String(object.size), "X-Content-Type-Options": "nosniff",
       } });
     }
-    // Content-addressed images are readable while the object or its cache exists.
     const cache = await caches.open("public-images-v1");
     const cacheRequest = new Request(new URL(`/api/media/blobs/${sha256}`, runtime.origin));
     const cached = await cache.match(cacheRequest).catch(() => undefined);

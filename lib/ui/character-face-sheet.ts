@@ -7,7 +7,7 @@ export type InspectedCharacterFaceSheet = {
 
 const MAX_FACE_SHEET_BYTES = 256 * 1024;
 const FACE_CELL_SIZE = 48;
-const MAX_FACE_SHEET_SIZE = 192;
+const MAX_FACE_SHEET_WIDTH = 192;
 
 export async function inspectCharacterFaceSheetFile(
   file: File,
@@ -31,13 +31,12 @@ export async function inspectCharacterFaceSheetFile(
   if (
     width < FACE_CELL_SIZE ||
     height < FACE_CELL_SIZE ||
-    width > MAX_FACE_SHEET_SIZE ||
-    height > MAX_FACE_SHEET_SIZE ||
+    width > MAX_FACE_SHEET_WIDTH ||
     width % FACE_CELL_SIZE !== 0 ||
     height % FACE_CELL_SIZE !== 0
   ) {
     throw new Error(
-      "脸图素材表尺寸必须在 48×48 至 192×192 之间，且宽高均为 48 的倍数。",
+      "脸图素材表宽度必须为 48 至 192 像素，且宽高均为 48 的倍数。",
     );
   }
 

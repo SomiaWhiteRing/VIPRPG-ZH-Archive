@@ -43,17 +43,18 @@ export async function storeWorkPreviews(runtime: AppRuntime, form: FormData, exi
 export async function storeWorkImages(
   runtime: AppRuntime,
   files: File[],
+  inspectContentType: (body: ArrayBuffer, file: File) => string = (body) => inspectWorkImage(body).contentType,
 ): Promise<string[]> {
   const hashes: string[] = [];
   const unique = new Map<string, { body: ArrayBuffer; contentType: string }>();
   for (const file of files) {
     readWorkImage(file, "图片");
     const body = await file.arrayBuffer();
-    const info = inspectWorkImage(body);
+    const contentType = inspectContentType(body, file);
     const sha256 = await sha256Hex(body);
     hashes.push(sha256);
     if (!unique.has(sha256))
-      unique.set(sha256, { body, contentType: info.contentType });
+      unique.set(sha256, { body, contentType });
   }
 
   const statuses = await findObjectStatuses(runtime, "blob", [

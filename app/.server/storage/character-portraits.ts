@@ -7,7 +7,7 @@ import { HttpError } from "@/lib/http";
 
 const MAX_CHARACTER_FACE_SHEET_BYTES = 256 * 1024;
 const CHARACTER_PORTRAIT_CELL_SIZE = 48;
-const MAX_CHARACTER_FACE_SHEET_SIZE = 192;
+const MAX_CHARACTER_FACE_SHEET_WIDTH = 192;
 
 export type CharacterFaceSheetObject = {
   sha256: string;
@@ -36,15 +36,10 @@ export async function storeCharacterFaceSheets(
   files: File[],
 ): Promise<CharacterFaceSheetObject[]> {
   const dimensions: Array<{ width: number; height: number }> = [];
-  for (const file of files) {
-    dimensions.push(
-      assertCharacterFaceSheetPng(
-        await file.arrayBuffer(),
-        file.name || "脸图素材表",
-      ),
-    );
-  }
-  const hashes = await storeWorkImages(runtime, files);
+  const hashes = await storeWorkImages(runtime, files, (body, file) => {
+    dimensions.push(assertCharacterFaceSheetPng(body, file.name || "脸图素材表"));
+    return "image/png";
+  });
   return hashes.map((sha256, index) => ({
     sha256,
     width: dimensions[index].width,
@@ -143,7 +138,7 @@ export async function validateCharacterFaceSheetHashes(
     ) {
       throw new HttpError(
         400,
-        "脸图素材表必须是 48×48 至 192×192、宽高均为 48 倍数的 PNG 文件",
+        "脸图素材表必须是宽 48 至 192 像素、宽高均为 48 倍数的 PNG 文件",
       );
     }
     const object = await getBlob(runtime, hash);
@@ -179,14 +174,13 @@ export function assertCharacterFaceSheetPng(
   if (
     width < CHARACTER_PORTRAIT_CELL_SIZE ||
     height < CHARACTER_PORTRAIT_CELL_SIZE ||
-    width > MAX_CHARACTER_FACE_SHEET_SIZE ||
-    height > MAX_CHARACTER_FACE_SHEET_SIZE ||
+    width > MAX_CHARACTER_FACE_SHEET_WIDTH ||
     width % CHARACTER_PORTRAIT_CELL_SIZE !== 0 ||
     height % CHARACTER_PORTRAIT_CELL_SIZE !== 0
   ) {
     throw new HttpError(
       400,
-      `${field}尺寸必须在 48×48 至 192×192 之间，且宽高均为 48 的倍数`,
+      `${field}宽度必须为 48 至 192 像素，且宽高均为 48 的倍数`,
     );
   }
   return { width, height };
