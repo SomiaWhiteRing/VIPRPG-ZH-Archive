@@ -172,7 +172,8 @@ try {
   await tap(pages[0], "ArrowUp");
   await tap(pages[0], "z");
   await waitUntil(() => packets.every((set) => set.some((packet) => /^<S \d+ \d+ 6 1 0 2 0 3$/.test(packet))), "Both selected fighters for the same best-of-five match");
-  await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<G "))), "Both clients loaded the arena and negotiated the start");
+  await waitUntil(() => packets.every((set) => set.some((packet) => /^<G \d+ 1$/.test(packet))),
+    "Both clients loaded the arena and started with one frame of local input delay");
   assert.equal(packets[0].find((packet) => packet.startsWith("<G ")), packets[1].find((packet) => packet.startsWith("<G ")));
   await Promise.all(pages.map(async (page) => {
     await page.keyboard.down("ArrowRight");

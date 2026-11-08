@@ -12,7 +12,7 @@ const stages = [6, 5, 7, 8, 11, 9, 12, 1, 14, 15, 13];
 const roster = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18];
 type Identity = { name: string; avatar: string };
 type Room = { id: string; members: Client[]; stage: number; rounds: number; phase: "room" | "select" | "loading" | "battle"; epoch: number };
-type Client = { socket: WebSocket; identity: Identity; room?: Room; ready: number; fighter: number; hover: number; wins: number; next: number; delay: number };
+type Client = { socket: WebSocket; identity: Identity; room?: Room; ready: number; fighter: number; hover: number; wins: number; next: number; loaded: boolean };
 
 export class GyokuroLobby extends DurableObject<CloudflareEnv> {
   private clients = new Set<Client>();
@@ -22,7 +22,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
     const pair = new WebSocketPair();
     const socket = pair[1];
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Gyokuro-Identity")!)) as Identity;
-    const client: Client = { socket, identity, ready: 0, fighter: 0, hover: 1, wins: 0, next: 1, delay: 0 };
+    const client: Client = { socket, identity, ready: 0, fighter: 0, hover: 1, wins: 0, next: 1, loaded: false };
     socket.accept();
     this.clients.add(client);
     socket.addEventListener("message", ({ data }) => this.receive(client, data));
@@ -118,7 +118,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
       if (!room.members.every((member) => member.fighter)) return;
       const random = crypto.getRandomValues(new Uint32Array(4));
       const picks = room.members.flatMap((member, slot) => {
-        member.delay = 0;
+        member.loaded = false;
         return [member.fighter === 16 ? roster[random[slot] % roster.length] : member.fighter, 0];
       });
       room.phase = "loading";
@@ -129,13 +129,12 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
 
     if (a !== room.epoch) return;
     if (room.phase === "loading") {
-      if (type !== "J" || words.length !== 2 || b < 1 || b > 72 || client.delay) return;
-      client.delay = b;
-      if (!peer.delay) return;
-      const delay = Math.max(client.delay, peer.delay);
-      for (const member of room.members) member.next = delay;
+      if (type !== "J" || words.length !== 1 || client.loaded) return;
+      client.loaded = true;
+      if (!peer.loaded) return;
+      for (const member of room.members) member.next = 1;
       room.phase = "battle";
-      this.broadcast(room, "G " + room.epoch + " " + delay);
+      this.broadcast(room, "G " + room.epoch + " 1");
       return;
     }
     if (type === "I" && words.length === 3 && b === client.next && c <= 31) {
