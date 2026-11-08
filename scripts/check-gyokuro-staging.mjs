@@ -144,8 +144,9 @@ try {
   for (let i = 0; i < row + 1; ++i) await tap(pages[1], "ArrowDown");
   await tap(pages[1], "z");
   await waitUntil(() => latest(1)?.roomId === latest(0)?.roomId, "Peer joined in game");
+  await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<R 1 0 "))), "The room defaulted to random stage");
   await tap(pages[0], "ArrowRight");
-  await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<R 1 5 "))), "The host stage was synchronized");
+  await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<R 1 6 "))), "The host stage was synchronized");
   await tap(pages[0], "ArrowDown");
   await Promise.all(pages.map((page) => tap(page, "z")));
   await waitUntil(() => packets.every((set) => set.includes("<B")), "Both opened the original character selection");
@@ -154,11 +155,17 @@ try {
   await waitUntil(() => packets[0].includes("<H 2 0"), "The host saw the guest browse to the second fighter");
   await tap(pages[1], "z");
   await waitUntil(() => packets[0].includes("<H 2 1"), "The host saw the guest confirm");
+  await tap(pages[1], "x");
+  await waitUntil(() => packets[1].includes(">U") && packets[0].filter((packet) => packet === "<H 2 0").length >= 2,
+    "The guest could cancel confirmation and stay in character selection");
+  await tap(pages[1], "z");
+  await waitUntil(() => packets[0].filter((packet) => packet === "<H 2 1").length >= 2, "The guest could confirm again");
+  await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<Y "))), "Both players measured peer latency");
   await tap(pages[0], "ArrowDown");
   await waitUntil(() => packets[1].includes("<H 2 0"), "The guest could still see the host browse while confirmed");
   await tap(pages[0], "ArrowUp");
   await tap(pages[0], "z");
-  await waitUntil(() => packets.every((set) => set.some((packet) => /^<S \d+ \d+ 5 1 0 2 0$/.test(packet))), "Both selected fighters and started the same match");
+  await waitUntil(() => packets.every((set) => set.some((packet) => /^<S \d+ \d+ 6 1 0 2 0$/.test(packet))), "Both selected fighters and started the same match");
   await Promise.all(pages.map(async (page) => {
     await page.keyboard.down("ArrowRight");
     await page.keyboard.down("z");
@@ -171,22 +178,26 @@ try {
     return value ? [[Number(value[1]), value[2]]] : [];
   }));
   await waitUntil(() => packets.every((set) => checksum(set).has(179)), "Both game engines confirmed inputs through frame 179");
-  assert.ok(packets[0].some((packet) => packet.includes("fighters 1/2, stage 5")), "The host selected fighter 1 in the native 1P slot");
-  assert.ok(packets[1].some((packet) => packet.includes("fighters 2/1, stage 5")), "The guest selected fighter 2 in the native 1P slot");
+  assert.ok(packets[0].some((packet) => packet.includes("fighters 1/2, stage 6")), "The host selected fighter 1 in the native 1P slot");
+  assert.ok(packets[1].some((packet) => packet.includes("fighters 2/1, stage 6")), "The guest selected fighter 2 in the native 1P slot");
   const [first, second] = packets.map(checksum);
   for (const [frame, sum] of first) if (second.has(frame)) assert.equal(sum, second.get(frame), "Frame " + frame);
   assert.ok(packets.every((set) => set.some((p) => p.startsWith(">I ") && Number(p.split(" ").at(-1)) === 18)), "Both browsers sent right and attack in stage coordinates");
   await tap(pages[0], "Escape");
   await waitUntil(() => packets.every((set) => set.includes("<Q")), "Both returned to the same room");
-  await tap(pages[0], "x");
-  await waitUntil(() => !latest(0)?.roomId && latest(1)?.roomId === roomId &&
-    packets[1].includes("<P 0"), "The guest inherited the room");
+  const previews = packets.map((set) => set.filter((packet) => packet === ">H 1").length);
+  await Promise.all(pages.map((page) => tap(page, "z")));
+  await waitUntil(() => packets.every((set, i) => set.filter((packet) => packet === ">H 1").length > previews[i]), "Both entered rematch selection");
+  await pages[0].close();
+  await waitUntil(() => latest(1)?.roomId === roomId && latest(1)?.rooms.find((room) => room.id === roomId)?.players.length === 1 &&
+    packets[1].includes("<O") && packets[1].includes("<P 0"), "The guest returned and inherited the room after the host disconnected");
+  await pages[1].waitForTimeout(600);
   await tap(pages[1], "ArrowRight");
-  await waitUntil(() => packets[1].some((packet) => packet.startsWith("<R 0 7 ")), "The new host could choose the stage");
+  await waitUntil(() => packets[1].some((packet) => packet.startsWith("<R 0 5 ")), "The new host could choose the stage");
   await tap(pages[1], "x");
-  await waitUntil(() => !latest(0)?.rooms.some((room) => room.id === roomId), "The empty room disappeared");
+  await waitUntil(() => !latest(1)?.rooms.some((room) => room.id === roomId), "The empty room disappeared");
   await Promise.all(contexts.map((context) => context.close()));
-  console.log("Verified staging work " + workId + " title, live character selection, native 1P slots and room ownership transfer.");
+  console.log("Verified staging work " + workId + " title, stage controls, character selection and cancellation, latency probes, native 1P slots and disconnect recovery.");
 
   const [asset] = await query("SELECT u.avatar_blob_sha256 AS avatar FROM users u JOIN blobs b ON b.sha256=u.avatar_blob_sha256 WHERE b.status='active' LIMIT 1");
   const avatar = asset?.avatar ?? null;

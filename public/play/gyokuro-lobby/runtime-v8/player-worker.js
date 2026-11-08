@@ -160,11 +160,13 @@ function gyokuroBridge() {
       if (!avatars.has(path)) {
         avatars.set(path, null);
         fetch(path).then(response => response.blob()).then(createImageBitmap).then(image => {
-          const canvas = new OffscreenCanvas(20, 20);
+          const size = 40;
+          const canvas = new OffscreenCanvas(size, size);
           const ctx = canvas.getContext('2d');
-          ctx.drawImage(image, 0, 0, 20, 20);
+          const crop = Math.min(image.width, image.height);
+          ctx.drawImage(image, (image.width - crop) / 2, (image.height - crop) / 2, crop, crop, 0, 0, size, size);
           image.close();
-          avatars.set(path, ctx.getImageData(0, 0, 20, 20).data);
+          avatars.set(path, ctx.getImageData(0, 0, size, size).data);
         }).catch(() => {});
       }
       const bytes = avatars.get(path);

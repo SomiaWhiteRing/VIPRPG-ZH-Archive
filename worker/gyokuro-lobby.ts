@@ -12,7 +12,7 @@ const stages = [6, 5, 7, 8, 11, 9, 12, 1, 14, 15, 13];
 const roster = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18];
 type Identity = { name: string; avatar: string };
 type Room = { id: string; members: Client[]; stage: number; phase: "room" | "select" | "battle"; epoch: number };
-type Client = { socket: WebSocket; identity: Identity; room?: Room; ready: number; fighter: number; next: number };
+type Client = { socket: WebSocket; identity: Identity; room?: Room; ready: number; fighter: number; hover: number; wins: number; next: number };
 
 export class GyokuroLobby extends DurableObject<CloudflareEnv> {
   private clients = new Set<Client>();
@@ -22,7 +22,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
     const pair = new WebSocketPair();
     const socket = pair[1];
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Gyokuro-Identity")!)) as Identity;
-    const client: Client = { socket, identity, ready: 0, fighter: 0, next: 1 };
+    const client: Client = { socket, identity, ready: 0, fighter: 0, hover: 1, wins: 0, next: 1 };
     socket.accept();
     this.clients.add(client);
     socket.addEventListener("message", ({ data }) => this.receive(client, data));
@@ -36,7 +36,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
   }
 
   private disconnect(client: Client) {
-    if (this.clients.delete(client)) this.leave(client);
+    if (this.clients.delete(client)) this.leave(client, true);
   }
 
   private receive(client: Client, message: string | ArrayBuffer) {
@@ -56,7 +56,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
         do {
           id = String(100000 + crypto.getRandomValues(new Uint32Array(1))[0] % 900000);
         } while (this.rooms.has(id));
-        const created: Room = { id, members: [], stage: stages[0], phase: "room", epoch: 0 };
+        const created: Room = { id, members: [], stage: 0, phase: "room", epoch: 0 };
         this.rooms.set(id, created);
         this.enter(client, created);
       } else {
@@ -73,11 +73,17 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
       this.reset(room, "Q");
       return;
     }
-    if (!/^[AHFVICD](?: \d{1,10}){1,3}$/.test(message)) return;
+    const peer = room.members[room.members[0] === client ? 1 : 0];
+    if (room.phase === "select" && message === "U") {
+      client.fighter = 0;
+      this.send(peer, "H " + client.hover + " 0");
+      return;
+    }
+    if (!/^[AHFVICDTY](?: \d{1,10}){1,3}$/.test(message)) return;
     const [type, ...words] = message.split(" ");
     const [a, b, c] = words.map(Number);
     if (room.phase === "room") {
-      if (type === "V" && words.length === 1 && room.members[0] === client && !client.ready && stages.includes(a)) {
+      if (type === "V" && words.length === 1 && room.members[0] === client && !client.ready && (a === 0 || stages.includes(a))) {
         room.stage = a;
         for (const member of room.members) member.ready = 0;
       } else if (type === "A" && words.length === 1 && a <= 1) {
@@ -93,10 +99,14 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
       return;
     }
 
-    const peer = room.members[room.members[0] === client ? 1 : 0];
+    if ((type === "T" || type === "Y") && words.length === 1) {
+      this.send(peer, message);
+      return;
+    }
     if (room.phase === "select") {
       if (words.length !== 1 || client.fighter) return;
       if (type === "H" && a >= 1 && a <= 16) {
+        client.hover = a;
         this.send(peer, "H " + a + " 0");
         return;
       }
@@ -104,13 +114,14 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
       client.fighter = a;
       this.send(peer, "H " + a + " 1");
       if (!room.members.every((member) => member.fighter)) return;
-      const random = crypto.getRandomValues(new Uint32Array(3));
+      const random = crypto.getRandomValues(new Uint32Array(4));
       const picks = room.members.flatMap((member, slot) => {
         member.next = 1;
         return [member.fighter === 16 ? roster[random[slot] % roster.length] : member.fighter, 0];
       });
       room.phase = "battle";
-      this.broadcast(room, ["S", ++room.epoch, random[2], room.stage, ...picks].join(" "));
+      const stage = room.stage || stages[random[3] % stages.length];
+      this.broadcast(room, ["S", ++room.epoch, random[2], stage, ...picks].join(" "));
       return;
     }
 
@@ -121,19 +132,22 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
     } else if (type === "C" && words.length === 3 && b % 60 === 59 && b < client.next && c <= 0xffffffff) {
       this.send(peer, message);
     } else if (type === "D" && words.length === 2 && room.members[0] === client && (b === 1 || b === 2)) {
+      room.members[b - 1].wins++;
       this.reset(room, "D " + b);
+      this.publish();
     }
   }
 
   private enter(client: Client, room: Room) {
     client.room = room;
+    client.wins = 0;
     this.send(client, "P " + room.members.length);
     room.members.push(client);
     this.roomState(room);
     this.publish();
   }
 
-  private leave(client: Client) {
+  private leave(client: Client, disconnected = false) {
     const room = client.room;
     if (!room) return;
     client.room = undefined;
@@ -142,7 +156,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
     this.send(client, "L");
     if (room.members.length === 0) this.rooms.delete(room.id);
     else {
-      this.reset(room, "Q");
+      this.reset(room, disconnected && room.phase !== "room" ? "O" : "Q");
       this.send(room.members[0], "P 0");
     }
     this.publish();
@@ -150,7 +164,10 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
 
   private reset(room: Room, message: string) {
     room.phase = "room";
-    for (const client of room.members) client.ready = client.fighter = 0;
+    for (const client of room.members) {
+      client.ready = client.fighter = 0;
+      client.hover = 1;
+    }
     this.broadcast(room, message);
     this.roomState(room);
   }
@@ -170,7 +187,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
   private publish(clients: Iterable<Client> = this.clients) {
     const rooms = Array.from(this.rooms.values(), (room) => ({
       id: room.id,
-      players: room.members.map(({ identity }) => identity),
+      players: room.members.map(({ identity, wins }) => ({ ...identity, wins })),
     }));
     for (const client of clients) {
       this.send(client, JSON.stringify({ self: client.identity, rooms, roomId: client.room?.id ?? null }));
