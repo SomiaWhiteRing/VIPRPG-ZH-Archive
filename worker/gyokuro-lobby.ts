@@ -129,6 +129,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
 
     if (a !== room.epoch) return;
     if (room.phase === "loading") {
+      // Each client sends J after its original round intro finishes.
       if (type !== "J" || words.length !== 1 || client.loaded) return;
       client.loaded = true;
       if (!peer.loaded) return;
