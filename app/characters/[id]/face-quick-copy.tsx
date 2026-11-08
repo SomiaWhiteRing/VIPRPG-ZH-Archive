@@ -99,6 +99,8 @@ function FaceQuickCopyGrid({ image, sheet, label, scale }: {
   const columns = sheet.width / FACE_SIZE;
   const rows = sheet.height / FACE_SIZE;
   const size = FACE_SIZE * scale;
+  const androidShare = typeof window === "undefined" ? undefined
+    : (window as Window & { VIPRPGFaceShare?: { postMessage: (png: string) => void } }).VIPRPGFaceShare;
 
   useEffect(() => {
     if (!image) return;
@@ -163,6 +165,16 @@ function FaceQuickCopyGrid({ image, sheet, label, scale }: {
                 alt=""
                 className={cn("absolute inset-0 block size-full [image-rendering:pixelated]", !ready && "invisible")}
                 src={cell.url}
+                draggable={androidShare ? false : undefined}
+                onContextMenu={(event) => {
+                  if (!androidShare || !event.nativeEvent.isTrusted) return;
+                  event.preventDefault();
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    if (typeof reader.result === "string") androidShare.postMessage(reader.result);
+                  };
+                  reader.readAsDataURL(cell.png);
+                }}
                 onDragStart={({ dataTransfer }) => {
                   // Keep the native image data and omit the browser-local link.
                   dataTransfer.clearData("text/uri-list");

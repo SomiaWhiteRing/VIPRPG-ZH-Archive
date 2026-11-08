@@ -176,6 +176,7 @@ public final class MainActivity extends Activity {
         localGames = new LocalGames(this, browser, offlineBrowser);
         localGames.store.changed = () -> runOnUiThread(this::refreshLocalGames);
         screenshots = new ScreenshotController(this, browser, offlineBrowser);
+        FaceImageShare.attach(this, browser);
         galleryPanel = new ScreenshotGallery(this, screenshots);
         ((FrameLayout) findViewById(R.id.gallery_panel)).addView(galleryPanel);
         installedVersion.setText("版本 " + BuildConfig.VERSION_NAME);

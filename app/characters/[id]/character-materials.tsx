@@ -10,6 +10,7 @@ import Download from "yet-another-react-lightbox/plugins/download";
 import { FaceMaterial, FaceQuickCopyControls } from "./face-quick-copy";
 
 const FACE_SCALE_STORAGE_KEY = "viprpg:face-quick-copy:scale";
+const FACE_QUICK_COPY_SESSION_KEY = "viprpg:face-quick-copy:enabled";
 
 export function CharacterMaterials({
   materials,
@@ -38,6 +39,9 @@ export function CharacterMaterials({
 
   useEffect(() => {
     try {
+      setQuickCopy(sessionStorage.getItem(FACE_QUICK_COPY_SESSION_KEY) === "1");
+    } catch { /* Storage may be unavailable. */ }
+    try {
       const stored = Number(localStorage.getItem(FACE_SCALE_STORAGE_KEY));
       if (Number.isInteger(stored) && stored >= 1 && stored <= 4) setFaceScale(stored);
     } catch { /* Storage may be unavailable. */ }
@@ -56,7 +60,11 @@ export function CharacterMaterials({
               {kind === "faceset" ? (
                 <FaceQuickCopyControls
                   enabled={quickCopy}
-                  onEnabledChange={setQuickCopy}
+                  onEnabledChange={(enabled) => {
+                    setQuickCopy(enabled);
+                    try { sessionStorage.setItem(FACE_QUICK_COPY_SESSION_KEY, enabled ? "1" : "0"); }
+                    catch { /* Keep using the selected mode for this page. */ }
+                  }}
                   scale={faceScale}
                   onScaleChange={(scale) => {
                     setFaceScale(scale);
