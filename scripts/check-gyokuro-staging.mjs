@@ -27,8 +27,19 @@ const browser = await chromium.launch({
   args: ["--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows"],
 });
 const fixture = "gyokuro-test:" + randomUUID();
-let fixtureCreated = false;
+const fixtureMatch = `external_auth_id GLOB 'gyokuro-test:*' AND email IS NULL AND
+  display_name='联机验证 ' || substr(external_auth_id, -8) AND status='active'`;
+async function retireFixtures() {
+  await query(`UPDATE user_sessions SET revoked_at=CURRENT_TIMESTAMP
+    WHERE revoked_at IS NULL AND user_id IN (SELECT id FROM users WHERE ${fixtureMatch})`);
+  await query(`UPDATE users SET status='deleted', display_name='账户已注销',
+    avatar_blob_sha256=NULL, updated_at=CURRENT_TIMESTAMP WHERE ${fixtureMatch}`);
+  const [remaining] = await query(`SELECT count(*) AS count FROM users WHERE ${fixtureMatch}`);
+  assert.equal(remaining.count, 0, "Temporary staging identities were retired");
+}
+
 try {
+  await retireFixtures();
   const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
   const pages = await Promise.all(contexts.map((context) => context.newPage()));
   const checksums = pages.map(() => new Map());
@@ -89,7 +100,6 @@ try {
   const session = randomBytes(32).toString("base64url");
   const hash = createHash("sha256").update(session).digest("hex");
   await query("INSERT INTO users (external_auth_id, display_name, avatar_blob_sha256) VALUES (?, ?, ?)", [fixture, displayName, avatar]);
-  fixtureCreated = true;
   await query("INSERT INTO user_sessions (user_id, session_hash, expires_at) SELECT id, ?, datetime('now', '+10 minutes') FROM users WHERE external_auth_id=?", [hash, fixture]);
 
   const signed = await browser.newContext();
@@ -106,5 +116,5 @@ try {
   console.log(avatar ? "Authenticated name and saved avatar loaded in staging." : "Authenticated name and site default avatar loaded in staging.");
 } finally {
   await browser.close();
-  if (fixtureCreated) await query("DELETE FROM users WHERE external_auth_id=?", [fixture]);
+  await retireFixtures();
 }
