@@ -195,7 +195,8 @@ try {
   await pages[1].waitForTimeout(600);
   await tap(pages[1], "ArrowRight");
   await waitUntil(() => packets[1].some((packet) => packet.startsWith("<R 0 5 ")), "The new host could choose the stage");
-  const replacement = await contexts[0].newPage();
+  const replacementContext = await browser.newContext();
+  const replacement = await replacementContext.newPage();
   let replacementState;
   await start(replacement, path, (packet) => {
     if (packet.startsWith("<{")) replacementState = JSON.parse(packet.slice(1));
@@ -208,6 +209,7 @@ try {
   await tap(replacement, "x");
   await waitUntil(() => packets[1].includes("<Q leave") && latest(1)?.roomId === roomId &&
     latest(1)?.rooms.find((room) => room.id === roomId)?.players.length === 1, "Voluntary departure notified the remaining player");
+  await replacementContext.close();
   await tap(pages[1], "x");
   await waitUntil(() => !latest(1)?.rooms.some((room) => room.id === roomId), "The empty room disappeared");
   await Promise.all(contexts.map((context) => context.close()));
