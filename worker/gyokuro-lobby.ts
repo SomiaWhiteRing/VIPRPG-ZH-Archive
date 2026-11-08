@@ -156,7 +156,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
     this.send(client, "L");
     if (room.members.length === 0) this.rooms.delete(room.id);
     else {
-      this.reset(room, disconnected && room.phase !== "room" ? "O" : "Q");
+      this.reset(room, disconnected ? "O" : "Q leave");
       this.send(room.members[0], "P 0");
     }
     this.publish();

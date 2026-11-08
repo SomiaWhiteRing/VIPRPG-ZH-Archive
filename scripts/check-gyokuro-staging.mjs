@@ -195,10 +195,23 @@ try {
   await pages[1].waitForTimeout(600);
   await tap(pages[1], "ArrowRight");
   await waitUntil(() => packets[1].some((packet) => packet.startsWith("<R 0 5 ")), "The new host could choose the stage");
+  const replacement = await contexts[0].newPage();
+  let replacementState;
+  await start(replacement, path, (packet) => {
+    if (packet.startsWith("<{")) replacementState = JSON.parse(packet.slice(1));
+  });
+  await waitUntil(() => replacementState?.rooms?.some((room) => room.id === roomId), "The replacement saw the surviving room");
+  const replacementRow = replacementState.rooms.findIndex((room) => room.id === roomId);
+  for (let i = 0; i <= replacementRow; ++i) await tap(replacement, "ArrowDown");
+  await tap(replacement, "z");
+  await waitUntil(() => replacementState?.roomId === roomId && latest(1)?.rooms.find((room) => room.id === roomId)?.players.length === 2, "The replacement joined the surviving room");
+  await tap(replacement, "x");
+  await waitUntil(() => packets[1].includes("<Q leave") && latest(1)?.roomId === roomId &&
+    latest(1)?.rooms.find((room) => room.id === roomId)?.players.length === 1, "Voluntary departure notified the remaining player");
   await tap(pages[1], "x");
   await waitUntil(() => !latest(1)?.rooms.some((room) => room.id === roomId), "The empty room disappeared");
   await Promise.all(contexts.map((context) => context.close()));
-  console.log("Verified staging work " + workId + " title, stage controls, character selection and cancellation, latency probes, native 1P slots and disconnect recovery.");
+  console.log("Verified staging work " + workId + " title, stage controls, character selection and cancellation, latency probes, native 1P slots and both room departure paths.");
 
   const [asset] = await query("SELECT u.avatar_blob_sha256 AS avatar FROM users u JOIN blobs b ON b.sha256=u.avatar_blob_sha256 WHERE b.status='active' LIMIT 1");
   const avatar = asset?.avatar ?? null;
