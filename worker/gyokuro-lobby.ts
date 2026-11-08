@@ -145,8 +145,9 @@ export async function maybeHandleGyokuroLobby(request: Request, env: CloudflareE
     };
     const headers = new Headers(request.headers);
     headers.set("X-Gyokuro-Identity", encodeURIComponent(JSON.stringify(identity)));
-    // A live Durable Object can still serve sockets from the previous protocol.
-    return env.GYOKURO_LOBBY.getByName(socketPath).fetch(new Request(request, { headers }));
+    // A new protocol or placement hint needs a new lobby instance.
+    const lobby = env.GYOKURO_LOBBY.getByName(socketPath + "/apac", { locationHint: "apac" });
+    return lobby.fetch(new Request(request, { headers }));
   }
 
   if (url.pathname === lobbyPath) {
