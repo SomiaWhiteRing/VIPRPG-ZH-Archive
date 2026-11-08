@@ -94,6 +94,10 @@ function gameCanvas(page) {
 }
 
 async function start(page, path, probe) {
+  let titleLoaded = false;
+  page.on("console", (message) => {
+    if (message.text().includes("Loaded Map Map0002")) titleLoaded = true;
+  });
   page.on("websocket", (socket) => {
     if (!socket.url().endsWith(gyokuroEndpoint)) return;
     socket.on("framesent", ({ payload }) => probe(">" + payload.toString()));
@@ -105,6 +109,11 @@ async function start(page, path, probe) {
   const canvas = gameCanvas(page);
   await canvas.waitFor({ timeout: 90_000 });
   await canvas.focus();
+  await waitUntil(() => titleLoaded, "The original game title map loaded", 90_000);
+  await page.waitForTimeout(3500);
+  await tap(page, "z");
+  await tap(page, "ArrowUp");
+  await tap(page, "z");
 }
 
 async function waitUntil(predicate, label, timeout = 30_000) {
@@ -127,18 +136,22 @@ try {
   };
   await waitUntil(() => packets.every((set) => set.includes(">K")), "Both engines entered the in-game lobby");
   await waitUntil(() => [0, 1].every((side) => latest(side)?.self?.name.startsWith("访客 ")), "Anonymous identities in game");
-  await tap(pages[0], "ArrowDown");
   await tap(pages[0], "z");
   await waitUntil(() => latest(0)?.roomId && latest(1)?.rooms.some((room) => room.id === latest(0).roomId), "Game lobby room appeared on peer");
-  const row = latest(1).rooms.findIndex((room) => room.id === latest(0).roomId);
-  for (let i = 0; i < row + 2; ++i) await tap(pages[1], "ArrowDown");
+  const roomId = latest(0).roomId;
+  const row = latest(1).rooms.findIndex((room) => room.id === roomId);
+  for (let i = 0; i < row + 1; ++i) await tap(pages[1], "ArrowDown");
   await tap(pages[1], "z");
   await waitUntil(() => latest(1)?.roomId === latest(0)?.roomId, "Peer joined in game");
-  await Promise.all(pages.map(async (page) => {
-    await tap(page, "ArrowUp");
-    await tap(page, "z");
-  }));
-  await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<S "))), "Both ready for the same match");
+  await tap(pages[0], "ArrowRight");
+  await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<R 1 5 "))), "The host stage was synchronized");
+  await tap(pages[0], "ArrowDown");
+  await Promise.all(pages.map((page) => tap(page, "z")));
+  await waitUntil(() => packets.every((set) => set.includes("<B")), "Both opened the original character selection");
+  await pages[0].waitForTimeout(3000);
+  await tap(pages[1], "ArrowDown");
+  await Promise.all(pages.map((page) => tap(page, "z")));
+  await waitUntil(() => packets.every((set) => set.some((packet) => /^<S \d+ \d+ 5 1 0 2 0$/.test(packet))), "Both selected fighters and started the same match");
   await Promise.all(pages.map(async (page) => {
     await page.keyboard.down("ArrowRight");
     await page.keyboard.down("z");
@@ -153,11 +166,18 @@ try {
   await waitUntil(() => packets.every((set) => checksum(set).has(179)), "Both game engines confirmed frame 179");
   const [first, second] = packets.map(checksum);
   for (const [frame, sum] of first) if (second.has(frame)) assert.equal(sum, second.get(frame), "Frame " + frame);
-  assert.ok(packets.every((set) => set.some((p) => p.startsWith(">I ") && (Number(p.split(" ").at(-1)) & 16))), "Both browsers attacked in the game");
+  assert.ok(packets.every((set) => set.some((p) => p.startsWith(">I ") && Number(p.split(" ").at(-1)) === 18)), "Both browsers sent right and attack in stage coordinates");
   await tap(pages[0], "Escape");
-  await waitUntil(() => !latest(0)?.roomId && !latest(1)?.roomId, "Both left the match");
+  await waitUntil(() => packets.every((set) => set.includes("<Q")), "Both returned to the same room");
+  await tap(pages[0], "x");
+  await waitUntil(() => !latest(0)?.roomId && latest(1)?.roomId === roomId &&
+    packets[1].includes("<P 0"), "The guest inherited the room");
+  await tap(pages[1], "ArrowRight");
+  await waitUntil(() => packets[1].some((packet) => packet.startsWith("<R 0 7 ")), "The new host could choose the stage");
+  await tap(pages[1], "x");
+  await waitUntil(() => !latest(0)?.rooms.some((room) => room.id === roomId), "The empty room disappeared");
   await Promise.all(contexts.map((context) => context.close()));
-  console.log("Verified ordinary staging work " + workId + " installation, in-game rooms and two anonymous fighters.");
+  console.log("Verified staging work " + workId + " title, character selection, battle and room ownership transfer.");
 
   const [asset] = await query("SELECT u.avatar_blob_sha256 AS avatar FROM users u JOIN blobs b ON b.sha256=u.avatar_blob_sha256 WHERE b.status='active' LIMIT 1");
   const avatar = asset?.avatar ?? null;
