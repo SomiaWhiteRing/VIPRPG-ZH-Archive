@@ -17,7 +17,7 @@ import { Label } from "@/app/components/ui/label";
 import { CREATOR_PUBLIC_EDIT_PERMISSIONS } from "@/lib/authz/creator-permissions";
 import { CHARACTER_EDIT_PERMISSIONS, hasPermission } from "@/lib/authz/permissions";
 import { AUDIT_TARGET_LABELS, auditRecord, entityAuditTargets } from "@/lib/entity-audit";
-import { entryHistoryChanges, entryHistoryRangeChanges, entryHistorySnapshots, type EntryHistoryKind, type EntryHistoryValue } from "@/lib/entry-history";
+import { entryHistoryChanges, entryHistoryRangeChanges, entryHistorySnapshots, entryHistorySummary, type EntryHistoryKind, type EntryHistoryValue } from "@/lib/entry-history";
 import { formatExactTimestamp } from "@/lib/format";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { Form, Link, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
@@ -125,7 +125,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       .map(({ snapshots: _snapshots, candidateIndex: _candidateIndex, changes, ...item }) => ({
         ...item,
         hasPrevious: item.id !== earliestId,
-        fields: changes.map(change => change.field),
+        summary: entryHistorySummary(changes),
       })),
   };
 }
@@ -208,7 +208,7 @@ export default function EntryHistoryPage() {
             )</span>
             <Link to={revisionHref(entry.id)} className="font-mono tabular-nums text-primary hover:underline">{formatExactTimestamp(entry.createdAt)}</Link>
             <HistoryEditor entry={entry} />
-            <span className="min-w-0 wrap-anywhere text-muted">（{entry.fields.join("、")}）</span>
+            <span className="min-w-0 wrap-anywhere text-muted">（{entry.summary}）</span>
           </div>
         </li>; })}
       </ol>

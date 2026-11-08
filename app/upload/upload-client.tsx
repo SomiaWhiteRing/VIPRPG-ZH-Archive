@@ -58,7 +58,7 @@ import type {
   UploadSuggestions,
 } from "@/app/upload/upload-types";
 import type { ArchiveCommitMetadata } from "@/lib/archive/manifest";
-import { type CharacterCreditSelection, characterSelectionKey } from "@/lib/character-names";
+import { type CharacterCreditSelection, type CharacterFaceSheet, characterSelectionKey } from "@/lib/character-names";
 
 
 
@@ -121,6 +121,7 @@ export type UploadInitialWork = WorkVisibility & {
   tags: string[];
   characters: CharacterCreditSelection[];
   characterCredits: CharacterCredit[];
+  characterFaceSheets: Record<number, CharacterFaceSheet[]>;
   authors: UploadStaffCredit[];
   extraStaff: UploadStaffCredit[];
   moreInfo: WorkMoreInfo[];
@@ -156,6 +157,16 @@ export function UploadClient({
 }) {
   const navigate = useNavigate();
   const upload = useUploadController(currentUser.id);
+  const editSuggestions = useMemo(() => {
+    if (!initialWork) return suggestions;
+    return {
+      ...suggestions,
+      characters: suggestions.characters.map((character) => {
+        const sheets = initialWork.characterFaceSheets[character.id];
+        return sheets ? { ...character, faceSheets: [...character.faceSheets, ...sheets] } : character;
+      }),
+    };
+  }, [initialWork, suggestions]);
   const canEditMetadata = !adminOptions || currentUser.permissionKeys.includes("work.metadata.update_any");
   const canEditDistribution = !adminOptions || currentUser.permissionKeys.includes("work.distribution.update_any");
   const canArchiveUpload = canEditDistribution && ARCHIVE_UPLOAD_PERMISSIONS.every((key) =>
@@ -996,7 +1007,7 @@ export function UploadClient({
                     imageSelections={imageSelections}
                     setForm={setForm}
                     setImageSelections={setImageSelections}
-                    suggestions={suggestions}
+                    suggestions={editSuggestions}
                     staffErrorsVisible={staffErrorsVisible}
                     moreInfoErrorsVisible={moreInfoErrorsVisible}
                     translatorError={translatorError}

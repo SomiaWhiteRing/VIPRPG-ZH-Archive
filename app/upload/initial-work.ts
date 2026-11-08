@@ -4,6 +4,21 @@ import { isCharacterRoleKey } from "@/lib/character-names";
 import { isExtraStaffRole } from "@/lib/staff-credits";
 
 export function uploadInitialWork(work: AdminWorkEdit): UploadInitialWork {
+  const characterFaceSheets: UploadInitialWork["characterFaceSheets"] = {};
+  for (const character of work.characterCredits) {
+    const portrait = character.portrait;
+    if (!character.portraitChoice || !portrait) continue;
+    const sheets = characterFaceSheets[character.id] ??= [];
+    if (sheets.some((sheet) => sheet.id === portrait.faceSheetId)) continue;
+    sheets.push({
+      id: portrait.faceSheetId,
+      blobSha256: portrait.blobSha256,
+      width: portrait.width,
+      height: portrait.height,
+      sourcePageTitle: null,
+      sourceSectionTitle: null,
+    });
+  }
   const staff = work.creators.map((creator) => ({
     selection: {
       kind: "existing" as const,
@@ -34,6 +49,7 @@ export function uploadInitialWork(work: AdminWorkEdit): UploadInitialWork {
     aliases: work.aliases,
     tags: work.tags,
     characters: work.characters,
+    characterFaceSheets,
     characterCredits: work.characterCredits.map((character) => ({
       selection: {
         kind: "existing" as const,

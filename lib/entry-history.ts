@@ -156,8 +156,44 @@ export function entryHistoryChanges(before: Snapshot, after: Snapshot, kind: Ent
   return [...new Set([...previous.keys(), ...next.keys()])].flatMap(field => {
     const left = previous.get(field) ?? [];
     const right = next.get(field) ?? [];
-    return JSON.stringify(left) === JSON.stringify(right) ? [] : [{ field, before: left, after: right }];
+    if (JSON.stringify(left) === JSON.stringify(right)) return [];
+    if ([...left, ...right].every(value => value.image && !value.text && !value.cell)) {
+      const leftImages = new Set(left.map(value => value.image));
+      const rightImages = new Set(right.map(value => value.image));
+      if (leftImages.size === left.length && rightImages.size === right.length) {
+        // Compare the order among shared images so an insertion doesn't mark later images as moved.
+        const sharedLeft = left.filter(value => rightImages.has(value.image));
+        const sharedRight = right.filter(value => leftImages.has(value.image));
+        const moved = new Set(sharedLeft.filter((value, index) => value.image !== sharedRight[index].image).map(value => value.image));
+        return [{
+          field,
+          before: left.filter(value => !rightImages.has(value.image) || moved.has(value.image)),
+          after: right.filter(value => !leftImages.has(value.image) || moved.has(value.image)),
+        }];
+      }
+    }
+    return [{ field, before: left, after: right }];
   });
+}
+
+function includesInOrder(values: EntryHistoryValue[], subset: EntryHistoryValue[]): boolean {
+  const keys = subset.map(value => JSON.stringify(value));
+  let index = 0;
+  for (const value of values) {
+    if (JSON.stringify(value) === keys[index]) index++;
+  }
+  return index === keys.length;
+}
+
+export function entryHistorySummary(changes: ReturnType<typeof entryHistoryChanges>): string {
+  const groups: Record<"新增" | "移除" | "编辑", string[]> = { 新增: [], 移除: [], 编辑: [] };
+  for (const { field, before, after } of changes) {
+    if (before.length < after.length && includesInOrder(after, before)) groups.新增.push(field);
+    else if (after.length < before.length && includesInOrder(before, after)) groups.移除.push(field);
+    else groups.编辑.push(field);
+  }
+  return Object.entries(groups).flatMap(([action, fields]) =>
+    fields.length ? [action + fields.join("、")] : []).join("，");
 }
 
 /** Reconstruct the endpoints from chronological, operation-scoped snapshots before diffing. */

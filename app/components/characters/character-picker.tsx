@@ -135,9 +135,13 @@ export function CharacterPicker({
   }, [wantedSheetIds, portraitIndex]);
   const aliasReturnFocusRef = useRef<HTMLElement | null>(null);
   const suggestionsById = useMemo(
-    () => new Map(suggestions.map((suggestion) => [suggestion.id, {
-      ...suggestion, faceSheets: sheetResults[suggestion.id] ?? suggestion.faceSheets,
-    }])),
+    () => new Map(suggestions.map((suggestion) => {
+      const publicSheets = sheetResults[suggestion.id];
+      if (!publicSheets) return [suggestion.id, suggestion];
+      const sheets = new Map(suggestion.faceSheets.map((sheet) => [sheet.blobSha256, sheet]));
+      for (const sheet of publicSheets) sheets.set(sheet.blobSha256, sheet);
+      return [suggestion.id, { ...suggestion, faceSheets: [...sheets.values()] }];
+    })),
     [suggestions, sheetResults],
   );
   const options = useMemo<CharacterOption[]>(() => {
