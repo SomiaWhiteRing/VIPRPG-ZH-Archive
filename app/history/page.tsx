@@ -24,9 +24,9 @@ import { Form, Link, useLoaderData, type LoaderFunctionArgs, type MetaFunction }
 import { useState } from "react";
 
 const entries = {
-  work: { path: "games", sql: "SELECT COALESCE(chinese_title,original_title) AS name,status FROM works WHERE id=?" },
-  creator: { path: "creators", sql: "SELECT name,public_at AS publicAt FROM creators WHERE id=?" },
-  character: { path: "characters", sql: "SELECT primary_name AS name FROM characters WHERE id=?" },
+  work: { path: "games", sql: "SELECT COALESCE(chinese_title,original_title) AS name,status,created_at AS createdAt FROM works WHERE id=?" },
+  creator: { path: "creators", sql: "SELECT name,public_at AS publicAt,created_at AS createdAt FROM creators WHERE id=?" },
+  character: { path: "characters", sql: "SELECT primary_name AS name,created_at AS createdAt FROM characters WHERE id=?" },
 };
 
 const PAGE_SIZE = 20;
@@ -43,19 +43,22 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const nextPath = url.pathname + url.search;
   const user = kind === "work" ? await requireAccountUser(runtime, nextPath)
     : await requireAnyPagePermission(runtime, nextPath, kind === "creator" ? CREATOR_PUBLIC_EDIT_PERMISSIONS : CHARACTER_EDIT_PERMISSIONS);
-  const entry = await runtime.db.prepare(entries[kind].sql).bind(id).first<{ name: string; status?: string; publicAt?: string | null }>();
+  const entry = await runtime.db.prepare(entries[kind].sql).bind(id).first<{
+    name: string; createdAt: string; status?: string; publicAt?: string | null;
+  }>();
   if (kind === "work" && !await getWorkEditInfoHref(runtime, id, user, entry?.status === "deleted")) redirectPage("/");
   if (kind === "creator" && !entry?.publicAt && !hasPermission(user, "creator.metadata.update_any")) throwNotFound();
 
   const oldParam = url.searchParams.get("oldid");
   const diffParam = url.searchParams.get("diff");
-  const oldId = oldParam === null ? null : parsePositiveId(oldParam, "revision id");
+  const oldId = oldParam === null || oldParam === "creation" ? oldParam : parsePositiveId(oldParam, "revision id");
   const diff = diffParam === null || diffParam === "prev" || diffParam === "cur" ? diffParam : parsePositiveId(diffParam, "revision id");
   if (diff !== null && oldId === null) throwNotFound();
 
   const candidates = [];
   const targetId = String(id);
   let oldName: string | null | undefined;
+  let recordedCreation: { createdAt: string; actorId: number | null; actorName: string | null } | undefined;
   let before: { createdAt: string; id: number } | undefined;
   while (true) {
     const batch = await searchAdminAuditLogs(runtime, {
@@ -66,13 +69,23 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       if (!entry && !oldName) oldName = entityAuditTargets(log.detail)
         .find(target => target.type === kind && String(target.id) === targetId)?.name;
       const detail = auditRecord(log.detail);
-      if (!detail || !Object.hasOwn(detail, "before") || !Object.hasOwn(detail, "after")) continue;
-      const snapshots = entryHistorySnapshots(detail, kind, id);
+      const snapshots = detail && Object.hasOwn(detail, "before") && Object.hasOwn(detail, "after")
+        ? entryHistorySnapshots(detail, kind, id) : null;
+      const creation = (snapshots?.before === null && snapshots.after?.id === id)
+        || (kind === "character" && log.eventType === "admin_character_create")
+        || (kind === "work" && (log.eventType === "external_work_created"
+          || (log.eventType === "archive_work_commit" && auditRecord(detail?.context)?.mode === "create")));
       const historicalName = auditRecord(detail?.actor)?.displayName;
+      const actorName = typeof historicalName === "string" ? historicalName : log.actorName ?? (log.userId ? "用户" : null);
+      if (creation && !snapshots?.after) {
+        recordedCreation = { createdAt: log.createdAt, actorId: log.userId, actorName };
+        continue;
+      }
+      if (!snapshots || (!snapshots.before && !snapshots.after)) continue;
       candidates.push({
         id: log.id, createdAt: log.createdAt, actorId: log.userId,
-        actorName: typeof historicalName === "string" ? historicalName : log.actorName ?? (log.userId ? "用户" : "系统"),
-        snapshots,
+        actorName: actorName ?? (creation ? null : "系统"),
+        snapshots, creation,
       });
     }
     const last = batch.items.at(-1);
@@ -83,26 +96,33 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const names = await getEntryHistoryNames(runtime, user, candidates.map(item => item.snapshots));
   const revisions = candidates.flatMap((item, candidateIndex) => {
     const changes = entryHistoryChanges(item.snapshots.before, item.snapshots.after, kind, id, names);
-    return changes.length ? [{ ...item, changes, candidateIndex }] : [];
+    return changes.length || item.creation ? [{ ...item, changes, candidateIndex }] : [];
   });
+  const creation = recordedCreation ?? (entry ? { createdAt: entry.createdAt, actorId: null, actorName: null } : null);
+  const creationMarker = creation && !revisions.some(item => item.creation)
+    ? { ...creation, id: "creation" as const, hasPrevious: false, summary: "创建条目" } : null;
+  const earliest = revisions.at(-1);
   let selection = null;
   if (oldId !== null) {
-    const olderIndex = revisions.findIndex(item => item.id === oldId);
+    if (oldId === "creation" && (diff === null || diff === "prev")) throwNotFound();
+    const olderIndex = oldId === "creation" ? revisions.length : revisions.findIndex(item => item.id === oldId);
     const newerIndex = diff === "cur" ? 0 : typeof diff === "number" ? revisions.findIndex(item => item.id === diff) : olderIndex;
-    const older = revisions[olderIndex];
+    const older = oldId === "creation" ? creationMarker : revisions[olderIndex];
     const newer = revisions[newerIndex];
     if (!older || !newer) throwNotFound();
     if ((diff === "cur" || typeof diff === "number") && olderIndex <= newerIndex) {
       throw new Response(null, { status: 400 });
     }
-    const previous = diff === "prev" ? revisions[olderIndex + 1] : null;
+    const previous = diff === "prev" ? revisions[olderIndex + 1] ?? creationMarker : null;
     if (diff === "prev" && !previous) throw new Response(null, { status: 400 });
     let fields;
     if (diff === null) fields = entryHistoryChanges(null, newer.snapshots.after, kind, id, names);
     else if (diff === "prev") fields = newer.changes;
     else {
       // A hidden edit can replace an internal relation ID used by later snapshots.
-      const edits = candidates.slice(newer.candidateIndex, older.candidateIndex).reverse().map(item => item.snapshots);
+      // With no creation snapshot, the earliest visible edit's before-state is the comparison base.
+      const end = "candidateIndex" in older ? older.candidateIndex : earliest!.candidateIndex + 1;
+      const edits = candidates.slice(newer.candidateIndex, end).reverse().map(item => item.snapshots);
       fields = entryHistoryRangeChanges(edits, kind, id, names);
     }
     selection = {
@@ -111,22 +131,24 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       fields,
     };
   }
-  const page = Math.min(parseAccountPage(url.searchParams.get("page") ?? undefined), Math.max(1, Math.ceil(revisions.length / PAGE_SIZE)));
+  const items = [
+    ...revisions.map(({ snapshots: _snapshots, candidateIndex: _candidateIndex, changes, creation, ...item }) => ({
+      ...item,
+      hasPrevious: item.id !== earliest?.id || creationMarker !== null,
+      summary: creation ? "创建条目" : entryHistorySummary(changes),
+    })),
+    ...(creationMarker ? [creationMarker] : []),
+  ];
+  const page = Math.min(parseAccountPage(url.searchParams.get("page") ?? undefined), Math.max(1, Math.ceil(items.length / PAGE_SIZE)));
   const offset = (page - 1) * PAGE_SIZE;
-  const earliestId = revisions.at(-1)?.id;
   return {
     title: entry?.name ?? oldName ?? AUDIT_TARGET_LABELS[kind],
     entryHref: entry ? `/${entries[kind].path}/${id}` : null,
     basePath: `/history/${kind}/${id}`,
-    total: revisions.length, page, pageSize: PAGE_SIZE,
+    total: items.length, page, pageSize: PAGE_SIZE,
     latestId: revisions[0]?.id, selection,
-    items: revisions.filter((item, index) => (index >= offset && index < offset + PAGE_SIZE)
-      || item.id === selection?.oldId || item.id === selection?.newId)
-      .map(({ snapshots: _snapshots, candidateIndex: _candidateIndex, changes, ...item }) => ({
-        ...item,
-        hasPrevious: item.id !== earliestId,
-        summary: entryHistorySummary(changes),
-      })),
+    items: items.filter((item, index) => (index >= offset && index < offset + PAGE_SIZE)
+      || item.id === selection?.oldId || item.id === selection?.newId),
   };
 }
 
@@ -146,10 +168,10 @@ export default function EntryHistoryPage() {
   const selectedNewerIndex = revisions.findIndex(entry => entry.id === selection?.newId);
   const defaults = selection && !selection.snapshot
     ? { olderIndex: selectedOlderIndex, newerIndex: selectedNewerIndex }
-    : { olderIndex: revisions.length > 1 ? 1 : -1, newerIndex: revisions.length ? 0 : -1 };
+    : { olderIndex: revisions.length > 1 ? 1 : -1, newerIndex: revisions[0]?.id !== "creation" && revisions.length ? 0 : -1 };
   const [picked, setPicked] = useState({ source: history, ...defaults });
   const choice = picked.source === history ? picked : { source: history, ...defaults };
-  function revisionHref(id: number, diff?: number | "prev" | "cur") {
+  function revisionHref(id: number | "creation", diff?: number | "prev" | "cur") {
     const params = new URLSearchParams({ oldid: String(id) });
     if (diff !== undefined) params.set("diff", String(diff));
     if (history.page > 1) params.set("page", String(history.page));
@@ -182,12 +204,14 @@ export default function EntryHistoryPage() {
     </section> : null}
     {history.items.length ? <Form method="get" className="mt-5" aria-label="比较历史版本">
       {history.page > 1 && <input type="hidden" name="page" value={history.page} />}
-      <Button type="submit" variant="outline" disabled={choice.newerIndex < 0 || choice.olderIndex <= choice.newerIndex}>比较所选版本</Button>
-      <div className="mt-3 flex gap-2 text-xs text-muted" aria-hidden><span className="w-8 text-center">较旧</span><span className="w-8 text-center">较新</span></div>
+      {history.latestId !== undefined && <>
+        <Button type="submit" variant="outline" disabled={choice.newerIndex < 0 || choice.olderIndex <= choice.newerIndex}>比较所选版本</Button>
+        <div className="mt-3 flex gap-2 text-xs text-muted" aria-hidden><span className="w-8 text-center">较旧</span><span className="w-8 text-center">较新</span></div>
+      </>}
       <ol className="mt-1 min-w-0 border-y border-border py-1">
         {revisions.map((entry, index) => {
           return <li key={entry.id} className="flex min-w-0 items-start gap-2 py-1 text-sm">
-          <div className="flex shrink-0 gap-2">
+          {history.latestId !== undefined && <div className="flex shrink-0 gap-2">
             <Label className="flex size-8 items-center justify-center">
               <Input type="radio" name="oldid" value={entry.id} required disabled={index <= choice.newerIndex}
                 checked={index >= 0 && index === choice.olderIndex}
@@ -195,18 +219,19 @@ export default function EntryHistoryPage() {
                 aria-label={`较旧版本：${formatExactTimestamp(entry.createdAt)}`} className="size-4 shrink-0 accent-primary p-0 shadow-none" />
             </Label>
             <Label className="flex size-8 items-center justify-center">
-              <Input type="radio" name="diff" value={entry.id} required disabled={choice.olderIndex >= 0 && index >= choice.olderIndex}
+              <Input type="radio" name="diff" value={entry.id} required disabled={entry.id === "creation" || (choice.olderIndex >= 0 && index >= choice.olderIndex)}
                 checked={index >= 0 && index === choice.newerIndex}
                 onChange={() => setPicked({ ...choice, newerIndex: index })}
                 aria-label={`较新版本：${formatExactTimestamp(entry.createdAt)}`} className="size-4 shrink-0 accent-primary p-0 shadow-none" />
             </Label>
-          </div>
+          </div>}
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 py-1">
-            <span className="whitespace-nowrap text-primary">(
+            {history.latestId !== undefined && <span className="whitespace-nowrap text-primary">(
               {entry.id !== history.latestId ? <Link to={revisionHref(entry.id, "cur")} className="hover:underline">当前</Link> : <span className="text-muted">当前</span>}
               {" | "}{entry.hasPrevious ? <Link to={revisionHref(entry.id, "prev")} className="hover:underline">前次</Link> : <span className="text-muted">前次</span>}
-            )</span>
-            <Link to={revisionHref(entry.id)} className="font-mono tabular-nums text-primary hover:underline">{formatExactTimestamp(entry.createdAt)}</Link>
+            )</span>}
+            {entry.id === "creation" ? <span className="font-mono tabular-nums">{formatExactTimestamp(entry.createdAt)}</span>
+              : <Link to={revisionHref(entry.id)} className="font-mono tabular-nums text-primary hover:underline">{formatExactTimestamp(entry.createdAt)}</Link>}
             <HistoryEditor entry={entry} />
             <span className="min-w-0 wrap-anywhere text-muted">（{entry.summary}）</span>
           </div>
@@ -232,7 +257,7 @@ function HistoryValues({ field, values }: { field: string; values: EntryHistoryV
   </div>;
 }
 
-function HistoryEditor({ entry }: { entry?: { actorId: number | null; actorName: string } }) {
-  if (!entry) return null;
+function HistoryEditor({ entry }: { entry?: { actorId: number | null; actorName: string | null } }) {
+  if (!entry?.actorName) return null;
   return entry.actorId ? <Link to={`/users/${entry.actorId}`} className="text-primary hover:underline">{entry.actorName}</Link> : <span>{entry.actorName}</span>;
 }
