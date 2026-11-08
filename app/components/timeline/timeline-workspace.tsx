@@ -209,7 +209,7 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
                 {group.items.map((item, index) => {
                   if (item.kind === "join" || item.kind === "rename") return <li key={item.id} className="px-3 py-3 sm:px-4">
                     <article className="flex min-w-0 gap-2.5 sm:gap-3">
-                      {showAuthor && item.kind === "rename" && <Link className="shrink-0" to={`/users/${item.actor.id}`} aria-label={`${item.actor.displayName}的个人主页`}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>}
+                      {showAuthor && item.kind === "rename" && <Link className="shrink-0 self-start" to={`/users/${item.actor.id}`} aria-label={`${item.actor.displayName}的个人主页`}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>}
                       <div className="grid min-w-0 flex-1 gap-2">
                         <p className="m-0 text-sm leading-relaxed wrap-anywhere">
                           {item.kind === "join" ? <>{showAuthor && <><strong>{item.actor.displayName}</strong> </>}加入了VIPRPG.org</> : <>由 <strong>{item.nameChange!.previousName}</strong> 改名为 <strong>{item.nameChange!.newName}</strong></>}
@@ -228,7 +228,7 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
                   </>;
                   return <li key={item.id} id={`timeline-event-${item.id}`} className={cn("scroll-mt-24 px-3 sm:px-4", compact ? "py-3" : "py-4")}>
                     <article className="flex min-w-0 gap-2.5 sm:gap-3">
-                      {showAuthor && (continued ? <span aria-hidden className="size-9 shrink-0" /> : <Link className="shrink-0" to={`/users/${item.actor.id}`} aria-label={`${item.actor.displayName}的个人主页`}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>)}
+                      {showAuthor && (continued ? <span aria-hidden className="size-9 shrink-0" /> : <Link className="shrink-0 self-start" to={`/users/${item.actor.id}`} aria-label={`${item.actor.displayName}的个人主页`}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>)}
                       <div className="min-w-0 flex-1">
                         {(showAuthor || item.kind !== "status") && <p className="m-0 text-sm leading-relaxed wrap-anywhere">
                           {showAuthor && <Link className="font-semibold text-secondary hover:underline" to={`/users/${item.actor.id}`}>{item.actor.displayName}</Link>}

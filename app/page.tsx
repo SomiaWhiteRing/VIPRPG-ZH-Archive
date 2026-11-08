@@ -26,6 +26,10 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 export default function HomePage() {
   const result = useLoaderData<typeof loader>();
   return result.mode === "timeline"
-    ? <Suspense fallback={null}><TimelinePageContent values={result.values} basePath="/" /></Suspense>
+    ? (
+      <Suspense fallback={<div aria-hidden className="min-h-dvh" />}>
+        <TimelinePageContent values={result.values} basePath="/" />
+      </Suspense>
+    )
     : <HomeWorkspace {...result.values} />;
 }
