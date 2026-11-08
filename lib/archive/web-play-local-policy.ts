@@ -10,6 +10,7 @@ const engineDetectionFiles = new Set([
   "harmony.dll",
   "dynloader.dll",
   "destiny.dll",
+  "gyokuro-netplay.txt",
 ]);
 
 export function shouldSkipWebPlayLocalWrite(path: string): boolean {
