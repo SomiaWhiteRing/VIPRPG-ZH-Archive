@@ -1,0 +1,57 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  background: #0d101c;
+  color: #eef1ff;
+}
+body {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+}
+main {
+  box-sizing: border-box;
+  width: min(34rem, 100%);
+  padding: 2rem clamp(1rem, 5vw, 2.5rem);
+  background: #171d30;
+  border-block: 2px solid #e3ba77;
+}
+header p { margin: 0; color: #ffd797; }
+h1 { margin: .25rem 0 1.5rem; font-size: 1.75rem; }
+h2 { margin: 1.5rem 0 .5rem; font-size: 1.1rem; }
+#status { min-height: 1.5em; }
+#actions { display: flex; gap: .75rem; }
+#rooms { list-style: none; padding: 0; margin: 0; }
+#rooms li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .65rem 0;
+  border-bottom: 1px solid #3c4662;
+  font-variant-numeric: tabular-nums;
+}
+button {
+  min-height: 2.6rem;
+  padding: .4rem .85rem;
+  border: 1px solid #69779e;
+  border-radius: .25rem;
+  background: #283552;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+button:focus-visible { outline: 2px solid #ffd797; outline-offset: 3px; }
+button:disabled { opacity: .55; cursor: default; }
+[hidden] { display: none !important; }
+#identity, #choices { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+#players { margin: 0 0 .75rem; padding: 0; list-style: none; }
+#players li { display: flex; align-items: center; justify-content: space-between; padding: .3rem 0; }
+.player-identity { display: inline-flex; align-items: center; gap: .5rem; min-width: 0; overflow-wrap: anywhere; }
+.player-identity img { width: 1.6rem; height: 1.6rem; border-radius: 50%; object-fit: cover; }
+#rooms li > div { display: grid; gap: .35rem; }
+select { padding: .4rem; font: inherit; }
+#battle { display: grid; justify-items: center; width: min(100%, 48rem); }
+#canvas { width: min(100%, 40rem); height: auto; aspect-ratio: 4/3; image-rendering: pixelated; background: #000; }
+footer { display: flex; gap: .75rem; align-items: center; justify-content: space-between; width: min(100%, 40rem); padding-block: .5rem; }
