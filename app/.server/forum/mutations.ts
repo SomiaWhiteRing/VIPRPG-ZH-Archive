@@ -787,6 +787,8 @@ export async function moderateForum(
       "restore",
       "lock",
       "unlock",
+      "sage",
+      "unsage",
       "feature",
       "unfeature",
       "pin",
@@ -796,11 +798,14 @@ export async function moderateForum(
     ].includes(action)
   )
     throw new HttpError(400, "管理动作无效。");
-  const permission: PermissionKey = ["feature", "unfeature", "tags"].includes(
-    action,
-  )
-    ? "forum.topic.feature_any"
-    : "forum.content.moderate_any";
+  const sageAction = action === "sage" || action === "unsage";
+  const curation = action === "feature" || action === "unfeature" || action === "tags";
+  const permission: PermissionKey = sageAction
+    ? "forum.topic.sage_any"
+    : curation
+      ? "forum.topic.feature_any"
+      : "forum.content.moderate_any";
+  const publicOnly = sageAction || curation || action === "pin" || action === "unpin";
   checkPermission(actor, permission);
   const topic = await rawTopic(ctx, row.topic_id);
   if (input.topicRevision !== topic.revision) conflict();
@@ -808,11 +813,11 @@ export async function moderateForum(
   if (action !== "none" && row.status === "deleted")
     throw new HttpError(409, "已删除内容不能修改或恢复。");
   if (
-    ["lock", "unlock", "feature", "unfeature", "pin", "unpin", "tags"].includes(action) &&
+    (publicOnly || action === "lock" || action === "unlock") &&
     target.kind !== "topic"
   )
     throw new HttpError(400, "此动作只适用于主题。");
-  if ((permission === "forum.topic.feature_any" || action === "pin" || action === "unpin") && !topic.public) unavailable();
+  if (publicOnly && !topic.public) unavailable();
   if (action === "restore" && row.status !== "hidden")
     throw new HttpError(409, "目标未被隐藏。");
   const tags =
@@ -862,7 +867,7 @@ export async function moderateForum(
   )
     throw new HttpError(409, "关联图片已进入清理，无法完整恢复内容。");
   const predicate: Predicate = {
-    sql: `${permission === "forum.topic.feature_any" || action === "pin" || action === "unpin" ? publicTopicSql : "1"} AND ${tagGuard.sql} AND ${restoreImages.sql}
+    sql: `${publicOnly ? publicTopicSql : "1"} AND ${tagGuard.sql} AND ${restoreImages.sql}
     ${report ? `AND ${forumActorSql("forum.content.moderate_any")} AND EXISTS(SELECT 1 FROM forum_content_reports WHERE id=? AND status='pending')` : ""}`,
     args: [
       ...tagGuard.args,
@@ -895,6 +900,11 @@ export async function moderateForum(
           "UPDATE forum_topics SET locked=? WHERE id=? AND write_token=?",
         )
         .bind(action === "lock" ? 1 : 0, topic.id, token),
+    );
+  else if (sageAction)
+    statements.push(
+      db.prepare("UPDATE forum_topics SET saged=? WHERE id=? AND write_token=?")
+        .bind(action === "sage" ? 1 : 0, topic.id, token),
     );
   else if (action === "pin" || action === "unpin")
     statements.push(db.prepare("UPDATE forum_topics SET pinned_at=CASE WHEN ?=1 THEN COALESCE(pinned_at,CURRENT_TIMESTAMP) ELSE NULL END WHERE id=? AND write_token=?")
@@ -963,6 +973,7 @@ export async function moderateForum(
         locked: topic.locked,
         featured: topic.featured_at,
         pinned: topic.pinned_at,
+        saged: topic.saged,
         tags: topic.tag_snapshot,
       },
       after: { action, tags: tags?.map((t) => t.name) },

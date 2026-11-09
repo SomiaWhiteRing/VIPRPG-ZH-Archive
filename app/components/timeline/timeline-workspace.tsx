@@ -1,8 +1,8 @@
 import { requestJson } from "@/lib/ui/api-response";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useNavigation, useRevalidator, useRouteLoaderData } from "react-router";
-import { Globe, RefreshCw, Settings, Trash2, Users } from "lucide-react";
+import { ChevronDown, Globe, RefreshCw, Settings, Trash2, Users } from "lucide-react";
 import type { loader as rootLoader } from "@/app/root";
 import { Button } from "@/app/components/ui/button";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -55,14 +55,50 @@ function timelineHref(basePath: string, view: TimelineView, kind?: TimelineKind,
 function groupTimelineDays(items: TimelineItem[], serverTime: number | undefined) {
   const today = serverTime === undefined ? null : formatDateKey(new Date(serverTime));
   const yesterday = serverTime === undefined ? null : formatDateKey(new Date(serverTime - 86400000));
-  const groups: { date: string; label: string; items: TimelineItem[] }[] = [];
+  const groups: { date: string; label: string; entries: { item: TimelineItem; olderRenames?: TimelineItem[] }[] }[] = [];
   for (const item of items) {
     const date = formatDateKey(parseTimestamp(item.createdAt));
-    const last = groups.at(-1);
-    if (last?.date === date) last.items.push(item);
-    else groups.push({ date, label: date === today ? "今天" : date === yesterday ? "昨天" : formatDate(item.createdAt, { time: false }), items: [item] });
+    const group = groups.at(-1);
+    if (group?.date !== date) {
+      groups.push({ date, label: date === today ? "今天" : date === yesterday ? "昨天" : formatDate(item.createdAt, { time: false }), entries: [{ item }] });
+      continue;
+    }
+    const previous = group.entries.at(-1);
+    if (item.kind === "rename" && previous?.item.kind === "rename") (previous.olderRenames ??= []).push(item);
+    else group.entries.push({ item });
   }
   return groups;
+}
+
+function AccountHistoryEntry({ item, showAuthor, timeAction }: { item: TimelineItem; showAuthor: boolean; timeAction?: ReactNode }) {
+  return <article className="flex min-w-0 gap-2.5 sm:gap-3">
+    {showAuthor && item.kind === "rename" && <Link className="shrink-0 self-start" to={`/users/${item.actor.id}`} aria-label={`${item.actor.displayName}的个人主页`}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>}
+    <div className="grid min-w-0 flex-1 gap-2">
+      <p className="m-0 text-sm leading-relaxed wrap-anywhere">
+        {item.kind === "join" ? <>{showAuthor && <><strong>{item.actor.displayName}</strong> </>}加入了VIPRPG.org</> : <>由 <strong>{item.nameChange!.previousName}</strong> 改名为 <strong>{item.nameChange!.newName}</strong></>}
+      </p>
+      <div className="flex flex-wrap items-center gap-x-2">
+        <Timestamp value={item.createdAt} format="duration" className="text-xs text-muted" />
+        {timeAction}
+      </div>
+    </div>
+  </article>;
+}
+
+function AccountHistoryGroup({ item, olderRenames, showAuthor }: { item: TimelineItem; olderRenames: TimelineItem[]; showAuthor: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const historyId = useId();
+  return <>
+    <AccountHistoryEntry item={item} showAuthor={showAuthor} timeAction={
+      <Button type="button" variant="ghost" size="sm" className="min-h-8 gap-1 px-1 text-xs font-normal text-secondary"
+        aria-expanded={expanded} aria-controls={historyId} onClick={() => setExpanded(!expanded)}>
+        另 {olderRenames.length} 条改名<ChevronDown aria-hidden className={expanded ? "rotate-180" : undefined} />
+      </Button>
+    } />
+    <ol id={historyId} hidden={!expanded} className="m-0 mt-2 list-none space-y-3 p-0">
+      {olderRenames.map((rename) => <li key={rename.id}><AccountHistoryEntry item={rename} showAuthor={showAuthor} /></li>)}
+    </ol>
+  </>;
 }
 
 async function mutateTimeline(path: string, method: string, body?: unknown) {
@@ -213,24 +249,18 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
             groupTimelineDays(visibleItems, root?.serverTime).map((group) => <section key={group.date} aria-label={group.label}>
               <h2 className="m-0 border-b border-border bg-muted/5 px-3 py-2 text-xs font-medium text-muted sm:px-4"><time dateTime={group.date}>{group.label}</time></h2>
               <ol className="m-0 list-none divide-y divide-border/60 p-0">
-                {group.items.map((item, index) => {
+                {group.entries.map(({ item, olderRenames }, index) => {
                   const onReplyBusyChange = (value: boolean) => setReplyBusy(current => ({ ...current, [item.id]: value }));
                   if (item.kind === "status" && isPostAuthorHidden(item.actor.id)) return <li key={item.id} id={`timeline-event-${item.id}`} className="scroll-mt-24 px-3 py-2 sm:px-4">
                     <StatusInteractions item={item} viewerId={viewerId} readOnly={readOnlyInteractions} hideStatus initialPage={initialReplies} onCacheError={reportCacheError} onBusyChange={onReplyBusyChange} />
                   </li>;
                   if (item.kind === "join" || item.kind === "rename") return <li key={item.id} className="px-3 py-3 sm:px-4">
-                    <article className="flex min-w-0 gap-2.5 sm:gap-3">
-                      {showAuthor && item.kind === "rename" && <Link className="shrink-0 self-start" to={`/users/${item.actor.id}`} aria-label={`${item.actor.displayName}的个人主页`}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>}
-                      <div className="grid min-w-0 flex-1 gap-2">
-                        <p className="m-0 text-sm leading-relaxed wrap-anywhere">
-                          {item.kind === "join" ? <>{showAuthor && <><strong>{item.actor.displayName}</strong> </>}加入了VIPRPG.org</> : <>由 <strong>{item.nameChange!.previousName}</strong> 改名为 <strong>{item.nameChange!.newName}</strong></>}
-                        </p>
-                        <Timestamp value={item.createdAt} format="duration" className="text-xs text-muted" />
-                      </div>
-                    </article>
+                    {olderRenames
+                      ? <AccountHistoryGroup item={item} olderRenames={olderRenames} showAuthor={showAuthor} />
+                      : <AccountHistoryEntry item={item} showAuthor={showAuthor} />}
                   </li>;
                   const compact = !item.text && !item.images.length && item.kind !== "upload";
-                  const previous = group.items[index - 1];
+                  const previous = group.entries[index - 1]?.item;
                   const continued = compact && previous && previous.actor.id === item.actor.id && !previous.text && !previous.images.length && previous.kind !== "upload" && previous.kind !== "join" && previous.kind !== "rename";
                   const targetLink = item.target && <Link to={item.target.href} prefetch="none" className="font-medium text-secondary hover:underline">{item.target.title}</Link>;
                   const footer = <>

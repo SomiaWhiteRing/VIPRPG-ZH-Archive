@@ -342,38 +342,59 @@ export async function publicTopicList(
     ${input.featured ? "t.featured_at IS NOT NULL" : "1"}
     AND (SELECT COUNT(*) FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id WHERE x.topic_id=t.id AND g.status<>'hidden' AND x.tag_id IN(SELECT value FROM json_each(?)))=?`;
   const bindings = [JSON.stringify(input.tags), input.tags.length];
-  // Pins are shown in addition to the first ordinary page, never carried forward.
-  const total = (await ctx.db
-    .prepare(`SELECT COUNT(*) AS total ${source} AND t.pinned_at IS NULL`)
+  // Only effective pins are extra on page one. SAGE topics count toward pagination.
+  const { total, normal } = (await ctx.db
+    .prepare(`SELECT COUNT(*) AS total,COUNT(*) FILTER (WHERE t.saged=0) AS normal
+      ${source} AND (t.pinned_at IS NULL OR t.saged=1)`)
     .bind(...bindings)
-    .first<{ total: number }>())!.total;
+    .first<{ total: number; normal: number }>())!;
   const page = Math.min(
     forumPage(input.page),
     Math.max(1, Math.ceil(total / FORUM_PAGE_SIZE)),
   );
-  const rows = await ctx.db
-    .prepare(
-      `SELECT t.id ${source} AND t.pinned_at IS NULL ORDER BY t.${sort} DESC,t.id DESC LIMIT ? OFFSET ?`,
-    )
-    .bind(...bindings, FORUM_PAGE_SIZE, (page - 1) * FORUM_PAGE_SIZE)
-    .all<{ id: number }>();
-  const pinned = page === 1 ? await ctx.db.prepare(`SELECT t.id ${source} AND t.pinned_at IS NOT NULL ORDER BY t.pinned_at DESC,t.id DESC`)
-    .bind(...bindings).all<{ id: number }>() : { results: [] };
-  const ids = [...pinned.results, ...rows.results].map((r) => r.id);
+  const offset = (page - 1) * FORUM_PAGE_SIZE;
+  const normalLimit = Math.min(FORUM_PAGE_SIZE, Math.max(0, normal - offset));
+  const sageLimit = Math.min(FORUM_PAGE_SIZE - normalLimit, total - offset - normalLimit);
+  const idQueries: D1PreparedStatement[] = [];
+  if (normalLimit)
+    idQueries.push(ctx.db.prepare(
+      `SELECT t.id ${source} AND t.saged=0 AND t.pinned_at IS NULL
+       ORDER BY t.${sort} DESC,t.id DESC LIMIT ? OFFSET ?`,
+    ).bind(...bindings, normalLimit, offset));
+  if (sageLimit)
+    idQueries.push(ctx.db.prepare(
+      `SELECT t.id ${source} AND t.saged=1
+       ORDER BY t.last_activity_at DESC,t.id DESC LIMIT ? OFFSET ?`,
+    ).bind(...bindings, sageLimit, Math.max(0, offset - normal)));
+  const [first, second] = idQueries;
+  const rows = second
+    ? await ctx.db.batch<{ id: number }>(idQueries)
+    : first
+      ? [await first.all<{ id: number }>()]
+      : [];
+  const pinned = page === 1
+    ? await ctx.db.prepare(
+        `SELECT t.id ${source} AND t.saged=0 AND t.pinned_at IS NOT NULL ORDER BY t.pinned_at DESC,t.id DESC`,
+      ).bind(...bindings).all<{ id: number }>()
+    : { results: [] };
+  const ids = [...new Set([pinned, ...rows].flatMap(({ results }) => results.map((row) => row.id)))];
   const { topicSql } = await import("./queries");
   const topics = ids.length
     ? await ctx.db
         .prepare(
-          `${topicSql} WHERE t.id IN(SELECT value FROM json_each(?)) AND EXISTS(SELECT 1 FROM forum_public_topics visible WHERE visible.id=t.id) ORDER BY (t.pinned_at IS NOT NULL) DESC,t.pinned_at DESC,t.${sort} DESC,t.id DESC`,
+          `${topicSql} JOIN json_each(?) list_order ON list_order.value=t.id
+           WHERE EXISTS(SELECT 1 FROM forum_public_topics visible WHERE visible.id=t.id)
+           ORDER BY list_order.key`,
         )
         .bind(JSON.stringify(ids))
         .all<import("./queries").TopicRow>()
     : { results: [] };
   const tags = await topicTags(ctx, ids);
   return {
-    items: topics.results.map((r) =>
-      publicTopicDto(mapTopic(r, null, tags.get(r.id) ?? [])),
-    ),
+    items: topics.results.map((row) => {
+      const topic = mapTopic(row, null, tags.get(row.id) ?? []);
+      return publicTopicDto({ ...topic, pinned: topic.pinned && !topic.saged });
+    }),
     total,
     page,
     pageSize: FORUM_PAGE_SIZE,

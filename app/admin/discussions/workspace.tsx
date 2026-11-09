@@ -257,6 +257,9 @@ function AdminDiscussionPanel({
     ...(viewer.moderate && detail.target.kind === "topic" && detail.publicHref
       ? [{ value: detail.pinned ? "unpin" : "pin", label: detail.pinned ? "取消置顶" : "置顶" }]
       : []),
+    ...(viewer.sage && detail.target.kind === "topic" && detail.publicHref
+      ? [{ value: detail.saged ? "unsage" : "sage", label: detail.saged ? "取消 SAGE" : "SAGE" }]
+      : []),
     ...(viewer.feature && detail.target.kind === "topic" && detail.publicHref
       ? [
           {

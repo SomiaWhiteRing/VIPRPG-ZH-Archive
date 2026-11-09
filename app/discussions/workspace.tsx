@@ -608,6 +608,21 @@ export function DiscussionWorkspace({
                 }),
             }))
           : []),
+        ...(topic.capabilities.sage
+          ? [
+              {
+                label: topic.saged ? "取消 SAGE" : "SAGE",
+                run: () =>
+                  void openAction({
+                    kind: "moderate",
+                    target: { kind: "topic", id: topic.id },
+                    summary: topic.title,
+                    topicRevision: topic.revision,
+                    action: topic.saged ? "unsage" : "sage",
+                  }),
+              },
+            ]
+          : []),
         ...(topic.capabilities.feature
           ? (
               [
