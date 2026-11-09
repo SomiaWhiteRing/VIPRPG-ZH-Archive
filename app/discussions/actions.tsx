@@ -93,6 +93,8 @@ export function ForumActionDialog({
             restore: "恢复内容",
             lock: "锁定主题",
             unlock: "解锁主题",
+            sage: "SAGE 主题",
+            unsage: "取消 SAGE",
             feature: "加精主题",
             unfeature: "取消加精",
             pin: "置顶主题",

@@ -28,6 +28,7 @@ export type ForumAdminDetail = {
   body: string;
   state: string;
   locked: boolean;
+  saged: boolean;
   featured: boolean;
   pinned: boolean;
   publicHref: string | null;

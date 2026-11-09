@@ -13,6 +13,7 @@ import { type ForumRequestRuntime, readForumJson, requireForumUser } from "./req
 const permissions = [
   "forum.content.moderate_any",
   "forum.topic.feature_any",
+  "forum.topic.sage_any",
   "forum.tag.manage",
 ] as const;
 export async function GET(ctx: ForumRequestRuntime, request: Request) {

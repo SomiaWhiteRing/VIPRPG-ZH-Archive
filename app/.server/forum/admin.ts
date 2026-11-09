@@ -38,7 +38,8 @@ export async function adminForumList(
   input: { view: string; query?: string; state?: string; page: number },
 ): Promise<ForumPage<ForumAdminRow>> {
   const moderate = hasPermission(actor, "forum.content.moderate_any");
-  if (!moderate) checkPermission(actor, "forum.topic.feature_any");
+  if (!moderate && !hasPermission(actor, "forum.topic.sage_any"))
+    checkPermission(actor, "forum.topic.feature_any");
   if (input.view !== "topics" && !moderate)
     throw new HttpError(403, "没有此视图权限。");
   const query = (input.query ?? "").trim().slice(0, 200),
@@ -85,19 +86,24 @@ export async function adminForumDetail(
   actor: ArchiveUser,
   target: ForumTarget,
 ): Promise<ForumAdminDetail> {
-  const moderate = hasPermission(actor, "forum.content.moderate_any");
-  if (!moderate) checkPermission(actor, "forum.topic.feature_any");
+  const viewer = forumViewer(actor)!;
+  const { moderate } = viewer;
+  if (!moderate && !viewer.sage) checkPermission(actor, "forum.topic.feature_any");
   const row = await rawContent(ctx, target),
     topic = await rawTopic(ctx, row.topic_id);
   if (!moderate && (target.kind !== "topic" || !topic.public)) unavailable();
   const tags = await topicTags(ctx, [topic.id]);
-  const dto = mapTopic(topic, forumViewer(actor), tags.get(topic.id) ?? []);
+  const dto = mapTopic(topic, viewer, tags.get(topic.id) ?? []);
   const normalized =
     row.kind === "post" && row.post_number === 1
       ? { kind: "topic" as const, id: topic.id }
       : target;
-  // Curators may see that a curation action occurred, but not report notes,
+  // Limited managers may see actions they can perform, but not report notes,
   // resolutions, or historical tag snapshots embedded in the same audit row.
+  const auditEvents = [
+    ...(viewer.feature ? ["forum_feature", "forum_unfeature", "forum_tags"] : []),
+    ...(viewer.sage ? ["forum_sage", "forum_unsage"] : []),
+  ];
   const auditDetail = moderate
     ? "a.detail_json"
     : "json_object('topicId',json_extract(a.detail_json,'$.topicId'),'action',substr(a.event_type,7))";
@@ -105,9 +111,10 @@ export async function adminForumDetail(
     .prepare(
       `SELECT a.id,u.display_name AS actor,a.event_type AS event,${auditDetail} AS detail,a.created_at AS createdAt
     FROM auth_audit_logs a LEFT JOIN users u ON u.id=a.user_id WHERE a.event_type LIKE 'forum_%'
-    AND COALESCE(json_extract(a.detail_json,'$.topicId'),json_extract(a.detail_json,'$.context.topicId'))=? ${moderate ? "" : "AND a.event_type IN('forum_feature','forum_unfeature','forum_tags')"} ORDER BY a.id DESC LIMIT 50`,
+    AND COALESCE(json_extract(a.detail_json,'$.topicId'),json_extract(a.detail_json,'$.context.topicId'))=?
+    ${moderate ? "" : "AND a.event_type IN(SELECT value FROM json_each(?))"} ORDER BY a.id DESC LIMIT 50`,
     )
-    .bind(topic.id)
+    .bind(topic.id, ...(moderate ? [] : [JSON.stringify(auditEvents)]))
     .all<ForumAdminDetail["audit"][number]>();
   const parent =
     target.kind === "comment"
@@ -121,6 +128,7 @@ export async function adminForumDetail(
     images: contentImages(row),
     state: row.status,
     locked: !!topic.locked,
+    saged: !!topic.saged,
     featured: !!topic.featured_at,
     pinned: !!topic.pinned_at,
     publicHref: row.public

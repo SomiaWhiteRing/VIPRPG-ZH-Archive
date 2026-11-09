@@ -44,6 +44,8 @@ export type ForumAction =
   | "restore"
   | "lock"
   | "unlock"
+  | "sage"
+  | "unsage"
   | "feature"
   | "unfeature"
   | "pin"
@@ -70,6 +72,7 @@ export type ForumCapabilities = {
   report: boolean;
   moderate: boolean;
   feature: boolean;
+  sage: boolean;
 };
 export type ForumTopic = {
   id: number;
@@ -78,6 +81,7 @@ export type ForumTopic = {
   tags: ForumTag[];
   state: ForumState;
   locked: boolean;
+  saged: boolean;
   featured: boolean;
   pinned: boolean;
   createdAt: string;
@@ -159,6 +163,7 @@ export type ForumViewer = {
   use: boolean;
   moderate: boolean;
   feature: boolean;
+  sage: boolean;
   tags: boolean;
   elements: boolean;
 } | null;

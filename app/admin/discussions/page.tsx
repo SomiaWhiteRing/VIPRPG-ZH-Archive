@@ -5,7 +5,6 @@ import { forumViewer } from "@/app/.server/forum/queries";
 import { redirectPage } from "@/app/.server/http/page-response";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
-import { hasPermission } from "@/lib/authz/permissions";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { forumPage } from "@/lib/forum";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -17,8 +16,9 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const user = await getCurrentUser(runtime);
   if (!user) redirectPage("/login?next=%2Fadmin%2Fdiscussions");
-  const moderate = hasPermission(user, "forum.content.moderate_any");
-  if (!moderate && !hasPermission(user, "forum.topic.feature_any"))
+  const viewer = forumViewer(user)!;
+  const { moderate } = viewer;
+  if (!moderate && !viewer.feature && !viewer.sage)
     redirectPage("/");
   const p = await searchParams,
     view =
@@ -36,7 +36,7 @@ export async function loader(args: LoaderFunctionArgs) {
     page: forumPage(p.page),
   });
 
-  return { viewer: forumViewer(user)!, p, view, query, state, data };
+  return { viewer, p, view, query, state, data };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>

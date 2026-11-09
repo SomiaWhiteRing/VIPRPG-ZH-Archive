@@ -103,7 +103,7 @@ const ADMIN_NAVIGATION: Array<
       {
         href: "/admin/discussions",
         label: "讨论版",
-        anyPermission: ["forum.content.moderate_any", "forum.topic.feature_any"],
+        anyPermission: ["forum.content.moderate_any", "forum.topic.feature_any", "forum.topic.sage_any"],
       },
       {
         href: "/admin/discussion-tags",

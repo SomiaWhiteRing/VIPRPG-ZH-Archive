@@ -27,6 +27,7 @@ export type TopicRow = {
   locked: number;
   featured_at: string | null;
   pinned_at: string | null;
+  saged: number;
   revision: string;
   tag_snapshot: string;
   created_at: string;
@@ -97,6 +98,7 @@ export function forumViewer(user: ArchiveUser | null): ForumViewer {
         use: hasPermission(user, "forum.use"),
         moderate: hasPermission(user, "forum.content.moderate_any"),
         feature: hasPermission(user, "forum.topic.feature_any"),
+        sage: hasPermission(user, "forum.topic.sage_any"),
         tags: hasPermission(user, "forum.tag.manage"),
         elements: user.status === "active" && user.isBootstrapAdmin,
       }
@@ -163,6 +165,7 @@ export function mapTopic(
     title: row.title,
     state: row.status,
     locked: !!row.locked,
+    saged: !!row.saged,
     featured: !!row.featured_at,
     pinned: !!row.pinned_at,
     author: author(
@@ -193,6 +196,7 @@ export function mapTopic(
       report: !!viewer?.use && !!row.public,
       moderate: !!viewer?.moderate,
       feature: !!viewer?.feature && !!row.public,
+      sage: !!viewer?.sage && !!row.public,
     },
   };
 }
@@ -333,6 +337,7 @@ export function mapContent(
     report: readable && !!viewer?.use,
     moderate: !!viewer?.moderate && row.status !== "deleted",
     feature: false,
+    sage: false,
   };
   if (row.kind === "post" && row.post_number === 1) {
     capability.edit = topic.capabilities.edit;
