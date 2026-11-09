@@ -13,12 +13,15 @@ import type { DirectMessagePage } from "@/lib/dto/db/messages";
 import { FACE_EMOJI_PATTERN, type FaceEmoji } from "@/lib/face-emojis";
 import { MESSAGE_PAGE_SIZE } from "@/lib/messages";
 import { notifyInboxChanged } from "@/lib/inbox-events";
+import type { RestrictedInteraction } from "@/lib/interaction-restrictions";
 import { requestJson } from "@/lib/ui/api-response";
 import { MessageComposer } from "./composer";
 import { useMessageRoom } from "./use-message-room";
 import { MessageMenu } from "./menu";
 
-export function MessageThread({ viewerId, initial }: { viewerId: number; initial: DirectMessagePage }) {
+export function MessageThread({ viewerId, initial, interactionRestrictions }: {
+  viewerId: number; initial: DirectMessagePage; interactionRestrictions: RestrictedInteraction[] | null;
+}) {
   const environment = useClientEnvironment();
   const native = environment === "android";
   const [page, setPage] = useState(initial);
@@ -196,7 +199,7 @@ export function MessageThread({ viewerId, initial }: { viewerId: number; initial
           </Link>
           {!page.peer.receiveMessages ? <span className="shrink-0 text-sm text-muted">[已屏蔽]</span> : null}
         </div>
-        <MessageMenu peer={page.peer} onChanged={refresh} />
+        <MessageMenu peer={page.peer} interactionRestrictions={interactionRestrictions} onChanged={refresh} />
       </div>;
 
   // Clip the fixed background at the conversation's end, before the site footer.

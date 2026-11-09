@@ -2,6 +2,8 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
 import type { UserBlockSettings } from "@/lib/user-blocks";
+import type { RestrictedInteraction } from "@/lib/interaction-restrictions";
+import { interactionRestrictionStatements } from "./interaction-restrictions";
 
 const columns: Record<keyof UserBlockSettings, string> = {
   blockPrivateMessages: "block_private_messages", muteComments: "mute_comments",
@@ -35,13 +37,13 @@ export async function listHiddenPostAuthorIds(runtime: AppRuntime, userId: numbe
 }
 
 export async function setUserBlockSettings(runtime: AppRuntime, user: ArchiveUser, peerId: number,
-  patch: Partial<UserBlockSettings>): Promise<UserBlockSettings> {
+  patch: Partial<UserBlockSettings>, restrictions?: RestrictedInteraction[]): Promise<UserBlockSettings> {
   if (user.id === peerId) throw new HttpError(400, "不能屏蔽自己");
-  if (!await runtime.db.prepare("SELECT 1 FROM users WHERE id=?").bind(peerId).first())
+  if (!await runtime.db.prepare("SELECT 1 FROM users WHERE id=? AND (?=0 OR status<>'deleted')").bind(peerId, restrictions ? 1 : 0).first())
     throw new HttpError(404, "用户不存在");
   const entries = (Object.keys(patch) as (keyof UserBlockSettings)[]).map(key => ({ column: columns[key], value: patch[key] ? 1 : 0 }));
   const db = runtime.db;
-  await db.batch([
+  const statements = entries.length ? [
     db.prepare(`INSERT INTO user_block_settings(user_id,blocked_user_id,${entries.map(entry => entry.column).join(",")})
       VALUES(?,?,${entries.map(() => "?").join(",")}) ON CONFLICT(user_id,blocked_user_id) DO UPDATE SET
       ${entries.map(entry => `${entry.column}=excluded.${entry.column}`).join(",")}`)
@@ -63,7 +65,9 @@ export async function setUserBlockSettings(runtime: AppRuntime, user: ArchiveUse
     db.prepare(`DELETE FROM user_block_settings WHERE user_id=? AND blocked_user_id=?
       AND block_private_messages=0 AND mute_comments=0 AND mute_replies=0 AND mute_mentions=0 AND mute_likes=0 AND mute_friends=0 AND hide_posts=0`)
       .bind(user.id, peerId),
-  ]);
+  ] : [];
+  if (restrictions) statements.push(...interactionRestrictionStatements(db, user, peerId, restrictions));
+  await db.batch(statements);
   if (patch.blockPrivateMessages !== undefined) runtime.execution.waitUntil(runtime.env.MESSAGE_ROOM
     .getByName(`${Math.min(user.id, peerId)}:${Math.max(user.id, peerId)}`).changed()
     .catch(error => console.error("Private message notification failed", error)));

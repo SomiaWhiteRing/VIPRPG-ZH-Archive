@@ -9,16 +9,17 @@ import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import type { MessagePeer } from "@/lib/dto/db/messages";
 import { FORUM_REPORT_REASONS } from "@/lib/forum";
+import type { RestrictedInteraction } from "@/lib/interaction-restrictions";
 import { requestJson } from "@/lib/ui/api-response";
 import { UserBlockDialog } from "@/app/components/user-block-settings";
 import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
-import { useRevalidator } from "react-router";
 
-export function MessageMenu({ peer, onChanged }: { peer: MessagePeer; onChanged: () => Promise<void> }) {
+export function MessageMenu({ peer, interactionRestrictions, onChanged }: {
+  peer: MessagePeer; interactionRestrictions: RestrictedInteraction[] | null; onChanged: () => Promise<void>;
+}) {
   const [blocking, setBlocking] = useState(false);
   const [reporting, setReporting] = useState(false);
   const toast = useToast();
-  const revalidator = useRevalidator();
   const hidePosts = useIsPostAuthorHidden()(peer.id);
   return <>
     <DropdownMenu.Root>
@@ -30,11 +31,8 @@ export function MessageMenu({ peer, onChanged }: { peer: MessagePeer; onChanged:
         <DropdownMenu.Item className="cursor-pointer rounded-sm px-3 py-2 text-sm text-destructive outline-none focus:bg-primary/10" onSelect={() => setReporting(true)}>举报用户</DropdownMenu.Item>
       </DropdownMenu.Content></DropdownMenu.Portal>
     </DropdownMenu.Root>
-    {blocking ? <UserBlockDialog peer={peer} initial={{ ...peer.blockSettings, hidePosts }} onClose={() => setBlocking(false)}
-      onSaved={settings => {
-        if (settings.hidePosts !== hidePosts) void revalidator.revalidate();
-        void onChanged().catch(error => toast.error(error instanceof Error ? error.message : "读取失败"));
-      }} /> : null}
+    {blocking ? <UserBlockDialog peer={peer} initial={{ ...peer.blockSettings, hidePosts }} interactionRestrictions={interactionRestrictions}
+      onClose={() => setBlocking(false)} onSaved={() => { void onChanged().catch(error => toast.error(error instanceof Error ? error.message : "读取失败")); }} /> : null}
     {reporting ? <MessageReportDialog peer={peer} onClose={() => setReporting(false)} /> : null}
   </>;
 }
