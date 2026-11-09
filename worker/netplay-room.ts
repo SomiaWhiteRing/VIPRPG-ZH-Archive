@@ -16,7 +16,8 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     socket.accept();
     this.peers.add(socket);
     socket.addEventListener("message", ({ data }) => {
-      if (!this.peers.has(socket) || !(data instanceof ArrayBuffer) || data.byteLength !== 4) return;
+      if (!this.peers.has(socket) || !(data instanceof ArrayBuffer) ||
+          (data.byteLength !== 4 && data.byteLength !== 12)) return;
       for (const peer of this.peers) {
         if (peer !== socket && peer.readyState === WebSocket.OPEN) peer.send(data);
       }
