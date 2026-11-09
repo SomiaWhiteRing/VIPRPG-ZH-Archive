@@ -21,8 +21,9 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
 
   private publishDirectory() {
     const rooms = this.list();
+    const online = this.directory.size;
     for (const [socket, identity] of this.directory) {
-      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ rooms, identity }));
+      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ rooms, identity, online }));
     }
   }
 
@@ -39,12 +40,13 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
       const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Netplay-Identity")!)) as Identity;
       this.directory.set(socket, identity);
       const disconnect = () => {
-        this.directory.delete(socket);
+        if (!this.directory.delete(socket)) return;
+        this.publishDirectory();
         socket.close(1000);
       };
       socket.addEventListener("close", disconnect);
       socket.addEventListener("error", disconnect);
-      socket.send(JSON.stringify({ rooms: this.list(), identity }));
+      this.publishDirectory();
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
 
