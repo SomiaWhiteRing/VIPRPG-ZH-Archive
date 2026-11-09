@@ -139,7 +139,7 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
       this.broadcast(room, "G " + room.epoch + " 1");
       return;
     }
-    if (type === "I" && words.length === 3 && b === client.next && c <= 31) {
+    if (type === "I" && words.length === 3 && b === client.next && c <= (room.members[0] === client ? 63 : 31)) {
       client.next++;
       this.send(peer, message);
     } else if (type === "C" && words.length === 3 && b % 60 === 59 && b < client.next && c <= 0xffffffff) {
