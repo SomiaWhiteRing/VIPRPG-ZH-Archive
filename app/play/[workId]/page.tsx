@@ -90,7 +90,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const netplayEndpoint = easyRpg?.netplay && record.netplayService && runtime.env.NETPLAY_ROOM
     ? new URL(`/api/netplay/v1/${record.id}/`, runtime.origin).href
     : undefined;
-  const runtimeVersion = netplayEndpoint ? "kai-netplay-41319054" : easyRpgRuntimeVersion;
+  const runtimeVersion = netplayEndpoint ? "kai-netplay-0c9c6c6c" : easyRpgRuntimeVersion;
   const runtimeBasePath = netplayEndpoint ? `/play/runtime/easyrpg/${runtimeVersion}` : easyRpgRuntimeBasePath;
   const metadata: WebPlayMetadata = {
     ok: true,
