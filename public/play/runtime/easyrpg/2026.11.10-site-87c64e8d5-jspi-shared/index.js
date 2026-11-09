@@ -872,6 +872,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const offscreen = canvas.transferControlToOffscreen();
     worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, engineName, packages: options.packages,
       workId: options.workId, sampleRate: context.sampleRate, wasmModule, runtimeData, arguments: options.arguments || [],
+      netplayEndpoint: options.netplayEndpoint,
       joystickAvailable: joystickAvailable(),
       systemNameInput,
       audioPort: controlChannel.port2, audioCapabilities}, [offscreen, controlChannel.port2]);

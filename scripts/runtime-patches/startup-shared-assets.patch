@@ -26,7 +26,7 @@
    startStartupTimer();
    const shutdown = async () => {
      nameInput?.finish(null);
-@@ -723,20 +734,25 @@
+@@ -723,21 +734,26 @@
    };
    try {
      // Cancel/timeout must also end startup while the audio module is loading.
@@ -52,6 +52,7 @@
      worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, engineName, packages: options.packages,
 -      workId: options.workId, sampleRate: context.sampleRate, arguments: options.arguments || [],
 +      workId: options.workId, sampleRate: context.sampleRate, wasmModule, runtimeData, arguments: options.arguments || [],
+       netplayEndpoint: options.netplayEndpoint,
        joystickAvailable: joystickAvailable(),
        systemNameInput,
        audioPort: controlChannel.port2, audioCapabilities}, [offscreen, controlChannel.port2]);

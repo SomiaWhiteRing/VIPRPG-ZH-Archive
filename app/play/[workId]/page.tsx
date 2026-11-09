@@ -90,8 +90,6 @@ export async function loader(args: LoaderFunctionArgs) {
   const netplayEndpoint = easyRpg?.netplay && record.netplayService && runtime.env.NETPLAY_ROOM
     ? new URL(`/api/netplay/v1/${record.id}/`, runtime.origin).href
     : undefined;
-  const runtimeVersion = netplayEndpoint ? "kai-netplay-e55e7d89" : easyRpgRuntimeVersion;
-  const runtimeBasePath = netplayEndpoint ? `/play/runtime/easyrpg/${runtimeVersion}` : easyRpgRuntimeBasePath;
   const metadata: WebPlayMetadata = {
     ok: true,
     archiveVersionId: record.id,
@@ -103,9 +101,9 @@ export async function loader(args: LoaderFunctionArgs) {
     manifestSha256: record.manifestSha256,
     downloadZipBuilderVersion,
     webPlayInstallerVersion,
-    easyRpgRuntimeVersion: runtimeVersion,
-    runtimeBasePath,
-    runtimeAssetBasePath: netplayEndpoint ? runtimeBasePath : easyRpgRuntimeAssetBasePath(runtime.origin),
+    easyRpgRuntimeVersion,
+    runtimeBasePath: easyRpgRuntimeBasePath,
+    runtimeAssetBasePath: easyRpgRuntimeAssetBasePath(runtime.origin),
     playKey: buildWebPlayKey({
       archiveVersionId: record.id,
       manifestSha256: record.manifestSha256,
