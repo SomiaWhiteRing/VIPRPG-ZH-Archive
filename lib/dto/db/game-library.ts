@@ -199,6 +199,7 @@ export type GameLibrarySummary = GameCardSummary & Pick<GameWorkSummary,
 
 export type AdminArchiveVersionEdit = {
   id: number;
+  netplayService: boolean | null;
   workId: number;
   workTitle: string;
   language: string;

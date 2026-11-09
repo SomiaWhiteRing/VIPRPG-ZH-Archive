@@ -135,6 +135,19 @@ export default function AdminArchiveVersionEditPage() {
                 type="url"
               />
             </FormField>
+            {archiveVersion.netplayService !== null && (
+              <FormField controlId="archive-netplay-service" label="联机服务">
+                <SelectField
+                  id="archive-netplay-service"
+                  name="netplay_service"
+                  defaultValue={archiveVersion.netplayService ? "1" : "0"}
+                  options={[
+                    { value: "0", label: "关闭" },
+                    { value: "1", label: "开启" },
+                  ]}
+                />
+              </FormField>
+            )}
           </div>
         </Pane>
         <StickySaveBar>

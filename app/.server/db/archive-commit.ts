@@ -1578,10 +1578,11 @@ async function insertArchiveVersion(
         web_play_size_bytes,
         uses_shared_player,
         embedded_player_size_bytes,
+        netplay_service,
         is_current,
         uploader_id,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'processing')`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'processing')`,
     )
     .bind(
       input.workId,
@@ -1605,6 +1606,7 @@ async function insertArchiveVersion(
       webPlayTotals.sizeBytes,
       manifest.archiveVersion.sharedPlayer ? 1 : 0,
       manifest.files.filter((file) => isSharedPlayerPath(file.path)).reduce((sum, file) => sum + file.size, 0),
+      manifest.archiveVersion.easyRpg?.netplay ? 0 : null,
       input.uploaderId,
     )
     .run();

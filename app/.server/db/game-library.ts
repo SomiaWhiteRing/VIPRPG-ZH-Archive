@@ -164,6 +164,7 @@ type WorkRow = {
 };
 type ArchiveEditRow = {
   id: number;
+  netplay_service: 0 | 1 | null;
   work_id: number;
   work_title: string;
   work_language: string;
@@ -214,6 +215,7 @@ type WorkEditInput = WorkVisibilityInput & {
 
 type ArchiveEditInput = {
   archiveVersionId: number;
+  netplayService?: 0 | 1;
   status: string;
   sourceName: string | null;
   sourceUrl: string | null;
@@ -1418,6 +1420,7 @@ export async function getArchiveVersionForAdminEdit(
     workId: row.work_id,
     workTitle: row.work_title,
     language: row.work_language,
+    netplayService: row.netplay_service === null ? null : row.netplay_service === 1,
     isCurrent: row.is_current === 1,
     status: row.status,
     totalFiles: row.total_files,
@@ -1468,6 +1471,7 @@ export async function updateArchiveVersionForAdmin(
        SET status = ?,
          source_name = ?,
          source_url = ?,
+         netplay_service = CASE WHEN netplay_service IS NOT NULL THEN COALESCE(?, netplay_service) END,
          is_current = CASE
            WHEN ? <> 'published' THEN 0
            ELSE is_current
@@ -1480,6 +1484,7 @@ export async function updateArchiveVersionForAdmin(
       input.status,
       input.sourceName,
       sourceUrl,
+      input.netplayService ?? null,
       input.status,
       input.archiveVersionId,
     );
@@ -1526,8 +1531,13 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
   };
 }
 export function parseArchiveVersionEditForm(form: FormData): ArchiveEditInput {
+  const netplayService = form.get("netplay_service");
+  if (netplayService !== null && netplayService !== "0" && netplayService !== "1") {
+    throw new HttpError(400, "联机服务设置无效");
+  }
   return {
     archiveVersionId: positive(form.get("archive_version_id")),
+    netplayService: netplayService === null ? undefined : netplayService === "1" ? 1 : 0,
     status: String(form.get("status") ?? "published"),
     sourceName: clean(form.get("source_name")),
     sourceUrl: clean(form.get("source_url")),

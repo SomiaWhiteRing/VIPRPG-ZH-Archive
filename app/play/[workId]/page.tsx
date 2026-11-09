@@ -86,6 +86,7 @@ export async function loader(args: LoaderFunctionArgs) {
     listWorkCollections(runtime, work.id, page, true),
   ]);
 
+  const easyRpg = await readArchiveEasyRpgConfig(runtime, record.manifestSha256);
   const metadata: WebPlayMetadata = {
     ok: true,
     archiveVersionId: record.id,
@@ -111,7 +112,10 @@ export async function loader(args: LoaderFunctionArgs) {
     installTotalSizeBytes: record.installTotalSizeBytes,
     estimatedR2GetCount: record.estimatedR2GetCount,
     engineFamily: record.engineFamily,
-    easyRpg: await readArchiveEasyRpgConfig(runtime, record.manifestSha256),
+    easyRpg,
+    netplayEndpoint: easyRpg?.netplay && record.netplayService && runtime.env.NETPLAY_ROOM
+      ? new URL(`/api/netplay/v1/${record.id}/`, runtime.origin).href
+      : undefined,
   };
 
   return {

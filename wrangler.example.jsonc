@@ -152,6 +152,10 @@
           {
             "name": "MESSAGE_ROOM",
             "class_name": "MessageRoom"
+          },
+          {
+            "name": "NETPLAY_ROOM",
+            "class_name": "NetplayRoom"
           }
         ]
       },
@@ -170,6 +174,10 @@
     }
   },
   "exports": {
+    "NetplayRoom": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
     "MessageRoom": {
       "type": "durable-object",
       "storage": "sqlite"
