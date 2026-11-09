@@ -156,11 +156,10 @@ function gyokuroBridge() {
       postMessage({type: 'gyokuro-send', message});
       return true;
     },
-    gyokuroAvatar: (path, pointer) => {
+    gyokuroAvatar: (path, pointer, size) => {
       if (!avatars.has(path)) {
         avatars.set(path, null);
         fetch(path).then(response => response.blob()).then(createImageBitmap).then(image => {
-          const size = 40;
           const canvas = new OffscreenCanvas(size, size);
           const ctx = canvas.getContext('2d');
           const crop = Math.min(image.width, image.height);

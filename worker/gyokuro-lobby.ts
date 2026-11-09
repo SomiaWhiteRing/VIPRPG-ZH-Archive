@@ -8,7 +8,7 @@ import { gyokuroEndpoint as socketPath, gyokuroRuntime, gyokuroStagingOrigin as 
 const lobbyPath = "/play/244/netplay";
 const assetPath = "/play/gyokuro-lobby/";
 
-const stages = [6, 5, 7, 8, 11, 9, 12, 1, 14, 15, 13];
+const stages = [6, 7, 8, 11, 9, 12, 1, 14, 15, 13];
 const roster = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18];
 type Identity = { name: string; avatar: string };
 type Room = { id: string; members: Client[]; stage: number; rounds: number; phase: "room" | "select" | "loading" | "battle"; epoch: number };
