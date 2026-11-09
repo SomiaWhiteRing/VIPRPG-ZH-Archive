@@ -6,6 +6,7 @@ import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import type { FollowDirection, FollowPage, FollowSummary } from "@/lib/dto/db/user-follows";
 import { HttpError } from "@/lib/http";
 import { interactionSuppressedSql } from "./user-blocks";
+import { assertInteractionAllowed, interactionRestrictedSql } from "./interaction-restrictions";
 
 export async function readFollowSummary(runtime: AppRuntime, userId: number, viewer: ArchiveUser | null): Promise<FollowSummary | null> {
   const row = await getD1(runtime).prepare(`SELECT
@@ -40,6 +41,7 @@ export async function setUserFollow(runtime: AppRuntime, actorId: number, target
       db.prepare(`INSERT INTO user_follows(follower_user_id,followed_user_id)
       SELECT actor.id,target.id FROM users actor JOIN users target ON target.id=? AND target.status='active'
       WHERE actor.id=? AND actor.status='active' AND ${userPermissionSql("actor.id", permission)}
+        AND NOT ${interactionRestrictedSql("target.id", "actor.id", "friend")}
       ON CONFLICT(follower_user_id,followed_user_id) DO NOTHING`).bind(targetId, actorId),
       // changes() belongs to the preceding relation insert. A retry cannot send
       // another notice, and a notification failure rolls the relation back.
@@ -68,6 +70,8 @@ export async function setUserFollow(runtime: AppRuntime, actorId: number, target
     if (!result.meta.changes) {
       await assertFollowPermission(runtime, actorId, permission);
       if (!await db.prepare("SELECT 1 FROM users WHERE id=? AND status='active'").bind(targetId).first()) throw new HttpError(404, "用户不存在");
+      if (!await db.prepare("SELECT 1 FROM user_follows WHERE follower_user_id=? AND followed_user_id=?").bind(actorId, targetId).first())
+        await assertInteractionAllowed(db, targetId, actorId, "friend");
     }
   } else {
     const result = await db.prepare(`DELETE FROM user_follows WHERE follower_user_id=? AND followed_user_id=?

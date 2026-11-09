@@ -3,6 +3,7 @@ import { getCurrentUser } from "./auth/current-user";
 import { getD1 } from "./db/d1";
 import { commentRecipientReadSql } from "./db/comment-visibility";
 import { interactionSuppressedSql } from "./db/user-blocks";
+import { interactionRestrictedSql } from "./db/interaction-restrictions";
 import type { AppRuntime } from "./runtime";
 
 import { MENTION_LIMIT, mentions, type MentionSearchUser } from "@/lib/mentions";
@@ -22,18 +23,23 @@ export async function searchMentionUsers(runtime: AppRuntime, request: Request) 
   return jsonResponse({ ok: true, users: rows.results }, { headers: { "Cache-Control": "no-store" } });
 }
 
-export async function validateMentions(db: D1Database, body: string, previous = "") {
+export async function validateMentions(db: D1Database, actorId: number, body: string, previous = "") {
   const users = mentions(body);
   const ids = [...new Set(users.map((user) => user.id))];
   if (ids.length > MENTION_LIMIT) throw new HttpError(400, `每条内容最多提及 ${MENTION_LIMIT} 位用户。`);
-  const old = new Set(mentions(previous).map((user) => `${user.id}:${user.displayName}`));
+  const previousMentions = mentions(previous);
+  const old = new Set(previousMentions.map((user) => `${user.id}:${user.displayName}`));
   const added = users.filter((user) => !old.has(`${user.id}:${user.displayName}`));
   if (!added.length) return;
-  const rows = await db.prepare("SELECT id,display_name FROM users WHERE status='active' AND id IN (SELECT value FROM json_each(?))")
-    .bind(JSON.stringify([...new Set(added.map((user) => user.id))])).all<{ id: number; display_name: string }>();
+  const rows = await db.prepare(`SELECT id,display_name,${interactionRestrictedSql("users.id", "?", "mention")} AS restricted
+    FROM users WHERE status='active' AND id IN (SELECT value FROM json_each(?))`)
+    .bind(actorId, JSON.stringify([...new Set(added.map((user) => user.id))])).all<{ id: number; display_name: string; restricted: number }>();
   const names = new Map(rows.results.map((user) => [user.id, user.display_name]));
   if (added.some((user) => names.get(user.id) !== user.displayName))
     throw new HttpError(409, "被提及用户的资料已变化或不可用，请重新搜索选择。");
+  const previousIds = new Set(previousMentions.map(user => user.id));
+  if (rows.results.some(row => row.restricted && !previousIds.has(row.id)))
+    throw new HttpError(403, "Permission denied");
 }
 
 // The source must be gated by this write's revision/request identity in the publication batch.

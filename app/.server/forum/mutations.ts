@@ -1,4 +1,5 @@
 import { mentionNotificationStatements, validateMentions } from "@/app/.server/mentions";
+import { assertInteractionAllowed, interactionRestrictedSql } from "@/app/.server/db/interaction-restrictions";
 import { validateBodyEmojis } from "@/app/.server/emojis/service";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { auditedEntityBatch, forumEditAuditSnapshot } from "@/app/.server/db/entity-audit";
@@ -313,7 +314,7 @@ export async function publishForum(
   const body = mixedBody(input.body, images, kind);
   const attachments = contentGuard(images, actor, body, kind);
   await validateBodyEmojis(ctx.db, body);
-  await validateMentions(ctx.db, body);
+  await validateMentions(ctx.db, actor.id, body);
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
   const token = crypto.randomUUID(),
     db = ctx.db;
@@ -413,6 +414,7 @@ export async function publishForum(
   const topic = await rawTopic(ctx, parent.topic_id);
   if (topic.locked) throw new HttpError(409, "主题已锁定，不能继续回复。");
   const targetId = input.replyToId == null ? null : id(input.replyToId);
+  let recipientId = kind === "post" ? topic.user_id : parent.user_id;
   if (kind === "comment" && targetId) {
     const target = await contentIdentity(ctx, {
       kind: "comment",
@@ -420,7 +422,9 @@ export async function publishForum(
     });
     if (!target.public || target.post_id !== parent.id)
       throw new HttpError(409, "回复目标已不可用。", "forum_reply_target");
+    recipientId = target.user_id;
   }
+  await assertInteractionAllowed(db, recipientId, actor.id, "reply");
   const tokenGate = topicGate(topic.id, token);
   const predicate: Predicate = {
     sql: `${publicTopicSql} AND t.locked=0 AND ${rateSql} AND ${attachments.sql} AND NOT EXISTS(SELECT 1 FROM ${table} WHERE user_id=? AND request_key=?)
@@ -530,7 +534,7 @@ export async function editForum(
   const body = mixedBody(input.body, images, target.kind);
   const attachments = contentGuard(images, actor, body, target.kind, row.id);
   await validateBodyEmojis(ctx.db, body, row.body ?? "");
-  await validateMentions(ctx.db, body, row.body ?? "");
+  await validateMentions(ctx.db, actor.id, body, row.body ?? "");
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
   const title =
     target.kind === "topic"
@@ -672,13 +676,13 @@ export async function likeForum(
   const visible = target.kind === "comment" ? "forum_public_comments" : "forum_public_posts";
   if (typeof input.liked !== "boolean")
     throw new HttpError(400, "点赞状态无效。");
-  if (
-    !(await ctx.db
-      .prepare(`SELECT id FROM ${visible} WHERE id=?`)
-      .bind(target.id)
-      .first())
-  )
-    unavailable();
+  const row = await ctx.db.prepare(`SELECT
+    (? AND ${interactionRestrictedSql("p.user_id", "?", "like")} AND NOT EXISTS(
+      SELECT 1 FROM ${table} WHERE ${column}=p.id AND user_id=?)) AS restricted
+    FROM ${visible} p WHERE p.id=?`)
+    .bind(input.liked ? 1 : 0, actor.id, actor.id, target.id).first<{ restricted: number }>();
+  if (!row) unavailable();
+  if (row.restricted) throw new HttpError(403, "Permission denied");
   if (input.liked)
     await ctx.db.batch([
       ctx.db

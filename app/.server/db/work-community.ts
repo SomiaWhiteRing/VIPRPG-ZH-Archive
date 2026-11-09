@@ -1,5 +1,6 @@
 import { mentionNotificationStatements, validateMentions } from "@/app/.server/mentions";
 import { interactionSuppressedSql } from "./user-blocks";
+import { assertInteractionAllowed, interactionRestrictedSql } from "./interaction-restrictions";
 import { timelineStatement } from "@/app/.server/db/timeline";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { workReadCondition } from "@/app/.server/db/work-visibility";
@@ -613,10 +614,11 @@ export async function createComment(
   const body = normalizeCommentBody(bodyInput);
   let rootCommentId: number | null = null;
   let replyToId: number | null = null;
+  let replyRecipientId: number | null = null;
   if (replyToCommentId !== undefined) {
     const replyTarget = await getD1(runtime)
       .prepare(
-        `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.catalog_id,c.root_comment_id,c.status,
+        `SELECT c.id,c.user_id,c.work_id,c.creator_id,c.character_id,c.catalog_id,c.root_comment_id,c.status,
         COALESCE(root.status,c.status) AS root_status
         FROM comments c LEFT JOIN comments root ON root.id=c.root_comment_id
         JOIN users author ON author.id=c.user_id
@@ -627,6 +629,7 @@ export async function createComment(
       .bind(replyToCommentId)
       .first<{
         id: number;
+        user_id: number;
         work_id: number | null;
         creator_id: number | null;
         character_id: number | null;
@@ -644,6 +647,7 @@ export async function createComment(
       throw new HttpError(409, "回复目标不可用");
     rootCommentId = replyTarget.root_comment_id ?? replyTarget.id;
     replyToId = replyTarget.root_comment_id === null ? null : replyTarget.id;
+    replyRecipientId = replyTarget.user_id;
   }
   const db = getD1(runtime);
   const ids = parseCommentImageIds(imagesInput);
@@ -659,8 +663,9 @@ export async function createComment(
   };
   const previous = await previousRequest();
   if (previous) return readCommentForUser(runtime, previous.id, userId);
+  if (replyRecipientId !== null) await assertInteractionAllowed(db, replyRecipientId, userId, "reply");
   await validateBodyEmojis(db, body);
-  await validateMentions(db, body);
+  await validateMentions(db, userId, body);
   const guard = commentImageGuard(ids, userId);
   const source = "SELECT id FROM comments WHERE user_id=? AND request_key=?";
   try {
@@ -743,7 +748,7 @@ export async function updateComment(
     .first<{ body: string }>();
   if (!previous) throw new HttpError(404, "评论不存在或不可编辑");
   await validateBodyEmojis(db, body, previous.body);
-  await validateMentions(db, body, previous.body);
+  await validateMentions(db, userId, body, previous.body);
   const source =
     `SELECT id FROM comments WHERE id=? AND user_id=? AND status IN('published','hidden') AND ${access.sql}`;
   const sourceBinds = [id, userId, ...access.binds];
@@ -846,8 +851,13 @@ export async function likeComment(
 ): Promise<void> {
   const access = commentTargetReadCondition(await getCurrentUser(runtime));
   const db = getD1(runtime);
-  if (!await db.prepare(`SELECT c.id FROM published_comments c WHERE c.id=? AND ${access.sql}`)
-    .bind(id, ...access.binds).first()) throw new HttpError(404, "评论不存在");
+  const target = await db.prepare(`SELECT
+      (${interactionRestrictedSql("c.user_id", "?", "like")} AND NOT EXISTS(
+        SELECT 1 FROM comment_likes WHERE comment_id=c.id AND user_id=?)) AS restricted
+      FROM published_comments c WHERE c.id=? AND ${access.sql}`)
+    .bind(userId, userId, id, ...access.binds).first<{ restricted: number }>();
+  if (!target) throw new HttpError(404, "评论不存在");
+  if (target.restricted) throw new HttpError(403, "Permission denied");
   await db.batch([
     db.prepare(`INSERT OR IGNORE INTO comment_likes(comment_id,user_id)
       SELECT c.id,? FROM published_comments c WHERE c.id=? AND ${access.sql}

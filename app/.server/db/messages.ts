@@ -1,6 +1,7 @@
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { readDirectMessageReport } from "./message-reports";
 import { readUserBlockSettings, setUserBlockSettings } from "./user-blocks";
+import { assertInteractionAllowed, interactionRestrictedSql } from "./interaction-restrictions";
 import { bodyEmojis } from "@/app/.server/emojis/service";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { memoizeRequest } from "@/app/.server/runtime";
@@ -140,9 +141,11 @@ export async function sendDirectMessage(runtime: AppRuntime, user: ArchiveUser, 
   const peer = await directMessagePeer(runtime, user, peerId);
   if (!peer.canSend) throw new HttpError(403, "无法向此用户发送短信");
   const db = runtime.db;
+  await assertInteractionAllowed(db, peerId, user.id, "message");
   const ids = input.kind === "text" ? emojiIds(input.body) : [];
   const allowed = `EXISTS(SELECT 1 FROM users recipient WHERE recipient.id=? AND recipient.status='active'
-      AND recipient.receive_private_messages=1) AND ${userPermissionSql(String(user.id), "message.send")}`;
+      AND recipient.receive_private_messages=1 AND NOT ${interactionRestrictedSql("recipient.id", String(user.id), "message")})
+      AND ${userPermissionSql(String(user.id), "message.send")}`;
   await db.batch([
     db.prepare(`INSERT INTO direct_conversations(lower_user_id,upper_user_id)
       SELECT MIN(?,?),MAX(?,?) WHERE ${allowed} ON CONFLICT(lower_user_id,upper_user_id) DO NOTHING`)
@@ -168,7 +171,10 @@ export async function sendDirectMessage(runtime: AppRuntime, user: ArchiveUser, 
       WHERE sender_user_id=? AND client_id=?) AND state='uploading'`).bind(user.id, input.clientId),
   ]);
   const sent = await findSentDirectMessage(runtime, user.id, peerId, input);
-  if (!sent) throw new HttpError(429, "发送未完成，请稍后重试");
+  if (!sent) {
+    await assertInteractionAllowed(db, peerId, user.id, "message");
+    throw new HttpError(429, "发送未完成，请稍后重试");
+  }
   // D1 owns the message. The room only wakes briefly to send a change event.
   runtime.execution.waitUntil(runtime.env.MESSAGE_ROOM.getByName(`${Math.min(user.id, peerId)}:${Math.max(user.id, peerId)}`)
     .changed().catch(error => console.error("Private message notification failed", error)));
