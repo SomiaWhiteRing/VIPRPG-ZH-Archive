@@ -189,8 +189,8 @@ try {
     return value ? [[Number(value[1]), value[2]]] : [];
   }));
   await waitUntil(() => packets.every((set) => checksum(set).has(179)), "Both game engines confirmed inputs through frame 179");
-  assert.ok(packets[0].some((packet) => packet.includes("fighters 1/2, stage 6")), "The host selected fighter 1 in the native 1P slot");
-  assert.ok(packets[1].some((packet) => packet.includes("fighters 2/1, stage 6")), "The guest selected fighter 2 in the native 1P slot");
+  assert.ok(packets.every((set) => set.some((packet) => packet.includes("fighters 1/2, stage 6"))),
+    "Both engines simulated the same native fighter order");
   const [first, second] = packets.map(checksum);
   for (const [frame, sum] of first) if (second.has(frame)) assert.equal(sum, second.get(frame), "Frame " + frame);
   assert.ok(packets.every((set) => set.some((p) => p.startsWith(">I ") && Number(p.split(" ").at(-1)) === 18)), "Both browsers sent right and attack in stage coordinates");
@@ -228,7 +228,7 @@ try {
   await tap(pages[1], "x");
   await waitUntil(() => !latest(1)?.rooms.some((room) => room.id === roomId), "The empty room disappeared");
   await Promise.all(contexts.map((context) => context.close()));
-  console.log("Verified staging work " + workId + " title, match rules, selection and cancellation, synchronized arena start, native 1P slots and both room departure paths.");
+  console.log("Verified staging work " + workId + " title, match rules, selection and cancellation, shared arena simulation and both room departure paths.");
 
   const [asset] = await query("SELECT u.avatar_blob_sha256 AS avatar FROM users u JOIN blobs b ON b.sha256=u.avatar_blob_sha256 WHERE b.status='active' LIMIT 1");
   const avatar = asset?.avatar ?? null;
