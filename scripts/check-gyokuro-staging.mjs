@@ -203,7 +203,7 @@ try {
     packets[1].includes("<O") && packets[1].includes("<P 0"), "The guest returned and inherited the room after the host disconnected");
   await pages[1].waitForTimeout(600);
   await tap(pages[1], "ArrowRight");
-  await waitUntil(() => packets[1].some((packet) => packet.startsWith("<R 0 5 ")), "The new host could choose the stage");
+  await waitUntil(() => packets[1].some((packet) => packet.startsWith("<R 0 7 ")), "The new host could choose the next online stage after Scrapcity");
   const replacementContext = await browser.newContext();
   const replacement = await replacementContext.newPage();
   let replacementState;
