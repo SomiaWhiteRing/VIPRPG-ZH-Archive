@@ -55,6 +55,7 @@ import * as endpoint50 from "@/app/.server/endpoints/api/admin/users/[userId]/ro
 import * as endpoint51 from "@/app/.server/endpoints/api/admin/users/[userId]/roles/route";
 import * as endpoint52 from "@/app/.server/endpoints/api/admin/users/[userId]/status/route";
 import * as userPermissionsEndpoint from "@/app/.server/endpoints/api/admin/users/[userId]/permissions/route";
+import * as interactionRestrictionsEndpoint from "@/app/.server/endpoints/api/admin/users/[userId]/interaction-restrictions/route";
 import * as endpoint53 from "@/app/.server/endpoints/api/admin/works/[workId]/maintainers/route";
 import * as endpoint54 from "@/app/.server/endpoints/api/admin/works/[workId]/merge/route";
 import * as endpoint55 from "@/app/.server/endpoints/api/admin/works/[workId]/update/route";
@@ -857,6 +858,15 @@ api.options("/api/admin/users/:userId/permissions", (c) =>
 );
 api.all("/api/admin/users/:userId/permissions", (_c) =>
   jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }),
+);
+api.put("/api/admin/users/:userId/interaction-restrictions", (c) =>
+  interactionRestrictionsEndpoint.PUT(c.get("runtime"), c.req.raw, c.req.param("userId")),
+);
+api.options("/api/admin/users/:userId/interaction-restrictions", (c) =>
+  c.body(null, 204, { Allow: "PUT, OPTIONS" }),
+);
+api.all("/api/admin/users/:userId/interaction-restrictions", () =>
+  jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "PUT, OPTIONS" } }),
 );
 api.on("POST", "/api/admin/users/:userId/status", (c) =>
   endpoint52.POST(c.get("runtime"), c.req.raw, {

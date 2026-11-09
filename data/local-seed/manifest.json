@@ -3,9 +3,9 @@
   "capturedAt": "2026-10-03T17:08:34.857Z",
   "database": {
     "file": "data/local-seed/database.sqlite.gz",
-    "sha256": "785aaf9333176577222904f3ea4d5a83e5a19ec150265eb540e8c7d98b1f9d0d",
+    "sha256": "c571f742c4e2a5cfff87a56dc6f8ec00b24a80660111a7cb349c9ee6b408755b",
     "size": 15298560,
-    "gzipSha256": "fc4433996bcc28996973f3260f0ce23507fac1e4a4275ec0ff38170530c8d04a",
+    "gzipSha256": "707407ddd5c442a51df6cda09fb84daee41b259af3e54d88f724354b6da5813f",
     "tables": {
       "_cf_METADATA": 1,
       "archive_gc_cursors": 0,
@@ -42,7 +42,7 @@
       "counted_work_genres": 3,
       "creator_aliases": 6,
       "creators": 6,
-      "d1_migrations": 51,
+      "d1_migrations": 52,
       "default_face_emojis": 30,
       "direct_conversation_states": 0,
       "direct_conversations": 0,
@@ -100,6 +100,7 @@
       "user_emoji_library_state": 0,
       "user_face_emojis": 0,
       "user_follows": 0,
+      "user_interaction_restrictions": 0,
       "user_permission_blocks": 0,
       "user_role_events": 1,
       "user_roles": 15,

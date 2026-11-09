@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { requireUser } from "@/app/.server/auth/guards";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
+import { assertInteractionAllowed, interactionRestrictedSql } from "@/app/.server/db/interaction-restrictions";
 import { directMessagePeer, findSentDirectMessage, listDirectConversations, listDirectMessages, markDirectMessagesRead, sendDirectMessage, setDirectMessageReceiving } from "@/app/.server/db/messages";
 import { createDirectMessageReport, readDirectMessageReport } from "@/app/.server/db/message-reports";
 import { parsePositiveId, readJsonObject, readRequestBody } from "@/app/.server/http/request";
@@ -103,6 +104,7 @@ messageApi.post("/api/messages/:peerId/image", async c => {
   if (!(file instanceof File)) throw new HttpError(400, "请选择图片");
   const existing = await findSentDirectMessage(runtime, user.id, peerId, { kind: "image", clientId });
   if (existing) return json({ ok: true, message: existing });
+  await assertInteractionAllowed(runtime.db, peerId, user.id, "message");
   const imageBytes = await file.arrayBuffer();
   let meta: ReturnType<typeof inspectImage>;
   try { meta = inspectImage(imageBytes, MESSAGE_IMAGE_BYTES); }
@@ -111,7 +113,8 @@ messageApi.post("/api/messages/:peerId/image", async c => {
   const imageId = crypto.randomUUID();
   await runtime.db.prepare(`INSERT INTO direct_message_images(id,sender_user_id,recipient_user_id,client_id,object_key,format,size,width,height,state)
     SELECT ?,?,?,?,?,?,?,?,?,'uploading' WHERE ${userPermissionSql(String(user.id), "message.send")}
-      AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active' AND receive_private_messages=1)
+      AND EXISTS(SELECT 1 FROM users WHERE id=? AND status='active' AND receive_private_messages=1
+        AND NOT ${interactionRestrictedSql("users.id", String(user.id), "message")})
       AND (SELECT COUNT(*) FROM direct_message_images WHERE sender_user_id=? AND created_at>=datetime('now','-1 minute'))<12
     ON CONFLICT(sender_user_id,client_id) DO NOTHING`)
     .bind(imageId, user.id, peerId, clientId, privateMessageImageKey(imageId), meta.format, meta.size, meta.width, meta.height, peerId, user.id).run();
