@@ -9,11 +9,12 @@ import { useConfirm } from "@/app/components/ui/confirm-provider";
 import type { FollowSummary } from "@/lib/dto/db/user-follows";
 import { notifyInboxChanged } from "@/lib/inbox-events";
 import { UserBlockButton } from "@/app/components/user-block-settings";
+import type { RestrictedInteraction } from "@/lib/interaction-restrictions";
 import type { UserBlockSettings } from "@/lib/user-blocks";
 
-export function UserFollowControls({ userId, displayName, viewerId, summary, canMessage = false, blockSettings, avatarBlobSha256 }: {
+export function UserFollowControls({ userId, displayName, viewerId, summary, canMessage = false, blockSettings, interactionRestrictions, avatarBlobSha256 }: {
   userId: number; displayName: string; viewerId: number | null; summary: FollowSummary | null; canMessage?: boolean;
-  blockSettings: UserBlockSettings | null; avatarBlobSha256: string | null;
+  blockSettings: UserBlockSettings | null; interactionRestrictions: RestrictedInteraction[] | null; avatarBlobSha256: string | null;
 }) {
   const submitting = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -49,6 +50,6 @@ export function UserFollowControls({ userId, displayName, viewerId, summary, can
         {busy ? "正在保存…" : summary.isFollowing ? "解除好友" : "加为好友"}
       </Button>}
     {canMessage ? <Button asChild size="sm" variant="outline" className="w-9 px-0"><Link to={`/me/messages/${userId}`} aria-label="发私信" title="发私信"><Mail aria-hidden /></Link></Button> : null}
-    {blockSettings ? <UserBlockButton peer={{ id: userId, displayName, avatarBlobSha256 }} initial={blockSettings} onSaved={() => { void revalidator.revalidate(); }} /> : null}
+    {blockSettings ? <UserBlockButton peer={{ id: userId, displayName, avatarBlobSha256 }} initial={blockSettings} interactionRestrictions={interactionRestrictions} /> : null}
   </div>;
 }

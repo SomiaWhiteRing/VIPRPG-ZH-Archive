@@ -18,7 +18,6 @@ import { useRouteRefresh } from "@/app/components/use-route-refresh";
 import { hasPermission, isPermissionKey, PERMISSION_LIST, PERMISSIONS } from "@/lib/authz/permissions";
 import type { AdminUserAccessUpdate } from "@/lib/dto/db/users";
 import { formatDate } from "@/lib/format";
-import type { RestrictedInteraction } from "@/lib/interaction-restrictions";
 import { requestJson } from "@/lib/ui/api-response";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { BadgeCheck, ChevronDown, ChevronUp, ShieldCheck, ShieldMinus } from "lucide-react";
@@ -26,7 +25,6 @@ import { Fragment, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData, useRevalidator } from "react-router";
 import { PermissionBlockControl } from "./permission-block-control";
-import { InteractionRestrictionControl } from "./interaction-restriction-control";
 import { RoleAssignmentControl, roleSourceLabel } from "./role-assignment-control";
 import "./users.css";
 
@@ -51,28 +49,14 @@ export async function loader(args: LoaderFunctionArgs) {
   });
   const memberships = await listUserRoleMemberships(runtime, result.items.map((user) => user.id));
   const permissionBlocks = await listUserPermissionBlocks(runtime, result.items.map((user) => user.id));
-  const canUpdateStatus = hasPermission(adminUser, "user.status.update");
-  const interactionRestrictions = new Map<number, RestrictedInteraction[]>();
-  if (canUpdateStatus) {
-    const { results } = await runtime.db.prepare(`SELECT sender_user_id,kind FROM user_interaction_restrictions
-      WHERE recipient_user_id=? AND sender_user_id IN (SELECT value FROM json_each(?))`)
-      .bind(adminUser.id, JSON.stringify(result.items.map(user => user.id)))
-      .all<{ sender_user_id: number; kind: RestrictedInteraction }>();
-    for (const row of results) {
-      const kinds = interactionRestrictions.get(row.sender_user_id) ?? [];
-      kinds.push(row.kind);
-      interactionRestrictions.set(row.sender_user_id, kinds);
-    }
-  }
   const assignableRoles = roles.filter((role) =>
     role.key !== "user" && role.kind !== "bootstrap_admin" &&
     (role.key !== "admin" || adminUser.isBootstrapAdmin) && role.priority < adminUser.maxRolePriority,
   );
   return {
     canAssignRoles: hasPermission(adminUser, "user.role.assign"),
-    canUpdateStatus,
+    canUpdateStatus: hasPermission(adminUser, "user.status.update"),
     canBlockPermissions: adminUser.isBootstrapAdmin,
-    interactionRestrictions,
     query, status, sort, blocks, permission, roleId, page, result, roles,
     memberships, permissionBlocks, assignableRoles,
   };
@@ -91,7 +75,6 @@ export default function AdminUsersPage() {
   const updates = snapshot.source === data ? snapshot.updates : new Map<number, AdminUserAccessUpdate>();
   const {
     canAssignRoles, canUpdateStatus, canBlockPermissions,
-    interactionRestrictions,
     query, status, sort, blocks, permission, roleId, page,
     result: initialResult, roles, memberships: initialMemberships,
     permissionBlocks: initialPermissionBlocks, assignableRoles,
@@ -235,7 +218,6 @@ export default function AdminUsersPage() {
                       <td><StatusBadge kind="account" value={user.status} /></td>
                       <td className="whitespace-nowrap text-xs text-muted tabular-nums">{formatDate(user.createdAt)}</td>
                       <td>
-                        <div className="flex flex-wrap items-center gap-1">
                         <Button
                           variant={expanded ? "default" : "ghost"}
                           size="sm"
@@ -249,9 +231,6 @@ export default function AdminUsersPage() {
                           {expanded ? "收起" : user.status === "deleted" ? "查看" : "管理"}
                           {expanded ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
                         </Button>
-                        {canUpdateStatus && user.status !== "deleted" ? <InteractionRestrictionControl userId={user.id} displayName={user.displayName}
-                          kinds={interactionRestrictions.get(user.id) ?? []} disabled={busy} /> : null}
-                        </div>
                       </td>
                     </tr>
                     {expanded ? (

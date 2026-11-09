@@ -5,6 +5,7 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { readUserBlockSettings } from "@/app/.server/db/user-blocks";
+import { readInteractionRestrictions } from "@/app/.server/db/interaction-restrictions";
 import { listUserFollows, readFollowSummary } from "@/app/.server/db/user-follows";
 import { listTimeline } from "@/app/.server/db/timeline";
 import { UserFollowControls } from "@/app/components/timeline/user-follow-controls";
@@ -33,13 +34,14 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const viewer = await getCurrentUser(runtime);
   const isOverview = Boolean(matchPath(overviewPath, args.url.pathname));
-  const [followSummary, friends, timeline, blockSettings] = await Promise.all([
+  const [followSummary, friends, timeline, blockSettings, interactionRestrictions] = await Promise.all([
     readFollowSummary(runtime, user.id, viewer),
     isOverview && user.profileVisibility.friends ? listUserFollows(runtime, user.id, "following", null, 15) : null,
     isOverview ? listTimeline(runtime, { actorUserId: user.id, viewerId: viewer?.id, limit: hasProfileOverviewSections(user.profileVisibility) ? 5 : 10 }) : null,
     viewer && viewer.id !== user.id ? readUserBlockSettings(runtime, viewer.id, user.id) : null,
+    viewer && viewer.id !== user.id ? readInteractionRestrictions(runtime.db, viewer.id, user.id) : null,
   ]);
-  return data({ user, viewerId: viewer?.id ?? null, canMessage: !!viewer && viewer.id !== user.id && user.canReceivePrivateMessages && hasPermission(viewer, "message.send"), followSummary, friends, timelineItems: timeline?.items ?? null, isOverview, blockSettings }, { headers: { "Cache-Control": "private, no-store" } });
+  return data({ user, viewerId: viewer?.id ?? null, canMessage: !!viewer && viewer.id !== user.id && user.canReceivePrivateMessages && hasPermission(viewer, "message.send"), followSummary, friends, timelineItems: timeline?.items ?? null, isOverview, blockSettings, interactionRestrictions }, { headers: { "Cache-Control": "private, no-store" } });
 }
 export function headers() { return { "Cache-Control": "private, no-store" }; }
 
@@ -47,7 +49,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
   pageMetaDescriptors({ title: [loaderData?.user.displayName || "用户", "个人主页"] }, error);
 
 export default function PublicUserLayout() {
-  const { user, viewerId, canMessage, followSummary, friends, timelineItems, isOverview, blockSettings } = useLoaderData<typeof loader>();
+  const { user, viewerId, canMessage, followSummary, friends, timelineItems, isOverview, blockSettings, interactionRestrictions } = useLoaderData<typeof loader>();
   const hasSidebar = isOverview && hasProfileOverviewSections(user.profileVisibility);
   const timelineSection = timelineItems !== null ? <AccountSection href={`/users/${user.id}/timeline`} title="时间线" divided={false}>
     <TimelineWorkspace page={{ items: timelineItems, nextCursor: null }} viewerId={viewerId} settings={null} basePath={`/users/${user.id}/timeline`} profile showAuthor={false} readOnlyInteractions expandReplies={false} />
@@ -85,7 +87,7 @@ export default function PublicUserLayout() {
                 {user.bio || "这位用户还没有填写简介。"}
               </p>
             ) : null}
-            <UserFollowControls key={`${user.id}:${viewerId}`} userId={user.id} displayName={user.displayName} viewerId={viewerId} summary={followSummary} canMessage={canMessage} blockSettings={blockSettings} avatarBlobSha256={user.avatarBlobSha256} />
+            <UserFollowControls key={`${user.id}:${viewerId}`} userId={user.id} displayName={user.displayName} viewerId={viewerId} summary={followSummary} canMessage={canMessage} blockSettings={blockSettings} interactionRestrictions={interactionRestrictions} avatarBlobSha256={user.avatarBlobSha256} />
           </div>
         </header>
         <PublicProfileNavigation userId={user.id} visibility={user.profileVisibility} />
