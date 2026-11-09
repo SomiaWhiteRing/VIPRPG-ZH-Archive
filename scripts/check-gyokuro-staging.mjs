@@ -147,11 +147,13 @@ try {
   await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<R 1 0 "))), "The room defaulted to random stage");
   await tap(pages[0], "ArrowRight");
   await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<R 1 6 "))), "The host stage was synchronized");
+  await tap(pages[1], "z");
+  await waitUntil(() => packets.every((set) => set.includes("<R 1 6 0 1 2")), "The guest was ready before the format changed");
   await tap(pages[0], "ArrowDown");
   await tap(pages[0], "ArrowRight");
-  await waitUntil(() => packets.every((set) => set.some((packet) => packet === "<R 1 6 0 0 3")), "Both players received the host's best-of-five rule");
+  await waitUntil(() => packets.every((set) => set.includes("<R 1 6 0 1 3")), "Best-of-five was synchronized and the guest stayed ready");
   await tap(pages[0], "ArrowDown");
-  await Promise.all(pages.map((page) => tap(page, "z")));
+  await tap(pages[0], "z");
   await waitUntil(() => packets.every((set) => set.includes("<B")), "Both opened the original character selection");
   await pages[0].waitForTimeout(3000);
   await tap(pages[0], "x");

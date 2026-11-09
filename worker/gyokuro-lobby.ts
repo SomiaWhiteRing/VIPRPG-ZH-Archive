@@ -84,10 +84,12 @@ export class GyokuroLobby extends DurableObject<CloudflareEnv> {
     const [a, b, c] = words.map(Number);
     if (room.phase === "room") {
       if ((type === "V" || type === "M") && words.length === 1 && room.members[0] === client && !client.ready) {
-        if (type === "V" && (a === 0 || stages.includes(a))) room.stage = a;
-        else if (type === "M" && a >= 1 && a <= 3) room.rounds = a;
-        else return;
-        for (const member of room.members) member.ready = 0;
+        if (type === "V" && (a === 0 || stages.includes(a))) {
+          room.stage = a;
+          for (const member of room.members) member.ready = 0;
+        } else if (type === "M" && a >= 1 && a <= 3) {
+          room.rounds = a;
+        } else return;
       } else if (type === "A" && words.length === 1 && a <= 1) {
         client.ready = a;
       } else {
