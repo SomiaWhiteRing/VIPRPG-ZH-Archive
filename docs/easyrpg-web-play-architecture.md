@@ -278,7 +278,7 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。普通作品和联机作品共用该版本。支持联机且已开启服务的归档会向宿主传入 `netplayEndpoint`。
 
-当前包使用既有 Docker Web 构建入口在本地生成。源码以 [Player 提交 339894341](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/commit/3398943413d0b99076498a3997911b74e54898a2) 为基线，应用 [本地 Kai 差异](../scripts/runtime-patches/kai-87c64e8d5.patch) 达到 `87c64e8d5`，再应用网站的启动补丁。构建工具链和内置 liblcf 基础版本继续锁定。libpng、FreeType 从同版 SDK 来源重建为 native longjmp ABI，字体来源声明随 `NOTICE-Zfull.txt`、`LICENSE-smallfonts.txt` 和拼音词库许可分发。
+当前包使用既有 Docker Web 构建入口在本地生成。源码以 [Player 提交 339894341](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/commit/3398943413d0b99076498a3997911b74e54898a2) 为基线，应用 [本地 Kai 差异](../scripts/runtime-patches/kai-40afbf126.patch) 达到 `40afbf126`，再应用网站的启动补丁。构建工具链和内置 liblcf 基础版本继续锁定。libpng、FreeType 从同版 SDK 来源重建为 native longjmp ABI，字体来源声明随 `NOTICE-Zfull.txt`、`LICENSE-smallfonts.txt` 和拼音词库许可分发。
 
 `patches` 由导入脚本应用于未压缩的宿主文件。`sourcePatches` 在构建前按配置顺序应用，导入脚本校验并随包保存。网站启动补丁包括 [skip-logo.patch](../scripts/runtime-patches/skip-logo.patch)、[startup-download-progress.patch](../scripts/runtime-patches/startup-download-progress.patch) 和 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)。构建工具链与依赖由固定 Player 提交的构建脚本锁定。Web ZIP 根目录包含拼音词库许可，来源及摘要记录在 `pinyinDictionary`。运行目录内的 `SOURCE.json` 记录源码、构建来源、补丁和文件摘要。
 

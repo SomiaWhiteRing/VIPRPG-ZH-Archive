@@ -1,8 +1,18 @@
 diff --git a/docs/netplay.md b/docs/netplay.md
-index b625374bae978d3d29829ff9921b030da2dbfedd..f748f2a1580361ad53ee075ee9f90751ac18dc6b 100644
+index b625374bae978d3d29829ff9921b030da2dbfedd..c40a92b799e7f05c3e97893a616e583e6b2802ca 100644
 --- a/docs/netplay.md
 +++ b/docs/netplay.md
-@@ -19,6 +19,7 @@ it so players that ignore these comments follow the offline event path.
+@@ -7,6 +7,9 @@ Place the declaration in the project root next to RPG_RT.ldb.
+ Enabled=1
+ ```
+ 
++Netplay-enabled projects default to running when focus is lost. An explicit
++`Pause when focus lost` setting still takes precedence.
++
+ The game uses regular RPG Maker comment commands for room controls. Initialize
+ the availability variable to zero in a regular event command before querying
+ it so players that ignore these comments follow the offline event path.
+@@ -19,6 +22,7 @@ it so players that ignore these comments follow the offline event path.
  | `@netplay join V` | Join an existing room numbered by V. An absent or full room is rejected. |
  | `@netplay rooms T` | Read the latest room directory into Maniac string T. Each row has a numeric `id` and a `players` array with `name` and `avatar` fields. |
  | `@netplay identity T` | Read the local directory profile as a JSON object with `name` and `avatar` fields. |
@@ -10,7 +20,7 @@ index b625374bae978d3d29829ff9921b030da2dbfedd..f748f2a1580361ad53ee075ee9f90751
  | `@netplay stop_directory` | Stop receiving directory updates when leaving the online menu. |
  | `@netplay fade_transfer OUT IN [DELAY]` | Set the fade durations and an optional black-screen delay before the next map's fade-in, in frames. A screen already erased starts with the delay and reveal. |
  | `@netplay state V` | Read the connection state into V. Values are 0 idle, 1 connecting, 2 waiting, 3 first seat paired, 4 second seat paired, and -1 disconnected. |
-@@ -100,7 +101,8 @@ starts or resumes. The default is one frame.
+@@ -100,7 +104,8 @@ starts or resumes. The default is one frame.
  | `@netplay stop` | End the synchronized map after this frame is confirmed. The next map tick resumes regular event processing at the confirmed state. |
  
  Parallel map and common events advance on the synchronized clock. Use the
@@ -96,6 +106,25 @@ index 49ebe3d9258d99e592ae040f23cff96cc89493ea..4ab489fddb4f41344c5cf5d8f66fe787
      2197 2198 2199 2208 220F 2211 2215 221A 221D 221E 221F 2220 2223 2225 2227 2228
      2229 222A 222B 222E 2234 2235 2236 2237 223D 2248 224C 2252 2260 2261 2264 2265
      2266 2267 226E 226F 2295 2299 22A5 22BF 2312 2500 2501 2502 2503 2504 2505 2506
+diff --git a/src/baseui.cpp b/src/baseui.cpp
+index 9a32511e2077929c984afa2705097c640b2dd3cc..ca81726ab30c8424c8dfbf5133f7a9f9ee8d0f59 100644
+--- a/src/baseui.cpp
++++ b/src/baseui.cpp
+@@ -99,9 +99,11 @@ bool BaseUi::IsRightShiftPressed() const {
+ bool BaseUi::ShouldPauseWhenFocusLost() const {
+ 	auto cfg = vcfg;
+ 	vGetConfig(cfg);
+-	if (!cfg.pause_when_focus_lost_configured && !cfg.pause_when_focus_lost.IsLocked()
+-			&& Player::IsPatchManiac() && Main_Data::game_system) {
+-		return !Main_Data::game_system->IsManiacRunWhenInactive();
++	if (!cfg.pause_when_focus_lost_configured && !cfg.pause_when_focus_lost.IsLocked()) {
++		if (Player::game_config.netplay_enabled) return false;
++		if (Player::IsPatchManiac() && Main_Data::game_system) {
++			return !Main_Data::game_system->IsManiacRunWhenInactive();
++		}
+ 	}
+ 	return cfg.pause_when_focus_lost.Get();
+ }
 diff --git a/src/game_netplay.cpp b/src/game_netplay.cpp
 index e8c989dc1997004fcffb342a4378f6ec0c5a61d1..5491705000c0e650061024fe8a24002d0a01e772 100644
 --- a/src/game_netplay.cpp

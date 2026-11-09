@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.10-site-87c64e8d5-jspi-shared",
+  "version": "2026.11.10-site-40afbf126-jspi-shared",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "build": "local-docker-87c64e8d55b34d67abeb9ceb8c6975f1d7454be2",
+  "build": "local-docker-40afbf126e7ce6ef25455294a062560bd0a8668d",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "2ca8677eb37ee058c46a2ccc4d0afa737285308fb747415b46cd5f3bcbae594e",
+  "archiveSha256": "a8bf1bc4ac39eda2ba96eb746f5b1328be39a0c5112386e9ee683456da37c72b",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -40,8 +40,8 @@
   ],
   "sourcePatches": [
     {
-      "path": "scripts/runtime-patches/kai-87c64e8d5.patch",
-      "sha256": "30597930d84a037fdefa504f81a42b5967c66c8ad5220a956dcdac8a141e98b6"
+      "path": "scripts/runtime-patches/kai-40afbf126.patch",
+      "sha256": "88f04a0cb4146efd877183480c4dcc08f16b893bebbe730cf82571cec326ef87"
     },
     {
       "path": "scripts/runtime-patches/skip-logo.patch",
