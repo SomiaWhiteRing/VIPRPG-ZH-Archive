@@ -6,7 +6,7 @@ import { downloadCacheMaxBytes, downloadZipBuilderVersion, downloadSubrequestLim
 import { artifactCrc32, assertSharedPlayerObject, getSharedArchivePlayer } from "../app/.server/resources/archive-player.ts";
 import { isSharedPlayerPath } from "../lib/archive/shared-player.ts";
 import {
-  shouldSkipWebPlayLocalWrite,
+  shouldSkipLegacyWebPlayLocalWrite,
 } from "../lib/archive/web-play-local-policy.ts";
 import { webPlayDownloadProfile, legacyWebPlayDownloadProfile, downloadWithoutPlayerProfile, shouldSkipWebPlayDownloadFile } from "../lib/archive/web-play-download-policy.ts";
 import { hotDownloadCache, readDownloadCache, createCachedDownloadStream } from "./download-cache.mjs";
@@ -472,7 +472,7 @@ async function downloadLayout(request, bucket, record, profile, player, ctx, key
       : profile === webPlayDownloadProfile
       ? manifest.files.filter((file) => !shouldSkipWebPlayDownloadFile(file.path))
       : profile === legacyWebPlayDownloadProfile
-        ? manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path))
+        ? manifest.files.filter((file) => !shouldSkipLegacyWebPlayLocalWrite(file.path))
         : downloadableFiles;
     const entries = buildZipEntries(files);
     if (player) {

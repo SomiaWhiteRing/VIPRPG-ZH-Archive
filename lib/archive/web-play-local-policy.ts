@@ -1,3 +1,5 @@
+import { isStringScriptTxt } from "./file-policy";
+
 // Local installation filtering is independent of the downloadable ZIP contents.
 export const webPlayLocalSkippedExtensions = ["dll", "exe", "txt"] as const;
 
@@ -13,6 +15,10 @@ const engineDetectionFiles = new Set([
 ]);
 
 export function shouldSkipWebPlayLocalWrite(path: string): boolean {
+  return !isStringScriptTxt(path) && shouldSkipLegacyWebPlayLocalWrite(path);
+}
+
+export function shouldSkipLegacyWebPlayLocalWrite(path: string): boolean {
   if (engineDetectionFiles.has(path.toLowerCase())) {
     return false;
   }

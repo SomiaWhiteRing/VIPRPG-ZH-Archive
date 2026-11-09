@@ -3,7 +3,7 @@ import { webPlayDownloadProfile, downloadWithoutPlayerProfile } from "@/lib/arch
 import easyRpgRuntime from "@/lib/archive/easyrpg-runtime.json";
 import easyRpgDelivery from "@/lib/archive/easyrpg-delivery.json";
 
-export const webPlayInstallerVersion = "opfs-v12-workerfs";
+export const webPlayInstallerVersion = "opfs-v13-workerfs";
 export const easyRpgRuntimeVersion = easyRpgRuntime.version;
 export const easyRpgRuntimeBasePath = `/play/runtime/easyrpg/${easyRpgRuntimeVersion}`;
 

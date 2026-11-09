@@ -228,7 +228,7 @@ function isCoreFile(path: string): boolean {
   );
 }
 
-function isStringScriptTxt(path: string): boolean {
+export function isStringScriptTxt(path: string): boolean {
   const parts = normalizeArchivePath(path).split("/").filter(Boolean);
 
   return (
