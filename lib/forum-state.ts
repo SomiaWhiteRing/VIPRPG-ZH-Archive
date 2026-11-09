@@ -1,9 +1,9 @@
 import type { ForumCapabilities, ForumContent, ForumTopic, ForumViewer } from "@/lib/forum";
 import type { PublicForumContent, PublicForumTopic } from "@/lib/forum-public";
 
-export const emptyCapabilities:ForumCapabilities={edit:false,delete:false,reply:false,like:false,report:false,moderate:false,feature:false};
+export const emptyCapabilities:ForumCapabilities={edit:false,delete:false,reply:false,like:false,report:false,moderate:false,feature:false,sage:false};
 export function interactiveTopic(topic:PublicForumTopic,viewer:ForumViewer,capabilities?:ForumCapabilities|null):ForumTopic {
-  return {...topic,capabilities:capabilities??{...emptyCapabilities,reply:!!viewer?.use&&!topic.locked,report:!!viewer?.use,moderate:!!viewer?.moderate,feature:!!viewer?.feature}};
+  return {...topic,capabilities:capabilities??{...emptyCapabilities,reply:!!viewer?.use&&!topic.locked,report:!!viewer?.use,moderate:!!viewer?.moderate,feature:!!viewer?.feature,sage:!!viewer?.sage}};
 }
 export function interactiveContent(content:PublicForumContent,topic:ForumTopic,viewer:ForumViewer,liked:number[]=[]):ForumContent {
   const available=content.body!==null,own=available&&!!viewer?.use&&viewer.id===content.author?.id;

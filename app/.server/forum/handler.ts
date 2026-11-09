@@ -156,7 +156,7 @@ async function write(runtime: AppRuntime, request: Request) {
     ctx,
     request,
     input.op === "moderate"
-      ? ["forum.content.moderate_any", "forum.topic.feature_any"]
+      ? ["forum.content.moderate_any", "forum.topic.feature_any", "forum.topic.sage_any"]
       : undefined,
   );
   if (input.op === "publish" || input.op === "edit") {

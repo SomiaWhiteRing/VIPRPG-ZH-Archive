@@ -373,6 +373,10 @@ export const PERMISSIONS = {
     category: "forum", label: "策展公开讨论", scope: "全部公开主题",
     description: "加精、取消加精及纠正主题 TAG；不授予举报处理或全站 TAG 管理能力。",
   },
+  "forum.topic.sage_any": {
+    category: "forum", label: "管理讨论 SAGE", scope: "全部公开主题",
+    description: "设置或取消主题 SAGE，将主题排在讨论版列表末尾。",
+  },
   "forum.tag.manage": {
     category: "forum", label: "管理讨论 TAG", scope: "全部讨论 TAG",
     description: "改名、合并、停用、隐藏或恢复讨论 TAG。",
@@ -774,7 +778,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "catalog.manage_any",
     "comment.manage_any",
     "sea.message.moderate_any", "sea.user.mute_any",
-    "forum.content.moderate_any", "forum.topic.feature_any", "forum.tag.manage",
+    "forum.content.moderate_any", "forum.topic.feature_any", "forum.topic.sage_any", "forum.tag.manage",
     "timeline.status.moderate_any", "timeline.event.moderate_any", "timeline.reply.moderate_any",
     "emoji.defaults.manage",
     "archive_version.read_private",
@@ -819,7 +823,7 @@ export const SYSTEM_ROLE_PERMISSIONS = {
     "catalog.manage_any",
     "comment.manage_any",
     "sea.message.moderate_any", "sea.user.mute_any",
-    "forum.content.moderate_any", "forum.topic.feature_any", "forum.tag.manage",
+    "forum.content.moderate_any", "forum.topic.feature_any", "forum.topic.sage_any", "forum.tag.manage",
     "timeline.status.moderate_any", "timeline.event.moderate_any", "timeline.reply.moderate_any",
     "emoji.defaults.manage",
     "archive_version.read_private",
