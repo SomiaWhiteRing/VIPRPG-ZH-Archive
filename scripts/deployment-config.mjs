@@ -109,10 +109,14 @@ export function validateIsolation(config) {
     .some(item => productionQueues.has(item.queue))) throw new Error("Production and staging share a Queue");
 }
 
-export function migrationManifest() {
+export function migrationManifest(environment) {
   const files = readdirSync("migrations").filter((name) => name.endsWith(".sql")).sort();
+  // Staging has already applied both parallel 0056 migrations under these names.
+  const sequences = environment === "staging" && files.includes("0056_archive_netplay_service.sql")
+    ? files.filter((name) => name !== "0056_forum_topic_sage.sql")
+    : files;
   if (!files.length || files.some((name) => !/^\d{4}_[a-z0-9_]+\.sql$/i.test(name)) ||
-      new Set(files.map((name) => name.slice(0, 4))).size !== files.length)
+      new Set(sequences.map((name) => name.slice(0, 4))).size !== sequences.length)
     throw new Error("Migrations require distinct four-digit sequence numbers and SQL filenames");
   return files.map((name) => {
     const sql = readFileSync(resolve("migrations", name), "utf8");
@@ -127,7 +131,7 @@ export function deploymentSummary(target, environment) {
     database: target.d1_databases.map(({ binding, database_name, database_id }) => ({ binding, database_name, database_id })),
     buckets: target.r2_buckets.map(({ binding, bucket_name }) => ({ binding, bucket_name })),
     queues: target.queues ?? { producers: [], consumers: [] },
-    migrations: migrationManifest(),
+    migrations: migrationManifest(environment),
   };
 }
 
