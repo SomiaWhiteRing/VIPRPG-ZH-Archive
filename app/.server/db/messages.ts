@@ -35,10 +35,12 @@ export async function directMessagePeer(runtime: AppRuntime, user: ArchiveUser, 
     .first<{ id: number; display_name: string; avatar_blob_sha256: string | null; status: string; receive_private_messages: number; has_history: number; receive_messages: number; accepts_messages: number }>();
   if (!row || (!row.has_history && (row.status !== "active" || row.receive_private_messages !== 1)))
     throw new HttpError(404, "会话不存在");
+  const { hidePosts, ...blockSettings } = await readUserBlockSettings(runtime, user.id, peerId);
+  void hidePosts;
   return { id: row.id, displayName: row.display_name, avatarBlobSha256: row.avatar_blob_sha256,
     canSend: row.status === "active" && row.receive_private_messages === 1 && hasPermission(user, "message.send"),
     receiveMessages: row.receive_messages === 1, acceptsMessages: row.accepts_messages === 1,
-    blockSettings: await readUserBlockSettings(runtime, user.id, peerId) };
+    blockSettings };
 }
 
 export async function listDirectConversations(runtime: AppRuntime, user: ArchiveUser, before = Number.MAX_SAFE_INTEGER) {

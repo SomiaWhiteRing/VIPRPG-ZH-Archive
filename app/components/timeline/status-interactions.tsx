@@ -2,6 +2,7 @@ import { requestJson } from "@/lib/ui/api-response";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { usePushReply } from "@/app/components/use-push-reply";
+import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
 import { Link, useRevalidator } from "react-router";
 import { MessageSquare, Send, ThumbsUp, Trash2 } from "lucide-react";
 import { NestedReply, nestedRepliesClassName } from "@/app/components/comments/nested-reply";
@@ -25,13 +26,15 @@ async function request(path: string, method = "GET", body?: unknown) {
   return result;
 }
 
-export function StatusInteractions({ item, viewerId, readOnly = false, expandReplies = true, initialPage, onCacheError, onBusyChange, children }: {
+export function StatusInteractions({ item, viewerId, readOnly = false, expandReplies = true, hideStatus = false, initialPage, onCacheError, onBusyChange, children }: {
   item: TimelineItem; viewerId: number | null; onCacheError: () => void; onBusyChange: (value: boolean) => void;
   readOnly?: boolean;
   expandReplies?: boolean;
+  hideStatus?: boolean;
   initialPage?: TimelineReplyPage;
   children?: ReactNode;
 }) {
+  const isPostAuthorHidden = useIsPostAuthorHidden();
   const [open, setOpen] = useState(!!initialPage);
   const [page, setPage] = useState<TimelineReplyPage | null>(initialPage ?? null);
   const [addressed, setAddressed] = useState(!!initialPage);
@@ -43,7 +46,7 @@ export function StatusInteractions({ item, viewerId, readOnly = false, expandRep
   const submitButton = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState("");
   const pending = useRef(false), composing = useRef(false);
-  const draft = useTimelineDraft({ userId: readOnly ? null : viewerId, kind: "reply", eventId: item.id, onError: onCacheError });
+  const draft = useTimelineDraft({ userId: readOnly || hideStatus ? null : viewerId, kind: "reply", eventId: item.id, onError: onCacheError });
   const confirm = useConfirm(), toast = useToast(), revalidator = useRevalidator();
   const regionId = `timeline-replies-${item.id}`, editorId = `timeline-reply-${item.id}`;
   const pushReply = usePushReply();
@@ -62,12 +65,12 @@ export function StatusInteractions({ item, viewerId, readOnly = false, expandRep
     if (!cursor) setAddressed(false);
   }, [item.id]);
   useEffect(() => {
-    if (pushReply.value !== String(item.id) || handledPushReply.current === pushReply.key || readOnly || !item.canReply || !expandReplies || !draft.ready || busy) return;
+    if (pushReply.value !== String(item.id) || handledPushReply.current === pushReply.key || readOnly || hideStatus || !item.canReply || !expandReplies || !draft.ready || busy) return;
     handledPushReply.current = pushReply.key;
     setOpen(true);
     const loaded = page ? Promise.resolve() : run(() => load());
     void loaded.then(() => requestAnimationFrame(() => document.getElementById(editorId)?.focus()));
-  }, [pushReply.value, pushReply.key, item.id, item.canReply, readOnly, expandReplies, page, run, load, editorId, draft.ready, busy]);
+  }, [pushReply.value, pushReply.key, item.id, item.canReply, readOnly, hideStatus, expandReplies, page, run, load, editorId, draft.ready, busy]);
 
   function toggle() {
     if (busy || !expandReplies) return;
@@ -103,10 +106,10 @@ export function StatusInteractions({ item, viewerId, readOnly = false, expandRep
 
   return <div className="mt-2">
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-      {readOnly ? item.likeCount > 0 && <span className="inline-flex min-h-8 items-center gap-1.5 px-1"><ThumbsUp aria-hidden className="size-4" />点赞 {item.likeCount}</span> : <Button variant="ghost" size="sm" className="min-h-8 gap-1.5 px-1 text-xs font-normal text-muted" type="button" disabled={busy || !item.canLike} aria-pressed={item.likedByMe}
+      {!hideStatus && (readOnly ? item.likeCount > 0 && <span className="inline-flex min-h-8 items-center gap-1.5 px-1"><ThumbsUp aria-hidden className="size-4" />点赞 {item.likeCount}</span> : <Button variant="ghost" size="sm" className="min-h-8 gap-1.5 px-1 text-xs font-normal text-muted" type="button" disabled={busy || !item.canLike} aria-pressed={item.likedByMe}
         aria-label={item.likedByMe ? "取消点赞" : "点赞"} onClick={() => void run(async () => {
           await request(`/api/timeline/${item.id}/like`, item.likedByMe ? "DELETE" : "PUT"); await revalidator.revalidate();
-        })}><ThumbsUp aria-hidden className={item.likedByMe ? "fill-current text-primary" : undefined} />点赞{item.likeCount > 0 ? ` ${item.likeCount}` : ""}</Button>}
+        })}><ThumbsUp aria-hidden className={item.likedByMe ? "fill-current text-primary" : undefined} />点赞{item.likeCount > 0 ? ` ${item.likeCount}` : ""}</Button>)}
       {expandReplies ? <Button variant="ghost" size="sm" className="min-h-8 gap-1.5 px-1 text-xs font-normal text-muted" type="button" disabled={busy} aria-expanded={open} aria-controls={regionId} onClick={toggle}>
         <MessageSquare aria-hidden />回复{item.replyCount > 0 ? ` ${item.replyCount}` : ""}
       </Button> : item.replyCount > 0 && <span className="inline-flex min-h-8 items-center gap-1.5 px-1"><MessageSquare aria-hidden className="size-4" />回复 {item.replyCount}</span>}
@@ -116,7 +119,7 @@ export function StatusInteractions({ item, viewerId, readOnly = false, expandRep
       {addressed && <Button variant="ghost" size="sm" type="button" disabled={busy} onClick={() => void run(() => load())}>查看全部回复</Button>}
       {error && <Notice role="alert" className="mb-3">{error}<Button variant="ghost" size="sm" type="button" disabled={busy} onClick={() => void run(() => load())}>重新加载回复</Button></Notice>}
       {!page && busy && <p className="m-0 text-sm text-muted">加载回复中……</p>}
-      {page?.items.map((reply) => <NestedReply key={reply.id} id={`timeline-reply-item-${reply.id}`}
+      {page?.items.filter(reply => !isPostAuthorHidden(reply.actor.id)).map((reply) => <NestedReply key={reply.id} id={`timeline-reply-item-${reply.id}`}
         metadata={<><Link className="font-medium text-primary" to={`/users/${reply.actor.id}`}>{reply.actor.displayName}</Link><Timestamp value={reply.createdAt} format="duration" /></>}
         actions={!readOnly && reply.canDelete && <Button variant="ghost" size="sm" type="button" disabled={busy} aria-label="删除回复" onClick={() => void remove(reply.id)}><Trash2 aria-hidden />删除</Button>}>
         <StatusBody segments={reply.body} />
@@ -124,7 +127,7 @@ export function StatusInteractions({ item, viewerId, readOnly = false, expandRep
       </NestedReply>)}
       {page && !page.items.length && <p className="m-0 mb-3 text-sm text-muted">还没有回复。</p>}
       {page?.nextCursor && <Button variant="ghost" size="sm" type="button" disabled={busy} onClick={() => void run(() => load(page.nextCursor))}>更多回复</Button>}
-      {!readOnly && item.canReply && <CommentReplyLayout inputId={editorId} displayName={item.actor.displayName} busy={busy} onCancel={() => setOpen(false)}>
+      {!readOnly && !hideStatus && item.canReply && <CommentReplyLayout inputId={editorId} displayName={item.actor.displayName} busy={busy} onCancel={() => setOpen(false)}>
         <form className="grid min-w-0 gap-2" onSubmit={(event) => void submit(event)} onKeyDownCapture={(event) => {
           if (event.key !== "Enter" || !event.ctrlKey || event.altKey || event.metaKey || event.shiftKey ||
             event.nativeEvent.isComposing || event.keyCode === 229 || composing.current) return;

@@ -1,6 +1,7 @@
 import { Timestamp } from "@/app/components/ui/timestamp";
 import type { PublicSearchPage } from "@/lib/dto/forum/activity";
 import { EmptyState } from "@/app/components/ui/empty-state";
+import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
 import {
   ForumAuthorName,
   Highlight,
@@ -16,6 +17,8 @@ export function DiscussionSearch({
   result: PublicSearchPage;
   error?: string;
 }) {
+  const isPostAuthorHidden = useIsPostAuthorHidden();
+  const visibleHits = result.items.filter(hit => !isPostAuthorHidden(hit.author?.id));
   return (
     <section aria-label="讨论搜索" className="min-w-0">
       {error ? (
@@ -29,7 +32,7 @@ export function DiscussionSearch({
           <p role="status" className="my-6 text-sm text-muted">
             {result.total} 个结果
           </p>
-          {result.items.map((hit) => (
+          {visibleHits.map((hit) => (
             <article
               key={`${hit.kind}-${hit.id}`}
               className="border-b border-border py-4"

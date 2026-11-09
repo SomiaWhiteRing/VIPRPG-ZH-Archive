@@ -11,11 +11,15 @@ import type { MessagePeer } from "@/lib/dto/db/messages";
 import { FORUM_REPORT_REASONS } from "@/lib/forum";
 import { requestJson } from "@/lib/ui/api-response";
 import { UserBlockDialog } from "@/app/components/user-block-settings";
+import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
+import { useRevalidator } from "react-router";
 
 export function MessageMenu({ peer, onChanged }: { peer: MessagePeer; onChanged: () => Promise<void> }) {
   const [blocking, setBlocking] = useState(false);
   const [reporting, setReporting] = useState(false);
   const toast = useToast();
+  const revalidator = useRevalidator();
+  const hidePosts = useIsPostAuthorHidden()(peer.id);
   return <>
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild><Button type="button" variant="ghost" size="icon" aria-label="更多操作"><EllipsisVertical aria-hidden /></Button></DropdownMenu.Trigger>
@@ -26,8 +30,11 @@ export function MessageMenu({ peer, onChanged }: { peer: MessagePeer; onChanged:
         <DropdownMenu.Item className="cursor-pointer rounded-sm px-3 py-2 text-sm text-destructive outline-none focus:bg-primary/10" onSelect={() => setReporting(true)}>举报用户</DropdownMenu.Item>
       </DropdownMenu.Content></DropdownMenu.Portal>
     </DropdownMenu.Root>
-    {blocking ? <UserBlockDialog peer={peer} initial={peer.blockSettings} onClose={() => setBlocking(false)}
-      onSaved={() => { void onChanged().catch(error => toast.error(error instanceof Error ? error.message : "读取失败")); }} /> : null}
+    {blocking ? <UserBlockDialog peer={peer} initial={{ ...peer.blockSettings, hidePosts }} onClose={() => setBlocking(false)}
+      onSaved={settings => {
+        if (settings.hidePosts !== hidePosts) void revalidator.revalidate();
+        void onChanged().catch(error => toast.error(error instanceof Error ? error.message : "读取失败"));
+      }} /> : null}
     {reporting ? <MessageReportDialog peer={peer} onClose={() => setReporting(false)} /> : null}
   </>;
 }

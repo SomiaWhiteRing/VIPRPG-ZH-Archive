@@ -9,8 +9,9 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { CommentSummaryList } from "@/app/components/profile/comment-summary-list";
+import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useParams } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const { params, searchParams } = routeInput(args);
@@ -44,10 +45,12 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 
 export default function PublicComments() {
   const { page, result, base, kind } = useLoaderData<typeof loader>();
+  const { userId } = useParams();
+  const hidePosts = useIsPostAuthorHidden()(Number(userId));
   return (
     <section aria-label="评论">
       <CommentCategoryFilter basePath={base} kind={kind} />
-      {result.items.length ? (
+      {hidePosts ? null : result.items.length ? (
         <CommentSummaryList items={result.items} />
       ) : (
         <AccountEmpty>{kind ? "这个类别下还没有公开评论。" : "还没有公开评论。"}</AccountEmpty>

@@ -5,6 +5,7 @@ import { scrollElementIntoView } from "@/lib/ui/scroll.js";
 
 import { MentionText } from "./mention-text";
 import { usePushReply } from "@/app/components/use-push-reply";
+import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
 import { useInboxAutoRead } from "@/app/inbox/use-auto-read";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Timestamp } from "@/app/components/ui/timestamp";
@@ -59,6 +60,7 @@ function CommentPanelContent({
   onChanged,
 }: Props & { hideDeletedContent: boolean }) {
   const endpoint = commentEndpoint(target);
+  const isPostAuthorHidden = useIsPostAuthorHidden();
   const [comments, setComments] = useState(initialComments);
   const [total, setTotal] = useState(initialTotal);
   const [pageSize, setPageSize] = useState(20);
@@ -217,7 +219,8 @@ function CommentPanelContent({
   const displayedComments = notificationReply && !comments.some(comment => comment.id === notificationReply.root.id)
     ? [notificationReply.root, ...comments] : comments;
   const visibleComments = displayedComments.filter((comment) =>
-    !hideDeletedContent || (commentUpdates[comment.id]?.status ?? comment.status) !== "deleted",
+    (!hideDeletedContent || (commentUpdates[comment.id]?.status ?? comment.status) !== "deleted") &&
+    (!isPostAuthorHidden(comment.author?.id) || !!comment.replyCount || notificationReply?.root.id === comment.id),
   );
 
   return (
@@ -278,7 +281,7 @@ function commentEndpoint(target: CommentTarget): string {
 
 function CommentCard({
   comment,
-  notificationReply,
+  notificationReply: linkedReply,
   notificationItemId,
   openNotificationReply,
   pinControl,
@@ -307,6 +310,9 @@ function CommentCard({
   onDelete: (comment: CommentDto) => Promise<boolean>;
   onUpdated: (comment: CommentDto) => void;
 }) {
+  const isPostAuthorHidden = useIsPostAuthorHidden();
+  const hideRoot = isPostAuthorHidden(comment.author?.id);
+  const notificationReply = isPostAuthorHidden(linkedReply?.author?.id) ? null : linkedReply;
   const [replyTarget, setReplyTarget] = useState<CommentDto | null>(null);
   const [replyBusy, setReplyBusy] = useState(false);
   const [editTarget, setEditTarget] = useState<CommentDto | null>(null);
@@ -400,7 +406,8 @@ function CommentCard({
   const displayedReplies = expanded && replies ? replies.items : preview;
   const visibleReplies = (notificationReply?.rootCommentId === comment.id && !displayedReplies.some(reply => reply.id === notificationReply.id)
     ? [...displayedReplies, notificationReply] : displayedReplies)
-    .filter((reply) => !hideDeletedContent || (commentUpdates[reply.id]?.status ?? reply.status) !== "deleted");
+    .filter((reply) => !isPostAuthorHidden(reply.author?.id) &&
+      (!hideDeletedContent || (commentUpdates[reply.id]?.status ?? reply.status) !== "deleted"));
   const replyCount = replies?.total ?? comment.replyCount ?? 0;
   const currentComment = { ...comment, ...commentUpdates[comment.id] };
 
@@ -409,7 +416,7 @@ function CommentCard({
       className="grid grid-cols-[38px_minmax(0,1fr)] gap-3 border-t border-border py-3 first:border-t-0 first:pt-0 @max-[320px]/comments:grid-cols-[32px_minmax(0,1fr)] @max-[320px]/comments:gap-2"
       id={`comment-${comment.id}`}
     >
-      {currentComment.status === "deleted" ? <div aria-hidden /> : currentComment.author ? (
+      {hideRoot || currentComment.status === "deleted" ? <div aria-hidden /> : currentComment.author ? (
         <Link
           aria-label={`查看${currentComment.author.displayName}的主页`}
           to={`/users/${currentComment.author.id}`}
@@ -429,23 +436,25 @@ function CommentCard({
         />
       )}
       <div className="min-w-0">
-        {currentComment.pinned ? <span className="text-xs font-bold text-primary">置顶</span> : null}
-        <CommentLine comment={currentComment} />
-        <div className="mt-1 flex flex-wrap items-center gap-1">
-          <CommentControls
-            comment={currentComment}
-            currentUserId={currentUserId}
-            editing={!!editTarget}
-            onDelete={async (entry) => {
-              if (await onDelete(entry)) setReplyTarget(null);
-            }}
-            onLike={onLike}
-            onReply={startReply}
-          />
-          {editControl(currentComment)}
-          {currentComment.status === "published" ? pinControl : null}
-        </div>
-        {editEditor(currentComment)}
+        {hideRoot ? <span className="font-mono text-xs text-muted">{comment.floorNumber} 楼</span> : <>
+          {currentComment.pinned ? <span className="text-xs font-bold text-primary">置顶</span> : null}
+          <CommentLine comment={currentComment} />
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            <CommentControls
+              comment={currentComment}
+              currentUserId={currentUserId}
+              editing={!!editTarget}
+              onDelete={async (entry) => {
+                if (await onDelete(entry)) setReplyTarget(null);
+              }}
+              onLike={onLike}
+              onReply={startReply}
+            />
+            {editControl(currentComment)}
+            {currentComment.status === "published" ? pinControl : null}
+          </div>
+          {editEditor(currentComment)}
+        </>}
         {visibleReplies.length > 0 || replyCount > COMMENT_REPLY_PREVIEW_SIZE || loading || error || replyTarget ? (
           <section
             aria-label={`${comment.floorNumber} 楼的回复`}
