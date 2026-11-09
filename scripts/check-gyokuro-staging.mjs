@@ -145,10 +145,10 @@ try {
   await tap(pages[1], "z");
   await waitUntil(() => latest(1)?.roomId === latest(0)?.roomId, "Peer joined in game");
   await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<R 1 0 "))), "The room defaulted to random stage");
-  await tap(pages[0], "ArrowRight");
-  await waitUntil(() => packets.every((set) => set.some((packet) => packet.startsWith("<R 1 6 "))), "The host stage was synchronized");
   await tap(pages[1], "z");
-  await waitUntil(() => packets.every((set) => set.includes("<R 1 6 0 1 2")), "The guest was ready before the format changed");
+  await waitUntil(() => packets.every((set) => set.includes("<R 1 0 0 1 2")), "The guest was ready before the stage changed");
+  await tap(pages[0], "ArrowRight");
+  await waitUntil(() => packets.every((set) => set.includes("<R 1 6 0 1 2")), "The stage was synchronized and the guest stayed ready");
   await tap(pages[0], "ArrowDown");
   await tap(pages[0], "ArrowRight");
   await waitUntil(() => packets.every((set) => set.includes("<R 1 6 0 1 3")), "Best-of-five was synchronized and the guest stayed ready");
