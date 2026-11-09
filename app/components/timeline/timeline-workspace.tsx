@@ -19,6 +19,7 @@ import { formatDate, formatDateKey, parseTimestamp } from "@/lib/format";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
+import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
 import { useToast } from "@/app/components/ui/toast";
 import { TIMELINE_FILTER_KINDS, TIMELINE_KIND_LABELS, type TimelineItem, type TimelineKind, type TimelinePage, type TimelineReplyPage, type TimelineSettings, type TimelineView } from "@/lib/dto/db/timeline";
 import { cn } from "@/lib/ui/cn";
@@ -81,6 +82,12 @@ export function TimelineWorkspace(props: Props) {
 
 function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, view = "all", profile = false, showAuthor = true, readOnlyInteractions = false, expandReplies = true, canCompose = false, canPublish = false, hasCursor = false, focused = false, initialReplies, targetReplyId = null, inboxItemId }: Props) {
   const root = useRouteLoaderData<typeof rootLoader>("root");
+  const isPostAuthorHidden = useIsPostAuthorHidden();
+  const visibleItems = page.items.filter(item => {
+    if (!isPostAuthorHidden(item.actor.id)) return true;
+    if (item.kind === "status") return expandReplies && item.replyCount > 0;
+    return item.kind !== "comment" && item.kind !== "discussion" && !item.text;
+  });
   const mine = view === "mine";
   const [replyBusy, setReplyBusy] = useState<Record<number, boolean>>({});
   const composing = useRef(false);
@@ -202,11 +209,15 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
       </div>}
       <>
         <section aria-label="时间线动态" aria-busy={revalidator.state !== "idle"} className="overflow-hidden rounded-xl border border-border bg-card">
-          {!page.items.length ? <EmptyState variant="plain" className="p-4" title={kind ? "还没有这类动态。" : view === "following" ? "你和好友暂时没有公开动态。" : mine || profile ? "还没有公开动态。" : "还没有公开动态，来留下第一条吐槽吧。"} /> : (
-            groupTimelineDays(page.items, root?.serverTime).map((group) => <section key={group.date} aria-label={group.label}>
+          {!visibleItems.length ? <EmptyState variant="plain" className="p-4" title={kind ? "还没有这类动态。" : view === "following" ? "你和好友暂时没有公开动态。" : mine || profile ? "还没有公开动态。" : "还没有公开动态，来留下第一条吐槽吧。"} /> : (
+            groupTimelineDays(visibleItems, root?.serverTime).map((group) => <section key={group.date} aria-label={group.label}>
               <h2 className="m-0 border-b border-border bg-muted/5 px-3 py-2 text-xs font-medium text-muted sm:px-4"><time dateTime={group.date}>{group.label}</time></h2>
               <ol className="m-0 list-none divide-y divide-border/60 p-0">
                 {group.items.map((item, index) => {
+                  const onReplyBusyChange = (value: boolean) => setReplyBusy(current => ({ ...current, [item.id]: value }));
+                  if (item.kind === "status" && isPostAuthorHidden(item.actor.id)) return <li key={item.id} id={`timeline-event-${item.id}`} className="scroll-mt-24 px-3 py-2 sm:px-4">
+                    <StatusInteractions item={item} viewerId={viewerId} readOnly={readOnlyInteractions} hideStatus initialPage={initialReplies} onCacheError={reportCacheError} onBusyChange={onReplyBusyChange} />
+                  </li>;
                   if (item.kind === "join" || item.kind === "rename") return <li key={item.id} className="px-3 py-3 sm:px-4">
                     <article className="flex min-w-0 gap-2.5 sm:gap-3">
                       {showAuthor && item.kind === "rename" && <Link className="shrink-0 self-start" to={`/users/${item.actor.id}`} aria-label={`${item.actor.displayName}的个人主页`}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>}
@@ -240,7 +251,7 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
                         {item.text && <div className={cn((showAuthor || item.kind !== "status") && "mt-2", item.kind !== "status" && "rounded-r-md border-l-2 border-primary/20 bg-muted/5 py-2 pl-3 pr-2")}><StatusBody segments={item.body} collapse /></div>}
                         <CommentImages images={item.images} imageLabel={item.kind === "comment" ? "评论图片" : "吐槽图片"} />
                         {item.work && <TimelineWorkPreview work={item.work} compact={compact} />}
-                        {item.kind === "status" ? <StatusInteractions item={item} viewerId={viewerId} readOnly={readOnlyInteractions} expandReplies={expandReplies} initialPage={initialReplies} onCacheError={reportCacheError} onBusyChange={(value) => setReplyBusy((current) => ({ ...current, [item.id]: value }))}>{footer}</StatusInteractions> : <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                        {item.kind === "status" ? <StatusInteractions item={item} viewerId={viewerId} readOnly={readOnlyInteractions} expandReplies={expandReplies} initialPage={initialReplies} onCacheError={reportCacheError} onBusyChange={onReplyBusyChange}>{footer}</StatusInteractions> : <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                           {footer}
                         </div>}
                       </div>

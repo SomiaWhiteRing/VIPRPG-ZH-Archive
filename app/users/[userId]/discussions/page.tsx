@@ -7,6 +7,7 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { DiscussionList } from "@/app/components/profile/discussion-list";
+import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
@@ -40,9 +41,10 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
 
 export default function PublicDiscussions() {
   const { user, result } = useLoaderData<typeof loader>();
+  const hidePosts = useIsPostAuthorHidden()(user.id);
   return (
     <section aria-label="讨论">
-      <DiscussionList items={result.items} />
+      {!hidePosts && <DiscussionList items={result.items} />}
       <PaginationLinks
         basePath={`/users/${user.id}/discussions`}
         page={result.page}

@@ -21,8 +21,10 @@ export async function PUT(runtime: AppRuntime, request: Request, userId: string)
   const input = await readJsonObject(request, "屏蔽设置无效", { maximumBytes: 1024, requireJsonContentType: true });
   // Older clients submit the combined replies/mentions switch.
   if (!Object.hasOwn(input, "muteMentions")) input.muteMentions = input.muteReplies;
-  if (Object.keys(input).length !== USER_BLOCK_OPTIONS.length || USER_BLOCK_OPTIONS.some(option => typeof input[option.key] !== "boolean"))
+  // Older clients leave the display setting untouched.
+  const options = USER_BLOCK_OPTIONS.filter(option => option.key !== "hidePosts" || Object.hasOwn(input, option.key));
+  if (Object.keys(input).length !== options.length || options.some(option => typeof input[option.key] !== "boolean"))
     throw new HttpError(400, "屏蔽设置无效");
-  const settings = Object.fromEntries(USER_BLOCK_OPTIONS.map(option => [option.key, input[option.key]])) as UserBlockSettings;
+  const settings = Object.fromEntries(options.map(option => [option.key, input[option.key]])) as Partial<UserBlockSettings>;
   return json({ ok: true, settings: await setUserBlockSettings(runtime, auth.user, peerId, settings) });
 }

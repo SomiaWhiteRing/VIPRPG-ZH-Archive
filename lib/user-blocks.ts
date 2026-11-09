@@ -5,6 +5,7 @@ export const USER_BLOCK_OPTIONS = [
   { key: "muteMentions", label: "@提及" },
   { key: "muteLikes", label: "点赞" },
   { key: "muteFriends", label: "好友申请" },
+  { key: "hidePosts", label: "不看TA的发言" },
 ] as const;
 
 export type UserBlockSettings = Record<typeof USER_BLOCK_OPTIONS[number]["key"], boolean>;

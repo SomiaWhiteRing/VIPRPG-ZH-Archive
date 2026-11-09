@@ -11,6 +11,7 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
+import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
 import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import type { loader as rootLoader } from "@/app/root";
 import { type ForumContent, type ForumDetail, type ForumFloor, type ForumPage, type ForumTag, type ForumTarget, type ForumTopic, type ForumViewer, FORUM_PREVIEW_SIZE, forumHref, forumTargetHref } from "@/lib/forum";
@@ -94,6 +95,7 @@ export function DiscussionWorkspace({
   initialReply,
 }: Props) {
   const root = useRouteLoaderData<typeof rootLoader>("root");
+  const isPostAuthorHidden = useIsPostAuthorHidden();
   const hideDeletedContent = root?.session?.preferences.hideDeletedContent ?? false;
   const location = useLocation();
   const [selectedHistory, setSelectedHistory] = useState<ForumTarget | null>(null);
@@ -118,7 +120,12 @@ export function DiscussionWorkspace({
     [error, setError] = useState(""),
     [requestError, setRequestError] = useState<ApiResponseError | null>(null);
   const dirty = !!draft && draftValue(draft) !== draftValue(draft.original);
-  const visiblePosts = detail?.posts.items.filter((post) => !hideDeletedContent || post.state !== "deleted") ?? [];
+  const hideTopic = isPostAuthorHidden(detail?.topic.author.id);
+  const visiblePosts = detail?.posts.items.filter(post =>
+    (!hideDeletedContent || post.state !== "deleted") &&
+    (!isPostAuthorHidden(post.author?.id) || (post.commentsAvailable && post.comments.total > 0)),
+  ) ?? [];
+  const visibleTopics = topics?.items.filter(topic => !isPostAuthorHidden(topic.author.id)) ?? [];
   useDocumentNavigationGuard(dirty || busy);
   const [action, setAction] = useState<ForumDialogAction | null>(null),
     [unavailable, setUnavailable] = useState(false);
@@ -794,10 +801,10 @@ export function DiscussionWorkspace({
             label="返回讨论版"
             variant="text"
           />
-          <div className="mb-2 text-sm leading-relaxed">
+          {!hideTopic && <div className="mb-2 text-sm leading-relaxed">
             <TopicTags tags={detail.topic.tags} />
-          </div>
-          <header
+          </div>}
+          {!hideTopic && <header
             className="min-w-0 wrap-anywhere border-b border-border pb-4"
             data-slot="page-header"
           >
@@ -814,7 +821,7 @@ export function DiscussionWorkspace({
                 <ForumMenu items={topicMenu} />
               </div>
             </div>
-          </header>
+          </header>}
           {detail.posts.page > 1 ? topicPagination : null}
           <section aria-label="帖子流">
             {visiblePosts.map((post, index) => (
@@ -962,7 +969,7 @@ export function DiscussionWorkspace({
               <p role="alert" className="text-destructive">
                 {filterError}
               </p>
-            ) : topics?.items.length ? (
+            ) : visibleTopics.length ? (
               <section aria-label="讨论主题" aria-busy={pending}>
                 <div className="hidden gap-2 border-b border-border py-2 text-right text-xs text-muted md:grid md:grid-cols-[minmax(0,1fr)_72px_96px] lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]">
                   <span className="min-w-0 flex-1" />
@@ -970,7 +977,7 @@ export function DiscussionWorkspace({
                   <span className="hidden w-[72px] shrink-0 lg:block">浏览</span>
                   <span className="w-[96px] shrink-0">活跃</span>
                 </div>
-                {topics.items.map((item) => (
+                {visibleTopics.map((item) => (
                   <article
                     className="grid min-w-0 grid-cols-1 gap-2 border-b border-border py-4 hover:bg-[#e1ece5] focus-within:bg-[#e1ece5] dark:hover:bg-primary/15 dark:focus-within:bg-primary/15 md:grid-cols-[minmax(0,1fr)_72px_96px] md:items-center lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]"
                     key={item.id}
@@ -1001,7 +1008,7 @@ export function DiscussionWorkspace({
                           · {item.replies} 回复 ·{" "}
                           <Timestamp value={item.activeAt} format="duration" />
                         </span>
-                        {item.lastAuthor ? (
+                        {item.lastAuthor && !isPostAuthorHidden(item.lastAuthor.id) ? (
                           <span className="hidden md:inline">
                             {" "}
                             · 最后回复：
@@ -1113,6 +1120,8 @@ function ForumFloorView({
 }) {
   const location = useLocation();
   const toast = useToast();
+  const isPostAuthorHidden = useIsPostAuthorHidden();
+  const hidePost = isPostAuthorHidden(post.author?.id);
   const [expanded, setExpanded] = useState(initialExpanded),
     [commentEmojis, setCommentEmojis] = useState(emojis),
     [comments, setComments] = useState(post.comments),
@@ -1243,7 +1252,7 @@ function ForumFloorView({
     }
   }
   const visibleComments = (expanded ? comments.items : preview)
-    .filter((comment) => !hideDeletedContent || comment.state !== "deleted");
+    .filter(comment => !isPostAuthorHidden(comment.author?.id) && (!hideDeletedContent || comment.state !== "deleted"));
   return (
     <article
       className="scroll-mt-24 border-b border-border py-6 focus-visible:outline focus-visible:outline-primary target:bg-primary/5 md:flex md:gap-6"
@@ -1251,7 +1260,7 @@ function ForumFloorView({
       tabIndex={-1}
       data-forum-post
     >
-      <div className="mb-3 flex min-w-0 items-center gap-2 md:mb-0 md:block md:w-[136px] md:shrink-0">
+      {!hidePost && <div className="mb-3 flex min-w-0 items-center gap-2 md:mb-0 md:block md:w-[136px] md:shrink-0">
         {post.author ? (
           <>
             <UserAvatar
@@ -1264,9 +1273,10 @@ function ForumFloorView({
             </div>
           </>
         ) : null}
-      </div>
+      </div>}
       <div className="min-w-0 flex-1">
-        {post.body !== null ? (
+        {hidePost && <span className="font-mono text-xs text-muted">#{post.postNumber}</span>}
+        {!hidePost && (post.body !== null ? (
           <>
             <ForumImages
               diceKey={`${topic.id}/${post.postNumber}`}
@@ -1283,8 +1293,8 @@ function ForumFloorView({
                 ? "该回复已由管理员隐藏。"
                 : "内容不可用。"}
           </p>
-        )}
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-muted">
+        ))}
+        {!hidePost && <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-muted">
           <span className="flex flex-wrap items-center gap-1">
             <Link
               to={forumTargetHref(
@@ -1359,7 +1369,7 @@ function ForumFloorView({
             ) : null}
             <ForumMenu items={menu(post)} />
           </div>
-        </div>
+        </div>}
         {post.postNumber > 1 && post.commentsAvailable && (visibleComments.length > 0 || post.comments.total > FORUM_PREVIEW_SIZE || editor) ? (
           <section
             id={`floor-comments-${post.id}`}
@@ -1412,7 +1422,7 @@ function ForumFloorView({
                   {comment.author ? (
                     <>
                       <ForumAuthorName author={comment.author} />
-                      {comment.replyTo ? (
+                      {comment.replyTo && !isPostAuthorHidden(comment.replyTo.author?.id) ? (
                         <>
                           {" "}
                           回复{" "}

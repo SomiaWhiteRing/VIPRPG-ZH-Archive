@@ -16,10 +16,11 @@ import {
 } from "@/app/components/profile/account-content";
 import { DiscussionList } from "@/app/components/profile/discussion-list";
 import { RecentCommentList } from "@/app/components/profile/recent-comment-list";
+import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
 import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useParams } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -106,6 +107,8 @@ export default function PublicUserPage() {
     discussions,
     hasVisibleSections,
   } = useLoaderData<typeof loader>();
+  const { userId } = useParams();
+  const hidePosts = useIsPostAuthorHidden()(Number(userId));
   return (
     <div className="grid min-w-0 grid-cols-1 gap-7">
       <Showcase
@@ -140,7 +143,7 @@ export default function PublicUserPage() {
           )}
         </AccountSection>
       ) : null}
-      {comments ? (
+      {comments && !hidePosts ? (
         <AccountSection href={`${base}/comments`} title="最近评论">
           {comments.items.length ? (
             <RecentCommentList items={comments.items} />
@@ -149,7 +152,7 @@ export default function PublicUserPage() {
           )}
         </AccountSection>
       ) : null}
-      {discussions ? (
+      {discussions && !hidePosts ? (
         <AccountSection href={`${base}/discussions`} title="最近讨论">
           <DiscussionList items={discussions.items} compact />
         </AccountSection>

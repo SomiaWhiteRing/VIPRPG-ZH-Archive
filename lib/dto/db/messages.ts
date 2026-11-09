@@ -8,7 +8,7 @@ export type MessagePeer = {
   canSend: boolean;
   receiveMessages: boolean;
   acceptsMessages: boolean;
-  blockSettings: UserBlockSettings;
+  blockSettings: Omit<UserBlockSettings, "hidePosts">;
 };
 
 export type DirectMessage = {

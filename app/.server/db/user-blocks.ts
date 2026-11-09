@@ -6,6 +6,7 @@ import type { UserBlockSettings } from "@/lib/user-blocks";
 const columns: Record<keyof UserBlockSettings, string> = {
   blockPrivateMessages: "block_private_messages", muteComments: "mute_comments",
   muteReplies: "mute_replies", muteMentions: "mute_mentions", muteLikes: "mute_likes", muteFriends: "mute_friends",
+  hidePosts: "hide_posts",
 };
 
 // Expressions are supplied by the notification writers, never by request input.
@@ -19,12 +20,18 @@ export function interactionSuppressedSql(recipient: string, actor: string, kind:
 }
 
 export async function readUserBlockSettings(runtime: AppRuntime, userId: number, peerId: number): Promise<UserBlockSettings> {
-  const row = await runtime.db.prepare(`SELECT block_private_messages,mute_comments,mute_replies,mute_mentions,mute_likes,mute_friends
+  const row = await runtime.db.prepare(`SELECT block_private_messages,mute_comments,mute_replies,mute_mentions,mute_likes,mute_friends,hide_posts
     FROM user_block_settings WHERE user_id=? AND blocked_user_id=?`).bind(userId, peerId)
     .first<Record<string, number>>();
   return { blockPrivateMessages: row?.block_private_messages === 1, muteComments: row?.mute_comments === 1,
     muteReplies: row?.mute_replies === 1, muteMentions: row?.mute_mentions === 1,
-    muteLikes: row?.mute_likes === 1, muteFriends: row?.mute_friends === 1 };
+    muteLikes: row?.mute_likes === 1, muteFriends: row?.mute_friends === 1, hidePosts: row?.hide_posts === 1 };
+}
+
+export async function listHiddenPostAuthorIds(runtime: AppRuntime, userId: number): Promise<number[]> {
+  const rows = await runtime.db.prepare("SELECT blocked_user_id FROM user_block_settings WHERE user_id=? AND hide_posts=1")
+    .bind(userId).all<{ blocked_user_id: number }>();
+  return rows.results.map(row => row.blocked_user_id);
 }
 
 export async function setUserBlockSettings(runtime: AppRuntime, user: ArchiveUser, peerId: number,
@@ -54,7 +61,7 @@ export async function setUserBlockSettings(runtime: AppRuntime, user: ArchiveUse
           AND (m.sender_user_id=s.user_id OR m.delivered=1) AND m.id>COALESCE(s.last_read_message_id,0))`)
       .bind(user.id, user.id, peerId, user.id, peerId)] : []),
     db.prepare(`DELETE FROM user_block_settings WHERE user_id=? AND blocked_user_id=?
-      AND block_private_messages=0 AND mute_comments=0 AND mute_replies=0 AND mute_mentions=0 AND mute_likes=0 AND mute_friends=0`)
+      AND block_private_messages=0 AND mute_comments=0 AND mute_replies=0 AND mute_mentions=0 AND mute_likes=0 AND mute_friends=0 AND hide_posts=0`)
       .bind(user.id, peerId),
   ]);
   if (patch.blockPrivateMessages !== undefined) runtime.execution.waitUntil(runtime.env.MESSAGE_ROOM

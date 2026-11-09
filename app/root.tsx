@@ -20,6 +20,7 @@ import {
 import { getCurrentUser } from "./.server/auth/current-user";
 import { countUnreadInboxItemsForUser } from "./.server/db/inbox";
 import { countUnreadDirectMessages } from "./.server/db/messages";
+import { listHiddenPostAuthorIds } from "./.server/db/user-blocks";
 import { InboxIndicator } from "./components/inbox-indicator";
 import { runtimeContext } from "./.server/router-context";
 import { getSiteAnalyticsConfig } from "./.server/analytics";
@@ -46,8 +47,11 @@ export const meta: MetaFunction = ({ error }) =>
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const user = await getCurrentUser(runtime);
-  const unread = user ? await countUnreadInboxItemsForUser(runtime, user) : 0;
-  const messagesUnread = user ? await countUnreadDirectMessages(runtime, user.id) : 0;
+  const [unread, messagesUnread, hiddenPostAuthorIds] = user ? await Promise.all([
+    countUnreadInboxItemsForUser(runtime, user),
+    countUnreadDirectMessages(runtime, user.id),
+    listHiddenPostAuthorIds(runtime, user.id),
+  ]) : [0, 0, []];
   return {
     serverTime: Date.now(),
     embedded: args.request.headers.get("Sec-Fetch-Dest") === "iframe",
@@ -62,6 +66,7 @@ export async function loader(args: LoaderFunctionArgs) {
           permissionKeys: user.permissionKeys,
           isBootstrapAdmin: user.isBootstrapAdmin,
           preferences: user.preferences,
+          hiddenPostAuthorIds,
         }
       : null,
   };
