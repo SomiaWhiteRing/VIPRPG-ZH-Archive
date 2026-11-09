@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { DurableObject } from "cloudflare:workers";
 import { createRequestHandler, RouterContextProvider } from "react-router";
 import { api } from "./app/.server/api";
 import { getSiteAnalyticsConfig } from "./app/.server/analytics";
@@ -21,6 +22,9 @@ import { crawlerResponse, publicRobots, isFilteredGameList } from "./lib/crawl-p
 export { ViewStats } from "./app/.server/views/durable-object";
 export { EternalSeaRoom } from "./app/.server/sea/durable-object";
 export { MessageRoom } from "./app/.server/messages/durable-object";
+
+// Preserve the provisioned staging namespace from the netplay experiment.
+export class GyokuroLobby extends DurableObject<CloudflareEnv> {}
 
 const developmentRender = createRequestHandler(
   () => import("virtual:react-router/server-build"),

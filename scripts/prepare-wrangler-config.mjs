@@ -43,6 +43,7 @@ if (resources.env) validateIsolation(resources);
 // Vite validates the top-level config even when staging is selected. Leave no
 // remote bindings in that unselected config, rather than invalid placeholders.
 if (values.env === "staging") {
+  template.exports.GyokuroLobby = { type: "durable-object", storage: "sqlite" };
   template.env.staging = target;
   template.name = "viprpg-deployment-disabled";
   for (const key of ["d1_databases", "r2_buckets", "send_email", "ratelimits", "routes"]) template[key] = [];
