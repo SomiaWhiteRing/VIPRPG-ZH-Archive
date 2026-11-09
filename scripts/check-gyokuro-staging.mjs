@@ -202,6 +202,7 @@ try {
   await waitUntil(() => latest(1)?.roomId === roomId && latest(1)?.rooms.find((room) => room.id === roomId)?.players.length === 1 &&
     packets[1].includes("<O") && packets[1].includes("<P 0"), "The guest returned and inherited the room after the host disconnected");
   await pages[1].waitForTimeout(600);
+  await tap(pages[1], "z");
   await tap(pages[1], "ArrowRight");
   await waitUntil(() => packets[1].some((packet) => packet.startsWith("<R 0 7 ")), "The new host could choose the next online stage after Scrapcity");
   const replacementContext = await browser.newContext();
@@ -221,6 +222,7 @@ try {
   await waitUntil(() => packets[1].includes("<Q leave") && latest(1)?.roomId === roomId &&
     latest(1)?.rooms.find((room) => room.id === roomId)?.players.length === 1, "Voluntary departure notified the remaining player");
   await replacementContext.close();
+  await tap(pages[1], "z");
   await tap(pages[1], "x");
   await waitUntil(() => !latest(1)?.rooms.some((room) => room.id === roomId), "The empty room disappeared");
   await Promise.all(contexts.map((context) => context.close()));
