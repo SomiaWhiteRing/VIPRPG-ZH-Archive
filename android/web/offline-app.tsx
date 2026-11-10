@@ -7,6 +7,7 @@ import { useWebPlayScreenshots } from "@/app/play/[workId]/web-play-screenshots"
 import { WebPlaySurface } from "@/app/play/[workId]/web-play-surface";
 import type { WebPlayInstallation } from "@/app/play/[workId]/web-play-types";
 import { easyRpgRuntimeBasePath } from "@/lib/archive/web-play";
+import { requestJson } from "@/lib/ui/api-response";
 import { ArrowLeft, RectangleHorizontal, RectangleVertical } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -148,6 +149,19 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
   useEffect(() => {
     const host = playerHostRef.current;
     if (!loaded || !host) return;
+    const netplayLookup = new AbortController();
+    let netplayEndpoint: Promise<string | undefined> | undefined;
+    if (navigator.onLine) {
+      const timeout = setTimeout(() => netplayLookup.abort(), 2_000);
+      netplayEndpoint = requestJson<{ netplayEndpoint?: unknown }>(
+        `/api/archive-versions/${installation.archiveVersionId}/web-play?fields=netplayEndpoint`,
+        { cache: "no-store", signal: netplayLookup.signal },
+      ).then(({ netplayEndpoint }) => {
+        if (typeof netplayEndpoint !== "string") return;
+        const endpoint = new URL(netplayEndpoint);
+        if (endpoint.origin === window.location.origin) return endpoint.href;
+      }).catch(() => undefined).finally(() => clearTimeout(timeout));
+    }
     const session = createPlayerSession(host, {
       title: installation.title,
       workId: installation.workId!,
@@ -157,6 +171,7 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
       easyRpg: installation.easyRpg,
       playKey: installation.playKey,
       runtimeBasePath: easyRpgRuntimeBasePath,
+      netplayEndpoint,
     }, () => {}, () => {}, () => { playerRef.current = null; onClose(); }, image => {
       void captureRef.current(async () => image).then(result => setFeedback(result ?? null));
     });
@@ -166,7 +181,10 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
       if (window.VIPRPGAndroid?.requestPlayerFocus) window.VIPRPGAndroid.requestPlayerFocus();
       else focusPlayer();
     }).catch((reason) => { setStarting(false); setError(message(reason)); });
-    return () => { void session.dispose(); };
+    return () => {
+      netplayLookup.abort();
+      void session.dispose();
+    };
   }, [loaded, installation, onClose, focusPlayer]);
 
   // Android owns physical rotation; CSS compensation is only for non-native previews.

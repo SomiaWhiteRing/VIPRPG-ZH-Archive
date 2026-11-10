@@ -74,8 +74,8 @@ export type PlayerScreenshot = {
 };
 
 type PlayerMetadata = Pick<WebPlayMetadata,
-  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "runtimeAssetBasePath" | "netplayEndpoint" | "engineFamily" | "easyRpg"
->;
+  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "runtimeAssetBasePath" | "engineFamily" | "easyRpg"
+> & { netplayEndpoint?: string | Promise<string | undefined> };
 
 /** EasyRPG owns document-wide input, audio and timers. Destroy that document on exit. */
 export function createPlayerSession(
@@ -251,6 +251,8 @@ export function createPlayerSession(
     args.push("--skip-logo", "--config-path", playerConfigDirectory);
     const loadId = new URLSearchParams(window.location.search).get("load-game-id");
     if (loadId && /^\d+$/.test(loadId)) args.push("--load-game-id", loadId);
+    const netplayEndpoint = await metadata.netplayEndpoint;
+    lifetime.signal.throwIfAborted();
     runtimeCreation = playerWindow.createEasyRpgPlayer({
       packages,
       nativeResources,
@@ -259,7 +261,7 @@ export function createPlayerSession(
       runtimeBase: `${metadata.runtimeBasePath}/`,
       assetBase: new URL(`${metadata.runtimeAssetBasePath || metadata.runtimeBasePath}/`, playerWindow.location.href).href,
       arguments: args,
-      netplayEndpoint: metadata.netplayEndpoint,
+      netplayEndpoint,
       signal: lifetime.signal,
       onError: (error: unknown) => onLog("error", formatLogValue(error)),
       onFullscreen,

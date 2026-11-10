@@ -169,7 +169,8 @@ export function workAuditSnapshot(id: number, includeRelations = false): AuditSn
       FROM (SELECT * FROM work_media_assets WHERE work_id=w.id ORDER BY role,sort_order,media_asset_id) a JOIN media_assets m ON m.id=a.media_asset_id)),
     'externalLinks',json((SELECT json_group_array(json_object('label',label,'url',url,'type',link_type))
       FROM (SELECT * FROM work_external_links WHERE work_id=w.id ORDER BY id))),
-    'currentArchives',json((SELECT json_group_array(json_object('id',id,'sourceUrl',source_url)) FROM (SELECT id,source_url FROM archive_versions WHERE work_id=w.id AND is_current=1 ORDER BY id)))
+    'currentArchives',json((SELECT json_group_array(json_object('id',id,'sourceUrl',source_url,'netplayService',netplay_service))
+      FROM (SELECT id,source_url,netplay_service FROM archive_versions WHERE work_id=w.id AND is_current=1 ORDER BY id)))
     ${includeRelations ? `,'relations',json((SELECT json_group_array(json_object('id',id,'fromWorkId',from_work_id,'toWorkId',to_work_id,'type',relation_type,'inverse',vice_versa))
       FROM (SELECT * FROM work_relations WHERE from_work_id=w.id OR to_work_id=w.id ORDER BY id))),
       'translationRelations',json((SELECT json_group_array(json_object('id',id,'fromWorkId',source_work_id,'toWorkId',target_work_id,'type',target_role,'inverse',vice_versa))

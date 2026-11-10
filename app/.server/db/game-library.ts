@@ -211,6 +211,7 @@ type WorkEditInput = WorkVisibilityInput & {
   externalLinks: GameExternalLink[];
   distribution?: "archive" | "external";
   archiveSourceUrl?: string | null;
+  netplay?: { archiveVersionId: number; service: 0 | 1 };
 };
 
 type ArchiveEditInput = {
@@ -692,6 +693,7 @@ export async function getWorkForAdminEdit(
        av.source_size_bytes AS current_archive_source_size_bytes,
        av.source_url AS current_archive_source_url,
        av.uses_shared_player AS current_archive_uses_shared_player,
+       av.netplay_service AS current_archive_netplay_service,
        av.published_at AS current_archive_published_at
        FROM works w LEFT JOIN archive_versions av
          ON av.work_id=w.id AND av.status='published' AND av.is_current=1 AND av.purged_at IS NULL
@@ -704,6 +706,7 @@ export async function getWorkForAdminEdit(
       current_archive_source_size_bytes: number | null;
       current_archive_source_url: string | null;
       current_archive_uses_shared_player: number | null;
+      current_archive_netplay_service: 0 | 1 | null;
       current_archive_published_at: string | null;
     }>();
   if (!row) return null;
@@ -748,6 +751,7 @@ export async function getWorkForAdminEdit(
     externalLinks: collections.links,
     currentArchive: row.current_archive_id === null ? null : {
       id: row.current_archive_id,
+      netplayService: row.current_archive_netplay_service === null ? null : row.current_archive_netplay_service === 1,
       sourceName: row.current_archive_source_name || "本站归档",
       sourceFileCount: row.current_archive_source_file_count ?? 0,
       sourceSizeBytes: row.current_archive_source_size_bytes ?? 0,
@@ -1219,6 +1223,12 @@ export async function updateWorkForAdmin(
   } else if (canUpdateDistribution && archiveSourceUrl !== undefined) {
     statements.push(database.prepare(`UPDATE archive_versions SET source_url=? WHERE work_id=? AND is_current=1`).bind(archiveSourceUrl, input.workId));
   }
+  if (input.netplay && input.distribution !== "external" && hasPermission(actor, "archive_version.update")) {
+    statements.push(database.prepare(`UPDATE archive_versions SET netplay_service=?
+      WHERE id=? AND work_id=? AND is_current=1 AND status='published'
+        AND purged_at IS NULL AND netplay_service IS NOT NULL`)
+      .bind(input.netplay.service, input.netplay.archiveVersionId, input.workId));
+  }
   if (canUpdateMetadata) {
     for (const alias of aliases) {
       statements.push(
@@ -1503,6 +1513,7 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
   if (distribution !== null && distribution !== "archive" && distribution !== "external") {
     throw new HttpError(400, "distribution 不合法");
   }
+  const netplayService = parseNetplayService(form.get("netplay_service"));
   return {
     workId: positive(form.get("work_id")),
     chineseTitle: clean(form.get("chinese_title")),
@@ -1528,20 +1539,26 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     externalLinks: parseLinks(form.get("external_links")),
     distribution: distribution ?? undefined,
     archiveSourceUrl: form.has("archive_source_url") ? clean(form.get("archive_source_url")) : undefined,
+    netplay: netplayService === undefined ? undefined : {
+      archiveVersionId: positive(form.get("netplay_archive_version_id")),
+      service: netplayService,
+    },
   };
 }
 export function parseArchiveVersionEditForm(form: FormData): ArchiveEditInput {
-  const netplayService = form.get("netplay_service");
-  if (netplayService !== null && netplayService !== "0" && netplayService !== "1") {
-    throw new HttpError(400, "联机服务设置无效");
-  }
   return {
     archiveVersionId: positive(form.get("archive_version_id")),
-    netplayService: netplayService === null ? undefined : netplayService === "1" ? 1 : 0,
+    netplayService: parseNetplayService(form.get("netplay_service")),
     status: String(form.get("status") ?? "published"),
     sourceName: clean(form.get("source_name")),
     sourceUrl: clean(form.get("source_url")),
   };
+}
+function parseNetplayService(value: FormDataEntryValue | null): 0 | 1 | undefined {
+  if (value === null) return undefined;
+  if (value === "0") return 0;
+  if (value === "1") return 1;
+  throw new HttpError(400, "联机服务设置无效");
 }
 function legacyPlayCountSql(): string {
   return `(SELECT COUNT(*) FROM user_work_entries e WHERE e.work_id=w.id AND e.last_played_at IS NOT NULL) AS legacy_player_count`;

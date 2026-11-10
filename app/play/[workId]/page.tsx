@@ -2,6 +2,7 @@ import { parseAccountPage } from "@/app/.server/auth/account-user";
 import type { WorkFavoriteUpdate } from "@/lib/user-tags";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
+  getArchiveNetplayEndpoint,
   getPublishedArchiveDownloadRecord,
 } from "@/app/.server/db/archive-downloads";
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
@@ -87,9 +88,7 @@ export async function loader(args: LoaderFunctionArgs) {
   ]);
 
   const easyRpg = await readArchiveEasyRpgConfig(runtime, record.manifestSha256);
-  const netplayEndpoint = easyRpg?.netplay && record.netplayService && runtime.env.NETPLAY_ROOM
-    ? new URL(`/api/netplay/v1/${record.id}/`, runtime.origin).href
-    : undefined;
+  const netplayEndpoint = easyRpg?.netplay ? getArchiveNetplayEndpoint(runtime, record) : undefined;
   const metadata: WebPlayMetadata = {
     ok: true,
     archiveVersionId: record.id,

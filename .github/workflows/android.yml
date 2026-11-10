@@ -54,6 +54,7 @@ on:
       - 'lib/browser/android-local.ts'
       - 'lib/browser/work-play.ts'
       - 'lib/format.ts'
+      - 'lib/ui/api-response.ts'
       - 'lib/ui/cn.ts'
       - 'lib/android-package.ts'
       - 'lib/package-zip.ts'

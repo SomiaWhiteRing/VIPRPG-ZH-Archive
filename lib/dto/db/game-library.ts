@@ -175,6 +175,7 @@ export type AdminWorkEdit = WorkVisibility & {
   externalLinks: GameExternalLink[];
   currentArchive: {
     id: number;
+    netplayService: boolean | null;
     sourceName: string;
     sourceFileCount: number;
     sourceSizeBytes: number;

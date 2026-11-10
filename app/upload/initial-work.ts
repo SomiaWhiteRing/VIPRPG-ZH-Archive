@@ -74,6 +74,7 @@ export function uploadInitialWork(work: AdminWorkEdit): UploadInitialWork {
       .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
       .map((media) => media.blobSha256),
     currentArchive: work.currentArchive ? {
+      id: work.currentArchive.id,
       name: work.currentArchive.sourceName,
       usesSharedPlayer: work.currentArchive.usesSharedPlayer,
       fileCount: work.currentArchive.sourceFileCount,

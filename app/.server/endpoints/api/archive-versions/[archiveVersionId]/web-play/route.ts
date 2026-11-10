@@ -1,4 +1,5 @@
 import {
+  getArchiveNetplayEndpoint,
   getPublishedArchiveDownloadRecord,
   parseArchiveVersionId,
 } from "@/app/.server/db/archive-downloads";
@@ -22,7 +23,7 @@ type RouteContext = {
 
 export async function GET(
   runtime: AppRuntime,
-  _request: Request,
+  request: Request,
   context: RouteContext,
 ) {
   try {
@@ -43,6 +44,12 @@ export async function GET(
       );
     }
 
+    const netplayEndpoint = getArchiveNetplayEndpoint(runtime, record);
+    if (new URL(request.url).searchParams.get("fields") === "netplayEndpoint") {
+      return json({ ok: true, netplayEndpoint });
+    }
+
+    const easyRpg = await readArchiveEasyRpgConfig(runtime, record.manifestSha256);
     const playKey = buildWebPlayKey({
       archiveVersionId: record.id,
       manifestSha256: record.manifestSha256,
@@ -69,7 +76,8 @@ export async function GET(
       installTotalSizeBytes: record.installTotalSizeBytes,
       estimatedR2GetCount: record.estimatedR2GetCount,
       engineFamily: record.engineFamily,
-      easyRpg: await readArchiveEasyRpgConfig(runtime, record.manifestSha256),
+      easyRpg,
+      netplayEndpoint: easyRpg?.netplay ? netplayEndpoint : undefined,
     });
   } catch (error) {
     return jsonError("Web Play metadata failed", error);

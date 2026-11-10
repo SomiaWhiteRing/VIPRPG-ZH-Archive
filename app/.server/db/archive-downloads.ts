@@ -36,6 +36,12 @@ export type ArchiveDownloadRecord = {
   workCoverBlobSha256: string | null;
   engineFamily: string;
 };
+
+export function getArchiveNetplayEndpoint(runtime: AppRuntime, record: ArchiveDownloadRecord): string | undefined {
+  if (!record.netplayService || !runtime.env.NETPLAY_ROOM) return;
+  return new URL(`/api/netplay/v1/${record.id}/`, runtime.origin).href;
+}
+
 export function parseArchiveVersionId(value: string): number {
   return parsePositiveId(value, "archive version id");
 }
