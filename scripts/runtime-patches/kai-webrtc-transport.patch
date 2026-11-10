@@ -1,12 +1,12 @@
 diff --git a/resources/emscripten/player-host.js b/resources/emscripten/player-host.js
-index 710116589..78937c7e9 100644
+index 710116589..1f657d256 100644
 --- a/resources/emscripten/player-host.js
 +++ b/resources/emscripten/player-host.js
 @@ -17,2 +17,3 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
    const worker = new Worker(new URL('player-worker.js', base));
 +  let closeNetplayRtc = () => {};
    const audioWorker = new Worker(new URL('player-audio-worker.js', base));
-@@ -512,2 +513,75 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+@@ -512,2 +513,78 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
    };
 +  function connectNetplayRtc({port, iceServers, offer}) {
 +    let peer;
@@ -43,7 +43,10 @@ index 710116589..78937c7e9 100644
 +      channel = dataChannel;
 +      channel.binaryType = 'arraybuffer';
 +      channel.onopen = () => port.postMessage({type: 'open'});
-+      channel.onmessage = ({data}) => port.postMessage({type: 'data', data}, [data]);
++      channel.onmessage = ({data}) => {
++        if (data instanceof ArrayBuffer) port.postMessage({type: 'data', data}, [data]);
++        else fail();
++      };
 +      channel.onclose = channel.onerror = fail;
 +    };
 +    peer.onicecandidate = ({candidate}) => {
@@ -82,22 +85,22 @@ index 710116589..78937c7e9 100644
 +  }
 +
    worker.onmessage = ({data}) => {
-@@ -585,2 +659,5 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+@@ -585,2 +662,5 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
        } catch { /* Invalid game-supplied URL. */ }
 +    } else if (data.type === 'netplay-rtc') {
 +      closeNetplayRtc();
 +      closeNetplayRtc = connectNetplayRtc(data);
      } else if (data.type === 'movie-open') {
-@@ -710,2 +787,3 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+@@ -710,2 +790,3 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
    const shutdown = async () => {
 +    closeNetplayRtc();
      nameInput?.finish(null);
-@@ -737,2 +815,3 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+@@ -737,2 +818,3 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
        netplayEndpoint: options.netplayEndpoint,
 +      netplayRtc: typeof RTCPeerConnection === 'function',
        joystickAvailable: joystickAvailable(),
 diff --git a/resources/emscripten/player-worker.js b/resources/emscripten/player-worker.js
-index 78ab2f031..1ecfccc71 100644
+index 78ab2f031..d3372e2e3 100644
 --- a/resources/emscripten/player-worker.js
 +++ b/resources/emscripten/player-worker.js
 @@ -149,3 +149,3 @@ function createRenderer(canvas) {
@@ -126,16 +129,22 @@ index 78ab2f031..1ecfccc71 100644
      values.forEach((value, index) => bytes.setInt32(index * 4, value, true));
 -    socket.send(bytes.buffer);
 +    if (rtcSelected && values.length > 1) {
-+      rtcPort.postMessage({type: 'data', data: bytes.buffer}, [bytes.buffer]);
++      rtcPort?.postMessage({type: 'data', data: bytes.buffer}, [bytes.buffer]);
 +    } else {
 +      socket.send(bytes.buffer);
 +    }
    };
-@@ -293,2 +305,3 @@ function createNetplay(endpoint) {
+@@ -236,3 +248,4 @@ function createNetplay(endpoint) {
+       echoProbe();
+-      return state;
++      // A peer can close its data channel before the room sends the waiting-seat update.
++      return rtcSelected && !rtcPort ? 2 : state;
+     },
+@@ -293,2 +306,3 @@ function createNetplay(endpoint) {
        if (mode) address.searchParams.set('mode', mode);
 +      if (rtcSupported) address.searchParams.set('rtc', '1');
        const connection = socket = new WebSocket(address);
-@@ -302,11 +315,4 @@ function createNetplay(endpoint) {
+@@ -302,11 +316,4 @@ function createNetplay(endpoint) {
        connection.onclose = connection.onerror = ended;
 -      connection.onmessage = ({data}) => {
 -        if (socket !== connection) return;
@@ -149,7 +158,7 @@ index 78ab2f031..1ecfccc71 100644
 +      const receiveMatchData = data => {
 +        if (data instanceof ArrayBuffer && data.byteLength === 8) {
            const packet = new DataView(data), kind = packet.getInt32(0, true), number = packet.getInt32(4, true);
-@@ -321,2 +327,43 @@ function createNetplay(endpoint) {
+@@ -321,2 +328,44 @@ function createNetplay(endpoint) {
        };
 +      connection.onmessage = ({data}) => {
 +        if (socket !== connection) return;
@@ -175,8 +184,9 @@ index 78ab2f031..1ecfccc71 100644
 +            else if (data.type === 'signal') connection.send('rtc:signal:' + JSON.stringify(data.value));
 +            else if (data.type === 'open') connection.send('rtc:ready');
 +            else if (data.type === 'closed') {
-+              if (rtcSelected) ended();
-+              else connection.send('rtc:fail');
++              port1.close();
++              rtcPort = undefined;
++              if (!rtcSelected) connection.send('rtc:fail');
 +            }
 +          };
 +          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer}, [port2]);
@@ -193,7 +203,7 @@ index 78ab2f031..1ecfccc71 100644
 +        }
 +      };
      },
-@@ -349,3 +396,3 @@ self.onmessage = async ({data}) => {
+@@ -349,3 +398,3 @@ self.onmessage = async ({data}) => {
          gamePackages: data.packages, gameArguments: data.arguments, keyNames: {},
 -        netplay: createNetplay(data.netplayEndpoint),
 +        netplay: createNetplay(data.netplayEndpoint, data.netplayRtc),

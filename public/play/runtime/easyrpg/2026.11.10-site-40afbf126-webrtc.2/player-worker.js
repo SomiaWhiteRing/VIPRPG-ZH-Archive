@@ -230,7 +230,7 @@ function createNetplay(endpoint, rtcSupported) {
     const bytes = new DataView(new ArrayBuffer(values.length * 4));
     values.forEach((value, index) => bytes.setInt32(index * 4, value, true));
     if (rtcSelected && values.length > 1) {
-      rtcPort.postMessage({type: 'data', data: bytes.buffer}, [bytes.buffer]);
+      rtcPort?.postMessage({type: 'data', data: bytes.buffer}, [bytes.buffer]);
     } else {
       socket.send(bytes.buffer);
     }
@@ -246,7 +246,8 @@ function createNetplay(endpoint, rtcSupported) {
     stopDirectory,
     state() {
       echoProbe();
-      return state;
+      // A peer can close its data channel before the room sends the waiting-seat update.
+      return rtcSelected && !rtcPort ? 2 : state;
     },
     rooms() {
       if (!subscription && performance.now() >= retry) subscribe();
@@ -349,8 +350,9 @@ function createNetplay(endpoint, rtcSupported) {
             else if (data.type === 'signal') connection.send('rtc:signal:' + JSON.stringify(data.value));
             else if (data.type === 'open') connection.send('rtc:ready');
             else if (data.type === 'closed') {
-              if (rtcSelected) ended();
-              else connection.send('rtc:fail');
+              port1.close();
+              rtcPort = undefined;
+              if (!rtcSelected) connection.send('rtc:fail');
             }
           };
           postMessage({type: 'netplay-rtc', port: port2, iceServers, offer}, [port2]);

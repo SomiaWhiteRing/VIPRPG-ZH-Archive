@@ -591,7 +591,10 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       channel = dataChannel;
       channel.binaryType = 'arraybuffer';
       channel.onopen = () => port.postMessage({type: 'open'});
-      channel.onmessage = ({data}) => port.postMessage({type: 'data', data}, [data]);
+      channel.onmessage = ({data}) => {
+        if (data instanceof ArrayBuffer) port.postMessage({type: 'data', data}, [data]);
+        else fail();
+      };
       channel.onclose = channel.onerror = fail;
     };
     peer.onicecandidate = ({candidate}) => {

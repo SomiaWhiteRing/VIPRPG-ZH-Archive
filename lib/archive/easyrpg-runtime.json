@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.10-site-40afbf126-webrtc.1",
+  "version": "2026.11.10-site-40afbf126-webrtc.2",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "build": "40afbf126-web-transport-webrtc.1",
+  "build": "40afbf126-web-transport-webrtc.2",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "9153a57f94c2baeae33691e2e1b0a976eff47297e4a63a9b10ddbe1b9cf37784",
+  "archiveSha256": "33ff3aa38c952eb1bcfe21bd29a371591344a571660a8a64c3a15e067259eafc",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -20,22 +20,22 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "393de95515a3ddb5a46c2c8048984c0f8ec9465840147105264cb2b2dc00292b",
-      "afterSha256": "b663260fe35aa1c635ef210a8df777492ff47379a4c8522e1b11de805a0798c8"
+      "beforeSha256": "f05aebedeb7378ea8e952707a2f46b77769aa56c7374c53dd827ec65bffb10e6",
+      "afterSha256": "90c50771bed4ff7985c7900c7a93ebc299f2d2ee58152bf6350ff99f87175e3a"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "b663260fe35aa1c635ef210a8df777492ff47379a4c8522e1b11de805a0798c8",
-      "afterSha256": "1e0f3c6f5a6a29d9e8245ff335a4a1d5caf3211638c4df0af1ac7cd062703721"
+      "beforeSha256": "90c50771bed4ff7985c7900c7a93ebc299f2d2ee58152bf6350ff99f87175e3a",
+      "afterSha256": "4af1b1765f27750b22d5432e9b1b990ca0cac4e34090e62df08db7fa163b78a4"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/startup-regional-assets.patch",
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
-      "beforeSha256": "1e0f3c6f5a6a29d9e8245ff335a4a1d5caf3211638c4df0af1ac7cd062703721",
-      "afterSha256": "a8549bb1b622fea6307441bfce8c8e1aa7f95d011931a1fbc6deecb50b05fd28"
+      "beforeSha256": "4af1b1765f27750b22d5432e9b1b990ca0cac4e34090e62df08db7fa163b78a4",
+      "afterSha256": "55e5d2d89ceb10a123472cda961840b53a3fc1d24c41f94a4b44ee513c347de9"
     }
   ],
   "sourcePatches": [
@@ -57,7 +57,7 @@
     },
     {
       "path": "scripts/runtime-patches/kai-webrtc-transport.patch",
-      "sha256": "0326706b92e606513e40461e0d84b1d00bf8c83bf9e0ae68aa89d81541dc7621"
+      "sha256": "a13324043596ca4f1f1dea38b534738da5dd2cd386ec550660eef9c1b98dceea"
     }
   ],
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",
