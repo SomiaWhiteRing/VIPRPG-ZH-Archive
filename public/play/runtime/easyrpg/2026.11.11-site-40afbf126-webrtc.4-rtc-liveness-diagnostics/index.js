@@ -562,27 +562,36 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     let open = true;
     let sentDescription = false;
     const pendingCandidates = [];
+    const milestones = new Set();
+    const mark = milestone => {
+      if (!open || milestones.has(milestone)) return;
+      milestones.add(milestone);
+      port.postMessage({type: 'diagnostic', milestone});
+    };
     const close = () => {
       if (!open) return;
       open = false;
       port.close();
       peer?.close();
     };
-    const fail = () => {
+    const fail = milestone => {
       if (!open) return;
+      mark(milestone);
       port.postMessage({type: 'closed'});
       close();
     };
     try {
       peer = new RTCPeerConnection({iceServers});
     } catch {
-      fail();
+      fail('peer_create_failed');
       return close;
     }
+    mark('peer_created');
     const signal = value => port.postMessage({type: 'signal', value});
     const describe = async () => {
-      await peer.setLocalDescription();
+      await peer.setLocalDescription().catch(() => fail('local_description_failed'));
       if (!open) return;
+      mark('local_description');
       signal({description: peer.localDescription.toJSON()});
       sentDescription = true;
       for (const candidate of pendingCandidates.splice(0)) signal({candidate});
@@ -590,20 +599,32 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const attach = dataChannel => {
       channel = dataChannel;
       channel.binaryType = 'arraybuffer';
-      channel.onopen = () => port.postMessage({type: 'open'});
+      channel.onopen = () => {
+        mark('channel_open');
+        port.postMessage({type: 'open'});
+      };
       channel.onmessage = ({data}) => {
         if (data instanceof ArrayBuffer) port.postMessage({type: 'data', data}, [data]);
-        else fail();
+        else fail('channel_error');
       };
-      channel.onclose = channel.onerror = fail;
+      channel.onclose = () => fail('channel_closed');
+      channel.onerror = () => fail('channel_error');
     };
     peer.onicecandidate = ({candidate}) => {
       if (!open || !candidate) return;
+      if (candidate.type) mark('candidate_' + candidate.type);
       if (sentDescription) signal({candidate: candidate.toJSON()});
       else pendingCandidates.push(candidate.toJSON());
     };
+    peer.onicegatheringstatechange = () => {
+      if (peer.iceGatheringState === 'complete') mark('gathering_complete');
+    };
+    peer.onicecandidateerror = ({errorCode}) => mark(errorCode === 701 ? 'stun_unreachable' : 'stun_error');
+    peer.oniceconnectionstatechange = () => {
+      if (peer.iceConnectionState !== 'new' && peer.iceConnectionState !== 'closed') mark('ice_' + peer.iceConnectionState);
+    };
     peer.onconnectionstatechange = () => {
-      if (peer.connectionState === 'failed') fail();
+      if (peer.connectionState === 'failed') fail('peer_connection_failed');
     };
     peer.ondatachannel = ({channel}) => attach(channel);
     let signaling = Promise.resolve();
@@ -612,22 +633,29 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
         close();
       } else if (data.type === 'data') {
         if (channel?.readyState === 'open') channel.send(data.data);
-        else fail();
+        else fail('channel_closed');
       } else if (data.type === 'signal') {
         signaling = signaling.then(async () => {
           if (!open) return;
           if (data.value.description) {
-            await peer.setRemoteDescription(data.value.description);
+            await peer.setRemoteDescription(data.value.description).catch(() => fail('remote_description_failed'));
+            if (!open) return;
+            mark('remote_description');
             if (data.value.description.type === 'offer') await describe();
           } else {
-            await peer.addIceCandidate(data.value.candidate);
+            await peer.addIceCandidate(data.value.candidate).catch(() => fail('remote_candidate_failed'));
           }
-        }).catch(fail);
+        }).catch(() => fail('invalid_signal'));
       }
     };
     if (offer) {
-      attach(peer.createDataChannel('easyrpg-netplay', {ordered: true}));
-      signaling = describe().catch(fail);
+      try {
+        attach(peer.createDataChannel('easyrpg-netplay', {ordered: true}));
+      } catch {
+        fail('channel_create_failed');
+        return close;
+      }
+      signaling = describe().catch(() => fail('local_description_failed'));
     }
     return close;
   }

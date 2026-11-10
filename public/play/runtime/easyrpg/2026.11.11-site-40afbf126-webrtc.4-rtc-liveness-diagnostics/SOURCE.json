@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-liveness",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness",
-  "artifact": "Kai-Web-2026.11.11-netplay-liveness-site.zip",
-  "archiveSha256": "b61dd2a8d618ae776a52da828c6beaff6e3c049fc388d6e5e562708988693d9c",
+  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-liveness-diagnostics",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics",
+  "artifact": "Kai-Web-2026.11.11-rtc-diagnostics-site.zip",
+  "archiveSha256": "87ae6c62c3762fbad576e326790a7e7ff24ce4e79d9bbeb5b5c16248768ba6ea",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/3398943413d0b99076498a3997911b74e54898a2",
   "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/3398943413d0b99076498a3997911b74e54898a2/COPYING",
   "sourceState": "patched-commit",
@@ -44,6 +44,10 @@
     {
       "path": "scripts/runtime-patches/kai-netplay-rtc-disconnect.patch",
       "sha256": "ff7979a9daac2434972b56d3114f8ef41253c4c89b5cc4d88205a28e4133e786"
+    },
+    {
+      "path": "scripts/runtime-patches/kai-netplay-rtc-diagnostics.patch",
+      "sha256": "cadfe71c9ee43e5218beeaea3254b61e15b91cc9162b15811339b6b90b7a730c"
     }
   ],
   "sourceSnapshot": null,
@@ -77,28 +81,28 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "ab0de13c8c3fd817e42e41f080a5ecc9c121d20e54d6b3352864d16d0bb1dee6",
-      "afterSha256": "16f0eded17c820822991276a7bcba36a6ab0fb11b1e383f908d9f423f3dcae14"
+      "beforeSha256": "ee12e0a529713e08491cb0bcff1741d4b731818398710ed95c627c6fd7da3091",
+      "afterSha256": "ff3f9beb84b45189edb91fc797242ed594ff238e08f2ae30cc8b5691574b8f12"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "16f0eded17c820822991276a7bcba36a6ab0fb11b1e383f908d9f423f3dcae14",
-      "afterSha256": "c88ec69674ce9d6d17ed480de8eec2e0f9cbb4c2f96e5d50458a0ccda95533f8"
+      "beforeSha256": "ff3f9beb84b45189edb91fc797242ed594ff238e08f2ae30cc8b5691574b8f12",
+      "afterSha256": "7443a502e7cdcdb1c50bd5c039694a652e8caec288496983c7fb5f56067bd79e"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/startup-regional-assets.patch",
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
-      "beforeSha256": "c88ec69674ce9d6d17ed480de8eec2e0f9cbb4c2f96e5d50458a0ccda95533f8",
-      "afterSha256": "0c196b31e1f4fb382c7a0c7c04b56a8f77325ce8030410703d162011700dddbc"
+      "beforeSha256": "7443a502e7cdcdb1c50bd5c039694a652e8caec288496983c7fb5f56067bd79e",
+      "afterSha256": "a515c279a30809ad46027459ab474a890d38b147a16afea4bbc68b159c8744bd"
     }
   ],
   "files": {
     "index.js": {
-      "size": 48500,
-      "sha256": "0c196b31e1f4fb382c7a0c7c04b56a8f77325ce8030410703d162011700dddbc"
+      "size": 49834,
+      "sha256": "a515c279a30809ad46027459ab474a890d38b147a16afea4bbc68b159c8744bd"
     },
     "easyrpg-player.js": {
       "size": 128884,
@@ -121,8 +125,8 @@
       "sha256": "014bfeab28d9ca92d2862cef5c754750784d664798654a2730e2fd2d28da1f6f"
     },
     "player-worker.js": {
-      "size": 20452,
-      "sha256": "1a4e7f91d4a60266a041974e960772f79e5df3a52f5425c3322dc3622155ec9e"
+      "size": 20678,
+      "sha256": "fb9748645539a742e2a917a5bf2ba7e51c848fb16e557116c2f51eae54600294"
     },
     "player-audio.js": {
       "size": 1858,
@@ -223,6 +227,10 @@
     "kai-netplay-rtc-disconnect.patch": {
       "size": 661,
       "sha256": "ff7979a9daac2434972b56d3114f8ef41253c4c89b5cc4d88205a28e4133e786"
+    },
+    "kai-netplay-rtc-diagnostics.patch": {
+      "size": 6082,
+      "sha256": "cadfe71c9ee43e5218beeaea3254b61e15b91cc9162b15811339b6b90b7a730c"
     }
   }
 }

@@ -9,6 +9,13 @@ const directIceServers = [{ urls: "stun:stun.cloudflare.com:3478" }];
 const heartbeatIntervalMs = 5_000;
 const heartbeatHideMs = 10_000;
 const heartbeatTimeoutMs = 15_000;
+const rtcMilestones = new Set([
+  "peer_created", "peer_create_failed", "peer_connection_failed", "channel_create_failed",
+  "local_description", "local_description_failed", "remote_description", "remote_description_failed", "remote_candidate_failed",
+  "candidate_host", "candidate_srflx", "candidate_prflx", "candidate_relay", "gathering_complete", "stun_unreachable", "stun_error",
+  "ice_checking", "ice_connected", "ice_completed", "ice_disconnected", "ice_failed",
+  "channel_open", "channel_closed", "channel_error", "invalid_signal",
+]);
 type Identity = { name: string; avatar: string };
 type DisconnectReason = "socket_close" | "socket_error" | "heartbeat_timeout" | "rtc_failed";
 type Heartbeat = {
@@ -16,9 +23,15 @@ type Heartbeat = {
   probe: ReturnType<typeof setInterval>;
   deadline?: ReturnType<typeof setTimeout>;
 };
+type RtcProgress = {
+  milestones: Set<string>;
+  signals: number;
+  oversizedSignals: number;
+};
 type Negotiation = {
   route: "pending" | "webrtc" | "websocket";
   ready: Set<WebSocket>;
+  progress: Map<WebSocket, RtcProgress>;
   startedAt: number;
   timeout: ReturnType<typeof setTimeout>;
 };
@@ -179,13 +192,22 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
           return;
         }
         if (rtc?.route !== "pending") return;
+        const progress = rtc.progress.get(socket)!;
         if (data === "rtc:ready") {
           rtc.ready.add(socket);
           if (rtc.ready.size === 2) this.selectRoute(room, "connected");
         } else if (data === "rtc:fail") {
-          this.selectRoute(room, "client_failure");
-        } else if (data.length <= 24576 && data.startsWith("rtc:signal:")) {
-          for (const peer of peers.keys()) if (peer !== socket && peer.readyState === WebSocket.OPEN) peer.send(data);
+          this.selectRoute(room, "client_failure", socket);
+        } else if (data.startsWith("rtc:diag:")) {
+          const milestone = data.slice("rtc:diag:".length);
+          if (rtcMilestones.has(milestone)) progress.milestones.add(milestone);
+        } else if (data.startsWith("rtc:signal:")) {
+          if (data.length <= 24576) {
+            progress.signals++;
+            for (const peer of peers.keys()) if (peer !== socket && peer.readyState === WebSocket.OPEN) peer.send(data);
+          } else {
+            progress.oversizedSignals++;
+          }
         }
         return;
       }
@@ -216,6 +238,10 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
         room.rtc = {
           route: "pending",
           ready: new Set(),
+          progress: new Map([
+            [first, { milestones: new Set(), signals: 0, oversizedSignals: 0 }],
+            [socket, { milestones: new Set(), signals: 0, oversizedSignals: 0 }],
+          ]),
           startedAt: Date.now(),
           timeout: setTimeout(() => this.selectRoute(room, "timeout"), 8000),
         };
@@ -233,14 +259,24 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
-  private selectRoute(room: Room, reason: "connected" | "client_failure" | "timeout") {
+  private selectRoute(room: Room, reason: "connected" | "client_failure" | "timeout", reporter?: WebSocket) {
     const rtc = room.rtc;
     const [first, second] = room.peers.keys();
     if (rtc?.route !== "pending" || first?.readyState !== WebSocket.OPEN || second?.readyState !== WebSocket.OPEN) return;
     clearTimeout(rtc.timeout);
     const route = reason === "connected" ? "webrtc" : "websocket";
     rtc.route = route;
-    console.log({ event: "netplay_route", ...room.details, route, reason, negotiationMs: Date.now() - rtc.startedAt });
+    console.log({
+      event: "netplay_route", ...room.details, route, reason, negotiationMs: Date.now() - rtc.startedAt,
+      failedSeat: reporter === first ? 1 : reporter === second ? 2 : undefined,
+      peers: Array.from(rtc.progress, ([socket, progress], index) => ({
+        seat: index + 1,
+        ready: rtc.ready.has(socket),
+        signals: progress.signals,
+        oversizedSignals: progress.oversizedSignals,
+        milestones: [...progress.milestones],
+      })),
+    });
     first.send("rtc:" + route);
     second.send("rtc:" + route);
     first.send("3");

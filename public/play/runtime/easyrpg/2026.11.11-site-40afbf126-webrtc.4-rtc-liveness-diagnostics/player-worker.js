@@ -355,6 +355,9 @@ function createNetplay(endpoint, rtcSupported) {
             if (rtcPort !== port1 || socket !== connection) return;
             if (data.type === 'data') receiveMatchData(data.data);
             else if (data.type === 'signal') connection.send('rtc:signal:' + JSON.stringify(data.value));
+            else if (data.type === 'diagnostic' && connection.readyState === WebSocket.OPEN) {
+              connection.send('rtc:diag:' + data.milestone);
+            }
             else if (data.type === 'open') connection.send('rtc:ready');
             else if (data.type === 'closed') {
               port1.close();
@@ -367,6 +370,7 @@ function createNetplay(endpoint, rtcSupported) {
           try {
             rtcPort?.postMessage({type: 'signal', value: JSON.parse(data.slice('rtc:signal:'.length))});
           } catch {
+            connection.send('rtc:diag:invalid_signal');
             connection.send('rtc:fail');
           }
         } else if (data instanceof ArrayBuffer && data.byteLength === 4 && inbox.length < 256) {
