@@ -5,6 +5,7 @@ export type EasyRpgConfig = {
   engine: EasyRpgEngine | null;
   engineSource: "config" | "executable" | "database" | "files" | "fallback";
   encoding: string | null;
+  netplay?: true;
   patches: {
     maniac: number;
     dynRpg: boolean;
@@ -170,7 +171,8 @@ export async function detectEasyRpgConfig(files: readonly SourceFile[]): Promise
     patches.dynRpg = entries.has("dynloader.dll");
     if (entries.has("accord.dll")) patches.maniac = 1;
   }
-  return { schema: "easyrpg-config.v1", engine, engineSource, encoding, patches };
+  const netplay = /^(?:true|yes|on|1)$/i.test(ini.get("netplay/enabled") ?? "");
+  return { schema: "easyrpg-config.v1", engine, engineSource, encoding, patches, ...(netplay ? { netplay: true } : {}) };
 }
 
 export function parseEasyRpgConfig(value: unknown): EasyRpgConfig {
@@ -179,6 +181,7 @@ export function parseEasyRpgConfig(value: unknown): EasyRpgConfig {
   if (v.schema !== "easyrpg-config.v1" || (v.engine !== null && !easyRpgEngines.includes(v.engine)) ||
       !["config", "executable", "database", "files", "fallback"].includes(v.engineSource) ||
       (v.encoding !== null && (typeof v.encoding !== "string" || !/^\w[\w.-]{0,63}$/.test(v.encoding))) ||
+      (v.netplay !== undefined && v.netplay !== true) ||
       !v.patches || typeof v.patches !== "object") throw new Error("Invalid EasyRPG config");
   for (const key of Object.keys(booleanPatches) as (keyof typeof booleanPatches)[]) {
     if (typeof v.patches[key] !== "boolean") throw new Error("Invalid EasyRPG patch config");

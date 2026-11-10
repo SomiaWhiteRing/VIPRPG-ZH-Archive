@@ -5,6 +5,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 
 type DownloadRow = {
   id: number;
+  netplay_service: number | null;
   work_id: number;
   manifest_sha256: string;
   packer_version: string;
@@ -21,6 +22,7 @@ type DownloadRow = {
 
 export type ArchiveDownloadRecord = {
   id: number;
+  netplayService: boolean;
   manifestSha256: string;
   packerVersion: string;
   totalFiles: number;
@@ -45,6 +47,7 @@ export async function getPublishedArchiveDownloadRecord(
   const row = await getD1(runtime)
     .prepare(
       `SELECT av.id,
+          av.netplay_service,
           av.work_id,
           av.manifest_sha256,
           av.packer_version,
@@ -71,6 +74,7 @@ export async function getPublishedArchiveDownloadRecord(
   if (!row || !row.work_original_title) return null;
   return {
     id: row.id,
+    netplayService: row.netplay_service === 1,
     manifestSha256: row.manifest_sha256,
     packerVersion: row.packer_version,
     totalFiles: row.total_files,

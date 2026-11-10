@@ -10,6 +10,7 @@ import type { AppRuntime } from "./app/.server/runtime";
 import { runtimeContext } from "./app/.server/router-context";
 import { maybeHandleArchiveDownload } from "./worker/archive-download.mjs";
 import { maybeHandleEasyRpgAsset } from "./worker/easyrpg-assets";
+import { maybeHandleNetplayRoom } from "./worker/netplay-room";
 import { runScheduledArchiveGc } from "./worker/archive-gc.mjs";
 import { cleanupCommentImages } from "./app/.server/comments/image-cleanup";
 import { cleanupDirectMessageImages } from "./app/.server/messages/image-cleanup";
@@ -22,6 +23,7 @@ import { crawlerResponse, publicRobots, isFilteredGameList } from "./lib/crawl-p
 export { ViewStats } from "./app/.server/views/durable-object";
 export { EternalSeaRoom } from "./app/.server/sea/durable-object";
 export { MessageRoom } from "./app/.server/messages/durable-object";
+export { NetplayRoom } from "./worker/netplay-room";
 
 // Preserve the provisioned staging namespace from the netplay experiment.
 export class GyokuroLobby extends DurableObject<CloudflareEnv> {}
@@ -148,7 +150,9 @@ app.all("*", async (c) => {
 
 export default {
   async fetch(request, env, ctx) {
-    return (await maybeHandleEasyRpgAsset(request, env.ASSETS)) ?? app.fetch(request, env, ctx);
+    return (await maybeHandleNetplayRoom(request, env, ctx))
+      ?? (await maybeHandleEasyRpgAsset(request, env.ASSETS))
+      ?? app.fetch(request, env, ctx);
   },
   async queue(batch, env, ctx) {
     await consumeWebPush(batch, createRuntime(new Request(env.APP_ORIGIN), env, ctx));

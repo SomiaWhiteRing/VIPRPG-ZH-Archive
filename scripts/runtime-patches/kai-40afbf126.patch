@@ -1,0 +1,201 @@
+diff --git a/docs/netplay.md b/docs/netplay.md
+index b625374bae978d3d29829ff9921b030da2dbfedd..c40a92b799e7f05c3e97893a616e583e6b2802ca 100644
+--- a/docs/netplay.md
++++ b/docs/netplay.md
+@@ -7,6 +7,9 @@ Place the declaration in the project root next to RPG_RT.ldb.
+ Enabled=1
+ ```
+ 
++Netplay-enabled projects default to running when focus is lost. An explicit
++`Pause when focus lost` setting still takes precedence.
++
+ The game uses regular RPG Maker comment commands for room controls. Initialize
+ the availability variable to zero in a regular event command before querying
+ it so players that ignore these comments follow the offline event path.
+@@ -19,6 +22,7 @@ it so players that ignore these comments follow the offline event path.
+ | `@netplay join V` | Join an existing room numbered by V. An absent or full room is rejected. |
+ | `@netplay rooms T` | Read the latest room directory into Maniac string T. Each row has a numeric `id` and a `players` array with `name` and `avatar` fields. |
+ | `@netplay identity T` | Read the local directory profile as a JSON object with `name` and `avatar` fields. |
++| `@netplay online V` | Read the current number of directory sessions, or -1 if unavailable. The room list request opens the directory subscription. |
+ | `@netplay stop_directory` | Stop receiving directory updates when leaving the online menu. |
+ | `@netplay fade_transfer OUT IN [DELAY]` | Set the fade durations and an optional black-screen delay before the next map's fade-in, in frames. A screen already erased starts with the delay and reveal. |
+ | `@netplay state V` | Read the connection state into V. Values are 0 idle, 1 connecting, 2 waiting, 3 first seat paired, 4 second seat paired, and -1 disconnected. |
+@@ -100,7 +104,8 @@ starts or resumes. The default is one frame.
+ | `@netplay stop` | End the synchronized map after this frame is confirmed. The next map tick resumes regular event processing at the confirmed state. |
+ 
+ Parallel map and common events advance on the synchronized clock. Use the
+-synchronized input variables for rules. The snapshot covers map events,
++synchronized input variables for rules. Fast-forward is suspended during
++a synchronized match. The snapshot covers map events,
+ switches, variables, seeded randomness, and resource pictures. Transitions,
+ foreground events, interactive messages, save I/O, and mutable images belong
+ outside the synchronized map. Play BGM, fade BGM and play sound event commands
+diff --git a/resources/emscripten/player-worker.js b/resources/emscripten/player-worker.js
+index 8c54e81ca90186837559e799f0355d54d835965f..78ab2f03103f9e91ef6932bdb5ea558f59b06126 100644
+--- a/resources/emscripten/player-worker.js
++++ b/resources/emscripten/player-worker.js
+@@ -160,12 +160,12 @@ function createNetplay(endpoint) {
+   directoryHttp.protocol = base.protocol === 'wss:' ? 'https:' : 'http:';
+   let socket, state = 0;
+   let subscription, retry = 0, fallback = false, nextPoll = 0, polling = false;
+-  let rooms, identity;
++  let rooms, identity, online = -1;
+   let probe = 0, probeSent = 0, latency = -1, pendingProbe;
+   const avatarPaths = new Set(), avatars = new Map();
+   const inbox = [], frames = [];
+   const isIdentity = person => typeof person?.name === 'string' && typeof person.avatar === 'string';
+-  const updateDirectory = (list, local) => {
++  const updateDirectory = (list, local, count) => {
+     if (!Array.isArray(list) || !list.every(room => Number.isSafeInteger(room?.id) &&
+         Array.isArray(room.players) && room.players.every(isIdentity))) return;
+     avatarPaths.clear();
+@@ -173,6 +173,7 @@ function createNetplay(endpoint) {
+     if (local) avatarPaths.add(local.avatar);
+     rooms = JSON.stringify(list);
+     if (local) identity = JSON.stringify(local);
++    online = Number.isInteger(count) && count >= 0 && count <= 0x7fffffff ? count : -1;
+   };
+   const subscribe = () => {
+     const connection = subscription = new WebSocket(directory);
+@@ -180,6 +181,7 @@ function createNetplay(endpoint) {
+       if (subscription !== connection) return;
+       subscription = undefined;
+       fallback = true;
++      online = -1;
+       retry = performance.now() + 2000;
+       connection.close();
+     };
+@@ -190,7 +192,7 @@ function createNetplay(endpoint) {
+       try { snapshot = JSON.parse(data); } catch { return; }
+       if (!isIdentity(snapshot?.identity)) return;
+       fallback = false;
+-      updateDirectory(snapshot.rooms, snapshot.identity);
++      updateDirectory(snapshot.rooms, snapshot.identity, snapshot.online);
+     };
+   };
+   const stopDirectory = () => {
+@@ -199,6 +201,7 @@ function createNetplay(endpoint) {
+     fallback = false;
+     retry = 0;
+     rooms = identity = undefined;
++    online = -1;
+     previous?.close();
+   };
+   const clear = () => {
+@@ -251,6 +254,7 @@ function createNetplay(endpoint) {
+       identity = undefined;
+       return snapshot;
+     },
++    online: () => online,
+     peerLatency(poll, reset) {
+       echoProbe();
+       if (reset) latency = -1;
+diff --git a/resources/wenquanyi/generate_symbols.py b/resources/wenquanyi/generate_symbols.py
+index 49ebe3d9258d99e592ae040f23cff96cc89493ea..4ab489fddb4f41344c5cf5d8f66fe787afda7ebd 100644
+--- a/resources/wenquanyi/generate_symbols.py
++++ b/resources/wenquanyi/generate_symbols.py
+@@ -4,9 +4,10 @@ from pathlib import Path
+ 
+ ROOT = Path(__file__).resolve().parents[2]
+ # GBK punctuation/symbols with a full-em advance in SimSun; bitmaps are WenQuanYi.
++# Leave U+2026 to the existing Shinonome glyph to preserve its two-pixel-high dots.
+ CODES = {int(value, 16) for value in """
+     00A4 00A7 00A8 00B0 00B1 00B7 00D7 00F7 02D9 2013 2014 2016 2018 2019 201C 201D
+-    2025 2026 2030 2032 2033 2035 203B 2103 2105 2109 2116 2190 2191 2192 2193 2196
++    2025 2030 2032 2033 2035 203B 2103 2105 2109 2116 2190 2191 2192 2193 2196
+     2197 2198 2199 2208 220F 2211 2215 221A 221D 221E 221F 2220 2223 2225 2227 2228
+     2229 222A 222B 222E 2234 2235 2236 2237 223D 2248 224C 2252 2260 2261 2264 2265
+     2266 2267 226E 226F 2295 2299 22A5 22BF 2312 2500 2501 2502 2503 2504 2505 2506
+diff --git a/src/baseui.cpp b/src/baseui.cpp
+index 9a32511e2077929c984afa2705097c640b2dd3cc..ca81726ab30c8424c8dfbf5133f7a9f9ee8d0f59 100644
+--- a/src/baseui.cpp
++++ b/src/baseui.cpp
+@@ -99,9 +99,11 @@ bool BaseUi::IsRightShiftPressed() const {
+ bool BaseUi::ShouldPauseWhenFocusLost() const {
+ 	auto cfg = vcfg;
+ 	vGetConfig(cfg);
+-	if (!cfg.pause_when_focus_lost_configured && !cfg.pause_when_focus_lost.IsLocked()
+-			&& Player::IsPatchManiac() && Main_Data::game_system) {
+-		return !Main_Data::game_system->IsManiacRunWhenInactive();
++	if (!cfg.pause_when_focus_lost_configured && !cfg.pause_when_focus_lost.IsLocked()) {
++		if (Player::game_config.netplay_enabled) return false;
++		if (Player::IsPatchManiac() && Main_Data::game_system) {
++			return !Main_Data::game_system->IsManiacRunWhenInactive();
++		}
+ 	}
+ 	return cfg.pause_when_focus_lost.Get();
+ }
+diff --git a/src/game_netplay.cpp b/src/game_netplay.cpp
+index e8c989dc1997004fcffb342a4378f6ec0c5a61d1..5491705000c0e650061024fe8a24002d0a01e772 100644
+--- a/src/game_netplay.cpp
++++ b/src/game_netplay.cpp
+@@ -537,6 +537,12 @@ void Game_Netplay::Command(std::string_view comment) {
+ 		write(variable, ReadTransportState());
+ #else
+ 		write(variable, 0);
++#endif
++	} else if (command == "online") {
++#ifdef PLAYER_WEB
++		write(variable, EM_ASM_INT({ return Module.netplay?.online?.() ?? -1; }));
++#else
++		write(variable, -1);
+ #endif
+ 	} else if (command == "receive") {
+ 		int received;
+@@ -601,6 +607,14 @@ void Game_Netplay::Close() {
+ #endif
+ }
+ 
++bool Game_Netplay::InMatch() {
++#ifdef PLAYER_WEB
++	return match != nullptr;
++#else
++	return false;
++#endif
++}
++
+ Game_Netplay::TransferFade Game_Netplay::TakeTransferFade() {
+ #ifdef PLAYER_WEB
+ 	return std::exchange(transfer_fade, {});
+diff --git a/src/game_netplay.h b/src/game_netplay.h
+index 0d8bbd815a23e59cc141d99f05d8615958bdb949..99a6fe68f8407ee0ba7a7f9c8112631366f662a6 100644
+--- a/src/game_netplay.h
++++ b/src/game_netplay.h
+@@ -16,6 +16,7 @@ namespace Game_Netplay {
+ 	// Called only for an explicitly enabled project.
+ 	void Command(std::string_view comment);
+ 	void Close();
++	bool InMatch();
+ 	struct TransferFade {
+ 		int erase = 0;
+ 		int show = 0;
+diff --git a/src/generated/bitmapfont_wqy_symbols.h b/src/generated/bitmapfont_wqy_symbols.h
+index 07f257652258f5dd24758f7bd4fb1fabcb3106a3..8f633deaca636a97c81bda111ecfe7d1f0a2aafe 100644
+GIT binary patch
+delta 19
+bcmdmRknzg_#tH8kO*eiBW7*uqsuv9aU~LGS
+
+delta 33
+pcmexzfN{e?#tH8k%{G1rV_`I&Tqq{XY;0sc`6H{$W_MQIXaMWs3=aSR
+
+diff --git a/src/player.cpp b/src/player.cpp
+index 58c28c1fd53f486f5a36b450120c28eba3fbc1db..a73fba00e0b7f0877273b1dac93465edcbee4f0a 100644
+--- a/src/player.cpp
++++ b/src/player.cpp
+@@ -57,6 +57,7 @@
+ #include "game_variables.h"
+ #include "game_strings.h"
+ #include "game_maniac_self_variables.h"
++#include "game_netplay.h"
+ #include "maniac_original_save.h"
+ #include "maniac_patch.h"
+ #include "game_targets.h"
+@@ -368,7 +369,7 @@ void Player::UpdateInput() {
+ 	if (Input::IsSystemPressed(Input::FAST_FORWARD_B)) {
+ 		speed = static_cast<float>(Input::GetInputSource()->GetConfig().speed_modifier_b.Get());
+ 	}
+-	Game_Clock::SetGameSpeedFactor(speed);
++	Game_Clock::SetGameSpeedFactor(Game_Netplay::InMatch() ? 1.0f : speed);
+ 
+ 	if (Main_Data::game_quit) {
+ 		reset_flag |= Main_Data::game_quit->ShouldQuit();

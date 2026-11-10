@@ -74,7 +74,7 @@ export type PlayerScreenshot = {
 };
 
 type PlayerMetadata = Pick<WebPlayMetadata,
-  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "runtimeAssetBasePath" | "engineFamily" | "easyRpg"
+  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "runtimeAssetBasePath" | "netplayEndpoint" | "engineFamily" | "easyRpg"
 >;
 
 /** EasyRPG owns document-wide input, audio and timers. Destroy that document on exit. */
@@ -259,6 +259,7 @@ export function createPlayerSession(
       runtimeBase: `${metadata.runtimeBasePath}/`,
       assetBase: new URL(`${metadata.runtimeAssetBasePath || metadata.runtimeBasePath}/`, playerWindow.location.href).href,
       arguments: args,
+      netplayEndpoint: metadata.netplayEndpoint,
       signal: lifetime.signal,
       onError: (error: unknown) => onLog("error", formatLogValue(error)),
       onFullscreen,
