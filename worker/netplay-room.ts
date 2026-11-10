@@ -6,6 +6,8 @@ import { getUserAvatarSrc } from "../lib/user-profile";
 import { json } from "../lib/http";
 
 const directIceServers = [{ urls: "stun:stun.cloudflare.com:3478" }];
+const heartbeatIntervalMs = 10_000;
+const heartbeatTimeoutMs = 60_000;
 type Identity = { name: string; avatar: string };
 type Negotiation = {
   route: "pending" | "webrtc" | "websocket";
@@ -13,7 +15,12 @@ type Negotiation = {
   timeout: ReturnType<typeof setTimeout>;
 };
 type Room = {
-  peers: Map<WebSocket, { identity: Identity; rtc: boolean }>;
+  peers: Map<WebSocket, {
+    identity: Identity;
+    rtc: boolean;
+    heartbeat?: { lastPong: number; disconnect: () => void };
+  }>;
+  heartbeatTimer?: ReturnType<typeof setInterval>;
   ready?: { socket: WebSocket; packet: ArrayBuffer };
   rtc?: Negotiation;
 };
@@ -34,6 +41,22 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     for (const [socket, identity] of this.directory) {
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ rooms, identity, online }));
     }
+  }
+
+  private updateWaitingHeartbeat(room: Room) {
+    if (room.heartbeatTimer !== undefined) clearInterval(room.heartbeatTimer);
+    room.heartbeatTimer = undefined;
+    if (room.peers.size !== 1) return;
+    const [socket, { heartbeat }] = room.peers.entries().next().value!;
+    if (!heartbeat) return;
+    heartbeat.lastPong = Date.now();
+    room.heartbeatTimer = setInterval(() => {
+      if (socket.readyState !== WebSocket.OPEN || Date.now() - heartbeat.lastPong >= heartbeatTimeoutMs) {
+        heartbeat.disconnect();
+      } else {
+        socket.send("room:ping");
+      }
+    }, heartbeatIntervalMs);
   }
 
   fetch(request: Request) {
@@ -74,12 +97,31 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     socket.binaryType = "arraybuffer";
     socket.accept();
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Netplay-Identity")!)) as Identity;
-    peers.set(socket, { identity, rtc: url.searchParams.get("rtc") === "1" });
+    const disconnect = () => {
+      if (!peers.delete(socket)) return;
+      room.ready = undefined;
+      if (room.rtc) clearTimeout(room.rtc.timeout);
+      room.rtc = undefined;
+      if (peers.size === 0) this.rooms.delete(id);
+      else {
+        const remaining = peers.keys().next().value!;
+        if (remaining.readyState === WebSocket.OPEN) remaining.send("2");
+      }
+      this.updateWaitingHeartbeat(room);
+      this.publishDirectory();
+      socket.close(1000);
+    };
+    const heartbeat = url.searchParams.get("heartbeat") === "1" ? { lastPong: 0, disconnect } : undefined;
+    peers.set(socket, { identity, rtc: url.searchParams.get("rtc") === "1", heartbeat });
     this.rooms.set(id, room);
     socket.addEventListener("message", ({ data }) => {
       if (!peers.has(socket)) return;
       const rtc = room.rtc;
       if (typeof data === "string") {
+        if (data === "room:pong" && heartbeat && peers.size === 1) {
+          heartbeat.lastPong = Date.now();
+          return;
+        }
         if (rtc?.route !== "pending") return;
         if (data === "rtc:ready") {
           rtc.ready.add(socket);
@@ -111,19 +153,6 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
         if (peer !== socket && peer.readyState === WebSocket.OPEN) peer.send(data);
       }
     });
-    const disconnect = () => {
-      if (!peers.delete(socket)) return;
-      room.ready = undefined;
-      if (room.rtc) clearTimeout(room.rtc.timeout);
-      room.rtc = undefined;
-      if (peers.size === 0) this.rooms.delete(id);
-      else {
-        const remaining = peers.keys().next().value!;
-        if (remaining.readyState === WebSocket.OPEN) remaining.send("2");
-      }
-      this.publishDirectory();
-      socket.close(1000);
-    };
     socket.addEventListener("close", disconnect);
     socket.addEventListener("error", disconnect);
     if (first) {
@@ -142,6 +171,7 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     } else {
       socket.send("2");
     }
+    this.updateWaitingHeartbeat(room);
     this.publishDirectory();
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
