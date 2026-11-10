@@ -4,6 +4,7 @@ import { getPublishedArchiveDownloadRecord } from "../app/.server/db/archive-dow
 import { createRuntime } from "../app/.server/runtime";
 import { getUserAvatarSrc } from "../lib/user-profile";
 import { json } from "../lib/http";
+import { requestJsonValue } from "../lib/ui/api-response";
 
 type Identity = { name: string; avatar: string };
 type NetplayEnvironment = CloudflareEnv & {
@@ -37,16 +38,13 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     const token = this.env.NETPLAY_TURN_KEY;
     if (!id || !token) return stun;
     try {
-      const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${id}/credentials/generate-ice-servers`, {
+      const { iceServers } = await requestJsonValue<{ iceServers?: RTCIceServer[] }>(`https://rtc.live.cloudflare.com/v1/turn/keys/${id}/credentials/generate-ice-servers`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ ttl: 3600 }),
         signal: AbortSignal.timeout(2500),
       });
-      if (response.ok) {
-        const { iceServers } = await response.json<{ iceServers?: RTCIceServer[] }>();
-        if (iceServers?.length) return iceServers;
-      }
+      if (iceServers?.length) return iceServers;
     } catch {
       // STUN can still establish a direct connection if the TURN API is unavailable.
     }
