@@ -4,12 +4,14 @@ import { getPublishedArchiveDownloadRecord } from "../app/.server/db/archive-dow
 import { createRuntime } from "../app/.server/runtime";
 import { getUserAvatarSrc } from "../lib/user-profile";
 import { json } from "../lib/http";
+import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
 
 const directIceServers = [{ urls: "stun:stun.cloudflare.com:3478" }];
 const heartbeatIntervalMs = 5_000;
 const heartbeatHideMs = 10_000;
 const heartbeatTimeoutMs = 15_000;
-const iceCandidateTypes = new Set(["host", "srflx", "prflx", "relay"]);
+const iceCandidateTypeSet = new Set<string>(iceCandidateTypes);
+const iceStatsPrefix = "rtc:ice-stats:";
 const rtcMilestones = new Set([
   "peer_created", "peer_create_failed", "peer_connection_failed", "channel_create_failed",
   "local_description", "local_description_failed", "remote_description", "remote_description_failed", "remote_candidate_failed",
@@ -25,11 +27,12 @@ type Heartbeat = {
   deadline?: ReturnType<typeof setTimeout>;
 };
 type RtcProgress = {
-  milestones: Set<string>;
+  milestones: Map<string, number>;
   signals: number;
   oversizedSignals: number;
   icePair?: { localCandidateType: string; remoteCandidateType: string; protocol: "udp" | "tcp" };
   icePairLogged?: boolean;
+  iceStatsPhases?: Set<string>;
 };
 type Negotiation = {
   route: "pending" | "webrtc" | "websocket";
@@ -135,7 +138,9 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     const disconnect = (reason: DisconnectReason, closeCode?: number) => {
       if (!peers.has(socket)) return;
       const seats = peers.size;
+      const negotiationStartedAt = room.rtc?.startedAt;
       const route = room.rtc?.route ?? (seats === 2 ? "websocket" : undefined);
+      const seat = socket === peers.keys().next().value ? 1 : 2;
       // Either peer can observe a failed data channel. Release both seats without guessing which side failed.
       const leaving = reason === "rtc_failed" ? [...peers.keys()] : [socket];
       for (const peer of leaving) {
@@ -156,7 +161,7 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
       }
       room.hidden = this.isRoomStale(room, Date.now());
       this.publishDirectory();
-      console.log({ event: "netplay_reclaim", ...room.details, reason, route, seats, released: leaving.length, closeCode });
+      console.log({ event: "netplay_reclaim", ...room.details, reason, route, negotiationStartedAt, seat, seats, released: leaving.length, closeCode });
       for (const peer of leaving) peer.close(1000);
     };
     const heartbeat: Heartbeat | undefined = url.searchParams.get("heartbeat") === "1" ? {
@@ -197,13 +202,29 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
           disconnect("rtc_failed");
           return;
         }
+        if (rtc && data.startsWith(iceStatsPrefix)) {
+          const snapshot = parseIceStats(data.slice(iceStatsPrefix.length));
+          if (!snapshot || snapshot.negotiationStartedAt !== rtc.startedAt) return;
+          if (snapshot.phase === "connected" && rtc.route !== "webrtc") return;
+          if (snapshot.phase === "fallback" && rtc.route !== "websocket") return;
+          const progress = rtc.progress.get(socket)!;
+          const phases = progress.iceStatsPhases ??= new Set();
+          if (phases.has(snapshot.phase)) return;
+          phases.add(snapshot.phase);
+          console.log({
+            event: "netplay_ice_stats", ...room.details,
+            seat: socket === peers.keys().next().value ? 1 : 2,
+            route: rtc.route, ...snapshot,
+          });
+          return;
+        }
         if (rtc && rtc.route !== "websocket" && data.startsWith("rtc:ice-pair:")) {
           const progress = rtc.progress.get(socket)!;
           if (progress.icePairLogged || data.length > 40) return;
           const value = data.slice("rtc:ice-pair:".length);
           const [phase, localCandidateType, remoteCandidateType, protocol, extra] = value.split(":");
           if (phase !== rtc.route) return;
-          const pair: RtcProgress["icePair"] = iceCandidateTypes.has(localCandidateType) && iceCandidateTypes.has(remoteCandidateType) &&
+          const pair: RtcProgress["icePair"] = iceCandidateTypeSet.has(localCandidateType) && iceCandidateTypeSet.has(remoteCandidateType) &&
             (protocol === "udp" || protocol === "tcp") && extra === undefined
             ? { localCandidateType, remoteCandidateType, protocol } : undefined;
           if (rtc.route === "pending") {
@@ -228,7 +249,9 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
           this.selectRoute(room, "client_failure", socket);
         } else if (data.startsWith("rtc:diag:")) {
           const milestone = data.slice("rtc:diag:".length);
-          if (rtcMilestones.has(milestone)) progress.milestones.add(milestone);
+          if (rtcMilestones.has(milestone) && !progress.milestones.has(milestone)) {
+            progress.milestones.set(milestone, Date.now() - rtc.startedAt);
+          }
         } else if (data.startsWith("rtc:signal:")) {
           if (data.length <= 24576) {
             progress.signals++;
@@ -263,18 +286,20 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     socket.addEventListener("error", () => disconnect("socket_error"));
     if (first) {
       if (peers.get(first)?.rtc && peers.get(socket)?.rtc) {
+        const startedAt = Date.now();
         room.rtc = {
           route: "pending",
           ready: new Set(),
           progress: new Map([
-            [first, { milestones: new Set(), signals: 0, oversizedSignals: 0 }],
-            [socket, { milestones: new Set(), signals: 0, oversizedSignals: 0 }],
+            [first, { milestones: new Map(), signals: 0, oversizedSignals: 0 }],
+            [socket, { milestones: new Map(), signals: 0, oversizedSignals: 0 }],
           ]),
-          startedAt: Date.now(),
+          startedAt,
           timeout: setTimeout(() => this.selectRoute(room, "timeout"), 8000),
         };
-        first.send("rtc:start:" + JSON.stringify({ iceServers: directIceServers, offer: true }));
-        socket.send("rtc:start:" + JSON.stringify({ iceServers: directIceServers, offer: false }));
+        const config = { iceServers: directIceServers, negotiationStartedAt: startedAt };
+        first.send("rtc:start:" + JSON.stringify({ ...config, offer: true }));
+        socket.send("rtc:start:" + JSON.stringify({ ...config, offer: false }));
       } else {
         console.log({ event: "netplay_route", ...room.details, route: "websocket", reason: "rtc_unavailable" });
         first.send("3");
@@ -303,7 +328,8 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
         ready: rtc.ready.has(socket),
         signals: progress.signals,
         oversizedSignals: progress.oversizedSignals,
-        milestones: [...progress.milestones],
+        milestones: [...progress.milestones.keys()],
+        milestoneMs: Object.fromEntries(progress.milestones),
         icePair: progress.icePair,
       })),
     });

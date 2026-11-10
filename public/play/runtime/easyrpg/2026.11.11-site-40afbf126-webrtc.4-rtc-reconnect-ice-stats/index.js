@@ -556,13 +556,26 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       stopMovie();
     }
   };
-  function connectNetplayRtc({port, iceServers, offer}) {
+  function connectNetplayRtc({port, iceServers, offer, diagnostics}) {
     let peer;
     let channel;
     let open = true;
+    let finishing = false;
+    let finishTimer;
     let sentDescription = false;
+    let localCandidatesGathered = 0;
+    let remoteCandidatesReceived = 0;
+    let remoteCandidatesApplied = 0;
+    const startedAt = performance.now();
     const pendingCandidates = [];
     const milestones = new Set();
+    const sampleTimers = [];
+    const candidateNumbers = new Map();
+    const localSignals = [];
+    const remoteSignals = [];
+    const stunErrors = new Map();
+    const elapsed = () => Math.round(performance.now() - startedAt);
+    const clearSamples = () => sampleTimers.forEach(timer => clearTimeout(timer));
     const mark = milestone => {
       if (!open || milestones.has(milestone)) return;
       milestones.add(milestone);
@@ -571,19 +584,146 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const close = () => {
       if (!open) return;
       open = false;
+      clearSamples();
+      clearTimeout(finishTimer);
       port.close();
       peer?.close();
     };
     const fail = milestone => {
-      if (!open) return;
+      if (!open || finishing) return;
       mark(milestone);
-      port.postMessage({type: 'closed'});
-      close();
+      port.postMessage({type: 'closed', diagnosticsPending: diagnostics});
+      finishStats('failure');
+    };
+    const readStats = async () => {
+      if (!peer) return {status: 'peer_unavailable'};
+      if (typeof peer.getStats !== 'function') return {status: 'unsupported'};
+      try {
+        return {status: 'ok', stats: await peer.getStats()};
+      } catch {
+        return {status: 'error'};
+      }
+    };
+    const addressKind = address => {
+      if (typeof address !== 'string') return 'unknown';
+      if (/\.local\.?$/i.test(address)) return 'mdns';
+      if (address.includes(':')) return 'ipv6';
+      return /^\d+(?:\.\d+){3}$/.test(address) ? 'ipv4' : 'unknown';
+    };
+    const describeCandidate = (candidate, type) => ({
+      type, protocol: candidate.protocol, tcpType: candidate.tcpType,
+      addressKind: addressKind(candidate.address ?? candidate.ip), port: candidate.port,
+      relatedAddressKind: addressKind(candidate.relatedAddress), relatedPort: candidate.relatedPort,
+      relayProtocol: candidate.relayProtocol, priority: candidate.priority,
+    });
+    const rememberCandidate = (signals, candidate) => {
+      if (!diagnostics || signals.length >= 32) return;
+      // Remote signaling carries RTCIceCandidateInit. Parse with the browser so mDNS/IPv6 stay identifiable
+      // even if getStats omits the remote address or the candidate was rejected.
+      if (signals === remoteSignals) {
+        try {
+          candidate = new RTCIceCandidate(candidate);
+        } catch {
+          return;
+        }
+      }
+      const entry = {...describeCandidate(candidate, candidate.type), elapsedMs: elapsed()};
+      signals.push(entry);
+      return entry;
+    };
+    const describeSdp = description => {
+      if (!description) return;
+      const sdp = description.sdp;
+      const application = /^m=application (\d+) ([\w/]+) /m.exec(sdp);
+      const iceOptions = /^a=ice-options:([^\r\n]+)/m.exec(sdp)?.[1].split(/\s+/) ?? [];
+      const integer = pattern => {
+        const value = pattern.exec(sdp)?.[1];
+        return value === undefined ? undefined : Number(value);
+      };
+      return {
+        type: description.type, applicationPort: application ? Number(application[1]) : undefined,
+        applicationProtocol: application?.[2],
+        setup: /^a=setup:(\w+)/m.exec(sdp)?.[1],
+        fingerprintAlgorithm: /^a=fingerprint:([\w-]+)/m.exec(sdp)?.[1],
+        sctpPort: integer(/^a=sctp-port:(\d+)/m), maxMessageSize: integer(/^a=max-message-size:(\d+)/m),
+        trickle: iceOptions.includes('trickle'), renomination: iceOptions.includes('renomination'),
+        iceLite: /^a=ice-lite\b/m.test(sdp), bundle: /^a=group:BUNDLE\b/m.test(sdp),
+        endOfCandidates: /^a=end-of-candidates\b/m.test(sdp), candidateCount: sdp.match(/^a=candidate:/gm)?.length ?? 0,
+      };
+    };
+    const sendIceStats = (phase, status, stats) => {
+      if (!open || !diagnostics || (finishing && phase !== 'fallback' && phase !== 'failure')) return;
+      const candidates = new Map();
+      const addCandidate = candidate => {
+        if (candidate?.type !== 'local-candidate' && candidate?.type !== 'remote-candidate') return;
+        if (!candidateNumbers.has(candidate.id)) candidateNumbers.set(candidate.id, candidateNumbers.size + 1);
+        const number = candidateNumbers.get(candidate.id);
+        candidates.set(number, {
+          number, side: candidate.type === 'local-candidate' ? 'local' : 'remote',
+          ...describeCandidate(candidate, candidate.candidateType),
+        });
+        return number;
+      };
+      const rows = stats ? Array.from(stats.values()) : [];
+      const transports = rows.filter(stat => stat.type === 'transport');
+      const transport = transports.find(stat => stat.selectedCandidatePairId) ?? transports[0];
+      const selected = transport?.selectedCandidatePairId;
+      const pairs = rows.filter(stat => stat.type === 'candidate-pair');
+      const rank = pair => (pair.id === selected ? 8 : 0) + (pair.nominated ? 4 : 0) +
+        (pair.state === 'succeeded' || pair.state === 'in-progress' ? 2 : 0) +
+        (pair.requestsSent || pair.requestsReceived ? 1 : 0);
+      const pairStats = pairs.sort((a, b) => rank(b) - rank(a)).slice(0, 32).map(pair => ({
+        local: addCandidate(stats.get(pair.localCandidateId)), remote: addCandidate(stats.get(pair.remoteCandidateId)),
+        state: pair.state, nominated: pair.nominated, selected: pair.id === selected,
+        requestsSent: pair.requestsSent, requestsReceived: pair.requestsReceived,
+        responsesSent: pair.responsesSent, responsesReceived: pair.responsesReceived,
+        consentRequestsSent: pair.consentRequestsSent, bytesSent: pair.bytesSent, bytesReceived: pair.bytesReceived,
+        packetsSent: pair.packetsSent, packetsReceived: pair.packetsReceived,
+        roundTripMs: pair.currentRoundTripTime === undefined ? undefined : Math.round(pair.currentRoundTripTime * 1000),
+      }));
+      const candidateRows = rows.filter(stat => stat.type === 'local-candidate' || stat.type === 'remote-candidate');
+      for (const candidate of candidateRows) {
+        if (candidates.size >= 72) break;
+        addCandidate(candidate);
+      }
+      port.postMessage({type: 'ice-stats', snapshot: {
+        phase, status, elapsedMs: elapsed(),
+        iceState: peer?.iceConnectionState, gatheringState: peer?.iceGatheringState,
+        connectionState: peer?.connectionState, signalingState: peer?.signalingState, channelState: channel?.readyState,
+        dtlsState: transport?.dtlsState, iceRole: transport?.iceRole,
+        localSdp: describeSdp(peer?.localDescription), remoteSdp: describeSdp(peer?.remoteDescription),
+        localCandidatesGathered, remoteCandidatesReceived, remoteCandidatesApplied,
+        candidateCount: candidateRows.length, pairCount: pairs.length,
+        stunErrors: Array.from(stunErrors.values()).slice(0, 32),
+        localSignals, remoteSignals,
+        candidates: Array.from(candidates.values()), pairs: pairStats,
+      }});
+    };
+    const sampleStats = async phase => {
+      const {status, stats} = await readStats();
+      sendIceStats(phase, status, stats);
+    };
+    const finishStats = phase => {
+      if (!diagnostics) {
+        close();
+        return;
+      }
+      if (finishing) return;
+      finishing = true;
+      clearSamples();
+      // The game has already fallen back or received the failure. Bound the lifetime of the old peer.
+      finishTimer = setTimeout(() => {
+        sendIceStats(phase, 'timeout');
+        close();
+      }, 250);
+      void sampleStats(phase).finally(close);
     };
     const reportIcePair = async final => {
+      if (final) clearSamples();
+      const {status, stats} = await readStats();
+      if (final) sendIceStats('connected', status, stats);
       let value = 'unavailable';
-      try {
-        const stats = await peer.getStats();
+      if (stats) {
         const transport = Array.from(stats.values()).find(stat => stat.type === 'transport' && stat.selectedCandidatePairId);
         const pair = transport && stats.get(transport.selectedCandidatePairId);
         if (pair?.type === 'candidate-pair') {
@@ -595,7 +735,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
             value = [local.candidateType, remote.candidateType, local.protocol].join(':');
           }
         }
-      } catch { /* Browsers can omit stats or close the peer while they are being read. */ }
+      }
       if (open && (final || value !== 'unavailable')) port.postMessage({type: 'ice-pair', value, final});
     };
     try {
@@ -630,6 +770,10 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     };
     peer.onicecandidate = ({candidate}) => {
       if (!open || !candidate) return;
+      if (candidate.candidate) {
+        localCandidatesGathered++;
+        rememberCandidate(localSignals, candidate);
+      }
       if (candidate.type) mark('candidate_' + candidate.type);
       if (sentDescription) signal({candidate: candidate.toJSON()});
       else pendingCandidates.push(candidate.toJSON());
@@ -637,7 +781,15 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     peer.onicegatheringstatechange = () => {
       if (peer.iceGatheringState === 'complete') mark('gathering_complete');
     };
-    peer.onicecandidateerror = ({errorCode}) => mark(errorCode === 701 ? 'stun_unreachable' : 'stun_error');
+    peer.onicecandidateerror = ({errorCode, address, port, url}) => {
+      const kind = addressKind(address ?? undefined);
+      const scheme = /^(stun|stuns|turn|turns):/i.exec(url)?.[1]?.toLowerCase();
+      const key = [errorCode, kind, port, scheme].join(':');
+      const previous = stunErrors.get(key);
+      if (previous) previous.count++;
+      else stunErrors.set(key, {code: errorCode, addressKind: kind, port, scheme, count: 1});
+      mark(errorCode === 701 ? 'stun_unreachable' : 'stun_error');
+    };
     peer.oniceconnectionstatechange = () => {
       const state = peer.iceConnectionState;
       if (state !== 'new' && state !== 'closed') mark('ice_' + state);
@@ -651,6 +803,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     port.onmessage = ({data}) => {
       if (data.type === 'close') {
         close();
+      } else if (data.type === 'fallback') {
+        finishStats('fallback');
       } else if (data.type === 'ice-pair') {
         void reportIcePair(true);
       } else if (data.type === 'data') {
@@ -665,11 +819,24 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
             mark('remote_description');
             if (data.value.description.type === 'offer') await describe();
           } else {
-            await peer.addIceCandidate(data.value.candidate).catch(() => fail('remote_candidate_failed'));
+            const candidate = data.value.candidate;
+            const entry = candidate?.candidate ? rememberCandidate(remoteSignals, candidate) : undefined;
+            if (candidate?.candidate) remoteCandidatesReceived++;
+            await peer.addIceCandidate(candidate).then(() => {
+              if (candidate?.candidate) remoteCandidatesApplied++;
+              if (entry) entry.appliedMs = elapsed();
+            }, () => {
+              if (entry) entry.rejected = true;
+              fail('remote_candidate_failed');
+            });
           }
         }).catch(() => fail('invalid_signal'));
       }
     };
+    if (diagnostics) {
+      sampleTimers.push(setTimeout(() => void sampleStats('2s'), 2000));
+      sampleTimers.push(setTimeout(() => void sampleStats('6s'), 6000));
+    }
     if (offer) {
       try {
         attach(peer.createDataChannel('easyrpg-netplay', {ordered: true}));

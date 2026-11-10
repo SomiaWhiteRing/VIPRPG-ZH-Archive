@@ -392,14 +392,27 @@ function createNetplay(endpoint, rtcSupported) {
           rtcSelected = true;
           rtcPort?.postMessage({type: 'ice-pair'});
         } else if (data === 'rtc:websocket') {
-          closeRtc();
+          const port = rtcPort;
+          rtcPort = undefined;
+          rtcSelected = false;
+          port?.postMessage({type: 'fallback'});
+          if (port) setTimeout(() => port.close(), 500);
         } else if (typeof data === 'string' && data.startsWith('rtc:start:')) {
           const {port1, port2} = new MessageChannel();
-          const {iceServers, offer} = JSON.parse(data.slice('rtc:start:'.length));
+          const {iceServers, offer, negotiationStartedAt} = JSON.parse(data.slice('rtc:start:'.length));
+          const diagnostics = Number.isSafeInteger(negotiationStartedAt);
           closeRtc();
           rtcPort = port1;
           port1.onmessage = ({data}) => {
-            if (rtcPort !== port1 || socket !== connection) return;
+            if (socket !== connection) return;
+            if (data.type === 'ice-stats') {
+              if (diagnostics && connection.readyState === WebSocket.OPEN) {
+                connection.send('rtc:ice-stats:' + JSON.stringify({...data.snapshot, negotiationStartedAt}));
+              }
+              if (data.snapshot.phase === 'fallback' || data.snapshot.phase === 'failure') port1.close();
+              return;
+            }
+            if (rtcPort !== port1) return;
             if (data.type === 'data') receiveMatchData(data.data);
             else if (data.type === 'signal') connection.send('rtc:signal:' + JSON.stringify(data.value));
             else if (data.type === 'diagnostic' && connection.readyState === WebSocket.OPEN) {
@@ -410,12 +423,13 @@ function createNetplay(endpoint, rtcSupported) {
             }
             else if (data.type === 'open') connection.send('rtc:ready');
             else if (data.type === 'closed') {
-              port1.close();
               rtcPort = undefined;
+              if (data.diagnosticsPending) setTimeout(() => port1.close(), 500);
+              else port1.close();
               if (connection.readyState === WebSocket.OPEN) connection.send('rtc:fail');
             }
           };
-          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer}, [port2]);
+          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer, diagnostics}, [port2]);
         } else if (typeof data === 'string' && data.startsWith('rtc:signal:')) {
           try {
             rtcPort?.postMessage({type: 'signal', value: JSON.parse(data.slice('rtc:signal:'.length))});

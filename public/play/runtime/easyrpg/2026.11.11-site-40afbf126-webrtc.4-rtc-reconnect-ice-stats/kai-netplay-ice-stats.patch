@@ -1,0 +1,307 @@
+diff --git a/resources/emscripten/player-host.js b/resources/emscripten/player-host.js
+index 09040978c..9b9802279 100644
+--- a/resources/emscripten/player-host.js
++++ b/resources/emscripten/player-host.js
+@@ -511,13 +511,26 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+       stopMovie();
+     }
+   };
+-  function connectNetplayRtc({port, iceServers, offer}) {
++  function connectNetplayRtc({port, iceServers, offer, diagnostics}) {
+     let peer;
+     let channel;
+     let open = true;
++    let finishing = false;
++    let finishTimer;
+     let sentDescription = false;
++    let localCandidatesGathered = 0;
++    let remoteCandidatesReceived = 0;
++    let remoteCandidatesApplied = 0;
++    const startedAt = performance.now();
+     const pendingCandidates = [];
+     const milestones = new Set();
++    const sampleTimers = [];
++    const candidateNumbers = new Map();
++    const localSignals = [];
++    const remoteSignals = [];
++    const stunErrors = new Map();
++    const elapsed = () => Math.round(performance.now() - startedAt);
++    const clearSamples = () => sampleTimers.forEach(timer => clearTimeout(timer));
+     const mark = milestone => {
+       if (!open || milestones.has(milestone)) return;
+       milestones.add(milestone);
+@@ -526,19 +539,146 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+     const close = () => {
+       if (!open) return;
+       open = false;
++      clearSamples();
++      clearTimeout(finishTimer);
+       port.close();
+       peer?.close();
+     };
+     const fail = milestone => {
+-      if (!open) return;
++      if (!open || finishing) return;
+       mark(milestone);
+-      port.postMessage({type: 'closed'});
+-      close();
++      port.postMessage({type: 'closed', diagnosticsPending: diagnostics});
++      finishStats('failure');
++    };
++    const readStats = async () => {
++      if (!peer) return {status: 'peer_unavailable'};
++      if (typeof peer.getStats !== 'function') return {status: 'unsupported'};
++      try {
++        return {status: 'ok', stats: await peer.getStats()};
++      } catch {
++        return {status: 'error'};
++      }
++    };
++    const addressKind = address => {
++      if (typeof address !== 'string') return 'unknown';
++      if (/\.local\.?$/i.test(address)) return 'mdns';
++      if (address.includes(':')) return 'ipv6';
++      return /^\d+(?:\.\d+){3}$/.test(address) ? 'ipv4' : 'unknown';
++    };
++    const describeCandidate = (candidate, type) => ({
++      type, protocol: candidate.protocol, tcpType: candidate.tcpType,
++      addressKind: addressKind(candidate.address ?? candidate.ip), port: candidate.port,
++      relatedAddressKind: addressKind(candidate.relatedAddress), relatedPort: candidate.relatedPort,
++      relayProtocol: candidate.relayProtocol, priority: candidate.priority,
++    });
++    const rememberCandidate = (signals, candidate) => {
++      if (!diagnostics || signals.length >= 32) return;
++      // Remote signaling carries RTCIceCandidateInit. Parse with the browser so mDNS/IPv6 stay identifiable
++      // even if getStats omits the remote address or the candidate was rejected.
++      if (signals === remoteSignals) {
++        try {
++          candidate = new RTCIceCandidate(candidate);
++        } catch {
++          return;
++        }
++      }
++      const entry = {...describeCandidate(candidate, candidate.type), elapsedMs: elapsed()};
++      signals.push(entry);
++      return entry;
++    };
++    const describeSdp = description => {
++      if (!description) return;
++      const sdp = description.sdp;
++      const application = /^m=application (\d+) ([\w/]+) /m.exec(sdp);
++      const iceOptions = /^a=ice-options:([^\r\n]+)/m.exec(sdp)?.[1].split(/\s+/) ?? [];
++      const integer = pattern => {
++        const value = pattern.exec(sdp)?.[1];
++        return value === undefined ? undefined : Number(value);
++      };
++      return {
++        type: description.type, applicationPort: application ? Number(application[1]) : undefined,
++        applicationProtocol: application?.[2],
++        setup: /^a=setup:(\w+)/m.exec(sdp)?.[1],
++        fingerprintAlgorithm: /^a=fingerprint:([\w-]+)/m.exec(sdp)?.[1],
++        sctpPort: integer(/^a=sctp-port:(\d+)/m), maxMessageSize: integer(/^a=max-message-size:(\d+)/m),
++        trickle: iceOptions.includes('trickle'), renomination: iceOptions.includes('renomination'),
++        iceLite: /^a=ice-lite\b/m.test(sdp), bundle: /^a=group:BUNDLE\b/m.test(sdp),
++        endOfCandidates: /^a=end-of-candidates\b/m.test(sdp), candidateCount: sdp.match(/^a=candidate:/gm)?.length ?? 0,
++      };
++    };
++    const sendIceStats = (phase, status, stats) => {
++      if (!open || !diagnostics || (finishing && phase !== 'fallback' && phase !== 'failure')) return;
++      const candidates = new Map();
++      const addCandidate = candidate => {
++        if (candidate?.type !== 'local-candidate' && candidate?.type !== 'remote-candidate') return;
++        if (!candidateNumbers.has(candidate.id)) candidateNumbers.set(candidate.id, candidateNumbers.size + 1);
++        const number = candidateNumbers.get(candidate.id);
++        candidates.set(number, {
++          number, side: candidate.type === 'local-candidate' ? 'local' : 'remote',
++          ...describeCandidate(candidate, candidate.candidateType),
++        });
++        return number;
++      };
++      const rows = stats ? Array.from(stats.values()) : [];
++      const transports = rows.filter(stat => stat.type === 'transport');
++      const transport = transports.find(stat => stat.selectedCandidatePairId) ?? transports[0];
++      const selected = transport?.selectedCandidatePairId;
++      const pairs = rows.filter(stat => stat.type === 'candidate-pair');
++      const rank = pair => (pair.id === selected ? 8 : 0) + (pair.nominated ? 4 : 0) +
++        (pair.state === 'succeeded' || pair.state === 'in-progress' ? 2 : 0) +
++        (pair.requestsSent || pair.requestsReceived ? 1 : 0);
++      const pairStats = pairs.sort((a, b) => rank(b) - rank(a)).slice(0, 32).map(pair => ({
++        local: addCandidate(stats.get(pair.localCandidateId)), remote: addCandidate(stats.get(pair.remoteCandidateId)),
++        state: pair.state, nominated: pair.nominated, selected: pair.id === selected,
++        requestsSent: pair.requestsSent, requestsReceived: pair.requestsReceived,
++        responsesSent: pair.responsesSent, responsesReceived: pair.responsesReceived,
++        consentRequestsSent: pair.consentRequestsSent, bytesSent: pair.bytesSent, bytesReceived: pair.bytesReceived,
++        packetsSent: pair.packetsSent, packetsReceived: pair.packetsReceived,
++        roundTripMs: pair.currentRoundTripTime === undefined ? undefined : Math.round(pair.currentRoundTripTime * 1000),
++      }));
++      const candidateRows = rows.filter(stat => stat.type === 'local-candidate' || stat.type === 'remote-candidate');
++      for (const candidate of candidateRows) {
++        if (candidates.size >= 72) break;
++        addCandidate(candidate);
++      }
++      port.postMessage({type: 'ice-stats', snapshot: {
++        phase, status, elapsedMs: elapsed(),
++        iceState: peer?.iceConnectionState, gatheringState: peer?.iceGatheringState,
++        connectionState: peer?.connectionState, signalingState: peer?.signalingState, channelState: channel?.readyState,
++        dtlsState: transport?.dtlsState, iceRole: transport?.iceRole,
++        localSdp: describeSdp(peer?.localDescription), remoteSdp: describeSdp(peer?.remoteDescription),
++        localCandidatesGathered, remoteCandidatesReceived, remoteCandidatesApplied,
++        candidateCount: candidateRows.length, pairCount: pairs.length,
++        stunErrors: Array.from(stunErrors.values()).slice(0, 32),
++        localSignals, remoteSignals,
++        candidates: Array.from(candidates.values()), pairs: pairStats,
++      }});
++    };
++    const sampleStats = async phase => {
++      const {status, stats} = await readStats();
++      sendIceStats(phase, status, stats);
++    };
++    const finishStats = phase => {
++      if (!diagnostics) {
++        close();
++        return;
++      }
++      if (finishing) return;
++      finishing = true;
++      clearSamples();
++      // The game has already fallen back or received the failure. Bound the lifetime of the old peer.
++      finishTimer = setTimeout(() => {
++        sendIceStats(phase, 'timeout');
++        close();
++      }, 250);
++      void sampleStats(phase).finally(close);
+     };
+     const reportIcePair = async final => {
++      if (final) clearSamples();
++      const {status, stats} = await readStats();
++      if (final) sendIceStats('connected', status, stats);
+       let value = 'unavailable';
+-      try {
+-        const stats = await peer.getStats();
++      if (stats) {
+         const transport = Array.from(stats.values()).find(stat => stat.type === 'transport' && stat.selectedCandidatePairId);
+         const pair = transport && stats.get(transport.selectedCandidatePairId);
+         if (pair?.type === 'candidate-pair') {
+@@ -550,7 +690,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+             value = [local.candidateType, remote.candidateType, local.protocol].join(':');
+           }
+         }
+-      } catch { /* Browsers can omit stats or close the peer while they are being read. */ }
++      }
+       if (open && (final || value !== 'unavailable')) port.postMessage({type: 'ice-pair', value, final});
+     };
+     try {
+@@ -585,6 +725,10 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+     };
+     peer.onicecandidate = ({candidate}) => {
+       if (!open || !candidate) return;
++      if (candidate.candidate) {
++        localCandidatesGathered++;
++        rememberCandidate(localSignals, candidate);
++      }
+       if (candidate.type) mark('candidate_' + candidate.type);
+       if (sentDescription) signal({candidate: candidate.toJSON()});
+       else pendingCandidates.push(candidate.toJSON());
+@@ -592,7 +736,15 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+     peer.onicegatheringstatechange = () => {
+       if (peer.iceGatheringState === 'complete') mark('gathering_complete');
+     };
+-    peer.onicecandidateerror = ({errorCode}) => mark(errorCode === 701 ? 'stun_unreachable' : 'stun_error');
++    peer.onicecandidateerror = ({errorCode, address, port, url}) => {
++      const kind = addressKind(address ?? undefined);
++      const scheme = /^(stun|stuns|turn|turns):/i.exec(url)?.[1]?.toLowerCase();
++      const key = [errorCode, kind, port, scheme].join(':');
++      const previous = stunErrors.get(key);
++      if (previous) previous.count++;
++      else stunErrors.set(key, {code: errorCode, addressKind: kind, port, scheme, count: 1});
++      mark(errorCode === 701 ? 'stun_unreachable' : 'stun_error');
++    };
+     peer.oniceconnectionstatechange = () => {
+       const state = peer.iceConnectionState;
+       if (state !== 'new' && state !== 'closed') mark('ice_' + state);
+@@ -606,6 +758,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+     port.onmessage = ({data}) => {
+       if (data.type === 'close') {
+         close();
++      } else if (data.type === 'fallback') {
++        finishStats('fallback');
+       } else if (data.type === 'ice-pair') {
+         void reportIcePair(true);
+       } else if (data.type === 'data') {
+@@ -620,11 +774,24 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+             mark('remote_description');
+             if (data.value.description.type === 'offer') await describe();
+           } else {
+-            await peer.addIceCandidate(data.value.candidate).catch(() => fail('remote_candidate_failed'));
++            const candidate = data.value.candidate;
++            const entry = candidate?.candidate ? rememberCandidate(remoteSignals, candidate) : undefined;
++            if (candidate?.candidate) remoteCandidatesReceived++;
++            await peer.addIceCandidate(candidate).then(() => {
++              if (candidate?.candidate) remoteCandidatesApplied++;
++              if (entry) entry.appliedMs = elapsed();
++            }, () => {
++              if (entry) entry.rejected = true;
++              fail('remote_candidate_failed');
++            });
+           }
+         }).catch(() => fail('invalid_signal'));
+       }
+     };
++    if (diagnostics) {
++      sampleTimers.push(setTimeout(() => void sampleStats('2s'), 2000));
++      sampleTimers.push(setTimeout(() => void sampleStats('6s'), 6000));
++    }
+     if (offer) {
+       try {
+         attach(peer.createDataChannel('easyrpg-netplay', {ordered: true}));
+diff --git a/resources/emscripten/player-worker.js b/resources/emscripten/player-worker.js
+index cb677e183..53bc3684d 100644
+--- a/resources/emscripten/player-worker.js
++++ b/resources/emscripten/player-worker.js
+@@ -392,14 +392,27 @@ function createNetplay(endpoint, rtcSupported) {
+           rtcSelected = true;
+           rtcPort?.postMessage({type: 'ice-pair'});
+         } else if (data === 'rtc:websocket') {
+-          closeRtc();
++          const port = rtcPort;
++          rtcPort = undefined;
++          rtcSelected = false;
++          port?.postMessage({type: 'fallback'});
++          if (port) setTimeout(() => port.close(), 500);
+         } else if (typeof data === 'string' && data.startsWith('rtc:start:')) {
+           const {port1, port2} = new MessageChannel();
+-          const {iceServers, offer} = JSON.parse(data.slice('rtc:start:'.length));
++          const {iceServers, offer, negotiationStartedAt} = JSON.parse(data.slice('rtc:start:'.length));
++          const diagnostics = Number.isSafeInteger(negotiationStartedAt);
+           closeRtc();
+           rtcPort = port1;
+           port1.onmessage = ({data}) => {
+-            if (rtcPort !== port1 || socket !== connection) return;
++            if (socket !== connection) return;
++            if (data.type === 'ice-stats') {
++              if (diagnostics && connection.readyState === WebSocket.OPEN) {
++                connection.send('rtc:ice-stats:' + JSON.stringify({...data.snapshot, negotiationStartedAt}));
++              }
++              if (data.snapshot.phase === 'fallback' || data.snapshot.phase === 'failure') port1.close();
++              return;
++            }
++            if (rtcPort !== port1) return;
+             if (data.type === 'data') receiveMatchData(data.data);
+             else if (data.type === 'signal') connection.send('rtc:signal:' + JSON.stringify(data.value));
+             else if (data.type === 'diagnostic' && connection.readyState === WebSocket.OPEN) {
+@@ -410,12 +423,13 @@ function createNetplay(endpoint, rtcSupported) {
+             }
+             else if (data.type === 'open') connection.send('rtc:ready');
+             else if (data.type === 'closed') {
+-              port1.close();
+               rtcPort = undefined;
++              if (data.diagnosticsPending) setTimeout(() => port1.close(), 500);
++              else port1.close();
+               if (connection.readyState === WebSocket.OPEN) connection.send('rtc:fail');
+             }
+           };
+-          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer}, [port2]);
++          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer, diagnostics}, [port2]);
+         } else if (typeof data === 'string' && data.startsWith('rtc:signal:')) {
+           try {
+             rtcPort?.postMessage({type: 'signal', value: JSON.parse(data.slice('rtc:signal:'.length))});
