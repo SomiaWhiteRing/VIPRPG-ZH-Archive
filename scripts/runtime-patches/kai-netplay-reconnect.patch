@@ -1,0 +1,267 @@
+diff --git a/resources/emscripten/player-host.js b/resources/emscripten/player-host.js
+index 3b6361624..12b245ef6 100644
+--- a/resources/emscripten/player-host.js
++++ b/resources/emscripten/player-host.js
+@@ -797,6 +797,11 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+   };
+   listen(page, 'gamepadconnected', updateJoystickAvailability);
+   listen(page, 'gamepaddisconnected', updateJoystickAvailability);
++  if (options.netplayEndpoint) {
++    const networkChanged = () => send({type: 'netplay-network-change'});
++    listen(page, 'online', networkChanged);
++    listen(page, 'offline', networkChanged);
++  }
+   const pollGamepad = () => {
+     updateJoystickAvailability();
+     const pad = gameFocused() ? [...navigator.getGamepads()].find(p => p?.mapping === 'standard') : null;
+diff --git a/resources/emscripten/player-worker.js b/resources/emscripten/player-worker.js
+index 9feb87bbb..23debfb42 100644
+--- a/resources/emscripten/player-worker.js
++++ b/resources/emscripten/player-worker.js
+@@ -160,7 +160,9 @@ function createNetplay(endpoint, rtcSupported) {
+   directoryHttp.protocol = base.protocol === 'wss:' ? 'https:' : 'http:';
+   let socket, state = 0;
+   let rtcPort, rtcSelected = false;
+-  let subscription, retry = 0, fallback = false, nextPoll = 0, polling = false;
++  const directoryTimeout = 5000;
++  let subscription, directoryDeadline = 0, nextProbe = 0, retry = 0;
++  let fallback = false, nextPoll = 0, poll;
+   let rooms, identity, online = -1;
+   let probe = 0, probeSent = 0, latency = -1, pendingProbe;
+   let sentMatch = 0, sentFrame = -1;
+@@ -176,36 +178,59 @@ function createNetplay(endpoint, rtcSupported) {
+     rooms = JSON.stringify(list);
+     if (local) identity = JSON.stringify(local);
+     online = Number.isInteger(count) && count >= 0 && count <= 0x7fffffff ? count : -1;
++    return true;
++  };
++  const endDirectory = connection => {
++    if (subscription !== connection) return;
++    subscription = undefined;
++    if (!fallback) {
++      rooms = '';
++      online = -1;
++    }
++    fallback = true;
++    retry = performance.now() + 2000;
++    connection.close();
+   };
+   const subscribe = () => {
+     const connection = subscription = new WebSocket(directory);
+-    const ended = () => {
+-      if (subscription !== connection) return;
+-      subscription = undefined;
+-      fallback = true;
+-      online = -1;
+-      retry = performance.now() + 2000;
+-      connection.close();
+-    };
+-    connection.onerror = connection.onclose = ended;
++    directoryDeadline = performance.now() + directoryTimeout;
++    nextProbe = 0;
++    connection.onerror = connection.onclose = () => endDirectory(connection);
+     connection.onmessage = ({data}) => {
+       if (subscription !== connection || typeof data !== 'string') return;
++      if (data === 'directory:pong') {
++        if (nextProbe) {
++          directoryDeadline = 0;
++          nextProbe = performance.now() + directoryTimeout;
++        }
++        return;
++      }
+       let snapshot;
+       try { snapshot = JSON.parse(data); } catch { return; }
+-      if (!isIdentity(snapshot?.identity)) return;
++      if (!isIdentity(snapshot?.identity) || !updateDirectory(snapshot.rooms, snapshot.identity, snapshot.online)) return;
+       fallback = false;
+-      updateDirectory(snapshot.rooms, snapshot.identity, snapshot.online);
++      directoryDeadline = 0;
++      nextProbe = performance.now() + directoryTimeout;
++      poll?.abort();
+     };
+   };
+   const stopDirectory = () => {
+     const previous = subscription;
+     subscription = undefined;
++    poll?.abort();
++    poll = undefined;
+     fallback = false;
+     retry = 0;
++    nextPoll = 0;
+     rooms = identity = undefined;
+     online = -1;
+     previous?.close();
+   };
++  const refreshDirectory = () => {
++    stopDirectory();
++    rooms = '';
++    fallback = true;
++  };
+   const clear = () => {
+     inbox.length = 0;
+     frames.length = 0;
+@@ -248,19 +273,38 @@ function createNetplay(endpoint, rtcSupported) {
+     close,
+     send,
+     stopDirectory,
++    refreshDirectory,
+     state() {
+       echoProbe();
+-      // A peer can close its data channel before the room sends the waiting-seat update.
+-      return rtcSelected && !rtcPort ? 2 : state;
++      return state;
+     },
+     rooms() {
+-      if (!subscription && performance.now() >= retry) subscribe();
+-      if (fallback && !polling && performance.now() >= nextPoll) {
+-        polling = true;
+-        nextPoll = performance.now() + 1200;
+-        fetch(directoryHttp, {credentials: 'same-origin', cache: 'no-store'}).then(async response => {
+-          if (response.ok && fallback) updateDirectory(await response.json());
+-        }).catch(() => {}).finally(() => { polling = false; });
++      const now = performance.now();
++      if (subscription && directoryDeadline && now >= directoryDeadline) endDirectory(subscription);
++      if (subscription?.readyState === WebSocket.OPEN && !directoryDeadline && now >= nextProbe) {
++        directoryDeadline = now + directoryTimeout;
++        subscription.send('directory:ping');
++      }
++      if (!subscription && now >= retry) subscribe();
++      if (fallback && !poll && now >= nextPoll) {
++        const request = poll = new AbortController();
++        const deadline = setTimeout(() => request.abort(), directoryTimeout);
++        nextPoll = now + 1200;
++        fetch(directoryHttp, {credentials: 'same-origin', cache: 'no-store', signal: request.signal}).then(async response => {
++          const list = response.ok ? await response.json() : undefined;
++          if (poll === request && fallback && !updateDirectory(list)) {
++            rooms = '';
++            online = -1;
++          }
++        }).catch(() => {
++          if (poll === request && fallback) {
++            rooms = '';
++            online = -1;
++          }
++        }).finally(() => {
++          clearTimeout(deadline);
++          if (poll === request) poll = undefined;
++        });
+       }
+       const snapshot = rooms;
+       rooms = undefined;
+@@ -315,8 +359,10 @@ function createNetplay(endpoint, rtcSupported) {
+       connection.binaryType = 'arraybuffer';
+       const ended = () => {
+         if (socket !== connection) return;
++        const inRoom = state >= 2;
+         close();
+         state = -1;
++        if (inRoom) refreshDirectory();
+       };
+       connection.onclose = connection.onerror = ended;
+       const receiveMatchData = data => {
+@@ -465,6 +511,7 @@ self.onmessage = async ({data}) => {
+       else if (data.type === 'mouse') engine._web_mouse(data.x, data.y, data.focus ? 1 : 0);
+       else if (data.type === 'touch') engine._web_touch(data.id, data.x, data.y, data.pressed ? 1 : 0);
+       else if (data.type === 'gamepad') engine._web_gamepad(...data.axes, ...data.triggers);
++      else if (data.type === 'netplay-network-change') engine.netplay?.refreshDirectory();
+       else if (data.type === 'focus') {
+         engine._web_focus(data.focused ? 1 : 0, data.fullscreen ? 1 : 0);
+       } else if (data.type === 'capture') engine._web_capture();
+diff --git a/src/game_maniac_js.cpp b/src/game_maniac_js.cpp
+index 958061848..570bd680b 100644
+--- a/src/game_maniac_js.cpp
++++ b/src/game_maniac_js.cpp
+@@ -96,6 +96,7 @@ public:
+ 			JS_SetPropertyStr(context, rm2k3, "netplayTime", JS_NewCFunction(context, NetplayTime, "netplayTime", 0));
+ 			JS_SetPropertyStr(context, rm2k3, "netplayFade", JS_NewCFunction(context, NetplayFade, "netplayFade", 2));
+ 			JS_SetPropertyStr(context, rm2k3, "netplayButtons", JS_NewCFunction(context, NetplayButtons, "netplayButtons", 1));
++			JS_SetPropertyStr(context, rm2k3, "netplayWaitingForInput", JS_NewCFunction(context, NetplayWaitingForInput, "netplayWaitingForInput", 0));
+ 			JS_SetPropertyStr(context, rm2k3, "netplayContinuePicture",
+ 				JS_NewCFunction(context, NetplayContinuePicture, "netplayContinuePicture", 4));
+ 			JS_SetPropertyStr(context, rm2k3, "setNetplayProjection",
+@@ -233,6 +234,10 @@ private:
+ 		return JS_NewFloat64(context, NetplayTimeMs());
+ 	}
+ 
++	static JSValue NetplayWaitingForInput(JSContext* context, JSValueConst, int, JSValueConst*) {
++		return JS_NewBool(context, Game_Netplay::WaitingForInput());
++	}
++
+ 	static JSValue NetplayButtons(JSContext* context, JSValueConst, int argc, JSValueConst* argv) {
+ 		const bool repeat = argc > 0 && JS_ToBool(context, argv[0]);
+ 		auto button = repeat ? Input::IsRepeated : Input::IsTriggered;
+diff --git a/src/game_netplay.cpp b/src/game_netplay.cpp
+index 0e5b63087..b5f6a4fdc 100644
+--- a/src/game_netplay.cpp
++++ b/src/game_netplay.cpp
+@@ -332,6 +332,7 @@ struct Match {
+ 	bool announced = false;
+ 	bool peer_ready = false;
+ 	bool started = false;
++	bool stall_exit = false;
+ 	MapWorld world;
+ 	Game_Netplay::Rollback<MapWorld> timeline;
+ };
+@@ -602,9 +603,12 @@ void Game_Netplay::Command(std::string_view comment) {
+ 		int buffer_variable;
+ 		const int buffer = args >> buffer_variable && vars.IsValid(buffer_variable)
+ 			? std::clamp(vars.Get(buffer_variable), 1, 60) : 1;
++		std::string stall_mode;
++		args >> stall_mode;
+ 		const int state = ReadTransportState();
+ 		if (state >= 3 && vars.Get(variable) > 0) {
+ 			match = std::make_unique<Match>(vars.Get(variable), vars.Get(seed), state - 3, rng_mode == "continue_rng", buffer);
++			match->stall_exit = stall_mode == "stall_exit";
+ 			if (PreparesMap(match->map_id)) match->world.picture_transforms = std::move(prepare_picture_transforms);
+ 			ClearPreparation();
+ 		}
+@@ -629,6 +633,14 @@ bool Game_Netplay::InMatch() {
+ #endif
+ }
+ 
++bool Game_Netplay::WaitingForInput() {
++#ifdef PLAYER_WEB
++	return match && match->stall_exit && !match->world.stopping && match->timeline.WaitingForInput();
++#else
++	return false;
++#endif
++}
++
+ Game_Netplay::TransferFade Game_Netplay::TakeTransferFade() {
+ #ifdef PLAYER_WEB
+ 	return std::exchange(transfer_fade, {});
+@@ -711,6 +723,10 @@ bool Game_Netplay::UpdateMap() {
+ 		match->peer_ready = true;
+ 	}
+ 	if (!match->peer_ready) return true;
++	if (WaitingForInput() && Input::IsTriggered(Input::CANCEL)) {
++		Close();
++		return true;
++	}
+ 	if (!match->started && !match->continue_rng) {
+ 		SeedRng(static_cast<uint32_t>(match->seed));
+ 	}
+diff --git a/src/game_netplay.h b/src/game_netplay.h
+index 99a6fe68f..43cd9da8a 100644
+--- a/src/game_netplay.h
++++ b/src/game_netplay.h
+@@ -17,6 +17,7 @@ namespace Game_Netplay {
+ 	void Command(std::string_view comment);
+ 	void Close();
+ 	bool InMatch();
++	bool WaitingForInput();
+ 	struct TransferFade {
+ 		int erase = 0;
+ 		int show = 0;
+diff --git a/src/netplay_rollback.h b/src/netplay_rollback.h
+index 7623228ab..249a969af 100644
+--- a/src/netplay_rollback.h
++++ b/src/netplay_rollback.h
+@@ -21,6 +21,7 @@ public:
+ 	}
+ 
+ 	int VisibleFrame() const { return next - 1; }
++	bool WaitingForInput() const { return next - confirmed >= window && remote_next == confirmed; }
+ 
+ 	bool Receive(int frame, int input) {
+ 		if (frame != remote_next || frame > next + window + input_delay) return false;

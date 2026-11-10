@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-liveness-diagnostics",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics",
-  "artifact": "Kai-Web-2026.11.11-rtc-diagnostics-site.zip",
-  "archiveSha256": "87ae6c62c3762fbad576e326790a7e7ff24ce4e79d9bbeb5b5c16248768ba6ea",
+  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect",
+  "artifact": "Kai-Web-2026.11.11-netplay-reconnect-site.zip",
+  "archiveSha256": "52bbcd777608dbcf95202426961bd948f2587e11dd0ad81361119887f57247e5",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/3398943413d0b99076498a3997911b74e54898a2",
   "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/3398943413d0b99076498a3997911b74e54898a2/COPYING",
   "sourceState": "patched-commit",
@@ -48,6 +48,10 @@
     {
       "path": "scripts/runtime-patches/kai-netplay-rtc-diagnostics.patch",
       "sha256": "cadfe71c9ee43e5218beeaea3254b61e15b91cc9162b15811339b6b90b7a730c"
+    },
+    {
+      "path": "scripts/runtime-patches/kai-netplay-reconnect.patch",
+      "sha256": "edb8dac999c88095f12d60ae9dadefa8e1cf905c425f4776f5a024645b77d997"
     }
   ],
   "sourceSnapshot": null,
@@ -81,36 +85,36 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "ee12e0a529713e08491cb0bcff1741d4b731818398710ed95c627c6fd7da3091",
-      "afterSha256": "ff3f9beb84b45189edb91fc797242ed594ff238e08f2ae30cc8b5691574b8f12"
+      "beforeSha256": "5f7662fda0602ce1aaadf045ffd4fc2aacd20040a873b70c378d0dcb86545331",
+      "afterSha256": "b0ebe31531f7c6c6f290961fbdbbdd3a87c2918dc9234d12ea66733cff79325b"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "ff3f9beb84b45189edb91fc797242ed594ff238e08f2ae30cc8b5691574b8f12",
-      "afterSha256": "7443a502e7cdcdb1c50bd5c039694a652e8caec288496983c7fb5f56067bd79e"
+      "beforeSha256": "b0ebe31531f7c6c6f290961fbdbbdd3a87c2918dc9234d12ea66733cff79325b",
+      "afterSha256": "f02a7030500c40edf1a2c593cca66c99c9de9075f100e7514bf5bc099cc01201"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/startup-regional-assets.patch",
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
-      "beforeSha256": "7443a502e7cdcdb1c50bd5c039694a652e8caec288496983c7fb5f56067bd79e",
-      "afterSha256": "a515c279a30809ad46027459ab474a890d38b147a16afea4bbc68b159c8744bd"
+      "beforeSha256": "f02a7030500c40edf1a2c593cca66c99c9de9075f100e7514bf5bc099cc01201",
+      "afterSha256": "17c96162b3b7a75d1406de5cca6bc0730c5cf9ea45d34016f931ee10c86d4cad"
     }
   ],
   "files": {
     "index.js": {
-      "size": 49834,
-      "sha256": "a515c279a30809ad46027459ab474a890d38b147a16afea4bbc68b159c8744bd"
+      "size": 50033,
+      "sha256": "17c96162b3b7a75d1406de5cca6bc0730c5cf9ea45d34016f931ee10c86d4cad"
     },
     "easyrpg-player.js": {
       "size": 128884,
-      "sha256": "bcfaf73964b5ada62dd3f7536e5ad7a9acb387489eeac8e59d60fcf2086c4885"
+      "sha256": "aa784216163bf2f0303306566258c4579bfe06cac72a52c710a717e6d494713a"
     },
     "easyrpg-player.wasm": {
-      "size": 13140167,
-      "sha256": "a919c33033e54de4459774a49b07b99766973f5189b4f1354d53d1dd3d91f32f"
+      "size": 13140522,
+      "sha256": "eb2ab5f50e32eba85816a0103ed0ec9e713d77c1f2384cddadf1200e9dcc0397"
     },
     "easyrpg-player.data": {
       "size": 7557598,
@@ -118,15 +122,15 @@
     },
     "easyrpg-player-asyncify.js": {
       "size": 134952,
-      "sha256": "c1dfe80f7d2dfd63c672a494576d71a11cfada749c9cf80acf83725029195fc0"
+      "sha256": "35c2a839d204392759ecba968cfb853441e63e0f1ed5231d432b8b4bb1ce43a9"
     },
     "easyrpg-player-asyncify.wasm": {
-      "size": 17307743,
-      "sha256": "014bfeab28d9ca92d2862cef5c754750784d664798654a2730e2fd2d28da1f6f"
+      "size": 17308258,
+      "sha256": "75d4586bc6be9c66680fa7699ad47e0e11ef15097accdebcac28eff2cb3de70f"
     },
     "player-worker.js": {
-      "size": 20678,
-      "sha256": "fb9748645539a742e2a917a5bf2ba7e51c848fb16e557116c2f51eae54600294"
+      "size": 22178,
+      "sha256": "61b36a9164def9f34f52f80d26e42507320bb3afc06b4689a7ff181783486c9a"
     },
     "player-audio.js": {
       "size": 1858,
@@ -181,16 +185,16 @@
       "sha256": "22ea534954e6bd50ef05157a9a6c02009815ff9f97769bb25df041385514c956"
     },
     "easyrpg-player.wasm.br": {
-      "size": 4043686,
-      "sha256": "96d1642ff13789d9f29ff67c5244a2a0071bfe7dfaddbe95ea814f47890796e2"
+      "size": 4043356,
+      "sha256": "ee0dd29305e6add58b44909123f3c0d1ac196fbd0fb70632e17275dcf360ad1d"
     },
     "easyrpg-player.data.br": {
       "size": 6311434,
       "sha256": "dfeef2a7cca1aee072450b553c6e372c90c4f4c8b2149e95899b6b4bb634f702"
     },
     "easyrpg-player-asyncify.wasm.br": {
-      "size": 4639932,
-      "sha256": "17be742368b2edf9d7c580c7dbf595c7ebf2c48f26068fe738637af06cb57f10"
+      "size": 4642194,
+      "sha256": "813298ac07f68a1681391dfde11f0f120b8d8257edff15483ab95d199ea1e314"
     },
     "kai-40afbf126.patch": {
       "size": 9427,
@@ -231,6 +235,10 @@
     "kai-netplay-rtc-diagnostics.patch": {
       "size": 6082,
       "sha256": "cadfe71c9ee43e5218beeaea3254b61e15b91cc9162b15811339b6b90b7a730c"
+    },
+    "kai-netplay-reconnect.patch": {
+      "size": 10981,
+      "sha256": "edb8dac999c88095f12d60ae9dadefa8e1cf905c425f4776f5a024645b77d997"
     }
   }
 }

@@ -101,6 +101,9 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
       };
       socket.addEventListener("close", disconnect);
       socket.addEventListener("error", disconnect);
+      socket.addEventListener("message", ({ data }) => {
+        if (data === "directory:ping" && socket.readyState === WebSocket.OPEN) socket.send("directory:pong");
+      });
       this.publishDirectory();
       return new Response(null, { status: 101, webSocket: pair[0] });
     }

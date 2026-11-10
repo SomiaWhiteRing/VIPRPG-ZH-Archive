@@ -843,6 +843,11 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   };
   listen(page, 'gamepadconnected', updateJoystickAvailability);
   listen(page, 'gamepaddisconnected', updateJoystickAvailability);
+  if (options.netplayEndpoint) {
+    const networkChanged = () => send({type: 'netplay-network-change'});
+    listen(page, 'online', networkChanged);
+    listen(page, 'offline', networkChanged);
+  }
   const pollGamepad = () => {
     updateJoystickAvailability();
     const pad = gameFocused() ? [...navigator.getGamepads()].find(p => p?.mapping === 'standard') : null;

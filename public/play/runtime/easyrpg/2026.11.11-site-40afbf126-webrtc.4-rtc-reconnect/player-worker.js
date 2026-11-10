@@ -160,7 +160,9 @@ function createNetplay(endpoint, rtcSupported) {
   directoryHttp.protocol = base.protocol === 'wss:' ? 'https:' : 'http:';
   let socket, state = 0;
   let rtcPort, rtcSelected = false;
-  let subscription, retry = 0, fallback = false, nextPoll = 0, polling = false;
+  const directoryTimeout = 5000;
+  let subscription, directoryDeadline = 0, nextProbe = 0, retry = 0;
+  let fallback = false, nextPoll = 0, poll;
   let rooms, identity, online = -1;
   let probe = 0, probeSent = 0, latency = -1, pendingProbe;
   let sentMatch = 0, sentFrame = -1;
@@ -176,35 +178,58 @@ function createNetplay(endpoint, rtcSupported) {
     rooms = JSON.stringify(list);
     if (local) identity = JSON.stringify(local);
     online = Number.isInteger(count) && count >= 0 && count <= 0x7fffffff ? count : -1;
+    return true;
+  };
+  const endDirectory = connection => {
+    if (subscription !== connection) return;
+    subscription = undefined;
+    if (!fallback) {
+      rooms = '';
+      online = -1;
+    }
+    fallback = true;
+    retry = performance.now() + 2000;
+    connection.close();
   };
   const subscribe = () => {
     const connection = subscription = new WebSocket(directory);
-    const ended = () => {
-      if (subscription !== connection) return;
-      subscription = undefined;
-      fallback = true;
-      online = -1;
-      retry = performance.now() + 2000;
-      connection.close();
-    };
-    connection.onerror = connection.onclose = ended;
+    directoryDeadline = performance.now() + directoryTimeout;
+    nextProbe = 0;
+    connection.onerror = connection.onclose = () => endDirectory(connection);
     connection.onmessage = ({data}) => {
       if (subscription !== connection || typeof data !== 'string') return;
+      if (data === 'directory:pong') {
+        if (nextProbe) {
+          directoryDeadline = 0;
+          nextProbe = performance.now() + directoryTimeout;
+        }
+        return;
+      }
       let snapshot;
       try { snapshot = JSON.parse(data); } catch { return; }
-      if (!isIdentity(snapshot?.identity)) return;
+      if (!isIdentity(snapshot?.identity) || !updateDirectory(snapshot.rooms, snapshot.identity, snapshot.online)) return;
       fallback = false;
-      updateDirectory(snapshot.rooms, snapshot.identity, snapshot.online);
+      directoryDeadline = 0;
+      nextProbe = performance.now() + directoryTimeout;
+      poll?.abort();
     };
   };
   const stopDirectory = () => {
     const previous = subscription;
     subscription = undefined;
+    poll?.abort();
+    poll = undefined;
     fallback = false;
     retry = 0;
+    nextPoll = 0;
     rooms = identity = undefined;
     online = -1;
     previous?.close();
+  };
+  const refreshDirectory = () => {
+    stopDirectory();
+    rooms = '';
+    fallback = true;
   };
   const clear = () => {
     inbox.length = 0;
@@ -248,19 +273,38 @@ function createNetplay(endpoint, rtcSupported) {
     close,
     send,
     stopDirectory,
+    refreshDirectory,
     state() {
       echoProbe();
-      // A peer can close its data channel before the room sends the waiting-seat update.
-      return rtcSelected && !rtcPort ? 2 : state;
+      return state;
     },
     rooms() {
-      if (!subscription && performance.now() >= retry) subscribe();
-      if (fallback && !polling && performance.now() >= nextPoll) {
-        polling = true;
-        nextPoll = performance.now() + 1200;
-        fetch(directoryHttp, {credentials: 'same-origin', cache: 'no-store'}).then(async response => {
-          if (response.ok && fallback) updateDirectory(await response.json());
-        }).catch(() => {}).finally(() => { polling = false; });
+      const now = performance.now();
+      if (subscription && directoryDeadline && now >= directoryDeadline) endDirectory(subscription);
+      if (subscription?.readyState === WebSocket.OPEN && !directoryDeadline && now >= nextProbe) {
+        directoryDeadline = now + directoryTimeout;
+        subscription.send('directory:ping');
+      }
+      if (!subscription && now >= retry) subscribe();
+      if (fallback && !poll && now >= nextPoll) {
+        const request = poll = new AbortController();
+        const deadline = setTimeout(() => request.abort(), directoryTimeout);
+        nextPoll = now + 1200;
+        fetch(directoryHttp, {credentials: 'same-origin', cache: 'no-store', signal: request.signal}).then(async response => {
+          const list = response.ok ? await response.json() : undefined;
+          if (poll === request && fallback && !updateDirectory(list)) {
+            rooms = '';
+            online = -1;
+          }
+        }).catch(() => {
+          if (poll === request && fallback) {
+            rooms = '';
+            online = -1;
+          }
+        }).finally(() => {
+          clearTimeout(deadline);
+          if (poll === request) poll = undefined;
+        });
       }
       const snapshot = rooms;
       rooms = undefined;
@@ -315,8 +359,10 @@ function createNetplay(endpoint, rtcSupported) {
       connection.binaryType = 'arraybuffer';
       const ended = () => {
         if (socket !== connection) return;
+        const inRoom = state >= 2;
         close();
         state = -1;
+        if (inRoom) refreshDirectory();
       };
       connection.onclose = connection.onerror = ended;
       const receiveMatchData = data => {
@@ -465,6 +511,7 @@ self.onmessage = async ({data}) => {
       else if (data.type === 'mouse') engine._web_mouse(data.x, data.y, data.focus ? 1 : 0);
       else if (data.type === 'touch') engine._web_touch(data.id, data.x, data.y, data.pressed ? 1 : 0);
       else if (data.type === 'gamepad') engine._web_gamepad(...data.axes, ...data.triggers);
+      else if (data.type === 'netplay-network-change') engine.netplay?.refreshDirectory();
       else if (data.type === 'focus') {
         engine._web_focus(data.focused ? 1 : 0, data.fullscreen ? 1 : 0);
       } else if (data.type === 'capture') engine._web_capture();
