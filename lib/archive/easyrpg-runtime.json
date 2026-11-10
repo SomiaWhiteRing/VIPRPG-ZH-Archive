@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.10-site-40afbf126-webrtc.4-rtc-pool-heartbeat-opening",
+  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-liveness",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "b2c7bb79228a9f3b08c373adbe5c9e0a41dd01f4aa9fbb8515bd16118691d8ba",
+  "archiveSha256": "b61dd2a8d618ae776a52da828c6beaff6e3c049fc388d6e5e562708988693d9c",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -70,6 +70,10 @@
     {
       "path": "scripts/runtime-patches/kai-netplay-opening-view.patch",
       "sha256": "33da72036ff73c99868257f3b5404c138c68b57bec379d8a744c2073a67f6102"
+    },
+    {
+      "path": "scripts/runtime-patches/kai-netplay-rtc-disconnect.patch",
+      "sha256": "ff7979a9daac2434972b56d3114f8ef41253c4c89b5cc4d88205a28e4133e786"
     }
   ],
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",

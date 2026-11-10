@@ -359,7 +359,7 @@ function createNetplay(endpoint, rtcSupported) {
             else if (data.type === 'closed') {
               port1.close();
               rtcPort = undefined;
-              if (!rtcSelected) connection.send('rtc:fail');
+              if (connection.readyState === WebSocket.OPEN) connection.send('rtc:fail');
             }
           };
           postMessage({type: 'netplay-rtc', port: port2, iceServers, offer}, [port2]);

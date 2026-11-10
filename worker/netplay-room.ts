@@ -6,21 +6,30 @@ import { getUserAvatarSrc } from "../lib/user-profile";
 import { json } from "../lib/http";
 
 const directIceServers = [{ urls: "stun:stun.cloudflare.com:3478" }];
-const heartbeatIntervalMs = 10_000;
-const heartbeatTimeoutMs = 60_000;
+const heartbeatIntervalMs = 5_000;
+const heartbeatHideMs = 10_000;
+const heartbeatTimeoutMs = 15_000;
 type Identity = { name: string; avatar: string };
+type DisconnectReason = "socket_close" | "socket_error" | "heartbeat_timeout" | "rtc_failed";
+type Heartbeat = {
+  lastPong: number;
+  probe: ReturnType<typeof setInterval>;
+  deadline?: ReturnType<typeof setTimeout>;
+};
 type Negotiation = {
   route: "pending" | "webrtc" | "websocket";
   ready: Set<WebSocket>;
+  startedAt: number;
   timeout: ReturnType<typeof setTimeout>;
 };
 type Room = {
+  details: { archiveVersionId: number; roomId: number; pool: "rtc" | "legacy" };
   peers: Map<WebSocket, {
     identity: Identity;
     rtc: boolean;
-    heartbeat?: { lastPong: number; disconnect: () => void };
+    heartbeat?: Heartbeat;
   }>;
-  heartbeatTimer?: ReturnType<typeof setInterval>;
+  hidden: boolean;
   ready?: { socket: WebSocket; packet: ArrayBuffer };
   rtc?: Negotiation;
 };
@@ -29,10 +38,20 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
   private rooms = new Map<number, Room>();
   private directory = new Map<WebSocket, Identity>();
 
+  private isRoomStale(room: Room, now: number) {
+    for (const [socket, { heartbeat }] of room.peers) {
+      if (socket.readyState !== WebSocket.OPEN || (heartbeat && now - heartbeat.lastPong >= heartbeatHideMs)) return true;
+    }
+    return false;
+  }
+
   private list() {
-    return Array.from(this.rooms, ([id, { peers }]) => ({
-      id, players: Array.from(peers.values(), ({ identity }) => identity),
-    }));
+    const now = Date.now();
+    const rooms = [];
+    for (const [id, room] of this.rooms) {
+      if (!this.isRoomStale(room, now)) rooms.push({ id, players: Array.from(room.peers.values(), ({ identity }) => identity) });
+    }
+    return rooms;
   }
 
   private publishDirectory() {
@@ -43,20 +62,11 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     }
   }
 
-  private updateWaitingHeartbeat(room: Room) {
-    if (room.heartbeatTimer !== undefined) clearInterval(room.heartbeatTimer);
-    room.heartbeatTimer = undefined;
-    if (room.peers.size !== 1) return;
-    const [socket, { heartbeat }] = room.peers.entries().next().value!;
-    if (!heartbeat) return;
-    heartbeat.lastPong = Date.now();
-    room.heartbeatTimer = setInterval(() => {
-      if (socket.readyState !== WebSocket.OPEN || Date.now() - heartbeat.lastPong >= heartbeatTimeoutMs) {
-        heartbeat.disconnect();
-      } else {
-        socket.send("room:ping");
-      }
-    }, heartbeatIntervalMs);
+  private refreshVisibility(room: Room, now: number) {
+    const hidden = this.isRoomStale(room, now);
+    if (room.hidden === hidden) return;
+    room.hidden = hidden;
+    this.publishDirectory();
   }
 
   fetch(request: Request) {
@@ -85,20 +95,38 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     const id = Number(path.slice(path.lastIndexOf("/") + 1));
     const mode = url.searchParams.get("mode");
     const existing = this.rooms.get(id);
-    if (existing?.peers.size === 2 || (mode === "create" && existing)) return new Response(null, { status: 409 });
-    if (mode === "join" && !existing) return new Response(null, { status: 404 });
-    const room: Room = existing ?? { peers: new Map() };
+    if (existing) {
+      if (this.isRoomStale(existing, Date.now())) return new Response(null, { status: mode === "join" ? 404 : 409 });
+      if (existing.peers.size === 2 || mode === "create") return new Response(null, { status: 409 });
+    } else if (mode === "join") return new Response(null, { status: 404 });
+    const [, , , , archive, pool] = path.split("/");
+    const room: Room = existing ?? {
+      details: { archiveVersionId: Number(archive), roomId: id, pool: pool === "rtc" ? "rtc" : "legacy" },
+      peers: new Map(),
+      hidden: false,
+    };
     const { peers } = room;
     const first = peers.keys().next().value;
-    if (first && first.readyState !== WebSocket.OPEN) return new Response(null, { status: 409 });
 
     const pair = new WebSocketPair();
     const socket = pair[1];
     socket.binaryType = "arraybuffer";
     socket.accept();
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Netplay-Identity")!)) as Identity;
-    const disconnect = () => {
-      if (!peers.delete(socket)) return;
+    const disconnect = (reason: DisconnectReason, closeCode?: number) => {
+      if (!peers.has(socket)) return;
+      const seats = peers.size;
+      const route = room.rtc?.route ?? (seats === 2 ? "websocket" : undefined);
+      // Either peer can observe a failed data channel. Release both seats without guessing which side failed.
+      const leaving = reason === "rtc_failed" ? [...peers.keys()] : [socket];
+      for (const peer of leaving) {
+        const heartbeat = peers.get(peer)?.heartbeat;
+        if (heartbeat) {
+          clearInterval(heartbeat.probe);
+          clearTimeout(heartbeat.deadline);
+        }
+        peers.delete(peer);
+      }
       room.ready = undefined;
       if (room.rtc) clearTimeout(room.rtc.timeout);
       room.rtc = undefined;
@@ -107,27 +135,55 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
         const remaining = peers.keys().next().value!;
         if (remaining.readyState === WebSocket.OPEN) remaining.send("2");
       }
-      this.updateWaitingHeartbeat(room);
+      room.hidden = this.isRoomStale(room, Date.now());
       this.publishDirectory();
-      socket.close(1000);
+      console.log({ event: "netplay_reclaim", ...room.details, reason, route, seats, released: leaving.length, closeCode });
+      for (const peer of leaving) peer.close(1000);
     };
-    const heartbeat = url.searchParams.get("heartbeat") === "1" ? { lastPong: 0, disconnect } : undefined;
+    const heartbeat: Heartbeat | undefined = url.searchParams.get("heartbeat") === "1" ? {
+      lastPong: Date.now(),
+      probe: setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) socket.send("room:ping");
+        else disconnect("socket_close");
+      }, heartbeatIntervalMs),
+    } : undefined;
+    const renewHeartbeat = () => {
+      if (!heartbeat) return;
+      const now = Date.now();
+      if (now - heartbeat.lastPong >= heartbeatTimeoutMs) {
+        disconnect("heartbeat_timeout");
+        return;
+      }
+      heartbeat.lastPong = now;
+      clearTimeout(heartbeat.deadline);
+      heartbeat.deadline = setTimeout(() => {
+        const now = Date.now();
+        this.refreshVisibility(room, now);
+        heartbeat.deadline = setTimeout(() => disconnect("heartbeat_timeout"), heartbeat.lastPong + heartbeatTimeoutMs - now);
+      }, heartbeatHideMs);
+      if (room.hidden) this.refreshVisibility(room, now);
+    };
     peers.set(socket, { identity, rtc: url.searchParams.get("rtc") === "1", heartbeat });
     this.rooms.set(id, room);
+    renewHeartbeat();
     socket.addEventListener("message", ({ data }) => {
       if (!peers.has(socket)) return;
       const rtc = room.rtc;
       if (typeof data === "string") {
-        if (data === "room:pong" && heartbeat && peers.size === 1) {
-          heartbeat.lastPong = Date.now();
+        if (data === "room:pong" && heartbeat) {
+          renewHeartbeat();
+          return;
+        }
+        if (data === "rtc:fail" && rtc?.route === "webrtc") {
+          disconnect("rtc_failed");
           return;
         }
         if (rtc?.route !== "pending") return;
         if (data === "rtc:ready") {
           rtc.ready.add(socket);
-          if (rtc.ready.size === 2) this.selectRoute(room, "webrtc");
+          if (rtc.ready.size === 2) this.selectRoute(room, "connected");
         } else if (data === "rtc:fail") {
-          this.selectRoute(room, "websocket");
+          this.selectRoute(room, "client_failure");
         } else if (data.length <= 24576 && data.startsWith("rtc:signal:")) {
           for (const peer of peers.keys()) if (peer !== socket && peer.readyState === WebSocket.OPEN) peer.send(data);
         }
@@ -153,35 +209,38 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
         if (peer !== socket && peer.readyState === WebSocket.OPEN) peer.send(data);
       }
     });
-    socket.addEventListener("close", disconnect);
-    socket.addEventListener("error", disconnect);
+    socket.addEventListener("close", (event) => disconnect("socket_close", event.code));
+    socket.addEventListener("error", () => disconnect("socket_error"));
     if (first) {
       if (peers.get(first)?.rtc && peers.get(socket)?.rtc) {
         room.rtc = {
           route: "pending",
           ready: new Set(),
-          timeout: setTimeout(() => this.selectRoute(room, "websocket"), 8000),
+          startedAt: Date.now(),
+          timeout: setTimeout(() => this.selectRoute(room, "timeout"), 8000),
         };
         first.send("rtc:start:" + JSON.stringify({ iceServers: directIceServers, offer: true }));
         socket.send("rtc:start:" + JSON.stringify({ iceServers: directIceServers, offer: false }));
       } else {
+        console.log({ event: "netplay_route", ...room.details, route: "websocket", reason: "rtc_unavailable" });
         first.send("3");
         socket.send("4");
       }
     } else {
       socket.send("2");
     }
-    this.updateWaitingHeartbeat(room);
     this.publishDirectory();
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
-  private selectRoute(room: Room, route: "webrtc" | "websocket") {
+  private selectRoute(room: Room, reason: "connected" | "client_failure" | "timeout") {
     const rtc = room.rtc;
     const [first, second] = room.peers.keys();
     if (rtc?.route !== "pending" || first?.readyState !== WebSocket.OPEN || second?.readyState !== WebSocket.OPEN) return;
     clearTimeout(rtc.timeout);
+    const route = reason === "connected" ? "webrtc" : "websocket";
     rtc.route = route;
+    console.log({ event: "netplay_route", ...room.details, route, reason, negotiationMs: Date.now() - rtc.startedAt });
     first.send("rtc:" + route);
     second.send("rtc:" + route);
     first.send("3");

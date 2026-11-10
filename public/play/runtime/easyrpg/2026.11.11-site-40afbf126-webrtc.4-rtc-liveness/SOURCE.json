@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "version": "2026.11.10-site-40afbf126-webrtc.4-rtc-pool-heartbeat-opening",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening",
-  "artifact": "Kai-Web-2026.11.10-opening-view-site.zip",
-  "archiveSha256": "b2c7bb79228a9f3b08c373adbe5c9e0a41dd01f4aa9fbb8515bd16118691d8ba",
+  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-liveness",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness",
+  "artifact": "Kai-Web-2026.11.11-netplay-liveness-site.zip",
+  "archiveSha256": "b61dd2a8d618ae776a52da828c6beaff6e3c049fc388d6e5e562708988693d9c",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/3398943413d0b99076498a3997911b74e54898a2",
   "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/3398943413d0b99076498a3997911b74e54898a2/COPYING",
   "sourceState": "patched-commit",
@@ -40,6 +40,10 @@
     {
       "path": "scripts/runtime-patches/kai-netplay-opening-view.patch",
       "sha256": "33da72036ff73c99868257f3b5404c138c68b57bec379d8a744c2073a67f6102"
+    },
+    {
+      "path": "scripts/runtime-patches/kai-netplay-rtc-disconnect.patch",
+      "sha256": "ff7979a9daac2434972b56d3114f8ef41253c4c89b5cc4d88205a28e4133e786"
     }
   ],
   "sourceSnapshot": null,
@@ -117,8 +121,8 @@
       "sha256": "014bfeab28d9ca92d2862cef5c754750784d664798654a2730e2fd2d28da1f6f"
     },
     "player-worker.js": {
-      "size": 20424,
-      "sha256": "60d9640b98c873a22e0f3e516626c919994e718db0f0a58eb4c28b4ca1e232e2"
+      "size": 20452,
+      "sha256": "1a4e7f91d4a60266a041974e960772f79e5df3a52f5425c3322dc3622155ec9e"
     },
     "player-audio.js": {
       "size": 1858,
@@ -215,6 +219,10 @@
     "kai-netplay-opening-view.patch": {
       "size": 7677,
       "sha256": "33da72036ff73c99868257f3b5404c138c68b57bec379d8a744c2073a67f6102"
+    },
+    "kai-netplay-rtc-disconnect.patch": {
+      "size": 661,
+      "sha256": "ff7979a9daac2434972b56d3114f8ef41253c4c89b5cc4d88205a28e4133e786"
     }
   }
 }
