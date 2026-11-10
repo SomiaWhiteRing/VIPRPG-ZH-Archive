@@ -4,17 +4,13 @@ import { getPublishedArchiveDownloadRecord } from "../app/.server/db/archive-dow
 import { createRuntime } from "../app/.server/runtime";
 import { getUserAvatarSrc } from "../lib/user-profile";
 import { json } from "../lib/http";
-import { requestJsonValue } from "../lib/ui/api-response";
 
+const directIceServers = [{ urls: "stun:stun.cloudflare.com:3478" }];
 type Identity = { name: string; avatar: string };
-type NetplayEnvironment = CloudflareEnv & {
-  NETPLAY_TURN_KEY_ID?: string;
-  NETPLAY_TURN_KEY?: string;
-};
 type Negotiation = {
   route: "pending" | "webrtc" | "websocket";
   ready: Set<WebSocket>;
-  timeout?: ReturnType<typeof setTimeout>;
+  timeout: ReturnType<typeof setTimeout>;
 };
 type Room = {
   peers: Map<WebSocket, { identity: Identity; rtc: boolean }>;
@@ -22,7 +18,7 @@ type Room = {
   rtc?: Negotiation;
 };
 
-export class NetplayRoom extends DurableObject<NetplayEnvironment> {
+export class NetplayRoom extends DurableObject<CloudflareEnv> {
   private rooms = new Map<number, Room>();
   private directory = new Map<WebSocket, Identity>();
 
@@ -30,25 +26,6 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     return Array.from(this.rooms, ([id, { peers }]) => ({
       id, players: Array.from(peers.values(), ({ identity }) => identity),
     }));
-  }
-
-  private async iceServers(): Promise<RTCIceServer[]> {
-    const stun = [{ urls: "stun:stun.cloudflare.com:3478" }];
-    const id = this.env.NETPLAY_TURN_KEY_ID;
-    const token = this.env.NETPLAY_TURN_KEY;
-    if (!id || !token) return stun;
-    try {
-      const { iceServers } = await requestJsonValue<{ iceServers?: RTCIceServer[] }>(`https://rtc.live.cloudflare.com/v1/turn/keys/${id}/credentials/generate-ice-servers`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ ttl: 3600 }),
-        signal: AbortSignal.timeout(2500),
-      });
-      if (iceServers?.length) return iceServers;
-    } catch {
-      // STUN can still establish a direct connection if the TURN API is unavailable.
-    }
-    return stun;
   }
 
   private publishDirectory() {
@@ -151,17 +128,13 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     socket.addEventListener("error", disconnect);
     if (first) {
       if (peers.get(first)?.rtc && peers.get(socket)?.rtc) {
-        const rtc: Negotiation = {
+        room.rtc = {
           route: "pending",
           ready: new Set(),
+          timeout: setTimeout(() => this.selectRoute(room, "websocket"), 8000),
         };
-        room.rtc = rtc;
-        void Promise.all([this.iceServers(), this.iceServers()]).then(([firstServers, secondServers]) => {
-          if (room.rtc !== rtc || rtc.route !== "pending") return;
-          rtc.timeout = setTimeout(() => this.selectRoute(room, "websocket"), 8000);
-          first.send("rtc:start:" + JSON.stringify({ iceServers: firstServers, offer: true }));
-          socket.send("rtc:start:" + JSON.stringify({ iceServers: secondServers, offer: false }));
-        });
+        first.send("rtc:start:" + JSON.stringify({ iceServers: directIceServers, offer: true }));
+        socket.send("rtc:start:" + JSON.stringify({ iceServers: directIceServers, offer: false }));
       } else {
         first.send("3");
         socket.send("4");
