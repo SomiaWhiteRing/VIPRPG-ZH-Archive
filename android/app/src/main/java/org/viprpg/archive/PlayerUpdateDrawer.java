@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.view.Gravity;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -51,7 +52,9 @@ final class PlayerUpdateDrawer extends LinearLayout {
         action.setMinWidth(0);
         action.setMinimumWidth(0);
         action.setPadding(dp(10), 0, dp(10), 0);
-        header.addView(action);
+        FrameLayout actionSlot = new FrameLayout(context);
+        actionSlot.addView(action, new FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT));
+        header.addView(actionSlot, new LayoutParams(LayoutParams.WRAP_CONTENT, dp(48)));
 
         meter = new LinearLayout(context);
         meter.setOrientation(VERTICAL);

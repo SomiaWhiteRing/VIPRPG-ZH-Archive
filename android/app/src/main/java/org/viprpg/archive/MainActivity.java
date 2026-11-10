@@ -80,7 +80,7 @@ public final class MainActivity extends Activity {
     private SaveTransfers saveTransfers;
     private PlayerRuntime playerRuntime;
     private PlayerRuntime.State playerState;
-    private PlayerUpdateDrawer globalPlayerUpdate, libraryPlayerUpdate;
+    private PlayerUpdateDrawer libraryPlayerUpdate;
     private final java.util.function.Consumer<PlayerRuntime.State> playerObserver = this::showPlayerUpdate;
 
     private final java.util.Set<String> loadedCovers = new java.util.HashSet<>();
@@ -155,9 +155,7 @@ public final class MainActivity extends Activity {
         offlineBrowser = findViewById(R.id.offline_browser);
         libraryPanel = findViewById(R.id.library_panel);
         playerRuntime = PlayerRuntime.get(this);
-        globalPlayerUpdate = new PlayerUpdateDrawer(this, playerRuntime::toggle);
         libraryPlayerUpdate = new PlayerUpdateDrawer(this, playerRuntime::toggle);
-        ((FrameLayout) findViewById(R.id.player_update_slot)).addView(globalPlayerUpdate, new FrameLayout.LayoutParams(-1, -2));
         nativeLibrary = new NativeLibrary(this, libraryPlayerUpdate, new NativeLibrary.Actions() {
             @Override public void refresh() { refreshLocalGames(); }
             @Override public void play(String key) { openLocalLibrary(key); }
@@ -598,7 +596,6 @@ public final class MainActivity extends Activity {
         if (playerState == null) return;
         boolean inLibrary = library && !gallery && !version;
         boolean visible = !playing && !onlinePlaying && !isContentImmersive();
-        globalPlayerUpdate.render(playerState, visible && !inLibrary);
         libraryPlayerUpdate.render(playerState, visible && inLibrary);
     }
     private void refreshLocalGames() {

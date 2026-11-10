@@ -20,6 +20,7 @@ import org.json.JSONObject;
 
 import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.SocketException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -187,7 +188,7 @@ final class PlayerRuntime {
         if (Objects.equals(previous, link)) return;
         if (link == null || link.automatic() || previous == null || !previous.network().equals(link.network())) allowMobile = false;
         if (offer != null) {
-            if (state.phase() != Phase.FAILED) proceed();
+            if (state.phase() != Phase.FAILED || link == null) proceed();
         } else if (!ready() && link != null) check();
         else if (!ready()) publish(Phase.OFFLINE, 0, 0, 0);
     }
@@ -236,14 +237,17 @@ final class PlayerRuntime {
                     publish(Phase.HIDDEN, 0, 0, 0);
                 });
             } catch (IOException error) {
-                main.post(() -> {
+                // The socket can abort before Android updates the default network.
+                main.postDelayed(() -> {
+                    Link previous = link;
+                    networkChanged();
                     busy = false;
-                    if (error instanceof Paused || waiting() != Phase.DOWNLOADING) proceed();
+                    if (error instanceof Paused || !Objects.equals(previous, link) || waiting() != Phase.DOWNLOADING) proceed();
                     else {
                         Log.w(TAG, "Could not install Player", error);
                         publish(Phase.FAILED, state.downloaded(), state.total(), 0);
                     }
-                });
+                }, error instanceof SocketException ? 1_000 : 0);
             }
         });
     }

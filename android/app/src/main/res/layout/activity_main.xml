@@ -7,10 +7,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
-        <FrameLayout
-            android:id="@+id/player_update_slot"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
         <ProgressBar
             android:id="@+id/progress"
             style="?android:attr/progressBarStyleHorizontal"
