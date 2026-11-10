@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect-ice-stats",
+  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect-ice-servers",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "4e6e60364ddeaa3c39c9f910a81aea1a040c845b0aadcf70f45c48e2aaea928c",
+  "archiveSha256": "c01cf2af5b8e072c6e2290b0ae76038d4f489928290b16a7f1b293138bcfc696",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -20,22 +20,22 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "deda01c0ad1b40e6af79eb53d76372d401efe1ae4ef59594f307f950aecae4ad",
-      "afterSha256": "943d2f28d0d39feb929e3b56665e99cb4e2ae9123999231599760b50a8c7e816"
+      "beforeSha256": "472be9aa2937539e503c899cca401dbda46a84ac18fb96acd1b0e6b732fbca9b",
+      "afterSha256": "80dcd91aa677ce78beb18ee7b53700ee0ebd1f8d6351bb8e22ca802d40543d7a"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "943d2f28d0d39feb929e3b56665e99cb4e2ae9123999231599760b50a8c7e816",
-      "afterSha256": "0321b3db35b936d81e0e30599dc39d3c4099fe1bab7c64a445a39dd56c7b4ca2"
+      "beforeSha256": "80dcd91aa677ce78beb18ee7b53700ee0ebd1f8d6351bb8e22ca802d40543d7a",
+      "afterSha256": "8e87f666de49a509bad87f267dbbce585b58411e962ddbf85d20d281b41f05cd"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/startup-regional-assets.patch",
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
-      "beforeSha256": "0321b3db35b936d81e0e30599dc39d3c4099fe1bab7c64a445a39dd56c7b4ca2",
-      "afterSha256": "bd842f09213b2be5f84cc917ebb85b991ac71510de7b6a61e7dbd1f90f4ad958"
+      "beforeSha256": "8e87f666de49a509bad87f267dbbce585b58411e962ddbf85d20d281b41f05cd",
+      "afterSha256": "3df3e912faa6ca66ed66b8eb0814231e7188344675a1bc1ce8402f8a74b938f4"
     }
   ],
   "sourcePatches": [
@@ -90,6 +90,10 @@
     {
       "path": "scripts/runtime-patches/kai-netplay-ice-stats.patch",
       "sha256": "451592b69dc98a6cfcadbdcd829201ca52e4c09bcdfaf8008dd3ade12aadb390"
+    },
+    {
+      "path": "scripts/runtime-patches/kai-netplay-ice-servers.patch",
+      "sha256": "7b7df0484a2c52cdb2ccc0511052a4ec50ce3dbc58f7f5acec8a679c1011075d"
     }
   ],
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",

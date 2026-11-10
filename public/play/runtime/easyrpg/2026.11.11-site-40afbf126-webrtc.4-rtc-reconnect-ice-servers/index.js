@@ -556,12 +556,13 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       stopMovie();
     }
   };
-  function connectNetplayRtc({port, iceServers, offer, diagnostics}) {
+  function connectNetplayRtc({port, iceServers, offer, diagnostics, relayProbeMaxMs}) {
     let peer;
     let channel;
     let open = true;
     let finishing = false;
     let finishTimer;
+    let relayReply;
     let sentDescription = false;
     let localCandidatesGathered = 0;
     let remoteCandidatesReceived = 0;
@@ -573,6 +574,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const candidateNumbers = new Map();
     const localSignals = [];
     const remoteSignals = [];
+    const relayProbeRttMs = [];
     const stunErrors = new Map();
     const elapsed = () => Math.round(performance.now() - startedAt);
     const clearSamples = () => sampleTimers.forEach(timer => clearTimeout(timer));
@@ -586,6 +588,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       open = false;
       clearSamples();
       clearTimeout(finishTimer);
+      relayReply?.(false);
       port.close();
       peer?.close();
     };
@@ -610,11 +613,18 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       if (address.includes(':')) return 'ipv6';
       return /^\d+(?:\.\d+){3}$/.test(address) ? 'ipv4' : 'unknown';
     };
+    const iceServerName = url => {
+      if (typeof url !== 'string') return;
+      const host = /^[a-z]+:([^:?]+)/i.exec(url)?.[1].toLowerCase();
+      if (host === 'stun.cloudflare.com') return 'cloudflare-stun';
+      if (host === 'stun.nextcloud.com') return 'nextcloud-stun';
+      if (host === 'turn.cloudflare.com') return 'cloudflare-turn';
+    };
     const describeCandidate = (candidate, type) => ({
       type, protocol: candidate.protocol, tcpType: candidate.tcpType,
       addressKind: addressKind(candidate.address ?? candidate.ip), port: candidate.port,
       relatedAddressKind: addressKind(candidate.relatedAddress), relatedPort: candidate.relatedPort,
-      relayProtocol: candidate.relayProtocol, priority: candidate.priority,
+      relayProtocol: candidate.relayProtocol, priority: candidate.priority, iceServer: iceServerName(candidate.url),
     });
     const rememberCandidate = (signals, candidate) => {
       if (!diagnostics || signals.length >= 32) return;
@@ -694,6 +704,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
         localSdp: describeSdp(peer?.localDescription), remoteSdp: describeSdp(peer?.remoteDescription),
         localCandidatesGathered, remoteCandidatesReceived, remoteCandidatesApplied,
         candidateCount: candidateRows.length, pairCount: pairs.length,
+        relayProbeRttMs,
         stunErrors: Array.from(stunErrors.values()).slice(0, 32),
         localSignals, remoteSignals,
         candidates: Array.from(candidates.values()), pairs: pairStats,
@@ -754,16 +765,58 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       sentDescription = true;
       for (const candidate of pendingCandidates.splice(0)) signal({candidate});
     };
+    // Probe only relayed or unclassified paths. Ordinary gameplay uses 8- or 12-byte messages.
+    const relayPing = 128;
+    const relayPong = 129;
+    const readyChannel = async () => {
+      if (relayProbeMaxMs) {
+        const pair = peer.sctp?.transport?.iceTransport?.getSelectedCandidatePair?.();
+        const localType = pair?.local?.type;
+        const remoteType = pair?.remote?.type;
+        const direct = localType && remoteType && localType !== 'relay' && remoteType !== 'relay';
+        if (!direct) {
+          for (let sample = 0; sample < 2; sample++) {
+            const start = performance.now();
+            const rtt = await new Promise(resolve => {
+              const timer = setTimeout(() => relayReply(false), relayProbeMaxMs + 150);
+              relayReply = received => {
+                clearTimeout(timer);
+                relayReply = undefined;
+                resolve(received ? Math.round(performance.now() - start) : undefined);
+              };
+              channel.send(Uint8Array.of(relayPing));
+            });
+            if (!open || finishing) return;
+            if (rtt === undefined) return fail('relay_probe_timeout');
+            relayProbeRttMs.push(rtt);
+            if (rtt > relayProbeMaxMs) return fail('relay_probe_slow');
+          }
+          mark('relay_probe_ok');
+        }
+      }
+      port.postMessage({type: 'open'});
+    };
     const attach = dataChannel => {
       channel = dataChannel;
       channel.binaryType = 'arraybuffer';
       channel.onopen = () => {
         mark('channel_open');
-        port.postMessage({type: 'open'});
+        void readyChannel().catch(() => fail('channel_error'));
       };
       channel.onmessage = ({data}) => {
-        if (data instanceof ArrayBuffer) port.postMessage({type: 'data', data}, [data]);
-        else fail('channel_error');
+        if (!(data instanceof ArrayBuffer)) return fail('channel_error');
+        if (relayProbeMaxMs && data.byteLength === 1) {
+          const command = new Uint8Array(data)[0];
+          if (command === relayPing) {
+            if (channel.readyState === 'open') channel.send(Uint8Array.of(relayPong));
+            return;
+          }
+          if (command === relayPong) {
+            relayReply?.(true);
+            return;
+          }
+        }
+        port.postMessage({type: 'data', data}, [data]);
       };
       channel.onclose = () => fail('channel_closed');
       channel.onerror = () => fail('channel_error');
@@ -784,10 +837,11 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     peer.onicecandidateerror = ({errorCode, address, port, url}) => {
       const kind = addressKind(address ?? undefined);
       const scheme = /^(stun|stuns|turn|turns):/i.exec(url)?.[1]?.toLowerCase();
-      const key = [errorCode, kind, port, scheme].join(':');
+      const iceServer = iceServerName(url);
+      const key = [errorCode, kind, port, scheme, iceServer].join(':');
       const previous = stunErrors.get(key);
       if (previous) previous.count++;
-      else stunErrors.set(key, {code: errorCode, addressKind: kind, port, scheme, count: 1});
+      else stunErrors.set(key, {code: errorCode, addressKind: kind, port, scheme, iceServer, count: 1});
       mark(errorCode === 701 ? 'stun_unreachable' : 'stun_error');
     };
     peer.oniceconnectionstatechange = () => {

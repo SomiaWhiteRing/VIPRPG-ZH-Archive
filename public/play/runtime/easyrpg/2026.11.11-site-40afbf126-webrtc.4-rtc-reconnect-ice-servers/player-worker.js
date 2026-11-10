@@ -352,7 +352,10 @@ function createNetplay(endpoint, rtcSupported) {
       const address = new URL(String(room), base);
       address.searchParams.set('guest', guest);
       if (mode) address.searchParams.set('mode', mode);
-      if (rtcSupported) address.searchParams.set('rtc', '1');
+      if (rtcSupported) {
+        address.searchParams.set('rtc', '1');
+        address.searchParams.set('rtcProbe', '1');
+      }
       address.searchParams.set('heartbeat', '1');
       const connection = socket = new WebSocket(address);
       state = 1;
@@ -399,7 +402,7 @@ function createNetplay(endpoint, rtcSupported) {
           if (port) setTimeout(() => port.close(), 500);
         } else if (typeof data === 'string' && data.startsWith('rtc:start:')) {
           const {port1, port2} = new MessageChannel();
-          const {iceServers, offer, negotiationStartedAt} = JSON.parse(data.slice('rtc:start:'.length));
+          const {iceServers, offer, negotiationStartedAt, relayProbeMaxMs} = JSON.parse(data.slice('rtc:start:'.length));
           const diagnostics = Number.isSafeInteger(negotiationStartedAt);
           closeRtc();
           rtcPort = port1;
@@ -429,7 +432,7 @@ function createNetplay(endpoint, rtcSupported) {
               if (connection.readyState === WebSocket.OPEN) connection.send('rtc:fail');
             }
           };
-          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer, diagnostics}, [port2]);
+          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer, diagnostics, relayProbeMaxMs}, [port2]);
         } else if (typeof data === 'string' && data.startsWith('rtc:signal:')) {
           try {
             rtcPort?.postMessage({type: 'signal', value: JSON.parse(data.slice('rtc:signal:'.length))});
