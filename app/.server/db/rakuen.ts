@@ -12,16 +12,16 @@ import type { WorkAudience } from "@/lib/work-visibility";
 
 const queries = {
   topic: `SELECT 'topic' AS kind,t.id,t.title,t.reply_count AS count,
-    MAX(t.created_at,t.last_activity_at) AS activeAt,'public' AS audience FROM forum_public_topics t`,
+    MAX(t.created_at,t.last_activity_at) AS activeAt,'public' AS audience,t.saged FROM forum_public_topics t`,
   work: `SELECT 'work' AS kind,w.id,COALESCE(w.chinese_title,w.original_title) AS title,
-    COUNT(*) AS count,MAX(c.created_at) AS activeAt,w.audience
+    COUNT(*) AS count,MAX(c.created_at) AS activeAt,w.audience,0 AS saged
     FROM comments c JOIN member_works w ON w.id=c.work_id GROUP BY w.id`,
   creator: `SELECT 'creator' AS kind,cr.id,cr.name AS title,
-    COUNT(*) AS count,MAX(c.created_at) AS activeAt,'public' AS audience
+    COUNT(*) AS count,MAX(c.created_at) AS activeAt,'public' AS audience,0 AS saged
     FROM comments c JOIN creators cr ON cr.id=c.creator_id
     WHERE cr.public_at IS NOT NULL GROUP BY cr.id`,
   character: `SELECT 'character' AS kind,ch.id,ch.primary_name AS title,
-    COUNT(*) AS count,MAX(c.created_at) AS activeAt,'public' AS audience
+    COUNT(*) AS count,MAX(c.created_at) AS activeAt,'public' AS audience,0 AS saged
     FROM comments c JOIN characters ch ON ch.id=c.character_id GROUP BY ch.id`,
 };
 
@@ -68,6 +68,7 @@ export async function listRakuenPages(
     Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1,
     Math.max(1, Math.ceil(total / pageSize)),
   );
+  const order = "page.saged ASC,page.activeAt DESC,page.kind ASC,page.id DESC";
   const rows = await database
     .prepare(`SELECT page.*,
       (SELECT ma.blob_sha256 FROM work_media_assets wma
@@ -80,14 +81,14 @@ export async function listRakuenPages(
       CASE WHEN u.status='deleted' THEN '账户已注销'
         ELSE COALESCE(u.display_name,page.title) END AS imageName,
       ${CHARACTER_PORTRAIT_COLUMNS}
-      FROM (SELECT * FROM (${query})
-        ORDER BY activeAt DESC,kind ASC,id DESC LIMIT ? OFFSET ?) page
+      FROM (SELECT * FROM (${query}) page
+        ORDER BY ${order} LIMIT ? OFFSET ?) page
       LEFT JOIN forum_topics t ON page.kind='topic' AND t.id=page.id
       LEFT JOIN users u ON u.id=t.user_id
       LEFT JOIN creators cr ON page.kind='creator' AND cr.id=page.id
       LEFT JOIN characters ch ON page.kind='character' AND ch.id=page.id
       ${DEFAULT_CHARACTER_PORTRAIT_JOINS} AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}
-      ORDER BY page.activeAt DESC,page.kind ASC,page.id DESC`)
+      ORDER BY ${order}`)
     .bind(pageSize, (page - 1) * pageSize)
     .all<Row>();
   const tags = await topicTags(runtime, rows.results

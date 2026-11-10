@@ -321,27 +321,25 @@ export async function indexedForumSearch(
   };
 }
 
-export async function homeTopics(
-  ctx: ForumRuntime,
-  { sageLast = false }: { sageLast?: boolean } = {},
-): Promise<HomeForumTopic[]> {
-  const order = "ORDER BY t.last_activity_at DESC,t.id DESC";
+const topicActivityOrder = "t.last_activity_at DESC,t.id DESC";
+
+export async function homeTopics(ctx: ForumRuntime): Promise<HomeForumTopic[]> {
   // Pick the small set of topics before looking up display names and tags.
-  const query = (where: string, limit: number) => ctx.db.prepare(`SELECT t.id,t.title,t.reply_count AS replies,
+  const query = (saged: 0 | 1, limit: number) => ctx.db.prepare(`SELECT t.id,t.title,t.reply_count AS replies,
     CASE WHEN u.status='deleted' THEN '账户已注销' ELSE u.display_name END AS authorName,
     (SELECT g.name FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id
      WHERE x.topic_id=t.id AND g.status<>'hidden' ORDER BY x.position LIMIT 1) AS tagName
     FROM (
       SELECT t.id,t.title,t.reply_count,t.user_id,t.last_activity_at
-      FROM forum_public_topics t ${where}
-      ${order} LIMIT ${limit}
+      FROM forum_public_topics t WHERE t.saged=${saged}
+      ORDER BY ${topicActivityOrder} LIMIT ${limit}
     ) t JOIN users u ON u.id=t.user_id
-    ${order}`)
+    ORDER BY ${topicActivityOrder}`)
     .all<HomeForumTopic>();
   const limit = 5;
-  const { results } = await query(sageLast ? "WHERE t.saged=0" : "", limit);
-  if (!sageLast || results.length === limit) return results;
-  const tail = await query("WHERE t.saged=1", limit - results.length);
+  const { results } = await query(0, limit);
+  if (results.length === limit) return results;
+  const tail = await query(1, limit - results.length);
   return [...results, ...tail.results];
 }
 
@@ -350,7 +348,7 @@ export async function publicTopicList(
   input: { tags: number[]; featured: boolean; page: number },
 ) {
   if (input.tags.length > 5) throw new HttpError(400, "最多选择 5 个 TAG。");
-  const sort = input.featured ? "featured_at" : "last_activity_at";
+  const normalOrder = input.featured ? "t.featured_at DESC,t.id DESC" : topicActivityOrder;
   const source = `FROM forum_public_topics t WHERE
     ${input.featured ? "t.featured_at IS NOT NULL" : "1"}
     AND (SELECT COUNT(*) FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id WHERE x.topic_id=t.id AND g.status<>'hidden' AND x.tag_id IN(SELECT value FROM json_each(?)))=?`;
@@ -372,12 +370,12 @@ export async function publicTopicList(
   if (normalLimit)
     idQueries.push(ctx.db.prepare(
       `SELECT t.id ${source} AND t.saged=0 AND t.pinned_at IS NULL
-       ORDER BY t.${sort} DESC,t.id DESC LIMIT ? OFFSET ?`,
+       ORDER BY ${normalOrder} LIMIT ? OFFSET ?`,
     ).bind(...bindings, normalLimit, offset));
   if (sageLimit)
     idQueries.push(ctx.db.prepare(
       `SELECT t.id ${source} AND t.saged=1
-       ORDER BY t.last_activity_at DESC,t.id DESC LIMIT ? OFFSET ?`,
+       ORDER BY ${topicActivityOrder} LIMIT ? OFFSET ?`,
     ).bind(...bindings, sageLimit, Math.max(0, offset - normal)));
   const [first, second] = idQueries;
   const rows = second
