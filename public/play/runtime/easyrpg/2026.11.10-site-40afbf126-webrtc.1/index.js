@@ -15,6 +15,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   const masterVolume = context.createGain();
   masterVolume.connect(context.destination);
   const worker = new Worker(new URL('player-worker.js', base));
+  let closeNetplayRtc = () => {};
   const audioWorker = new Worker(new URL('player-audio-worker.js', base));
   let audioReadyResolve, audioReadyReject;
   const audioReady = new Promise((resolve, reject) => { audioReadyResolve = resolve; audioReadyReject = reject; });
@@ -555,6 +556,79 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       stopMovie();
     }
   };
+  function connectNetplayRtc({port, iceServers, offer}) {
+    let peer;
+    let channel;
+    let open = true;
+    let sentDescription = false;
+    const pendingCandidates = [];
+    const close = () => {
+      if (!open) return;
+      open = false;
+      port.close();
+      peer?.close();
+    };
+    const fail = () => {
+      if (!open) return;
+      port.postMessage({type: 'closed'});
+      close();
+    };
+    try {
+      peer = new RTCPeerConnection({iceServers});
+    } catch {
+      fail();
+      return close;
+    }
+    const signal = value => port.postMessage({type: 'signal', value});
+    const describe = async () => {
+      await peer.setLocalDescription();
+      if (!open) return;
+      signal({description: peer.localDescription.toJSON()});
+      sentDescription = true;
+      for (const candidate of pendingCandidates.splice(0)) signal({candidate});
+    };
+    const attach = dataChannel => {
+      channel = dataChannel;
+      channel.binaryType = 'arraybuffer';
+      channel.onopen = () => port.postMessage({type: 'open'});
+      channel.onmessage = ({data}) => port.postMessage({type: 'data', data}, [data]);
+      channel.onclose = channel.onerror = fail;
+    };
+    peer.onicecandidate = ({candidate}) => {
+      if (!open || !candidate) return;
+      if (sentDescription) signal({candidate: candidate.toJSON()});
+      else pendingCandidates.push(candidate.toJSON());
+    };
+    peer.onconnectionstatechange = () => {
+      if (peer.connectionState === 'failed') fail();
+    };
+    peer.ondatachannel = ({channel}) => attach(channel);
+    let signaling = Promise.resolve();
+    port.onmessage = ({data}) => {
+      if (data.type === 'close') {
+        close();
+      } else if (data.type === 'data') {
+        if (channel?.readyState === 'open') channel.send(data.data);
+        else fail();
+      } else if (data.type === 'signal') {
+        signaling = signaling.then(async () => {
+          if (!open) return;
+          if (data.value.description) {
+            await peer.setRemoteDescription(data.value.description);
+            if (data.value.description.type === 'offer') await describe();
+          } else {
+            await peer.addIceCandidate(data.value.candidate);
+          }
+        }).catch(fail);
+      }
+    };
+    if (offer) {
+      attach(peer.createDataChannel('easyrpg-netplay', {ordered: true}));
+      signaling = describe().catch(fail);
+    }
+    return close;
+  }
+
   worker.onmessage = ({data}) => {
     if (data.type === 'ready') {
       keys = data.keys; width = data.width; height = data.height;
@@ -629,6 +703,9 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
         const url = new URL(data.url);
         if (url.protocol === 'https:' || url.protocol === 'http:') window.open(url.href, '_blank', 'noopener,noreferrer');
       } catch { /* Invalid game-supplied URL. */ }
+    } else if (data.type === 'netplay-rtc') {
+      closeNetplayRtc();
+      closeNetplayRtc = connectNetplayRtc(data);
     } else if (data.type === 'movie-open') {
       void openMovie(data);
     } else if (data.type === 'movie-stop' && data.id === movieId) stopMovie();
@@ -841,6 +918,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   }
   startStartupTimer();
   const shutdown = async () => {
+    closeNetplayRtc();
     nameInput?.finish(null);
     fileOutputConfirmation?.cancel();
     closeConsoleWindow();
@@ -873,6 +951,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, engineName, packages: options.packages,
       workId: options.workId, sampleRate: context.sampleRate, wasmModule, runtimeData, arguments: options.arguments || [],
       netplayEndpoint: options.netplayEndpoint,
+      netplayRtc: typeof RTCPeerConnection === 'function',
       joystickAvailable: joystickAvailable(),
       systemNameInput,
       audioPort: controlChannel.port2, audioCapabilities}, [offscreen, controlChannel.port2]);

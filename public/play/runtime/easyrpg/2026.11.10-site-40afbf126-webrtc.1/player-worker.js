@@ -147,7 +147,7 @@ function createRenderer(canvas) {
   };
 }
 
-function createNetplay(endpoint) {
+function createNetplay(endpoint, rtcSupported) {
   if (!endpoint) return;
   const base = new URL(endpoint);
   if (base.protocol === 'https:') base.protocol = 'wss:';
@@ -159,6 +159,7 @@ function createNetplay(endpoint) {
   const directoryHttp = new URL(directory);
   directoryHttp.protocol = base.protocol === 'wss:' ? 'https:' : 'http:';
   let socket, state = 0;
+  let rtcPort, rtcSelected = false;
   let subscription, retry = 0, fallback = false, nextPoll = 0, polling = false;
   let rooms, identity, online = -1;
   let probe = 0, probeSent = 0, latency = -1, pendingProbe;
@@ -210,18 +211,29 @@ function createNetplay(endpoint) {
     latency = -1;
     pendingProbe = undefined;
   };
+  const closeRtc = () => {
+    rtcPort?.postMessage({type: 'close'});
+    rtcPort?.close();
+    rtcPort = undefined;
+    rtcSelected = false;
+  };
   const close = () => {
     const old = socket;
     socket = undefined;
     clear();
     state = 0;
+    closeRtc();
     old?.close();
   };
   const send = (...values) => {
     if (state < 3 || socket.readyState !== WebSocket.OPEN) return;
     const bytes = new DataView(new ArrayBuffer(values.length * 4));
     values.forEach((value, index) => bytes.setInt32(index * 4, value, true));
-    socket.send(bytes.buffer);
+    if (rtcSelected && values.length > 1) {
+      rtcPort.postMessage({type: 'data', data: bytes.buffer}, [bytes.buffer]);
+    } else {
+      socket.send(bytes.buffer);
+    }
   };
   const echoProbe = () => {
     if (pendingProbe === undefined) return;
@@ -291,6 +303,7 @@ function createNetplay(endpoint) {
       const address = new URL(String(room), base);
       address.searchParams.set('guest', guest);
       if (mode) address.searchParams.set('mode', mode);
+      if (rtcSupported) address.searchParams.set('rtc', '1');
       const connection = socket = new WebSocket(address);
       state = 1;
       connection.binaryType = 'arraybuffer';
@@ -300,15 +313,8 @@ function createNetplay(endpoint) {
         state = -1;
       };
       connection.onclose = connection.onerror = ended;
-      connection.onmessage = ({data}) => {
-        if (socket !== connection) return;
-        if (data === '2' || data === '3' || data === '4') {
-          if (data === '2') clear();
-          state = Number(data);
-          nextPoll = 0;
-        } else if (data instanceof ArrayBuffer && data.byteLength === 4 && inbox.length < 256) {
-          inbox.push(new DataView(data).getInt32(0, true));
-        } else if (data instanceof ArrayBuffer && data.byteLength === 8) {
+      const receiveMatchData = data => {
+        if (data instanceof ArrayBuffer && data.byteLength === 8) {
           const packet = new DataView(data), kind = packet.getInt32(0, true), number = packet.getInt32(4, true);
           if (kind === 0) pendingProbe = number;
           else if (kind === 1 && number === probe) latency = Math.trunc(performance.now() - probeSent);
@@ -317,6 +323,47 @@ function createNetplay(endpoint) {
           frames.push([packet.getInt32(0, true), packet.getInt32(4, true), packet.getInt32(8, true)]);
         } else {
           ended();
+        }
+      };
+      connection.onmessage = ({data}) => {
+        if (socket !== connection) return;
+        if (data === '2' || data === '3' || data === '4') {
+          if (data === '2') {
+            clear();
+            closeRtc();
+          }
+          state = Number(data);
+          nextPoll = 0;
+        } else if (data === 'rtc:webrtc') {
+          rtcSelected = true;
+        } else if (data === 'rtc:websocket') {
+          closeRtc();
+        } else if (typeof data === 'string' && data.startsWith('rtc:start:')) {
+          const {port1, port2} = new MessageChannel();
+          const {iceServers, offer} = JSON.parse(data.slice('rtc:start:'.length));
+          closeRtc();
+          rtcPort = port1;
+          port1.onmessage = ({data}) => {
+            if (rtcPort !== port1 || socket !== connection) return;
+            if (data.type === 'data') receiveMatchData(data.data);
+            else if (data.type === 'signal') connection.send('rtc:signal:' + JSON.stringify(data.value));
+            else if (data.type === 'open') connection.send('rtc:ready');
+            else if (data.type === 'closed') {
+              if (rtcSelected) ended();
+              else connection.send('rtc:fail');
+            }
+          };
+          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer}, [port2]);
+        } else if (typeof data === 'string' && data.startsWith('rtc:signal:')) {
+          try {
+            rtcPort?.postMessage({type: 'signal', value: JSON.parse(data.slice('rtc:signal:'.length))});
+          } catch {
+            connection.send('rtc:fail');
+          }
+        } else if (data instanceof ArrayBuffer && data.byteLength === 4 && inbox.length < 256) {
+          inbox.push(new DataView(data).getInt32(0, true));
+        } else if (!rtcSelected) {
+          receiveMatchData(data);
         }
       };
     },
@@ -347,7 +394,7 @@ self.onmessage = async ({data}) => {
         canvas: data.canvas, workId: data.workId, sampleRate: data.sampleRate,
         audioCapabilities: data.audioCapabilities,
         gamePackages: data.packages, gameArguments: data.arguments, keyNames: {},
-        netplay: createNetplay(data.netplayEndpoint),
+        netplay: createNetplay(data.netplayEndpoint, data.netplayRtc),
         audioCommand: command => {
           if (command.op === 'config' && command.soundfont?.startsWith('/') && engine && command.soundfont !== forwardedSoundfont) {
             try {

@@ -6,17 +6,51 @@ import { getUserAvatarSrc } from "../lib/user-profile";
 import { json } from "../lib/http";
 
 type Identity = { name: string; avatar: string };
+type NetplayEnvironment = CloudflareEnv & {
+  NETPLAY_TURN_KEY_ID?: string;
+  NETPLAY_TURN_KEY?: string;
+};
+type Negotiation = {
+  route: "pending" | "webrtc" | "websocket";
+  ready: Set<WebSocket>;
+  timeout: ReturnType<typeof setTimeout>;
+};
 type Room = {
-  peers: Map<WebSocket, Identity>;
+  peers: Map<WebSocket, { identity: Identity; rtc: boolean }>;
   ready?: { socket: WebSocket; packet: ArrayBuffer };
+  rtc?: Negotiation;
 };
 
-export class NetplayRoom extends DurableObject<CloudflareEnv> {
+export class NetplayRoom extends DurableObject<NetplayEnvironment> {
   private rooms = new Map<number, Room>();
   private directory = new Map<WebSocket, Identity>();
 
   private list() {
-    return Array.from(this.rooms, ([id, { peers }]) => ({ id, players: Array.from(peers.values()) }));
+    return Array.from(this.rooms, ([id, { peers }]) => ({
+      id, players: Array.from(peers.values(), ({ identity }) => identity),
+    }));
+  }
+
+  private async iceServers(): Promise<RTCIceServer[]> {
+    const stun = [{ urls: "stun:stun.cloudflare.com:3478" }];
+    const id = this.env.NETPLAY_TURN_KEY_ID;
+    const token = this.env.NETPLAY_TURN_KEY;
+    if (!id || !token) return stun;
+    try {
+      const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${id}/credentials/generate-ice-servers`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ ttl: 3600 }),
+        signal: AbortSignal.timeout(2500),
+      });
+      if (response.ok) {
+        const { iceServers } = await response.json<{ iceServers?: RTCIceServer[] }>();
+        if (iceServers?.length) return iceServers;
+      }
+    } catch {
+      // STUN can still establish a direct connection if the TURN API is unavailable.
+    }
+    return stun;
   }
 
   private publishDirectory() {
@@ -55,7 +89,7 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     const existing = this.rooms.get(id);
     if (existing?.peers.size === 2 || (mode === "create" && existing)) return new Response(null, { status: 409 });
     if (mode === "join" && !existing) return new Response(null, { status: 404 });
-    const room: Room = existing ?? { peers: new Map<WebSocket, Identity>() };
+    const room: Room = existing ?? { peers: new Map() };
     const { peers } = room;
     const first = peers.keys().next().value;
     if (first && first.readyState !== WebSocket.OPEN) return new Response(null, { status: 409 });
@@ -65,11 +99,29 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     socket.binaryType = "arraybuffer";
     socket.accept();
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Netplay-Identity")!)) as Identity;
-    peers.set(socket, identity);
+    peers.set(socket, { identity, rtc: url.searchParams.get("rtc") === "1" });
     this.rooms.set(id, room);
+    const pairSeats = () => {
+      first!.send("3");
+      socket.send("4");
+    };
     socket.addEventListener("message", ({ data }) => {
-      if (!peers.has(socket) || !(data instanceof ArrayBuffer) ||
-          (data.byteLength !== 4 && data.byteLength !== 8 && data.byteLength !== 12)) return;
+      if (!peers.has(socket)) return;
+      const rtc = room.rtc;
+      if (typeof data === "string") {
+        if (rtc?.route !== "pending") return;
+        if (data === "rtc:ready") {
+          rtc.ready.add(socket);
+          if (rtc.ready.size === 2) this.selectRoute(room, "webrtc");
+        } else if (data === "rtc:fail") {
+          this.selectRoute(room, "websocket");
+        } else if (data.length <= 24576 && data.startsWith("rtc:signal:")) {
+          for (const peer of peers.keys()) if (peer !== socket && peer.readyState === WebSocket.OPEN) peer.send(data);
+        }
+        return;
+      }
+      if (!(data instanceof ArrayBuffer) || (data.byteLength !== 4 && data.byteLength !== 8 && data.byteLength !== 12) ||
+          rtc?.route === "pending" || (rtc?.route === "webrtc" && data.byteLength !== 4)) return;
       if (data.byteLength === 12 && new DataView(data).getInt32(4, true) === -1) {
         if (peers.size !== 2) return;
         const ready = room.ready;
@@ -91,6 +143,8 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     const disconnect = () => {
       if (!peers.delete(socket)) return;
       room.ready = undefined;
+      if (room.rtc) clearTimeout(room.rtc.timeout);
+      room.rtc = undefined;
       if (peers.size === 0) this.rooms.delete(id);
       else {
         const remaining = peers.keys().next().value!;
@@ -102,13 +156,38 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
     socket.addEventListener("close", disconnect);
     socket.addEventListener("error", disconnect);
     if (first) {
-      first.send("3");
-      socket.send("4");
+      if (peers.get(first)?.rtc && peers.get(socket)?.rtc) {
+        const rtc: Negotiation = {
+          route: "pending",
+          ready: new Set(),
+          timeout: setTimeout(() => this.selectRoute(room, "websocket"), 6000),
+        };
+        room.rtc = rtc;
+        void this.iceServers().then(iceServers => {
+          if (room.rtc !== rtc || rtc.route !== "pending") return;
+          first.send("rtc:start:" + JSON.stringify({ iceServers, offer: true }));
+          socket.send("rtc:start:" + JSON.stringify({ iceServers, offer: false }));
+        });
+      } else {
+        pairSeats();
+      }
     } else {
       socket.send("2");
     }
     this.publishDirectory();
     return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  private selectRoute(room: Room, route: "webrtc" | "websocket") {
+    const rtc = room.rtc;
+    const [first, second] = room.peers.keys();
+    if (rtc?.route !== "pending" || first?.readyState !== WebSocket.OPEN || second?.readyState !== WebSocket.OPEN) return;
+    clearTimeout(rtc.timeout);
+    rtc.route = route;
+    first.send("rtc:" + route);
+    second.send("rtc:" + route);
+    first.send("3");
+    second.send("4");
   }
 }
 
