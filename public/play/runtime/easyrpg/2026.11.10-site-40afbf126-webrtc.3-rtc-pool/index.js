@@ -954,7 +954,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, engineName, packages: options.packages,
       workId: options.workId, sampleRate: context.sampleRate, wasmModule, runtimeData, arguments: options.arguments || [],
       netplayEndpoint: options.netplayEndpoint,
-      netplayRtc: typeof RTCPeerConnection === 'function',
+      netplayRtc: typeof RTCPeerConnection === 'function' &&
+        typeof RTCPeerConnection.prototype.createDataChannel === 'function',
       joystickAvailable: joystickAvailable(),
       systemNameInput,
       audioPort: controlChannel.port2, audioCapabilities}, [offscreen, controlChannel.port2]);

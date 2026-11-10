@@ -149,7 +149,7 @@ function createRenderer(canvas) {
 
 function createNetplay(endpoint, rtcSupported) {
   if (!endpoint) return;
-  const base = new URL(endpoint);
+  const base = rtcSupported ? new URL('rtc/', endpoint) : new URL(endpoint);
   if (base.protocol === 'https:') base.protocol = 'wss:';
   else if (base.protocol === 'http:') base.protocol = 'ws:';
   else if (base.protocol !== 'wss:' && base.protocol !== 'ws:') return;

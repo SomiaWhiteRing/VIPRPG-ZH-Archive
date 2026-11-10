@@ -162,11 +162,13 @@ export class NetplayRoom extends DurableObject<CloudflareEnv> {
 export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEnv, ctx: ExecutionContext) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/netplay/v1/")) return;
-  const route = /^\/api\/netplay\/v1\/([1-9]\d*)\/(rooms|[1-9]\d{0,5})$/.exec(url.pathname);
+  const route = /^\/api\/netplay\/v1\/([1-9]\d*)\/(rtc\/)?(rooms|[1-9]\d{0,5})$/.exec(url.pathname);
   if (!route || !env.NETPLAY_ROOM) return new Response(null, { status: 404 });
-  const archiveVersionId = Number(route[1]);
+  const [, archive, rtc, target] = route;
+  const archiveVersionId = Number(archive);
   if (!Number.isSafeInteger(archiveVersionId)) return new Response(null, { status: 404 });
-  const directory = route[2] === "rooms";
+  const directory = target === "rooms";
+  if (rtc && !directory && url.searchParams.get("rtc") !== "1") return new Response(null, { status: 404 });
   const websocket = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
   if (request.method !== "GET" || (!directory && !websocket)) {
     return new Response(null, { status: 426 });
@@ -176,9 +178,10 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
   if (url.origin !== runtime.origin || (websocket && origin !== runtime.origin) || (origin !== null && origin !== runtime.origin)) {
     return new Response(null, { status: 403 });
   }
-  const archive = await getPublishedArchiveDownloadRecord(runtime, archiveVersionId);
-  if (!archive?.netplayService) return new Response(null, { status: 404 });
-  const rooms = env.NETPLAY_ROOM.getByName(`v1/${archiveVersionId}`);
+  const record = await getPublishedArchiveDownloadRecord(runtime, archiveVersionId);
+  if (!record?.netplayService) return new Response(null, { status: 404 });
+  const pool = rtc ? `v1/${archiveVersionId}/rtc` : `v1/${archiveVersionId}`;
+  const rooms = env.NETPLAY_ROOM.getByName(pool);
   if (directory && !websocket) return rooms.fetch(request);
 
   const user = await getCurrentUser(runtime);

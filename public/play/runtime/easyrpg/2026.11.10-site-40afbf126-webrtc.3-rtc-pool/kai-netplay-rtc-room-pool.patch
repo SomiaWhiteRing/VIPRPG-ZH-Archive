@@ -1,0 +1,19 @@
+diff --git a/resources/emscripten/player-host.js b/resources/emscripten/player-host.js
+index 1f657d256..af8812d62 100644
+--- a/resources/emscripten/player-host.js
++++ b/resources/emscripten/player-host.js
+@@ -818,3 +818,4 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+       netplayEndpoint: options.netplayEndpoint,
+-      netplayRtc: typeof RTCPeerConnection === 'function',
++      netplayRtc: typeof RTCPeerConnection === 'function' &&
++        typeof RTCPeerConnection.prototype.createDataChannel === 'function',
+       joystickAvailable: joystickAvailable(),
+diff --git a/resources/emscripten/player-worker.js b/resources/emscripten/player-worker.js
+index d3372e2e3..45ea2bafb 100644
+--- a/resources/emscripten/player-worker.js
++++ b/resources/emscripten/player-worker.js
+@@ -151,3 +151,3 @@ function createNetplay(endpoint, rtcSupported) {
+   if (!endpoint) return;
+-  const base = new URL(endpoint);
++  const base = rtcSupported ? new URL('rtc/', endpoint) : new URL(endpoint);
+   if (base.protocol === 'https:') base.protocol = 'wss:';
