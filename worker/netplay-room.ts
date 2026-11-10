@@ -8,7 +8,8 @@ import { requestJsonValue } from "../lib/ui/api-response";
 import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
 
 const directIceServers = [{ urls: ["stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"] }];
-const relayUrls = ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"];
+// Staging Chrome nominated the slower UDP relay when both were offered.
+const relayUrl = "turns:turn.cloudflare.com:443?transport=tcp";
 const relayProbeMaxMs = 300;
 const heartbeatIntervalMs = 5_000;
 const heartbeatHideMs = 10_000;
@@ -77,7 +78,7 @@ async function createTurnServer(id: string, token: string): Promise<RTCIceServer
       typeof server.username === "string" && server.username &&
       typeof server.credential === "string" && server.credential
     );
-    if (credentials) return { urls: relayUrls, username: credentials.username, credential: credentials.credential };
+    if (credentials) return { urls: relayUrl, username: credentials.username, credential: credentials.credential };
   } catch {
     // If credential issuance is unavailable, both seats can still attempt direct ICE.
   }
