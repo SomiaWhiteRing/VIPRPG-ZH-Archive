@@ -163,6 +163,7 @@ function createNetplay(endpoint, rtcSupported) {
   let subscription, retry = 0, fallback = false, nextPoll = 0, polling = false;
   let rooms, identity, online = -1;
   let probe = 0, probeSent = 0, latency = -1, pendingProbe;
+  let sentMatch = 0, sentFrame = -1;
   const avatarPaths = new Set(), avatars = new Map();
   const inbox = [], frames = [];
   const isIdentity = person => typeof person?.name === 'string' && typeof person.avatar === 'string';
@@ -210,6 +211,8 @@ function createNetplay(endpoint, rtcSupported) {
     frames.length = 0;
     latency = -1;
     pendingProbe = undefined;
+    sentMatch = 0;
+    sentFrame = -1;
   };
   const closeRtc = () => {
     rtcPort?.postMessage({type: 'close'});
@@ -229,6 +232,7 @@ function createNetplay(endpoint, rtcSupported) {
     if (state < 3 || socket.readyState !== WebSocket.OPEN) return;
     const bytes = new DataView(new ArrayBuffer(values.length * 4));
     values.forEach((value, index) => bytes.setInt32(index * 4, value, true));
+    if (values.length === 3) [sentMatch, sentFrame] = values;
     if (rtcSelected && values.length > 1) {
       rtcPort?.postMessage({type: 'data', data: bytes.buffer}, [bytes.buffer]);
     } else {
@@ -370,7 +374,12 @@ function createNetplay(endpoint, rtcSupported) {
       };
     },
     receive: () => inbox.shift(),
-    receiveFrame: () => frames.shift(),
+    receiveFrame() {
+      const next = frames[0];
+      // A faster peer can reach the rollback window before this browser's next tick.
+      if (next?.[0] === sentMatch && next[1] > sentFrame + 1) return;
+      return frames.shift();
+    },
   };
 }
 

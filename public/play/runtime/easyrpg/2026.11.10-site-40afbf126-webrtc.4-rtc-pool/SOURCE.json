@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "version": "2026.11.10-site-40afbf126-webrtc.3-rtc-pool",
-  "build": "40afbf126-web-transport-webrtc.3-rtc-pool",
+  "version": "2026.11.10-site-40afbf126-webrtc.4-rtc-pool",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool",
   "artifact": "kai-web-rtc-room-pool.zip",
-  "archiveSha256": "c0d307f6f97be0e6e9e0910279a06d0812f52052453253edfeb19833fa9eebd0",
+  "archiveSha256": "4e2f4996117c619336b4d73d7fb22636bde01bbe760ba8de296a5cd655d5a412",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/3398943413d0b99076498a3997911b74e54898a2",
   "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/3398943413d0b99076498a3997911b74e54898a2/COPYING",
   "sourceState": "patched-commit",
@@ -31,7 +31,7 @@
     },
     {
       "path": "scripts/runtime-patches/kai-netplay-rtc-room-pool.patch",
-      "sha256": "673ca5f5519e82b8d4abc8ae79248b52d95c335b790c01354be98319245878d4"
+      "sha256": "a831427927e97652456376582b94f0d8affcd315817003bf7d633d43f88d1ea8"
     }
   ],
   "sourceSnapshot": null,
@@ -109,8 +109,8 @@
       "sha256": "1ad3124b9ae0fb3e3201c559766ce4101881b5af2bd85571c5e2e2ebf22992e7"
     },
     "player-worker.js": {
-      "size": 19950,
-      "sha256": "65659647a22939ccc35ed90423c824eb6dd7d991f63990ea9b79f9901b49c835"
+      "size": 20291,
+      "sha256": "24097860c187df26885c34d6f9879a582bb2fc4be87c840336c642c91ffa7633"
     },
     "player-audio.js": {
       "size": 1858,
@@ -197,8 +197,8 @@
       "sha256": "a13324043596ca4f1f1dea38b534738da5dd2cd386ec550660eef9c1b98dceea"
     },
     "kai-netplay-rtc-room-pool.patch": {
-      "size": 1076,
-      "sha256": "673ca5f5519e82b8d4abc8ae79248b52d95c335b790c01354be98319245878d4"
+      "size": 2102,
+      "sha256": "a831427927e97652456376582b94f0d8affcd315817003bf7d633d43f88d1ea8"
     }
   }
 }

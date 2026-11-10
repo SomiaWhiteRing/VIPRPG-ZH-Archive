@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.10-site-40afbf126-webrtc.3-rtc-pool",
+  "version": "2026.11.10-site-40afbf126-webrtc.4-rtc-pool",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "build": "40afbf126-web-transport-webrtc.3-rtc-pool",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "c0d307f6f97be0e6e9e0910279a06d0812f52052453253edfeb19833fa9eebd0",
+  "archiveSha256": "4e2f4996117c619336b4d73d7fb22636bde01bbe760ba8de296a5cd655d5a412",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -61,7 +61,7 @@
     },
     {
       "path": "scripts/runtime-patches/kai-netplay-rtc-room-pool.patch",
-      "sha256": "673ca5f5519e82b8d4abc8ae79248b52d95c335b790c01354be98319245878d4"
+      "sha256": "a831427927e97652456376582b94f0d8affcd315817003bf7d633d43f88d1ea8"
     }
   ],
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",

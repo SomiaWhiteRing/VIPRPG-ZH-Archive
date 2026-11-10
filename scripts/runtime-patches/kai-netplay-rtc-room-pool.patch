@@ -9,7 +9,7 @@ index 1f657d256..af8812d62 100644
 +        typeof RTCPeerConnection.prototype.createDataChannel === 'function',
        joystickAvailable: joystickAvailable(),
 diff --git a/resources/emscripten/player-worker.js b/resources/emscripten/player-worker.js
-index d3372e2e3..45ea2bafb 100644
+index d3372e2e3..60da1817d 100644
 --- a/resources/emscripten/player-worker.js
 +++ b/resources/emscripten/player-worker.js
 @@ -151,3 +151,3 @@ function createNetplay(endpoint, rtcSupported) {
@@ -17,3 +17,26 @@ index d3372e2e3..45ea2bafb 100644
 -  const base = new URL(endpoint);
 +  const base = rtcSupported ? new URL('rtc/', endpoint) : new URL(endpoint);
    if (base.protocol === 'https:') base.protocol = 'wss:';
+@@ -165,2 +165,3 @@ function createNetplay(endpoint, rtcSupported) {
+   let probe = 0, probeSent = 0, latency = -1, pendingProbe;
++  let sentMatch = 0, sentFrame = -1;
+   const avatarPaths = new Set(), avatars = new Map();
+@@ -212,2 +213,4 @@ function createNetplay(endpoint, rtcSupported) {
+     pendingProbe = undefined;
++    sentMatch = 0;
++    sentFrame = -1;
+   };
+@@ -231,2 +234,3 @@ function createNetplay(endpoint, rtcSupported) {
+     values.forEach((value, index) => bytes.setInt32(index * 4, value, true));
++    if (values.length === 3) [sentMatch, sentFrame] = values;
+     if (rtcSelected && values.length > 1) {
+@@ -372,3 +376,8 @@ function createNetplay(endpoint, rtcSupported) {
+     receive: () => inbox.shift(),
+-    receiveFrame: () => frames.shift(),
++    receiveFrame() {
++      const next = frames[0];
++      // A faster peer can reach the rollback window before this browser's next tick.
++      if (next?.[0] === sentMatch && next[1] > sentFrame + 1) return;
++      return frames.shift();
++    },
+   };
