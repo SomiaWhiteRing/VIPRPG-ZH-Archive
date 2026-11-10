@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "version": "2026.11.10-site-40afbf126-jspi-shared",
-  "build": "local-docker-40afbf126e7ce6ef25455294a062560bd0a8668d",
-  "artifact": "EasyRPG-Player-Kai-Web-2026.11.10-40afbf126.zip",
-  "archiveSha256": "a8bf1bc4ac39eda2ba96eb746f5b1328be39a0c5112386e9ee683456da37c72b",
+  "version": "2026.11.10-site-40afbf126-webrtc.4-rtc-pool",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool",
+  "artifact": "kai-web-rtc-room-pool.zip",
+  "archiveSha256": "4e2f4996117c619336b4d73d7fb22636bde01bbe760ba8de296a5cd655d5a412",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/3398943413d0b99076498a3997911b74e54898a2",
   "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/3398943413d0b99076498a3997911b74e54898a2/COPYING",
   "sourceState": "patched-commit",
@@ -24,6 +24,14 @@
     {
       "path": "scripts/runtime-patches/startup-shared-assets.patch",
       "sha256": "d1ca14d3acb5eb18ad491ce15683722ab92d676dbbd8f81de5c6af69bab14407"
+    },
+    {
+      "path": "scripts/runtime-patches/kai-webrtc-transport.patch",
+      "sha256": "a13324043596ca4f1f1dea38b534738da5dd2cd386ec550660eef9c1b98dceea"
+    },
+    {
+      "path": "scripts/runtime-patches/kai-netplay-rtc-room-pool.patch",
+      "sha256": "a831427927e97652456376582b94f0d8affcd315817003bf7d633d43f88d1ea8"
     }
   ],
   "sourceSnapshot": null,
@@ -57,28 +65,28 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "a66e0f2a40046244014b85f16d44c9f6934bb92272cd3279c113372e4a8f10c3",
-      "afterSha256": "21c355ad7caecd92fb484505ab3566f864fd38bd0c31ab3ce5770f03361c6e5a"
+      "beforeSha256": "ab0de13c8c3fd817e42e41f080a5ecc9c121d20e54d6b3352864d16d0bb1dee6",
+      "afterSha256": "16f0eded17c820822991276a7bcba36a6ab0fb11b1e383f908d9f423f3dcae14"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "21c355ad7caecd92fb484505ab3566f864fd38bd0c31ab3ce5770f03361c6e5a",
-      "afterSha256": "95833c15da53bd1e2cc55d8c5a24130a889c7cdbd075f8ca33129ebc006c774e"
+      "beforeSha256": "16f0eded17c820822991276a7bcba36a6ab0fb11b1e383f908d9f423f3dcae14",
+      "afterSha256": "c88ec69674ce9d6d17ed480de8eec2e0f9cbb4c2f96e5d50458a0ccda95533f8"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/startup-regional-assets.patch",
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
-      "beforeSha256": "95833c15da53bd1e2cc55d8c5a24130a889c7cdbd075f8ca33129ebc006c774e",
-      "afterSha256": "6c68025f66f7e4681133f0a322edccdc8ff29f1ea37a09a3fc14518afd718875"
+      "beforeSha256": "c88ec69674ce9d6d17ed480de8eec2e0f9cbb4c2f96e5d50458a0ccda95533f8",
+      "afterSha256": "0c196b31e1f4fb382c7a0c7c04b56a8f77325ce8030410703d162011700dddbc"
     }
   ],
   "files": {
     "index.js": {
-      "size": 45698,
-      "sha256": "6c68025f66f7e4681133f0a322edccdc8ff29f1ea37a09a3fc14518afd718875"
+      "size": 48500,
+      "sha256": "0c196b31e1f4fb382c7a0c7c04b56a8f77325ce8030410703d162011700dddbc"
     },
     "easyrpg-player.js": {
       "size": 128884,
@@ -101,8 +109,8 @@
       "sha256": "1ad3124b9ae0fb3e3201c559766ce4101881b5af2bd85571c5e2e2ebf22992e7"
     },
     "player-worker.js": {
-      "size": 17851,
-      "sha256": "838ec79aaf3d8f36b39775bfcfb236db9af0fed75f7a67aacb53157125e8e25e"
+      "size": 20291,
+      "sha256": "24097860c187df26885c34d6f9879a582bb2fc4be87c840336c642c91ffa7633"
     },
     "player-audio.js": {
       "size": 1858,
@@ -183,6 +191,14 @@
     "startup-shared-assets.patch": {
       "size": 4925,
       "sha256": "d1ca14d3acb5eb18ad491ce15683722ab92d676dbbd8f81de5c6af69bab14407"
+    },
+    "kai-webrtc-transport.patch": {
+      "size": 8781,
+      "sha256": "a13324043596ca4f1f1dea38b534738da5dd2cd386ec550660eef9c1b98dceea"
+    },
+    "kai-netplay-rtc-room-pool.patch": {
+      "size": 2102,
+      "sha256": "a831427927e97652456376582b94f0d8affcd315817003bf7d633d43f88d1ea8"
     }
   }
 }
