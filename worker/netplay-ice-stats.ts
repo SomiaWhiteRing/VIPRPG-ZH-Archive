@@ -30,6 +30,10 @@ function flag(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
 }
 
+function probeRtt(value: unknown) {
+  return Array.isArray(value) ? value.slice(0, 2).map(ms => integer(ms, 10_000)).filter(ms => ms !== undefined) : undefined;
+}
+
 function rows(value: unknown, limit: number) {
   return Array.isArray(value) ? value.slice(0, limit).filter(isRecord) : [];
 }
@@ -100,9 +104,8 @@ export function parseIceStats(payload: string) {
     iceRole: choice(value.iceRole, ["unknown", "controlling", "controlled"]),
     localSdp: description(value.localSdp),
     remoteSdp: description(value.remoteSdp),
-    relayProbeRttMs: Array.isArray(value.relayProbeRttMs)
-      ? value.relayProbeRttMs.slice(0, 2).map(ms => integer(ms, 10_000)).filter(ms => ms !== undefined)
-      : undefined,
+    relayProbeRttMs: probeRtt(value.relayProbeRttMs),
+    socketProbeRttMs: probeRtt(value.socketProbeRttMs),
     ...counts(value, ["localCandidatesGathered", "remoteCandidatesReceived", "remoteCandidatesApplied", "candidateCount", "pairCount"]),
     stunErrors: rows(value.stunErrors, 32).map(row => ({
       code: integer(row.code, 999), count: integer(row.count), scheme: choice(row.scheme, stunSchemes),

@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect-ice-servers",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers",
-  "artifact": "Kai-Web-2026.11.11-ice-servers-site.zip",
-  "archiveSha256": "c01cf2af5b8e072c6e2290b0ae76038d4f489928290b16a7f1b293138bcfc696",
+  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect-direct-first",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers-direct-first",
+  "artifact": "Kai-Web-2026.11.11-direct-first-site.zip",
+  "archiveSha256": "1e31082e6b59feac7649055efa3b4181b94f09ba14b713d440b3560434ab1fc6",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/3398943413d0b99076498a3997911b74e54898a2",
   "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/3398943413d0b99076498a3997911b74e54898a2/COPYING",
   "sourceState": "patched-commit",
@@ -64,6 +64,10 @@
     {
       "path": "scripts/runtime-patches/kai-netplay-ice-servers.patch",
       "sha256": "7b7df0484a2c52cdb2ccc0511052a4ec50ce3dbc58f7f5acec8a679c1011075d"
+    },
+    {
+      "path": "scripts/runtime-patches/kai-netplay-direct-first.patch",
+      "sha256": "b20fdd8035d86e985b011e80693b99e3541a4c94967361e8b4e8e9178efd8989"
     }
   ],
   "sourceSnapshot": null,
@@ -97,28 +101,28 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "472be9aa2937539e503c899cca401dbda46a84ac18fb96acd1b0e6b732fbca9b",
-      "afterSha256": "80dcd91aa677ce78beb18ee7b53700ee0ebd1f8d6351bb8e22ca802d40543d7a"
+      "beforeSha256": "fbc44cc6aadb62fb4277bd2c6ccb6ba867a3e9e497431d4da54fd275ce541215",
+      "afterSha256": "c8a735a4d6511ab9635e818f2f45151973053ccb8486bc80e1a294419518d539"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "80dcd91aa677ce78beb18ee7b53700ee0ebd1f8d6351bb8e22ca802d40543d7a",
-      "afterSha256": "8e87f666de49a509bad87f267dbbce585b58411e962ddbf85d20d281b41f05cd"
+      "beforeSha256": "c8a735a4d6511ab9635e818f2f45151973053ccb8486bc80e1a294419518d539",
+      "afterSha256": "f0b6f59664be85ead85334fb9b54d312f2d709a639a52be42ed203b6b17ace48"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/startup-regional-assets.patch",
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
-      "beforeSha256": "8e87f666de49a509bad87f267dbbce585b58411e962ddbf85d20d281b41f05cd",
-      "afterSha256": "3df3e912faa6ca66ed66b8eb0814231e7188344675a1bc1ce8402f8a74b938f4"
+      "beforeSha256": "f0b6f59664be85ead85334fb9b54d312f2d709a639a52be42ed203b6b17ace48",
+      "afterSha256": "12774469846a46f5858ac0dd196c5719299943e9bad5a2280322f8091d7784de"
     }
   ],
   "files": {
     "index.js": {
-      "size": 61999,
-      "sha256": "3df3e912faa6ca66ed66b8eb0814231e7188344675a1bc1ce8402f8a74b938f4"
+      "size": 62431,
+      "sha256": "12774469846a46f5858ac0dd196c5719299943e9bad5a2280322f8091d7784de"
     },
     "easyrpg-player.js": {
       "size": 128884,
@@ -141,8 +145,8 @@
       "sha256": "75d4586bc6be9c66680fa7699ad47e0e11ef15097accdebcac28eff2cb3de70f"
     },
     "player-worker.js": {
-      "size": 23353,
-      "sha256": "182acd0f1e6cacf87669c1d3c9e39d5e121a8a7213decb2480948a316691842d"
+      "size": 23925,
+      "sha256": "b84eacb44e3ff1ac542953afeac3d08367d9c36c1bb7756c8c28f49a7e2d6956"
     },
     "player-audio.js": {
       "size": 1858,
@@ -263,6 +267,10 @@
     "kai-netplay-ice-servers.patch": {
       "size": 8816,
       "sha256": "7b7df0484a2c52cdb2ccc0511052a4ec50ce3dbc58f7f5acec8a679c1011075d"
+    },
+    "kai-netplay-direct-first.patch": {
+      "size": 12259,
+      "sha256": "b20fdd8035d86e985b011e80693b99e3541a4c94967361e8b4e8e9178efd8989"
     }
   }
 }

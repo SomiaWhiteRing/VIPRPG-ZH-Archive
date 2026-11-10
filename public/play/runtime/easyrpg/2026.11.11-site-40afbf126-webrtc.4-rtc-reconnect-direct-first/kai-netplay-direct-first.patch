@@ -1,0 +1,241 @@
+diff --git a/resources/emscripten/player-host.js b/resources/emscripten/player-host.js
+index 49a873379..a9b5c2d25 100644
+--- a/resources/emscripten/player-host.js
++++ b/resources/emscripten/player-host.js
+@@ -511,13 +511,12 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+       stopMovie();
+     }
+   };
+-  function connectNetplayRtc({port, iceServers, offer, diagnostics, relayProbeMaxMs}) {
++  function connectNetplayRtc({port, iceServers, offer, diagnostics, relayOnly}) {
+     let peer;
+     let channel;
+     let open = true;
+     let finishing = false;
+     let finishTimer;
+-    let relayReply;
+     let sentDescription = false;
+     let localCandidatesGathered = 0;
+     let remoteCandidatesReceived = 0;
+@@ -530,6 +529,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+     const localSignals = [];
+     const remoteSignals = [];
+     const relayProbeRttMs = [];
++    const socketProbeRttMs = [];
++    const probeReplies = new Map();
+     const stunErrors = new Map();
+     const elapsed = () => Math.round(performance.now() - startedAt);
+     const clearSamples = () => sampleTimers.forEach(timer => clearTimeout(timer));
+@@ -543,7 +544,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+       open = false;
+       clearSamples();
+       clearTimeout(finishTimer);
+-      relayReply?.(false);
++      for (const complete of probeReplies.values()) complete(false);
+       port.close();
+       peer?.close();
+     };
+@@ -659,7 +660,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+         localSdp: describeSdp(peer?.localDescription), remoteSdp: describeSdp(peer?.remoteDescription),
+         localCandidatesGathered, remoteCandidatesReceived, remoteCandidatesApplied,
+         candidateCount: candidateRows.length, pairCount: pairs.length,
+-        relayProbeRttMs,
++        relayProbeRttMs, socketProbeRttMs,
+         stunErrors: Array.from(stunErrors.values()).slice(0, 32),
+         localSignals, remoteSignals,
+         candidates: Array.from(candidates.values()), pairs: pairStats,
+@@ -705,7 +706,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+       if (open && (final || value !== 'unavailable')) port.postMessage({type: 'ice-pair', value, final});
+     };
+     try {
+-      peer = new RTCPeerConnection({iceServers});
++      peer = new RTCPeerConnection({iceServers, iceTransportPolicy: relayOnly ? 'relay' : 'all'});
+     } catch {
+       fail('peer_create_failed');
+       return close;
+@@ -720,34 +721,38 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+       sentDescription = true;
+       for (const candidate of pendingCandidates.splice(0)) signal({candidate});
+     };
+-    // Probe only relayed or unclassified paths. Ordinary gameplay uses 8- or 12-byte messages.
++    // Probe the same two peers over both transports. Gameplay uses 8- or 12-byte messages.
+     const relayPing = 128;
+     const relayPong = 129;
++    const probeDeadlineMs = 600;
++    const probe = (route, sample) => new Promise(resolve => {
++      const started = performance.now();
++      const key = route + sample;
++      const complete = received => {
++        clearTimeout(timer);
++        probeReplies.delete(key);
++        resolve(received ? Math.round(performance.now() - started) : undefined);
++      };
++      const timer = setTimeout(() => complete(false), probeDeadlineMs);
++      probeReplies.set(key, complete);
++      if (route === 'relay') channel.send(Uint8Array.of(relayPing, sample));
++      else port.postMessage({type: 'socket-probe', sample});
++    });
+     const readyChannel = async () => {
+-      if (relayProbeMaxMs) {
+-        const pair = peer.sctp?.transport?.iceTransport?.getSelectedCandidatePair?.();
+-        const localType = pair?.local?.type;
+-        const remoteType = pair?.remote?.type;
+-        const direct = localType && remoteType && localType !== 'relay' && remoteType !== 'relay';
+-        if (!direct) {
+-          for (let sample = 0; sample < 2; sample++) {
+-            const start = performance.now();
+-            const rtt = await new Promise(resolve => {
+-              const timer = setTimeout(() => relayReply(false), relayProbeMaxMs + 150);
+-              relayReply = received => {
+-                clearTimeout(timer);
+-                relayReply = undefined;
+-                resolve(received ? Math.round(performance.now() - start) : undefined);
+-              };
+-              channel.send(Uint8Array.of(relayPing));
+-            });
+-            if (!open || finishing) return;
+-            if (rtt === undefined) return fail('relay_probe_timeout');
+-            relayProbeRttMs.push(rtt);
+-            if (rtt > relayProbeMaxMs) return fail('relay_probe_slow');
+-          }
+-          mark('relay_probe_ok');
++      if (relayOnly) {
++        let relayTotal = 0;
++        let socketTotal = 0;
++        for (let sample = 0; sample < 2; sample++) {
++          const [relayMs, socketMs] = await Promise.all([probe('relay', sample), probe('socket', sample)]);
++          if (!open || finishing) return;
++          if (socketMs !== undefined) socketProbeRttMs.push(socketMs);
++          if (relayMs === undefined) return fail('relay_probe_timeout');
++          relayProbeRttMs.push(relayMs);
++          relayTotal += relayMs;
++          socketTotal += socketMs ?? probeDeadlineMs;
+         }
++        if (relayTotal >= socketTotal) return fail('relay_probe_slow');
++        mark('relay_probe_ok');
+       }
+       port.postMessage({type: 'open'});
+     };
+@@ -760,14 +765,14 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+       };
+       channel.onmessage = ({data}) => {
+         if (!(data instanceof ArrayBuffer)) return fail('channel_error');
+-        if (relayProbeMaxMs && data.byteLength === 1) {
+-          const command = new Uint8Array(data)[0];
++        if (relayOnly && data.byteLength === 2) {
++          const [command, sample] = new Uint8Array(data);
+           if (command === relayPing) {
+-            if (channel.readyState === 'open') channel.send(Uint8Array.of(relayPong));
++            if (channel.readyState === 'open') channel.send(Uint8Array.of(relayPong, sample));
+             return;
+           }
+           if (command === relayPong) {
+-            relayReply?.(true);
++            probeReplies.get('relay' + sample)?.(true);
+             return;
+           }
+         }
+@@ -816,6 +821,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+         finishStats('fallback');
+       } else if (data.type === 'ice-pair') {
+         void reportIcePair(true);
++      } else if (data.type === 'socket-probe-pong') {
++        probeReplies.get('socket' + data.sample)?.(true);
+       } else if (data.type === 'data') {
+         if (channel?.readyState === 'open') channel.send(data.data);
+         else fail('channel_closed');
+diff --git a/resources/emscripten/player-worker.js b/resources/emscripten/player-worker.js
+index 6f0abb642..7871469f3 100644
+--- a/resources/emscripten/player-worker.js
++++ b/resources/emscripten/player-worker.js
+@@ -159,7 +159,7 @@ function createNetplay(endpoint, rtcSupported) {
+   const directoryHttp = new URL(directory);
+   directoryHttp.protocol = base.protocol === 'wss:' ? 'https:' : 'http:';
+   let socket, state = 0;
+-  let rtcPort, rtcSelected = false;
++  let rtcPort, rtcRound, rtcSelected = false;
+   const directoryTimeout = 5000;
+   let subscription, directoryDeadline = 0, nextProbe = 0, retry = 0;
+   let fallback = false, nextPoll = 0, poll;
+@@ -243,6 +243,7 @@ function createNetplay(endpoint, rtcSupported) {
+     rtcPort?.postMessage({type: 'close'});
+     rtcPort?.close();
+     rtcPort = undefined;
++    rtcRound = undefined;
+     rtcSelected = false;
+   };
+   const close = () => {
+@@ -354,10 +355,11 @@ function createNetplay(endpoint, rtcSupported) {
+       if (mode) address.searchParams.set('mode', mode);
+       if (rtcSupported) {
+         address.searchParams.set('rtc', '1');
+-        address.searchParams.set('rtcProbe', '1');
++        address.searchParams.set('rtcProbe', '2');
+       }
+       address.searchParams.set('heartbeat', '1');
+       const connection = socket = new WebSocket(address);
++      const sendRtc = value => connection.send(rtcRound === undefined ? 'rtc:' + value : `rtc:round:${rtcRound}:${value}`);
+       state = 1;
+       connection.binaryType = 'arraybuffer';
+       const ended = () => {
+@@ -397,15 +399,21 @@ function createNetplay(endpoint, rtcSupported) {
+         } else if (data === 'rtc:websocket') {
+           const port = rtcPort;
+           rtcPort = undefined;
++          rtcRound = undefined;
+           rtcSelected = false;
+           port?.postMessage({type: 'fallback'});
+           if (port) setTimeout(() => port.close(), 500);
++        } else if (typeof data === 'string' && /^rtc:probe:(ping|pong):[01]$/.test(data)) {
++          const [, , kind, sample] = data.split(':');
++          if (kind === 'ping') sendRtc('probe:pong:' + sample);
++          else rtcPort?.postMessage({type: 'socket-probe-pong', sample: Number(sample)});
+         } else if (typeof data === 'string' && data.startsWith('rtc:start:')) {
+           const {port1, port2} = new MessageChannel();
+-          const {iceServers, offer, negotiationStartedAt, relayProbeMaxMs} = JSON.parse(data.slice('rtc:start:'.length));
++          const {iceServers, offer, negotiationStartedAt, scoped, relayOnly} = JSON.parse(data.slice('rtc:start:'.length));
+           const diagnostics = Number.isSafeInteger(negotiationStartedAt);
+           closeRtc();
+           rtcPort = port1;
++          rtcRound = diagnostics && scoped ? negotiationStartedAt : undefined;
+           port1.onmessage = ({data}) => {
+             if (socket !== connection) return;
+             if (data.type === 'ice-stats') {
+@@ -417,28 +425,29 @@ function createNetplay(endpoint, rtcSupported) {
+             }
+             if (rtcPort !== port1) return;
+             if (data.type === 'data') receiveMatchData(data.data);
+-            else if (data.type === 'signal') connection.send('rtc:signal:' + JSON.stringify(data.value));
++            else if (data.type === 'signal') sendRtc('signal:' + JSON.stringify(data.value));
+             else if (data.type === 'diagnostic' && connection.readyState === WebSocket.OPEN) {
+-              connection.send('rtc:diag:' + data.milestone);
++              sendRtc('diag:' + data.milestone);
+             }
+             else if (data.type === 'ice-pair' && data.final === rtcSelected && connection.readyState === WebSocket.OPEN) {
+-              connection.send(`rtc:ice-pair:${data.final ? 'webrtc' : 'pending'}:${data.value}`);
++              sendRtc(`ice-pair:${data.final ? 'webrtc' : 'pending'}:${data.value}`);
+             }
+-            else if (data.type === 'open') connection.send('rtc:ready');
++            else if (data.type === 'socket-probe') sendRtc('probe:ping:' + data.sample);
++            else if (data.type === 'open') sendRtc('ready');
+             else if (data.type === 'closed') {
+               rtcPort = undefined;
+               if (data.diagnosticsPending) setTimeout(() => port1.close(), 500);
+               else port1.close();
+-              if (connection.readyState === WebSocket.OPEN) connection.send('rtc:fail');
++              if (connection.readyState === WebSocket.OPEN) sendRtc('fail');
+             }
+           };
+-          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer, diagnostics, relayProbeMaxMs}, [port2]);
++          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer, diagnostics, relayOnly}, [port2]);
+         } else if (typeof data === 'string' && data.startsWith('rtc:signal:')) {
+           try {
+             rtcPort?.postMessage({type: 'signal', value: JSON.parse(data.slice('rtc:signal:'.length))});
+           } catch {
+-            connection.send('rtc:diag:invalid_signal');
+-            connection.send('rtc:fail');
++            sendRtc('diag:invalid_signal');
++            sendRtc('fail');
+           }
+         } else if (data instanceof ArrayBuffer && data.byteLength === 4 && inbox.length < 256) {
+           inbox.push(new DataView(data).getInt32(0, true));

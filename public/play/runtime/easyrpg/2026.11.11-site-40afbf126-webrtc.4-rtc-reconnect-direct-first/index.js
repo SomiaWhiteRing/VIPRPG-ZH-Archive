@@ -556,13 +556,12 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       stopMovie();
     }
   };
-  function connectNetplayRtc({port, iceServers, offer, diagnostics, relayProbeMaxMs}) {
+  function connectNetplayRtc({port, iceServers, offer, diagnostics, relayOnly}) {
     let peer;
     let channel;
     let open = true;
     let finishing = false;
     let finishTimer;
-    let relayReply;
     let sentDescription = false;
     let localCandidatesGathered = 0;
     let remoteCandidatesReceived = 0;
@@ -575,6 +574,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const localSignals = [];
     const remoteSignals = [];
     const relayProbeRttMs = [];
+    const socketProbeRttMs = [];
+    const probeReplies = new Map();
     const stunErrors = new Map();
     const elapsed = () => Math.round(performance.now() - startedAt);
     const clearSamples = () => sampleTimers.forEach(timer => clearTimeout(timer));
@@ -588,7 +589,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       open = false;
       clearSamples();
       clearTimeout(finishTimer);
-      relayReply?.(false);
+      for (const complete of probeReplies.values()) complete(false);
       port.close();
       peer?.close();
     };
@@ -704,7 +705,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
         localSdp: describeSdp(peer?.localDescription), remoteSdp: describeSdp(peer?.remoteDescription),
         localCandidatesGathered, remoteCandidatesReceived, remoteCandidatesApplied,
         candidateCount: candidateRows.length, pairCount: pairs.length,
-        relayProbeRttMs,
+        relayProbeRttMs, socketProbeRttMs,
         stunErrors: Array.from(stunErrors.values()).slice(0, 32),
         localSignals, remoteSignals,
         candidates: Array.from(candidates.values()), pairs: pairStats,
@@ -750,7 +751,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       if (open && (final || value !== 'unavailable')) port.postMessage({type: 'ice-pair', value, final});
     };
     try {
-      peer = new RTCPeerConnection({iceServers});
+      peer = new RTCPeerConnection({iceServers, iceTransportPolicy: relayOnly ? 'relay' : 'all'});
     } catch {
       fail('peer_create_failed');
       return close;
@@ -765,34 +766,38 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       sentDescription = true;
       for (const candidate of pendingCandidates.splice(0)) signal({candidate});
     };
-    // Probe only relayed or unclassified paths. Ordinary gameplay uses 8- or 12-byte messages.
+    // Probe the same two peers over both transports. Gameplay uses 8- or 12-byte messages.
     const relayPing = 128;
     const relayPong = 129;
+    const probeDeadlineMs = 600;
+    const probe = (route, sample) => new Promise(resolve => {
+      const started = performance.now();
+      const key = route + sample;
+      const complete = received => {
+        clearTimeout(timer);
+        probeReplies.delete(key);
+        resolve(received ? Math.round(performance.now() - started) : undefined);
+      };
+      const timer = setTimeout(() => complete(false), probeDeadlineMs);
+      probeReplies.set(key, complete);
+      if (route === 'relay') channel.send(Uint8Array.of(relayPing, sample));
+      else port.postMessage({type: 'socket-probe', sample});
+    });
     const readyChannel = async () => {
-      if (relayProbeMaxMs) {
-        const pair = peer.sctp?.transport?.iceTransport?.getSelectedCandidatePair?.();
-        const localType = pair?.local?.type;
-        const remoteType = pair?.remote?.type;
-        const direct = localType && remoteType && localType !== 'relay' && remoteType !== 'relay';
-        if (!direct) {
-          for (let sample = 0; sample < 2; sample++) {
-            const start = performance.now();
-            const rtt = await new Promise(resolve => {
-              const timer = setTimeout(() => relayReply(false), relayProbeMaxMs + 150);
-              relayReply = received => {
-                clearTimeout(timer);
-                relayReply = undefined;
-                resolve(received ? Math.round(performance.now() - start) : undefined);
-              };
-              channel.send(Uint8Array.of(relayPing));
-            });
-            if (!open || finishing) return;
-            if (rtt === undefined) return fail('relay_probe_timeout');
-            relayProbeRttMs.push(rtt);
-            if (rtt > relayProbeMaxMs) return fail('relay_probe_slow');
-          }
-          mark('relay_probe_ok');
+      if (relayOnly) {
+        let relayTotal = 0;
+        let socketTotal = 0;
+        for (let sample = 0; sample < 2; sample++) {
+          const [relayMs, socketMs] = await Promise.all([probe('relay', sample), probe('socket', sample)]);
+          if (!open || finishing) return;
+          if (socketMs !== undefined) socketProbeRttMs.push(socketMs);
+          if (relayMs === undefined) return fail('relay_probe_timeout');
+          relayProbeRttMs.push(relayMs);
+          relayTotal += relayMs;
+          socketTotal += socketMs ?? probeDeadlineMs;
         }
+        if (relayTotal >= socketTotal) return fail('relay_probe_slow');
+        mark('relay_probe_ok');
       }
       port.postMessage({type: 'open'});
     };
@@ -805,14 +810,14 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       };
       channel.onmessage = ({data}) => {
         if (!(data instanceof ArrayBuffer)) return fail('channel_error');
-        if (relayProbeMaxMs && data.byteLength === 1) {
-          const command = new Uint8Array(data)[0];
+        if (relayOnly && data.byteLength === 2) {
+          const [command, sample] = new Uint8Array(data);
           if (command === relayPing) {
-            if (channel.readyState === 'open') channel.send(Uint8Array.of(relayPong));
+            if (channel.readyState === 'open') channel.send(Uint8Array.of(relayPong, sample));
             return;
           }
           if (command === relayPong) {
-            relayReply?.(true);
+            probeReplies.get('relay' + sample)?.(true);
             return;
           }
         }
@@ -861,6 +866,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
         finishStats('fallback');
       } else if (data.type === 'ice-pair') {
         void reportIcePair(true);
+      } else if (data.type === 'socket-probe-pong') {
+        probeReplies.get('socket' + data.sample)?.(true);
       } else if (data.type === 'data') {
         if (channel?.readyState === 'open') channel.send(data.data);
         else fail('channel_closed');

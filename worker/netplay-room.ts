@@ -10,12 +10,12 @@ import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
 const directIceServers = [{ urls: ["stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"] }];
 // Staging Chrome nominated the slower UDP relay when both were offered.
 const relayUrl = "turns:turn.cloudflare.com:443?transport=tcp";
-const relayProbeMaxMs = 300;
 const heartbeatIntervalMs = 5_000;
 const heartbeatHideMs = 10_000;
 const heartbeatTimeoutMs = 15_000;
 const iceCandidateTypeSet = new Set<string>(iceCandidateTypes);
 const iceStatsPrefix = "rtc:ice-stats:";
+const rtcRoundPrefix = "rtc:round:";
 const rtcMilestones = new Set([
   "peer_created", "peer_create_failed", "peer_connection_failed", "channel_create_failed",
   "local_description", "local_description_failed", "remote_description", "remote_description_failed", "remote_candidate_failed",
@@ -26,6 +26,7 @@ const rtcMilestones = new Set([
 ]);
 type Identity = { name: string; avatar: string };
 type DisconnectReason = "socket_close" | "socket_error" | "heartbeat_timeout" | "rtc_failed";
+type RtcReason = "connected" | "client_failure" | "timeout" | "turn_unavailable";
 type Heartbeat = {
   lastPong: number;
   probe: ReturnType<typeof setInterval>;
@@ -44,6 +45,7 @@ type Negotiation = {
   ready: Set<WebSocket>;
   progress: Map<WebSocket, RtcProgress>;
   startedAt: number;
+  scoped: boolean;
   turn: "disabled" | "preparing" | "enabled" | "unavailable";
   turnSetupMs?: number;
   timeout: ReturnType<typeof setTimeout>;
@@ -219,7 +221,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       if (room.hidden) this.refreshVisibility(room, now);
     };
     peers.set(socket, {
-      identity, rtc: url.searchParams.get("rtc") === "1", relayProbe: url.searchParams.get("rtcProbe") === "1", heartbeat,
+      identity, rtc: url.searchParams.get("rtc") === "1", relayProbe: url.searchParams.get("rtcProbe") === "2", heartbeat,
     });
     this.rooms.set(id, room);
     renewHeartbeat();
@@ -229,6 +231,13 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       if (typeof data === "string") {
         if (data === "room:pong" && heartbeat) {
           renewHeartbeat();
+          return;
+        }
+        if (data.startsWith(rtcRoundPrefix)) {
+          const end = data.indexOf(":", rtcRoundPrefix.length);
+          if (!rtc?.scoped || end === -1 || data.slice(rtcRoundPrefix.length, end) !== String(rtc.startedAt)) return;
+          data = "rtc:" + data.slice(end + 1);
+        } else if (rtc?.scoped && data.startsWith("rtc:") && !data.startsWith(iceStatsPrefix)) {
           return;
         }
         if (data === "rtc:fail" && rtc?.route === "webrtc") {
@@ -275,7 +284,9 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
         }
         if (rtc?.route !== "pending") return;
         const progress = rtc.progress.get(socket)!;
-        if (data === "rtc:ready") {
+        if (rtc.turn === "enabled" && /^rtc:probe:(ping|pong):[01]$/.test(data)) {
+          for (const peer of peers.keys()) if (peer !== socket && peer.readyState === WebSocket.OPEN) peer.send(data);
+        } else if (data === "rtc:ready") {
           rtc.ready.add(socket);
           if (rtc.ready.size === 2) this.selectRoute(room, "connected");
         } else if (data === "rtc:fail") {
@@ -319,42 +330,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     socket.addEventListener("error", () => disconnect("socket_error"));
     if (first) {
       if (peers.get(first)?.rtc && peers.get(socket)?.rtc) {
-        const startedAt = Date.now();
-        const rtc: Negotiation = room.rtc = {
-          route: "pending",
-          ready: new Set(),
-          progress: new Map([
-            [first, { milestones: new Map(), signals: 0, oversizedSignals: 0 }],
-            [socket, { milestones: new Map(), signals: 0, oversizedSignals: 0 }],
-          ]),
-          startedAt,
-          turn: "disabled",
-          timeout: setTimeout(() => this.selectRoute(room, "timeout"), 8000),
-        };
-        const start = (firstTurn?: RTCIceServer, secondTurn?: RTCIceServer) => {
-          if (room.rtc !== rtc || rtc.route !== "pending") return;
-          if (first.readyState !== WebSocket.OPEN || socket.readyState !== WebSocket.OPEN) return;
-          const send = (peer: WebSocket, offer: boolean, turn?: RTCIceServer) => {
-            const iceServers = turn ? [...directIceServers, turn] : directIceServers;
-            peer.send("rtc:start:" + JSON.stringify({
-              iceServers, offer, negotiationStartedAt: startedAt, relayProbeMaxMs: turn ? relayProbeMaxMs : undefined,
-            }));
-          };
-          if (rtc.turn === "preparing") {
-            rtc.turn = firstTurn && secondTurn ? "enabled" : "unavailable";
-            rtc.turnSetupMs = Date.now() - startedAt;
-          }
-          send(first, true, rtc.turn === "enabled" ? firstTurn : undefined);
-          send(socket, false, rtc.turn === "enabled" ? secondTurn : undefined);
-        };
-        const { NETPLAY_TURN_KEY_ID: id, NETPLAY_TURN_KEY: token } = this.env;
-        if (id && token && peers.get(first)?.relayProbe && peers.get(socket)?.relayProbe) {
-          rtc.turn = "preparing";
-          void Promise.all([createTurnServer(id, token), createTurnServer(id, token)])
-            .then(([firstTurn, secondTurn]) => start(firstTurn, secondTurn));
-        } else {
-          start();
-        }
+        this.startNegotiation(room, first, socket);
       } else {
         console.log({ event: "netplay_route", ...room.details, route: "websocket", reason: "rtc_unavailable" });
         first.send("3");
@@ -367,15 +343,68 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
-  private selectRoute(room: Room, reason: "connected" | "client_failure" | "timeout", reporter?: WebSocket) {
+  private startNegotiation(room: Room, first: WebSocket, second: WebSocket, turn?: { id: string; token: string }) {
+    const startedAt = Math.max(Date.now(), (room.rtc?.startedAt ?? 0) + 1);
+    const scoped = Boolean(room.peers.get(first)?.relayProbe && room.peers.get(second)?.relayProbe);
+    const rtc: Negotiation = room.rtc = {
+      route: "pending",
+      ready: new Set(),
+      progress: new Map([first, second].map(peer => [peer, { milestones: new Map(), signals: 0, oversizedSignals: 0 }])),
+      startedAt,
+      scoped,
+      turn: turn ? "preparing" : "disabled",
+      timeout: setTimeout(() => this.selectRoute(room, "timeout"), turn ? 5000 : 8000),
+    };
+    const send = (peer: WebSocket, offer: boolean, relay?: RTCIceServer) => {
+      peer.send("rtc:start:" + JSON.stringify({
+        iceServers: relay ? [relay] : directIceServers, offer, negotiationStartedAt: startedAt, scoped,
+        relayOnly: Boolean(relay),
+      }));
+    };
+    if (!turn) {
+      send(first, true);
+      send(second, false);
+      return;
+    }
+    void Promise.all([createTurnServer(turn.id, turn.token), createTurnServer(turn.id, turn.token)]).then(([a, b]) => {
+      if (room.rtc !== rtc || rtc.route !== "pending") return;
+      if (first.readyState !== WebSocket.OPEN || second.readyState !== WebSocket.OPEN) return;
+      rtc.turnSetupMs = Date.now() - startedAt;
+      if (!a || !b) {
+        rtc.turn = "unavailable";
+        this.selectRoute(room, "turn_unavailable");
+        return;
+      }
+      rtc.turn = "enabled";
+      send(first, true, a);
+      send(second, false, b);
+    });
+  }
+
+  private selectRoute(room: Room, reason: RtcReason, reporter?: WebSocket) {
     const rtc = room.rtc;
     const [first, second] = room.peers.keys();
     if (rtc?.route !== "pending" || first?.readyState !== WebSocket.OPEN || second?.readyState !== WebSocket.OPEN) return;
     clearTimeout(rtc.timeout);
+    const { NETPLAY_TURN_KEY_ID: id, NETPLAY_TURN_KEY: token } = this.env;
+    if (reason !== "connected" && rtc.turn === "disabled" && rtc.scoped && id && token) {
+      this.logNegotiation(room, rtc, "netplay_direct_attempt", reason, reporter);
+      this.startNegotiation(room, first, second, { id, token });
+      return;
+    }
     const route = reason === "connected" ? "webrtc" : "websocket";
     rtc.route = route;
+    this.logNegotiation(room, rtc, "netplay_route", reason, reporter);
+    first.send("rtc:" + route);
+    second.send("rtc:" + route);
+    first.send("3");
+    second.send("4");
+  }
+
+  private logNegotiation(room: Room, rtc: Negotiation, event: string, reason: RtcReason, reporter?: WebSocket) {
+    const [first, second] = room.peers.keys();
     console.log({
-      event: "netplay_route", ...room.details, route, reason, negotiationStartedAt: rtc.startedAt,
+      event, ...room.details, route: rtc.route, reason, negotiationStartedAt: rtc.startedAt,
       negotiationMs: Date.now() - rtc.startedAt,
       turn: rtc.turn, turnSetupMs: rtc.turnSetupMs,
       failedSeat: reporter === first ? 1 : reporter === second ? 2 : undefined,
@@ -389,10 +418,6 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
         icePair: progress.icePair,
       })),
     });
-    first.send("rtc:" + route);
-    second.send("rtc:" + route);
-    first.send("3");
-    second.send("4");
   }
 }
 

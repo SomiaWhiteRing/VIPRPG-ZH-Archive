@@ -159,7 +159,7 @@ function createNetplay(endpoint, rtcSupported) {
   const directoryHttp = new URL(directory);
   directoryHttp.protocol = base.protocol === 'wss:' ? 'https:' : 'http:';
   let socket, state = 0;
-  let rtcPort, rtcSelected = false;
+  let rtcPort, rtcRound, rtcSelected = false;
   const directoryTimeout = 5000;
   let subscription, directoryDeadline = 0, nextProbe = 0, retry = 0;
   let fallback = false, nextPoll = 0, poll;
@@ -243,6 +243,7 @@ function createNetplay(endpoint, rtcSupported) {
     rtcPort?.postMessage({type: 'close'});
     rtcPort?.close();
     rtcPort = undefined;
+    rtcRound = undefined;
     rtcSelected = false;
   };
   const close = () => {
@@ -354,10 +355,11 @@ function createNetplay(endpoint, rtcSupported) {
       if (mode) address.searchParams.set('mode', mode);
       if (rtcSupported) {
         address.searchParams.set('rtc', '1');
-        address.searchParams.set('rtcProbe', '1');
+        address.searchParams.set('rtcProbe', '2');
       }
       address.searchParams.set('heartbeat', '1');
       const connection = socket = new WebSocket(address);
+      const sendRtc = value => connection.send(rtcRound === undefined ? 'rtc:' + value : `rtc:round:${rtcRound}:${value}`);
       state = 1;
       connection.binaryType = 'arraybuffer';
       const ended = () => {
@@ -397,15 +399,21 @@ function createNetplay(endpoint, rtcSupported) {
         } else if (data === 'rtc:websocket') {
           const port = rtcPort;
           rtcPort = undefined;
+          rtcRound = undefined;
           rtcSelected = false;
           port?.postMessage({type: 'fallback'});
           if (port) setTimeout(() => port.close(), 500);
+        } else if (typeof data === 'string' && /^rtc:probe:(ping|pong):[01]$/.test(data)) {
+          const [, , kind, sample] = data.split(':');
+          if (kind === 'ping') sendRtc('probe:pong:' + sample);
+          else rtcPort?.postMessage({type: 'socket-probe-pong', sample: Number(sample)});
         } else if (typeof data === 'string' && data.startsWith('rtc:start:')) {
           const {port1, port2} = new MessageChannel();
-          const {iceServers, offer, negotiationStartedAt, relayProbeMaxMs} = JSON.parse(data.slice('rtc:start:'.length));
+          const {iceServers, offer, negotiationStartedAt, scoped, relayOnly} = JSON.parse(data.slice('rtc:start:'.length));
           const diagnostics = Number.isSafeInteger(negotiationStartedAt);
           closeRtc();
           rtcPort = port1;
+          rtcRound = diagnostics && scoped ? negotiationStartedAt : undefined;
           port1.onmessage = ({data}) => {
             if (socket !== connection) return;
             if (data.type === 'ice-stats') {
@@ -417,28 +425,29 @@ function createNetplay(endpoint, rtcSupported) {
             }
             if (rtcPort !== port1) return;
             if (data.type === 'data') receiveMatchData(data.data);
-            else if (data.type === 'signal') connection.send('rtc:signal:' + JSON.stringify(data.value));
+            else if (data.type === 'signal') sendRtc('signal:' + JSON.stringify(data.value));
             else if (data.type === 'diagnostic' && connection.readyState === WebSocket.OPEN) {
-              connection.send('rtc:diag:' + data.milestone);
+              sendRtc('diag:' + data.milestone);
             }
             else if (data.type === 'ice-pair' && data.final === rtcSelected && connection.readyState === WebSocket.OPEN) {
-              connection.send(`rtc:ice-pair:${data.final ? 'webrtc' : 'pending'}:${data.value}`);
+              sendRtc(`ice-pair:${data.final ? 'webrtc' : 'pending'}:${data.value}`);
             }
-            else if (data.type === 'open') connection.send('rtc:ready');
+            else if (data.type === 'socket-probe') sendRtc('probe:ping:' + data.sample);
+            else if (data.type === 'open') sendRtc('ready');
             else if (data.type === 'closed') {
               rtcPort = undefined;
               if (data.diagnosticsPending) setTimeout(() => port1.close(), 500);
               else port1.close();
-              if (connection.readyState === WebSocket.OPEN) connection.send('rtc:fail');
+              if (connection.readyState === WebSocket.OPEN) sendRtc('fail');
             }
           };
-          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer, diagnostics, relayProbeMaxMs}, [port2]);
+          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer, diagnostics, relayOnly}, [port2]);
         } else if (typeof data === 'string' && data.startsWith('rtc:signal:')) {
           try {
             rtcPort?.postMessage({type: 'signal', value: JSON.parse(data.slice('rtc:signal:'.length))});
           } catch {
-            connection.send('rtc:diag:invalid_signal');
-            connection.send('rtc:fail');
+            sendRtc('diag:invalid_signal');
+            sendRtc('fail');
           }
         } else if (data instanceof ArrayBuffer && data.byteLength === 4 && inbox.length < 256) {
           inbox.push(new DataView(data).getInt32(0, true));
