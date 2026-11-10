@@ -107,7 +107,7 @@ export function TopicStatus({
   topic,
   compact = false,
 }: {
-  topic: Pick<ForumTopic, "featured" | "locked" | "pinned">;
+  topic: Pick<ForumTopic, "featured" | "locked" | "pinned" | "saged">;
   compact?: boolean;
 }) {
   const className = compact
@@ -121,7 +121,11 @@ export function TopicStatus({
           : "inline-flex flex-wrap gap-2"
       }
     >
-      {topic.pinned ? <Badge className={className}>置顶</Badge> : null}
+      {topic.saged ? (
+        <Badge className={className}>SAGE</Badge>
+      ) : topic.pinned ? (
+        <Badge className={className}>置顶</Badge>
+      ) : null}
       {topic.featured ? <Badge className={className}>★ 精品</Badge> : null}
       {topic.locked ? <Badge className={className} variant="neutral">已锁定</Badge> : null}
     </div>

@@ -6,7 +6,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 export async function readHomePage(runtime: AppRuntime) {
   const [works, topics] = await Promise.all([
     listHomeGameWorks(runtime),
-    homeTopics(getForumRuntime(runtime)),
+    homeTopics(getForumRuntime(runtime), { sageLast: true }),
   ]);
   return { ...works, topics };
 }

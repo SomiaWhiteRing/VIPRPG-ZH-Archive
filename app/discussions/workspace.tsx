@@ -998,12 +998,12 @@ export function DiscussionWorkspace({
                     key={item.id}
                   >
                     <div className="min-w-0 flex-1">
-                      {item.tags.length > 0 || item.featured || item.pinned || item.locked ? (
+                      {item.tags.length > 0 || item.featured || item.pinned || item.locked || item.saged ? (
                         <div className="mb-1 flex flex-wrap items-center gap-x-1.5 gap-y-[3px] text-sm leading-[21px]">
                           {item.tags.map((tag) => (
                             <DiscussionTagLink key={tag.id} tag={tag} />
                           ))}
-                          {item.featured || item.pinned || item.locked ? (
+                          {item.featured || item.pinned || item.locked || item.saged ? (
                             <TopicStatus topic={item} compact />
                           ) : null}
                         </div>

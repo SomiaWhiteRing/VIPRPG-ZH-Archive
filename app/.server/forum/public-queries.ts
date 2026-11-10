@@ -321,15 +321,28 @@ export async function indexedForumSearch(
   };
 }
 
-export async function homeTopics(ctx: ForumRuntime): Promise<HomeForumTopic[]> {
-  const rows = await ctx.db.prepare(`SELECT t.id,t.title,t.reply_count AS replies,
+export async function homeTopics(
+  ctx: ForumRuntime,
+  { sageLast = false }: { sageLast?: boolean } = {},
+): Promise<HomeForumTopic[]> {
+  const order = "ORDER BY t.last_activity_at DESC,t.id DESC";
+  // Pick the small set of topics before looking up display names and tags.
+  const query = (where: string, limit: number) => ctx.db.prepare(`SELECT t.id,t.title,t.reply_count AS replies,
     CASE WHEN u.status='deleted' THEN '账户已注销' ELSE u.display_name END AS authorName,
     (SELECT g.name FROM forum_topic_tags x JOIN forum_tags g ON g.id=x.tag_id
      WHERE x.topic_id=t.id AND g.status<>'hidden' ORDER BY x.position LIMIT 1) AS tagName
-    FROM forum_public_topics t JOIN users u ON u.id=t.user_id
-    ORDER BY t.last_activity_at DESC,t.id DESC LIMIT 5`)
+    FROM (
+      SELECT t.id,t.title,t.reply_count,t.user_id,t.last_activity_at
+      FROM forum_public_topics t ${where}
+      ${order} LIMIT ${limit}
+    ) t JOIN users u ON u.id=t.user_id
+    ${order}`)
     .all<HomeForumTopic>();
-  return rows.results;
+  const limit = 5;
+  const { results } = await query(sageLast ? "WHERE t.saged=0" : "", limit);
+  if (!sageLast || results.length === limit) return results;
+  const tail = await query("WHERE t.saged=1", limit - results.length);
+  return [...results, ...tail.results];
 }
 
 export async function publicTopicList(
