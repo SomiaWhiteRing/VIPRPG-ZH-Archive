@@ -82,9 +82,9 @@ on:
 permissions:
   contents: read
 
-# Relevant pushes all build; reruns of the same run cannot publish concurrently.
+# Queue automatic builds so each one sees the previous automatic release.
 concurrency:
-  group: ${{ inputs.target == 'production' && 'production-maintenance' || format('android-{0}', github.run_id) }}
+  group: ${{ inputs.target == 'production' && 'production-maintenance' || github.event_name == 'push' && 'android-automatic' || format('android-{0}', github.run_id) }}
   queue: max
   cancel-in-progress: false
 
@@ -99,6 +99,7 @@ jobs:
       version_name: ${{ steps.release.outputs.version_name }}
       published: ${{ steps.release.outputs.published }}
     permissions:
+      actions: read
       contents: read
     env:
       GH_REPO: ${{ github.repository }}
@@ -121,23 +122,36 @@ jobs:
         run: |
           set -euo pipefail
           code=$((100000 + GITHUB_RUN_NUMBER))
+          tag="android-${RELEASE_TARGET}-${code}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version_code=$code" >> "$GITHUB_OUTPUT"
+          # Published assets stay immutable, including when a workflow is rerun.
+          if draft=$(gh release view "$tag" --json isDraft --jq .isDraft) && [[ "$draft" == false ]]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           version="${REQUESTED_VERSION_NAME:-0.3.${GITHUB_RUN_NUMBER}}"
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            previous_run=$(gh run list --workflow android.yml --branch main --event push --status success --limit 1 --json number --jq '.[0].number // empty')
+            version="0.3.1"
+            if [[ -n "$previous_run" ]]; then
+              previous_tag="android-staging-$((100000 + previous_run))"
+              previous_release=$(gh release view "$previous_tag" --json name,isDraft --jq 'select(.isDraft | not) | .name')
+              if [[ ! "$previous_release" =~ ^Android\ ([0-9]+\.[0-9]+)\.([0-9]+)\ \(staging\)$ ]]; then
+                echo "Cannot read the automatic APK version from $previous_tag" >&2
+                exit 1
+              fi
+              version="${BASH_REMATCH[1]}.$((10#${BASH_REMATCH[2]} + 1))"
+            fi
+          fi
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo 'version_name must use X.Y.Z format' >&2
             exit 1
           fi
-          tag="android-${RELEASE_TARGET}-${code}"
           echo "ANDROID_VERSION_CODE=$code" >> "$GITHUB_ENV"
           echo "ANDROID_VERSION_NAME=$version" >> "$GITHUB_ENV"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "version_code=$code" >> "$GITHUB_OUTPUT"
           echo "version_name=$version" >> "$GITHUB_OUTPUT"
-          # Published assets stay immutable, including when a workflow is rerun.
-          if release=$(gh release view "$tag" --json isDraft); then
-            if [[ "$(jq -r .isDraft <<< "$release")" == false ]]; then
-              echo "published=true" >> "$GITHUB_OUTPUT"
-            fi
-          fi
 
       - name: Restore fixed signing key
         if: steps.release.outputs.published != 'true'
@@ -268,4 +282,8 @@ jobs:
           gh release upload "$RELEASE_TAG" output/android/viprpg-release.apk output/android/SHA256SUMS.txt --clobber
           prerelease=true
           if [[ "$RELEASE_TARGET" == 'production' ]]; then prerelease=false; fi
-          gh release edit "$RELEASE_TAG" --draft="${{ inputs.draft == true && 'true' || 'false' }}" --prerelease="$prerelease" --latest=false --notes-file "$notes"
+          gh release edit "$RELEASE_TAG" \
+            --draft="${{ inputs.draft == true && 'true' || 'false' }}" \
+            --prerelease="$prerelease" \
+            --latest="${{ github.event_name == 'workflow_dispatch' && inputs.target == 'production' && inputs.draft != true && 'true' || 'false' }}" \
+            --notes-file "$notes"
