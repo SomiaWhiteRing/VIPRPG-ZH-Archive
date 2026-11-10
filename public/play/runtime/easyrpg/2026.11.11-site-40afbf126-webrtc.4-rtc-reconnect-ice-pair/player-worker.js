@@ -390,6 +390,7 @@ function createNetplay(endpoint, rtcSupported) {
           nextPoll = 0;
         } else if (data === 'rtc:webrtc') {
           rtcSelected = true;
+          rtcPort?.postMessage({type: 'ice-pair'});
         } else if (data === 'rtc:websocket') {
           closeRtc();
         } else if (typeof data === 'string' && data.startsWith('rtc:start:')) {
@@ -403,6 +404,9 @@ function createNetplay(endpoint, rtcSupported) {
             else if (data.type === 'signal') connection.send('rtc:signal:' + JSON.stringify(data.value));
             else if (data.type === 'diagnostic' && connection.readyState === WebSocket.OPEN) {
               connection.send('rtc:diag:' + data.milestone);
+            }
+            else if (data.type === 'ice-pair' && data.final === rtcSelected && connection.readyState === WebSocket.OPEN) {
+              connection.send(`rtc:ice-pair:${data.final ? 'webrtc' : 'pending'}:${data.value}`);
             }
             else if (data.type === 'open') connection.send('rtc:ready');
             else if (data.type === 'closed') {

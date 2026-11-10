@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect",
-  "artifact": "Kai-Web-2026.11.11-netplay-reconnect-site.zip",
-  "archiveSha256": "52bbcd777608dbcf95202426961bd948f2587e11dd0ad81361119887f57247e5",
+  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect-ice-pair",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair",
+  "artifact": "Kai-Web-2026.11.11-ice-pair-site.zip",
+  "archiveSha256": "22b441a74ef585788c7c37984b546dd07b766b7f2f8bbf3b24b3efe9cf6f6955",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/3398943413d0b99076498a3997911b74e54898a2",
   "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/3398943413d0b99076498a3997911b74e54898a2/COPYING",
   "sourceState": "patched-commit",
@@ -52,6 +52,10 @@
     {
       "path": "scripts/runtime-patches/kai-netplay-reconnect.patch",
       "sha256": "edb8dac999c88095f12d60ae9dadefa8e1cf905c425f4776f5a024645b77d997"
+    },
+    {
+      "path": "scripts/runtime-patches/kai-netplay-ice-pair.patch",
+      "sha256": "4bf1acdd23b67e7441272bc726f34ccead9760cc10487db5f304c9f74c89ce69"
     }
   ],
   "sourceSnapshot": null,
@@ -85,28 +89,28 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "5f7662fda0602ce1aaadf045ffd4fc2aacd20040a873b70c378d0dcb86545331",
-      "afterSha256": "b0ebe31531f7c6c6f290961fbdbbdd3a87c2918dc9234d12ea66733cff79325b"
+      "beforeSha256": "6dd3e02898b695fd75cd3b5c7894d7aaf25c676d97665d6f5247f90375c5ceea",
+      "afterSha256": "ea0bd03c8402e588167a8232cf12d7b23750a684de04cbe131147eb55e09c347"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "b0ebe31531f7c6c6f290961fbdbbdd3a87c2918dc9234d12ea66733cff79325b",
-      "afterSha256": "f02a7030500c40edf1a2c593cca66c99c9de9075f100e7514bf5bc099cc01201"
+      "beforeSha256": "ea0bd03c8402e588167a8232cf12d7b23750a684de04cbe131147eb55e09c347",
+      "afterSha256": "1036ac72783f2e41f555252ebce4e7f0658b8d7ba38f82df4fa2f6c89cda318e"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/startup-regional-assets.patch",
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
-      "beforeSha256": "f02a7030500c40edf1a2c593cca66c99c9de9075f100e7514bf5bc099cc01201",
-      "afterSha256": "17c96162b3b7a75d1406de5cca6bc0730c5cf9ea45d34016f931ee10c86d4cad"
+      "beforeSha256": "1036ac72783f2e41f555252ebce4e7f0658b8d7ba38f82df4fa2f6c89cda318e",
+      "afterSha256": "66e1492b011972a567d9f937b85a4f6d4d0b6dd06afe52c6da8d7695f1bc27a3"
     }
   ],
   "files": {
     "index.js": {
-      "size": 50033,
-      "sha256": "17c96162b3b7a75d1406de5cca6bc0730c5cf9ea45d34016f931ee10c86d4cad"
+      "size": 51239,
+      "sha256": "66e1492b011972a567d9f937b85a4f6d4d0b6dd06afe52c6da8d7695f1bc27a3"
     },
     "easyrpg-player.js": {
       "size": 128884,
@@ -129,8 +133,8 @@
       "sha256": "75d4586bc6be9c66680fa7699ad47e0e11ef15097accdebcac28eff2cb3de70f"
     },
     "player-worker.js": {
-      "size": 22178,
-      "sha256": "61b36a9164def9f34f52f80d26e42507320bb3afc06b4689a7ff181783486c9a"
+      "size": 22465,
+      "sha256": "af1269546b49e91fb885048307092c7f81ab12512355147b77a8a7b3bd8ad5b6"
     },
     "player-audio.js": {
       "size": 1858,
@@ -239,6 +243,10 @@
     "kai-netplay-reconnect.patch": {
       "size": 10981,
       "sha256": "edb8dac999c88095f12d60ae9dadefa8e1cf905c425f4776f5a024645b77d997"
+    },
+    "kai-netplay-ice-pair.patch": {
+      "size": 3870,
+      "sha256": "4bf1acdd23b67e7441272bc726f34ccead9760cc10487db5f304c9f74c89ce69"
     }
   }
 }

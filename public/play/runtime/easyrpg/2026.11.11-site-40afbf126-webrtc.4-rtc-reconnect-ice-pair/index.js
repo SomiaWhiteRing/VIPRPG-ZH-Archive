@@ -580,6 +580,24 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       port.postMessage({type: 'closed'});
       close();
     };
+    const reportIcePair = async final => {
+      let value = 'unavailable';
+      try {
+        const stats = await peer.getStats();
+        const transport = Array.from(stats.values()).find(stat => stat.type === 'transport' && stat.selectedCandidatePairId);
+        const pair = transport && stats.get(transport.selectedCandidatePairId);
+        if (pair?.type === 'candidate-pair') {
+          const local = stats.get(pair.localCandidateId);
+          const remote = stats.get(pair.remoteCandidateId);
+          const types = ['host', 'srflx', 'prflx', 'relay'];
+          if (types.includes(local?.candidateType) && types.includes(remote?.candidateType) &&
+              (local.protocol === 'udp' || local.protocol === 'tcp')) {
+            value = [local.candidateType, remote.candidateType, local.protocol].join(':');
+          }
+        }
+      } catch { /* Browsers can omit stats or close the peer while they are being read. */ }
+      if (open && (final || value !== 'unavailable')) port.postMessage({type: 'ice-pair', value, final});
+    };
     try {
       peer = new RTCPeerConnection({iceServers});
     } catch {
@@ -621,7 +639,9 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     };
     peer.onicecandidateerror = ({errorCode}) => mark(errorCode === 701 ? 'stun_unreachable' : 'stun_error');
     peer.oniceconnectionstatechange = () => {
-      if (peer.iceConnectionState !== 'new' && peer.iceConnectionState !== 'closed') mark('ice_' + peer.iceConnectionState);
+      const state = peer.iceConnectionState;
+      if (state !== 'new' && state !== 'closed') mark('ice_' + state);
+      if (state === 'connected' || state === 'completed') void reportIcePair(false);
     };
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === 'failed') fail('peer_connection_failed');
@@ -631,6 +651,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     port.onmessage = ({data}) => {
       if (data.type === 'close') {
         close();
+      } else if (data.type === 'ice-pair') {
+        void reportIcePair(true);
       } else if (data.type === 'data') {
         if (channel?.readyState === 'open') channel.send(data.data);
         else fail('channel_closed');
