@@ -14,7 +14,7 @@ type NetplayEnvironment = CloudflareEnv & {
 type Negotiation = {
   route: "pending" | "webrtc" | "websocket";
   ready: Set<WebSocket>;
-  timeout: ReturnType<typeof setTimeout>;
+  timeout?: ReturnType<typeof setTimeout>;
 };
 type Room = {
   peers: Map<WebSocket, { identity: Identity; rtc: boolean }>;
@@ -99,10 +99,6 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Netplay-Identity")!)) as Identity;
     peers.set(socket, { identity, rtc: url.searchParams.get("rtc") === "1" });
     this.rooms.set(id, room);
-    const pairSeats = () => {
-      first!.send("3");
-      socket.send("4");
-    };
     socket.addEventListener("message", ({ data }) => {
       if (!peers.has(socket)) return;
       const rtc = room.rtc;
@@ -158,16 +154,17 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
         const rtc: Negotiation = {
           route: "pending",
           ready: new Set(),
-          timeout: setTimeout(() => this.selectRoute(room, "websocket"), 6000),
         };
         room.rtc = rtc;
-        void this.iceServers().then(iceServers => {
+        void Promise.all([this.iceServers(), this.iceServers()]).then(([firstServers, secondServers]) => {
           if (room.rtc !== rtc || rtc.route !== "pending") return;
-          first.send("rtc:start:" + JSON.stringify({ iceServers, offer: true }));
-          socket.send("rtc:start:" + JSON.stringify({ iceServers, offer: false }));
+          rtc.timeout = setTimeout(() => this.selectRoute(room, "websocket"), 8000);
+          first.send("rtc:start:" + JSON.stringify({ iceServers: firstServers, offer: true }));
+          socket.send("rtc:start:" + JSON.stringify({ iceServers: secondServers, offer: false }));
         });
       } else {
-        pairSeats();
+        first.send("3");
+        socket.send("4");
       }
     } else {
       socket.send("2");
