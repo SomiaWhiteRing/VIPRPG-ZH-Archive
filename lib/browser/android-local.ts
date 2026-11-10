@@ -26,6 +26,7 @@ export function localRequest<T>(action: string, values: Record<string, unknown> 
 }
 export type NativePlayerResources = {
   url: string;
+  runtimeBasePath?: string;
   files: { filename: string; start: number; end: number }[];
   saves: Record<string, string>;
 };

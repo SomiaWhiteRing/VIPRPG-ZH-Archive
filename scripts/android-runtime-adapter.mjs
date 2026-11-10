@@ -19,7 +19,7 @@ export async function adaptAndroidRuntime(root, directory) {
     if (original === updated) throw new Error(`Android runtime adapter did not match ${name}`);
     await writeFile(path, updated);
   };
-  await copyFile(resolve(root, 'android/web/native-storage.js'), resolve(directory, 'native-storage.js'));
+  await copyFile(resolve(root, 'scripts/android-native-storage.js'), resolve(directory, 'native-storage.js'));
   for (const worker of ['player-worker.js', 'player-audio-worker.js']) await edit(worker, source => source
     .replace("importScripts(new URL('player-files.js'", "importScripts(new URL('native-storage.js', data.runtimeBase).href);\n      if (data.nativeResources) data.packages = self.nativePackages(data.nativeResources);\n      importScripts(new URL('player-files.js'")
     .replace("  try {\n    if (data.type", "  try {\n    if (data.type === 'native-saved') { self.nativeSaveReplies?.get(data.id)?.(data.error); self.nativeSaveReplies?.delete(data.id); return; }\n    if (data.type"));

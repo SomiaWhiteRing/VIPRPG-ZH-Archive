@@ -24,7 +24,15 @@ Android 主站负责发现作品；仅在本 App 中隐藏作品的在线游玩 
 
 时间线的「首次游玩」与最近游玩共用上述 `/api/works/<workId>/played` 上报，由 Android 安装完成以及网站在线启动、下载／外链点击触发。服务端按登录账号和作品永久去重，将首次标记、符合记录条件的首次动态和最近游玩时间在同一 D1 batch 中提交；重复上报只刷新最近时间，关闭记录期间仍消耗首次资格，之后开启不补记。已有游玩历史只补齐抑制标记，不伪造首次时间。离线启动只更新设备本地最近游玩时间，断网、会话过期或失败请求不延期补报。新客户端不另发首玩请求；既有 `/api/works/<workId>/first-play` 保留为兼容入口，调用同一处理逻辑。
 
-APK 内 `/_android/` 只承载 WebPlayer。原生来源受限的 `VIPRPGLocal` 主框架消息接口负责安装、状态、启动和存档；每次游戏启动发放随机资源读取能力，只在离线 WebView 内拦截。Worker 保留 32 MiB 有界缓存，按文件区间读取原生目录；游戏与音频 Worker 都走此路径。视频按块读取后交给现有浏览器/FFmpeg 解码器。`scripts/android-runtime-adapter.mjs` 只适配 APK 构建副本，网站的版本化运行组件保持不变；升级引擎后必须重新构建并验证适配。
+APK 内保留 `/_android/` 离线页面及播放器外壳。原生来源受限的 `VIPRPGLocal` 主框架消息接口负责安装、状态、启动和存档。每次游戏启动发放随机资源读取能力，只在离线 WebView 内拦截。游戏与音频 Worker 保留 32 MiB 有界缓存，按区间读取原生文件。视频按块读取后交给浏览器或 FFmpeg 解码。
+
+### 离线 Player 更新
+
+应用冷启动和进入本地游戏库时向同源的 `/play/runtime/android/v1/latest.json` 检查 Player。首次下载和后续更新共用顶部抽屉，显示进度、大小和速度，支持暂停和继续。未计量网络自动下载，移动网络和计量网络等待用户继续。已安装 Player 时可以继续游玩。新版校验成功后成为下次启动使用的版本，运行中的游戏继续读取启动时选择的 Player。
+
+Player 存在 App 私有目录，与作品和存档分开。相同文件直接复用，变化文件从版本清单中的不可变分块下载。已完成的分块在暂停或重启后可复用。与本机 Wasm 匹配的 Zstandard 补丁更小时优先使用，补丁不可用时重新下载对应完整文件。原子更新安装记录后才启用新版。首次从内嵌 Player 的 APK 升级时需联网下载一次。
+
+网站构建使用 `scripts/android-runtime-adapter.mjs` 生成 Android 适配副本，并与网站一起发布。先部署支持该清单的网站，再发支持自动下载的 APK。此后兼容的 Player 更新随网站部署。
 
 后台下载与真实游戏读档使用 MuMu 技术验收；构建通过不能替代不同 Android 系统/WebView、SD 卡和音视频的设备验收。Android 15 对 dataSync 前台服务有系统时限，用户强行停止应用也会终止后台任务；下次打开通过任务日志恢复。
 
@@ -53,7 +61,7 @@ App 默认每次冷启动检查一次更新；版本页可关闭启动检查或�
 
 [Android Release](../.github/workflows/android.yml) 仅在推送 `main` 且改动涉及 APK 构建输入时自动构建签名 APK，也支持在 `main` 手动选择 `target=staging|production`；手动启动 production 即确认本次正式发布，构建并校验 APK 后直接公开 Release，无需再次 Review deployments、第二位审核人或另打 tag。每次符合条件的 push 事件生成一个 Release（一次 push 包含多个提交时，以该 push 的最终提交打包）。
 
-自动触发范围包括 Android 原生代码与离线页、离线页实际引用的共用游玩模块和 UI 组件、共用样式、EasyRPG 运行组件及其版本配置、应用图标，以及构建／验包脚本、依赖清单和锁文件、构建配置与 Android workflow。普通网站页面、服务端 API、数据库迁移、部署配置和文档更新不会单独触发打包；`android/` 内的 Markdown 文档也排除在外。`package.json` 或 `package-lock.json` 改动仍会触发，因为 Android 与网站共用 npm 安装环境。
+自动触发范围包括 Android 原生代码与离线页、离线页实际引用的共用游玩模块和 UI 组件、共用样式、播放器外壳、应用图标，以及构建／验包脚本、依赖清单和锁文件、构建配置与 Android workflow。EasyRPG 运行组件、版本配置和只在运行包中使用的 `scripts/android-native-storage.js` 随网站发布。普通网站页面、服务端 API、数据库迁移、部署配置和文档更新不会单独触发打包。`package.json` 或 `package-lock.json` 改动仍会触发，因为 Android 与网站共用 npm 安装环境。
 
 网站和离线页通过 `app/shared.css` 共用主题与基础样式，网站专用样式放在 `app/globals.css`。Android 的 Tailwind 只扫描离线页和包内组件，不扫描整个网站。验包大小限制与网站上传组件共用 `lib/resource-limits.ts`，不依赖网站资源类型所在的 `lib/resources.ts`；只修改网站专用样式或资源类型不会触发 Android 构建。新增或调整离线页的共用依赖时，须同步维护 workflow 的 `on.push.paths`；新增共用 UI 组件还须更新 `android/web/styles.css` 的 `@source`。
 
@@ -78,7 +86,7 @@ docker compose -f android/compose.yaml run --build --rm apk
 
 APK 位于 `output/android/viprpg-debug.apk`。Docker 镜像独立安装 Node 24、JDK 17、Gradle 8.13 和 Android SDK 35；Linux 的 `node_modules`、Gradle 缓存和 debug 签名使用独立 Docker 卷，不读取主机的依赖或 SDK。首次构建需下载镜像、Android SDK 和 Maven 依赖。保留 `android-debug-key` 卷才能保持 debug APK 的签名身份；删除卷将改变签名，覆盖安装前应先备份 App 数据。
 
-调试包默认指向 `https://staging.viprpg.org`，该站点当前提供仓库中的在线游玩功能。旧的 workers.dev 站点仍为上一版网站，不适合作为此 App 的安装入口。正式发布前必须先部署新版站点，再用 `SITE_ORIGIN=https://viprpg.org` 重新构建并验证。**在线安装和离线打开必须是同一个来源**；更换来源需要重新打包，且不同来源的已安装游戏互不可见。在线站点如升级运行组件，应重新打包 APK；离线页只发布当前声明的版本，不附带历史 runtime。
+调试包默认指向 `https://staging.viprpg.org`。正式发布前先部署提供 Android Player 清单的站点，再用 `SITE_ORIGIN=https://viprpg.org` 构建并验证。**在线安装和离线打开必须是同一个来源**。更换来源需要重新打包，不同来源的已安装游戏互不可见。
 
 需要在模拟器中验证未部署的网站改动时，可使用独立调试包和 ADB 直连本机网站，操作见[Android 模拟器本地测试](../docs/android-local-testing.md)。
 

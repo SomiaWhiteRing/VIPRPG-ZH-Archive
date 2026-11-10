@@ -1,23 +1,16 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import UPNG from "upng-js";
-import { adaptAndroidRuntime } from "./android-runtime-adapter.mjs";
 
 import { transformStyleHtml } from "./style-namespace.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const { version } = JSON.parse(await readFile(resolve(root, "lib/archive/easyrpg-runtime.json"), "utf8"));
 const source = resolve(root, "public/play");
 const target = resolve(root, "android/build-assets/play");
 
 await rm(target, { recursive: true, force: true });
-await mkdir(resolve(target, "runtime/easyrpg"), { recursive: true });
+await mkdir(target, { recursive: true });
 await writeFile(resolve(target, "player.html"), await transformStyleHtml(await readFile(resolve(source, "player.html"), "utf8")));
-await cp(resolve(source, "runtime/easyrpg", version), resolve(target, "runtime/easyrpg", version), {
-  recursive: true, force: true,
-  filter: (path) => !path.endsWith(".br"),
-});
-await adaptAndroidRuntime(root, resolve(target, "runtime/easyrpg", version));
 await cp(resolve(root, "public/icon/windI.png"), resolve(root, "android/build-assets/offline/icon.png"));
 
 // Keep the launcher mark sourced from the site's pixel-art logo.

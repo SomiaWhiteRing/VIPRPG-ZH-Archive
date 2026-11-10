@@ -42,6 +42,7 @@ Thumbs.db
 /output/
 /android/build-assets/
 /android/build-res/
+/public/play/runtime/android/v1/
 /android/.gradle/
 /android/app/build/
 

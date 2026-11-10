@@ -10,7 +10,6 @@ on:
       - '!android/**/*.md'
       - 'scripts/build-android-assets.mjs'
       - 'scripts/style-namespace.mjs'
-      - 'scripts/android-runtime-adapter.mjs'
       - 'scripts/inspect-android-package.ts'
       - 'package.json'
       - 'package-lock.json'
@@ -46,9 +45,7 @@ on:
       - 'app/play/*/web-play-types.ts'
       - 'lib/archive/download.ts'
       - 'lib/archive/crc32.ts'
-      - 'lib/archive/easyrpg-runtime.json'
       - 'lib/archive/lsd-save-upgrade.ts'
-      - 'lib/archive/web-play.ts'
       - 'lib/browser/client-environment.ts'
       - 'lib/browser/android-screenshots.ts'
       - 'lib/browser/android-local.ts'
@@ -59,7 +56,7 @@ on:
       - 'lib/android-package.ts'
       - 'lib/package-zip.ts'
       - 'lib/resource-limits.ts'
-      - 'public/play/**'
+      - 'public/play/player.html'
       - 'public/icon/windI.png'
   workflow_dispatch:
     inputs:

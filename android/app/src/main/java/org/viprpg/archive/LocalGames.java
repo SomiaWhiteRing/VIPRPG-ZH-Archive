@@ -12,15 +12,19 @@ import org.json.*;
 /** Main-frame, origin-scoped commands; opaque per-session read capability for player workers. */
 final class LocalGames {
     private final MainActivity activity;
+    private final PlayerRuntime playerRuntime;
     final GameStore store;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private volatile Session session;
     private static final class Session {
         final String token = UUID.randomUUID().toString(); final Uri zip; final long workId; final String key, title;
-        Session(Uri zip, long workId, String key, String title) { this.zip = zip; this.workId = workId; this.key = key; this.title = title; }
+        final PlayerRuntime.Installation player;
+        Session(Uri zip, long workId, String key, String title, PlayerRuntime.Installation player) {
+            this.zip = zip; this.workId = workId; this.key = key; this.title = title; this.player = player;
+        }
     }
-    LocalGames(MainActivity activity, WebView online, WebView offline) {
-        this.activity = activity; store = GameStore.get(activity);
+    LocalGames(MainActivity activity, WebView online, WebView offline, PlayerRuntime playerRuntime) {
+        this.activity = activity; this.playerRuntime = playerRuntime; store = GameStore.get(activity);
         attach(online, false); attach(offline, true);
     }
     private void attach(WebView web, boolean offline) {
@@ -36,7 +40,7 @@ final class LocalGames {
                     if (id.isEmpty() || id.length() > 100) throw new IOException("请求编号无效。");
                     String action = request.getString("action"); Object value;
                     switch (action) {
-                        case "list": value = new JSONObject(store.snapshot()); break;
+                        case "list": value = new JSONObject(store.snapshot()).put("playerReady", playerRuntime.ready()); break;
                         case "install": {
                             JSONObject task = store.enqueue(request.getLong("archiveVersionId"), request);
                             value = new JSONObject(task.toString());
@@ -54,9 +58,12 @@ final class LocalGames {
                         }
                         case "start": {
                             if (!offline) throw new IOException("请从本地游戏启动。");
+                            PlayerRuntime.Installation player = playerRuntime.installed();
+                            if (player == null) throw new IOException("下载完成后可游玩");
                             JSONObject task = store.start(request.getString("key"));
                             Uri folder = store.folder(task, false);
-                            Session next = new Session(store.storage.child(folder, "game.zip", "application/zip", false), task.getLong("workId"), task.getString("playKey"), task.getString("title"));
+                            Session next = new Session(store.storage.child(folder, "game.zip", "application/zip", false),
+                                task.getLong("workId"), task.getString("playKey"), task.getString("title"), player);
                             JSONObject index = store.storage.json(store.storage.child(folder, "index.json", "application/json", false));
                             JSONArray files = index.getJSONArray("files");
                             if (files.length() > 50000) throw new IOException("游戏索引过大。");
@@ -72,6 +79,7 @@ final class LocalGames {
                             JSONObject saves = store.storage.seedBundledSaves(next.workId, next.zip, files);
                             session = next;
                             value = new JSONObject().put("installation", task).put("files", index.getJSONArray("files"))
+                                .put("runtimeBasePath", player.basePath())
                                 .put("url", BuildConfig.SITE_ORIGIN + "/_native/read/" + next.token).put("saves", saves); break;
                         }
                         case "save": {
@@ -107,6 +115,10 @@ final class LocalGames {
             String json = new JSONObject().put("id", id).put("ok", error == null).put("value", value).put("error", error).toString();
             activity.runOnUiThread(() -> { if (!activity.isDestroyed()) try { reply.postMessage(json); } catch (Exception ignored) { } });
         } catch (Exception ignored) { }
+    }
+    WebResourceResponse readPlayer(String path) {
+        Session current = session;
+        return PlayerRuntime.read(current == null ? null : current.player, path);
     }
     WebResourceResponse read(WebResourceRequest request) {
         Uri url = request.getUrl();

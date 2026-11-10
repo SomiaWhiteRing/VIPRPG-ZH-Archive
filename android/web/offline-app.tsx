@@ -6,7 +6,6 @@ import type { PlayerSession } from "@/app/play/[workId]/web-play-player";
 import { useWebPlayScreenshots } from "@/app/play/[workId]/web-play-screenshots";
 import { WebPlaySurface } from "@/app/play/[workId]/web-play-surface";
 import type { WebPlayInstallation } from "@/app/play/[workId]/web-play-types";
-import { easyRpgRuntimeBasePath } from "@/lib/archive/web-play";
 import { requestJson } from "@/lib/ui/api-response";
 import { ArrowLeft, RectangleHorizontal, RectangleVertical } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -170,7 +169,6 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
       engineFamily: installation.engineFamily!,
       easyRpg: installation.easyRpg,
       playKey: installation.playKey,
-      runtimeBasePath: easyRpgRuntimeBasePath,
       netplayEndpoint,
     }, () => {}, () => {}, () => { playerRef.current = null; onClose(); }, image => {
       void captureRef.current(async () => image).then(result => setFeedback(result ?? null));

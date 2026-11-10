@@ -143,8 +143,12 @@ adb -s $device reverse --no-rebind tcp:443 tcp:3015
 
 ```powershell
 $testDir = '<步骤一生成的隔离目录绝对路径>'
+node scripts/build-android-player.mjs
+if ($LASTEXITCODE -ne 0) { throw '本地 Player 资源准备失败' }
 node node_modules/@react-router/dev/bin.cjs dev . --config "$testDir/vite.config.ts"
 ```
+
+本地 Player 生成到已忽略的 `public/play/runtime/android/v1/`。首次进入本地游戏库前，确认调试包可访问同源清单。更换本地运行包后重跑资源生成命令。
 
 服务就绪后，在原终端安装并打开调试包：
 

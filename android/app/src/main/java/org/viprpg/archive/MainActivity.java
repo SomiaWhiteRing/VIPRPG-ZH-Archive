@@ -78,6 +78,10 @@ public final class MainActivity extends Activity {
     private String pendingNotificationUrl;
     private LocalGames localGames;
     private SaveTransfers saveTransfers;
+    private PlayerRuntime playerRuntime;
+    private PlayerRuntime.State playerState;
+    private PlayerUpdateDrawer globalPlayerUpdate, libraryPlayerUpdate;
+    private final java.util.function.Consumer<PlayerRuntime.State> playerObserver = this::showPlayerUpdate;
 
     private final java.util.Set<String> loadedCovers = new java.util.HashSet<>();
     private final ExecutorService localIo = Executors.newSingleThreadExecutor();
@@ -150,7 +154,11 @@ public final class MainActivity extends Activity {
         });
         offlineBrowser = findViewById(R.id.offline_browser);
         libraryPanel = findViewById(R.id.library_panel);
-        nativeLibrary = new NativeLibrary(this, new NativeLibrary.Actions() {
+        playerRuntime = PlayerRuntime.get(this);
+        globalPlayerUpdate = new PlayerUpdateDrawer(this, playerRuntime::toggle);
+        libraryPlayerUpdate = new PlayerUpdateDrawer(this, playerRuntime::toggle);
+        ((FrameLayout) findViewById(R.id.player_update_slot)).addView(globalPlayerUpdate, new FrameLayout.LayoutParams(-1, -2));
+        nativeLibrary = new NativeLibrary(this, libraryPlayerUpdate, new NativeLibrary.Actions() {
             @Override public void refresh() { refreshLocalGames(); }
             @Override public void play(String key) { openLocalLibrary(key); }
             @Override public void delete(List<String> keys) {
@@ -173,7 +181,7 @@ public final class MainActivity extends Activity {
             }
         });
         libraryPanel.addView(nativeLibrary);
-        localGames = new LocalGames(this, browser, offlineBrowser);
+        localGames = new LocalGames(this, browser, offlineBrowser, playerRuntime);
         localGames.store.changed = () -> runOnUiThread(this::refreshLocalGames);
         screenshots = new ScreenshotController(this, browser, offlineBrowser);
         FaceImageShare.attach(this, browser);
@@ -227,19 +235,20 @@ public final class MainActivity extends Activity {
         browser.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (view != offlineBrowser) return null;
                 Uri url = request.getUrl();
                 if (!sameOrigin(url)) return null;
                 String path = url.getPath();
-                if (view == offlineBrowser && path != null && path.startsWith("/_native/read/")) return localGames.read(request);
-                if (path == null || !(path.startsWith("/_android/") || path.equals("/play/player.html")
-                    || path.startsWith("/play/runtime/easyrpg/" + BuildConfig.RUNTIME_VERSION + "/"))) return null;
+                if (path == null) return null;
+                if (path.startsWith("/_native/read/")) return localGames.read(request);
+                if (path.startsWith(PlayerRuntime.LOCAL_PATH)) return localGames.readPlayer(path);
+                if (!(path.startsWith("/_android/") || path.equals("/play/player.html"))) return null;
                 WebResourceResponse response = assets.shouldInterceptRequest(url);
                 if (response == null) {
                     WebResourceResponse missing = new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
                     missing.setStatusCodeAndReasonPhrase(404, "Not Found");
                     return missing;
                 }
-                if (path.endsWith(".wasm")) response.setMimeType("application/wasm");
                 return response;
             }
 
@@ -361,6 +370,8 @@ public final class MainActivity extends Activity {
         libraryTab.setOnClickListener(view -> showLibrary());
         galleryTab.setOnClickListener(view -> showGallery());
         versionTab.setOnClickListener(view -> showVersion());
+        playerRuntime.observe(playerObserver);
+        playerRuntime.check();
         pendingNotificationUrl = DeviceNotifications.target(getIntent());
         if (savedInstanceState != null) {
             Bundle onlineState = savedInstanceState.getBundle("onlineState");
@@ -523,6 +534,7 @@ public final class MainActivity extends Activity {
 
     private void showLibrary() {
         if (playing || onlineImmersive || fullscreenView != null || screenshots.isBusy()) return;
+        boolean entering = !library || gallery || version;
         pauseOnlineBrowser();
         hideGallery();
         version = false;
@@ -532,6 +544,7 @@ public final class MainActivity extends Activity {
         libraryPanel.setVisibility(playing ? View.GONE : View.VISIBLE);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         library = true;
+        if (entering) playerRuntime.check();
         if (!isBrowserOffline()) {
             nativeLibrary.loading();
             offlineBrowser.loadUrl(offlineUrl);
@@ -564,9 +577,29 @@ public final class MainActivity extends Activity {
     }
     volatile String pendingLocalPlay;
     void openLocalLibrary(String key) {
-        pendingLocalPlay = key;
+        String playKey = playerRuntime.ready() ? key : null;
+        pendingLocalPlay = playKey;
         showLibrary();
-        if (key != null) sendLibraryCommand("play", JSONObject.quote(key));
+        if (playKey != null) sendLibraryCommand("play", JSONObject.quote(playKey));
+    }
+
+    private void showPlayerUpdate(PlayerRuntime.State state) {
+        boolean readyChanged = playerState == null || state.ready() != playerState.ready();
+        playerState = state;
+        renderPlayerUpdate();
+        if (readyChanged) {
+            nativeLibrary.setPlayerReady(state.ready());
+            if (browser.getUrl() != null)
+                browser.evaluateJavascript("window.dispatchEvent(new Event('viprpg:local-change'))", null);
+        }
+    }
+
+    private void renderPlayerUpdate() {
+        if (playerState == null) return;
+        boolean inLibrary = library && !gallery && !version;
+        boolean visible = !playing && !onlinePlaying && !isContentImmersive();
+        globalPlayerUpdate.render(playerState, visible && !inLibrary);
+        libraryPlayerUpdate.render(playerState, visible && inLibrary);
     }
     private void refreshLocalGames() {
         if (isDestroyed() || localGames == null || nativeLibrary == null) return;
@@ -809,6 +842,7 @@ public final class MainActivity extends Activity {
     }
 
     private void updateNavigation() {
+        renderPlayerUpdate();
         boolean immersive = isContentImmersive();
         boolean online = !library && !gallery && !version;
         onlineRefresh.setVisibility(online ? View.VISIBLE : View.GONE);
@@ -979,6 +1013,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        playerRuntime.removeObserver(playerObserver);
         if (fileChooser != null) fileChooser.onReceiveValue(null);
         galleryPanel.close();
         screenshots.close();

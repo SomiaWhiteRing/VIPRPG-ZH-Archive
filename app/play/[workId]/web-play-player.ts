@@ -74,8 +74,8 @@ export type PlayerScreenshot = {
 };
 
 type PlayerMetadata = Pick<WebPlayMetadata,
-  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeBasePath" | "runtimeAssetBasePath" | "engineFamily" | "easyRpg"
-> & { netplayEndpoint?: string | Promise<string | undefined> };
+  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeAssetBasePath" | "engineFamily" | "easyRpg"
+> & { runtimeBasePath?: string; netplayEndpoint?: string | Promise<string | undefined> };
 
 /** EasyRPG owns document-wide input, audio and timers. Destroy that document on exit. */
 export function createPlayerSession(
@@ -206,6 +206,8 @@ export function createPlayerSession(
       await seedBundledWebPlaySaves(metadata.workId, packages, lifetime.signal);
       await upgradeWebPlaySaves(metadata.workId, lifetime.signal);
     }
+    const runtimeBasePath = nativeResources?.runtimeBasePath ?? metadata.runtimeBasePath;
+    if (!runtimeBasePath) throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
     await preparePlayerConfig(lifetime.signal, nativeResources);
     await load(frame, lifetime.signal, () => {
       // Preserve the runtime's existing URL options (e.g. load-game-id).
@@ -233,14 +235,14 @@ export function createPlayerSession(
 
     const script = playerDocument.createElement("script");
     await load(script, lifetime.signal, () => {
-      script.src = `${metadata.runtimeBasePath}/index.js`;
+      script.src = `${runtimeBasePath}/index.js`;
       playerDocument.head.appendChild(script);
     });
     if (!playerWindow.createEasyRpgPlayer)
       throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
 
     restoreWorker = interceptPlayerWorker(playerWindow, {
-      workId: metadata.workId, title: metadata.title, runtimeBasePath: metadata.runtimeBasePath,
+      workId: metadata.workId, title: metadata.title, runtimeBasePath,
       nativeUrl: nativeResources?.url, signal: lifetime.signal,
       onSize: (width, height) => canvas.style.setProperty("--player-aspect", String(width / height)),
       onScreenshot,
@@ -258,8 +260,8 @@ export function createPlayerSession(
       nativeResources,
       saveNative: (files: Record<string, string>) => localRequest("save", { url: nativeResources?.url, files }),
       workId: metadata.workId,
-      runtimeBase: `${metadata.runtimeBasePath}/`,
-      assetBase: new URL(`${metadata.runtimeAssetBasePath || metadata.runtimeBasePath}/`, playerWindow.location.href).href,
+      runtimeBase: `${runtimeBasePath}/`,
+      assetBase: new URL(`${nativeResources?.runtimeBasePath || metadata.runtimeAssetBasePath || runtimeBasePath}/`, playerWindow.location.href).href,
       arguments: args,
       netplayEndpoint,
       signal: lifetime.signal,

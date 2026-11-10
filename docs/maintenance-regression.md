@@ -87,6 +87,8 @@
 
 固定顺序为 **构建或取得合格的 Web ZIP → 导入网站本地工作区 → 验收 → 本地 `main` 合入 → 推送 → 预生产 → 正式部署 → 线上核验**。以下沿用 `11a38f87` 的更新方式。网站在线播放器与资源页的 Kai 下载包及网站 APK 分开发布。
 
+网站构建还会生成 Android 离线 Player 清单及分块。部署时以同一环境正在提供的 Wasm 作为可选差量基线。基线不可用时发布完整文件。核对 `/play/runtime/android/v1/latest.json` 指向同一候选版本，并检查同一 APK 更新前后都能读取本地游戏和存档。变更离线壳与 Player 的接口时，须先保证现有协议的兼容性。
+
 1. **固定输入。** 记录目标 Kai 完整提交和网站本地、远端 `main` 的起点。检查两边的工作区，保留已有暂存、未暂存及未跟踪内容。以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 中的补丁清单为准，核对哪些补丁已进入目标 Kai 源码、哪些仍要应用。涉及同一份运行包配置或补丁的并行修改，先合并到同一候选并检查差异，再推进发布。
 2. **准备带补丁的 Web ZIP。** 获得构建授权后，沿用上一版做法，在固定 Kai 提交的独立构建工作区按清单顺序逐个执行 `git apply --check`、`git apply`，然后运行 Kai 的 `./builds/package-docker.ps1 web`。当前源码补丁分别处理跳过启动 Logo、启动下载进度和共用资源。若本次指定使用 GitHub Actions，优先取既有工作流的固定提交产物，核对所需源码补丁是否已编入。缺少引擎补丁时，说明差异并确认构建方式。专用工作流或 CI 配置变更需单独明确范围。构建产物应包含 JSPI 和 Asyncify 两套 JS/Wasm、唯一的共用音色库，以及 Player、电影解码器、拼音词库和字体许可。打包入口若缺少许可，在导入前从固定源码或已核对的同版许可补齐到 ZIP 根目录。
 3. **固定配置并导入本地。** 更新运行包配置的 `version`、`revision`、`build`、ZIP 摘要及实际工具链、依赖和许可信息。以基线提交加源码补丁构建时使用 `sourceState: patched-commit`，保留实际应用的 `sourcePatches`。宿主补丁由导入脚本按 `patches` 的顺序应用，每一步都核对补丁、输入和输出摘要。输入变动时先在临时目录复核补丁效果，再更新对应摘要。产物字节变动使用新版本 URL。在网站工作区运行 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`，由脚本完成校验、Brotli 预压缩、生成 `SOURCE.json` 和清理旧版本。导入后核对配置、`SOURCE.json` 与唯一运行目录一致。

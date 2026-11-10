@@ -31,12 +31,16 @@ export function LocalInstallButton({ id, bytes, title, workId, coverBlobSha256 }
   const [native, setNative] = useState(false);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [playerReady, setPlayerReady] = useState(true);
   useEffect(() => {
     if (!isAndroidClient()) return;
     setNative(true);
     const refresh = () => {
-      void localRequest<{ items: { archiveVersionId: number; status: string }[] }>("list")
-        .then(result => setStatus(result.items.find(item => item.archiveVersionId === id)?.status ?? ""))
+      void localRequest<{ items: { archiveVersionId: number; status: string }[]; playerReady?: boolean }>("list")
+        .then(result => {
+          setStatus(result.items.find(item => item.archiveVersionId === id)?.status ?? "");
+          setPlayerReady(result.playerReady !== false);
+        })
         .catch(() => {});
     };
     refresh(); window.addEventListener("viprpg:local-change", refresh);
@@ -45,7 +49,7 @@ export function LocalInstallButton({ id, bytes, title, workId, coverBlobSha256 }
   const queued = status === "created" || status === "installing" || status === "paused";
   return <Rm2kButton className="min-h-12.5 w-full text-base"
     href={native ? undefined : `/play/${workId}`} reloadDocument
-    disabled={busy} icon={native && status !== "ready" ? <Download aria-hidden /> : <Play aria-hidden />}
+    disabled={busy || (native && status === "ready" && !playerReady)} icon={native && status !== "ready" ? <Download aria-hidden /> : <Play aria-hidden />}
     onClick={native ? () => {
       setBusy(true);
       void (status === "ready" || queued ? localRequest("open", status === "ready" ? { archiveVersionId: id } : {}) : coverPreview(coverBlobSha256).then(coverDataUrl => localRequest<{ status: string }>("install", { archiveVersionId: id, title, workId, coverBlobSha256, coverDataUrl })).then(task => setStatus(task.status)))

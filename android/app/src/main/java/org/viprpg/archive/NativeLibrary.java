@@ -88,9 +88,10 @@ final class NativeLibrary extends LinearLayout {
     private final Chip[] filterButtons = new Chip[3];
     private String filter = "all", error, searchQuery = "";
     private boolean managing, loading = true;
+    private boolean playerReady;
     private long usage = -1;
 
-    NativeLibrary(Context context, Actions actions) {
+    NativeLibrary(Context context, PlayerUpdateDrawer playerUpdate, Actions actions) {
         super(context);
         this.actions = actions;
         setOrientation(VERTICAL);
@@ -124,6 +125,9 @@ final class NativeLibrary extends LinearLayout {
         });
         addView(selectionToolbar, new LayoutParams(-1,
             dp(ArchivePageHeader.CONTENT_HEIGHT_DP) + dp(ArchivePageHeader.DIVIDER_HEIGHT_DP)));
+        FrameLayout playerUpdateSlot = new FrameLayout(context);
+        playerUpdateSlot.addView(playerUpdate, new FrameLayout.LayoutParams(-1, -2));
+        addView(playerUpdateSlot, new LayoutParams(-1, -2));
 
         refreshLayout = new SwipeRefreshLayout(context);
         refreshLayout.setColorSchemeColors(teal());
@@ -322,7 +326,7 @@ final class NativeLibrary extends LinearLayout {
             : entries.isEmpty() ? "还没有本地游戏。\n在主站安装的游戏会显示在这里。"
             : shown.isEmpty() ? "没有符合条件的作品" : "");
         message.setVisibility(error != null || loading || shown.isEmpty() ? VISIBLE : GONE);
-        StringBuilder structure = new StringBuilder().append(managing).append(loading);
+        StringBuilder structure = new StringBuilder().append(managing).append(loading).append(playerReady);
         for (Entry entry : shown) structure.append('|').append(entry.key).append(':').append(entry.ready)
             .append(':').append(entry.title).append(':').append(entry.workId).append(':').append(entry.lastPlayed);
         String signature = structure.toString();
@@ -388,6 +392,7 @@ final class NativeLibrary extends LinearLayout {
             if (!managing) {
                 MaterialButton play = icon(GalleryIcons.PLAY, teal(), () -> actions.play(entry.key));
                 play.setContentDescription("游玩 " + entry.title);
+                play.setEnabled(playerReady);
                 line.addView(play, new LayoutParams(dp(48), dp(48)));
             }
         } else {
@@ -500,6 +505,11 @@ final class NativeLibrary extends LinearLayout {
 
     private MaterialButton icon(String path, int color, Runnable click) {
         return NativeControls.icon(getContext(), path, color, click);
+    }
+    void setPlayerReady(boolean ready) {
+        if (playerReady == ready) return;
+        playerReady = ready;
+        render();
     }
     private LinearLayout row() { LinearLayout row = new LinearLayout(getContext()); row.setOrientation(HORIZONTAL); return row; }
     private LinearLayout column() { LinearLayout col = new LinearLayout(getContext()); col.setOrientation(VERTICAL); return col; }

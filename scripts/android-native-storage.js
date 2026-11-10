@@ -1,4 +1,4 @@
-// APK-only adapter; the website's versioned runtime remains byte-for-byte unchanged.
+// Storage bridge included in the downloaded Android Player.
 self.nativeSaveReplies = new Map();
 self.nativePackages = function(resources) {
   self.nativeResources = resources;

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { readConfig, selectDeployment, validateDeployment, validateIsolation, deploymentSummary, confirmProduction } from "./deployment-config.mjs";
+import { buildAndroidPlayer } from "./build-android-player.mjs";
 
 const [command = "dev", ...args] = process.argv.slice(2);
 const { values, positionals } = parseArgs({ args, strict: false, allowPositionals: true, options: {
@@ -24,10 +25,10 @@ const environmentIndex = passthrough.indexOf("--env");
 if (environmentIndex >= 0) passthrough.splice(environmentIndex, 2);
 if (command === "dev") run(router, ["dev", ...passthrough]);
 else if (command === "typegen") run(router, ["typegen"]);
-else if (command === "build") run(router, ["build"]);
-else if (command === "preview") {
+else if (command === "build" || command === "preview") {
   run(router, ["build"]);
-  run(vite, ["preview", ...passthrough]);
+  await buildAndroidPlayer(resolve("build/client"));
+  if (command === "preview") run(vite, ["preview", ...passthrough]);
 } else if (command === "deploy") {
   if (positionals.length || Object.keys(values).some((key) => !["env", "plan", "confirm", "apply-migrations"].includes(key)))
     throw new Error("Deploy accepts only --env, --plan, --confirm and --apply-migrations");
@@ -48,6 +49,7 @@ else if (command === "preview") {
     validateDeployment(built, environment, "build/server");
     if (JSON.stringify(deploymentSummary(built, environment)) !== JSON.stringify(summary))
       throw new Error("Built Worker resources differ from the selected deployment");
+    await buildAndroidPlayer(resolve("build/server", built.assets.directory), target.vars.APP_ORIGIN);
     if (environment === "production") {
       run("scripts/production-migrations.mjs", ["--plan"]);
       await confirmProduction(values.confirm, values["apply-migrations"] ? "Deploy production and apply pending migrations" : "Deploy production code only");
