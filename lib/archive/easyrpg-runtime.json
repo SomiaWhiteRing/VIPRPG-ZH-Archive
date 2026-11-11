@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.12-site-kai-room-password.2",
-  "revision": "f5e5fb860f19429c29c4953a75251c429b9743f4",
-  "build": "kai-web-room-password-interaction",
+  "version": "2026.11.12-site-kai-halfwidth-kana.1",
+  "revision": "5d555a82cdc31e8daffc6c80bf256992650d50f4",
+  "build": "kai-web-halfwidth-kana",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "commit",
-  "archiveSha256": "6c1cdfbd33e85ebd026e552c7c191b826a0cfbfc9474c14dc2c0b64061438ef0",
+  "archiveSha256": "cb12e3afaa086d8cd0d43ed3cf40c2a44ca9e1b4d8c4e0b9ae72d2a8ef9b7e26",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
