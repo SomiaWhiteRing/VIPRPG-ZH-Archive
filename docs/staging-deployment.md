@@ -20,7 +20,7 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Worker 联机的归档可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
 
-预生产玉露弹归档版本 17 使用 `netplay-hk-staging.viprpg.org`。双方以访客身份连到同一台香港服务器，房间和对战消息均由 [香港联机服务](../scripts/netplay-hk-relay.mjs) 处理。服务器以 Debian 的 Node.js 和 `node-ws` 运行该脚本，设置 `NETPLAY_ARCHIVE_VERSION=17`，Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。
+预生产玉露弹归档版本 17 使用 `85-189-41-214.sslip.io` 测试域名，DNS 直接返回香港服务器的公网 IP。双方以访客身份连接，房间和对战消息均由 [香港联机服务](../scripts/netplay-hk-relay.mjs) 处理。服务器以 Debian 的 Node.js 和 `node-ws` 运行该脚本，设置 `NETPLAY_ARCHIVE_VERSION=17`，Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。
 
 ## 干净种子
 
