@@ -426,7 +426,7 @@ function createNetplay(endpoint, rtcSupported) {
           else rtcPort?.postMessage({type: 'socket-probe-pong', sample: Number(sample)});
         } else if (typeof data === 'string' && data.startsWith('rtc:start:')) {
           const {port1, port2} = new MessageChannel();
-          const {iceServers, offer, negotiationStartedAt, scoped, relayOnly} = JSON.parse(data.slice('rtc:start:'.length));
+          const {iceServers, offer, negotiationStartedAt, scoped, relayOnly, compareRelay} = JSON.parse(data.slice('rtc:start:'.length));
           const diagnostics = Number.isSafeInteger(negotiationStartedAt);
           closeRtc();
           rtcPort = port1;
@@ -459,7 +459,7 @@ function createNetplay(endpoint, rtcSupported) {
               if (rtcSelected && resumeToken) ended();
             }
           };
-          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer, diagnostics, relayOnly}, [port2]);
+          postMessage({type: 'netplay-rtc', port: port2, iceServers, offer, diagnostics, relayOnly, compareRelay}, [port2]);
         } else if (typeof data === 'string' && data.startsWith('rtc:signal:')) {
           try {
             rtcPort?.postMessage({type: 'signal', value: JSON.parse(data.slice('rtc:signal:'.length))});

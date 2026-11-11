@@ -47,7 +47,9 @@ export async function getArchiveNetplayEndpoint(runtime: AppRuntime, record: Arc
   if (!record.netplayService || !runtime.env.NETPLAY_ROOM) return;
   let path = `/api/netplay/v1/${record.id}/`;
   if (runtime.origin === stagingNetplaySiteOrigin && record.id === stagingNetplayHongKongArchive) {
-    if (new URL(runtime.request.url).searchParams.get("netplayRelay") !== "1") path += "direct/";
+    const options = new URL(runtime.request.url).searchParams;
+    if (options.get("netplayTurn") === "1") path += "turn/";
+    else if (options.get("netplayRelay") !== "1") path += "direct/";
     const user = await getCurrentUser(runtime);
     if (!user) return new URL(path, stagingNetplayHongKongOrigin).href;
     const key = runtime.env.NETPLAY_HK_IDENTITY_KEY;

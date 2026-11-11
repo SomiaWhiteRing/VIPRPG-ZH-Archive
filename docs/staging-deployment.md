@@ -22,6 +22,8 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 预生产玉露弹归档版本 17 使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 协助 WebRTC 直连，两边都确认接通后直接传对战数据。连接失败或 8 秒内未完成时，开战前切到香港 WebSocket 转发。在网页版游玩地址加 `?netplayRelay=1` 可进纯转发房间池做对照，两台设备使用同一入口。香港服务以 Debian 的 Node.js 和 `node-ws` 运行，设置 `NETPLAY_ARCHIVE_VERSION=17`，Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
 
+在网页版游玩地址加 `?netplayTurn=1` 进入独立的香港 UDP TURN 房间池。该入口要求双方经 coturn 中继，连接失败时结束本次协商。coturn 在香港服务器的公网 IPv4 上监听 UDP 3478，使用 UDP 49160–49259 分配中继端口，中继对端限定为同一服务器上的分配。香港联机服务使用与 coturn 配置一致的 `NETPLAY_HK_TURN_SECRET` 签发短期凭据，实际使用的中继协议见香港服的 `netplay_ice_stats` 日志。
+
 ## 干净种子
 
 不要把本地开发数据库整体上传到远端。准备独立的预生产导入包：

@@ -1,7 +1,7 @@
 {
-  "version": "2026.11.11-site-40afbf126-webrtc.5-hk-direct-v2-staging",
+  "version": "2026.11.11-site-40afbf126-webrtc.6-hk-turn-staging",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers-direct-first-hitv-staging-hk-direct",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers-direct-first-hitv-staging-hk-direct-hk-turn-udp",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
@@ -43,6 +43,20 @@
       "sha256": "df7a7ff88e9c9a05e5f733a57054b848ce3af77f4fb9f891f7061fc454cfff72",
       "beforeSha256": "b84eacb44e3ff1ac542953afeac3d08367d9c36c1bb7756c8c28f49a7e2d6956",
       "afterSha256": "29c7a2b0f442842ecb3f032be4359e9450e50d6523d3f789236a66eeb8b67b00"
+    },
+    {
+      "file": "player-host.js",
+      "path": "scripts/runtime-patches/kai-netplay-hk-turn-host.patch",
+      "sha256": "03d646d22215d771ace035e5219df604175983a41c741aed7d98cbe2f888e535",
+      "beforeSha256": "d0ce34097142e0774dbf0ce8bb03c297efb9e37dee1b4f971a7a2457e4236aea",
+      "afterSha256": "2456315d70b2081a25d92cda25dd12fb7430126a722601bb37f7266dcb0f6e42"
+    },
+    {
+      "file": "player-worker.js",
+      "path": "scripts/runtime-patches/kai-netplay-hk-turn-worker.patch",
+      "sha256": "c8d9150275ab2e9cb7345bfaf65c18d5dd8a300b9504630c0782962d274133b3",
+      "beforeSha256": "29c7a2b0f442842ecb3f032be4359e9450e50d6523d3f789236a66eeb8b67b00",
+      "afterSha256": "ef37dc225036fde8197d94f42d080830c699e415049283e261987e65ad4d2e00"
     }
   ],
   "sourcePatches": [
