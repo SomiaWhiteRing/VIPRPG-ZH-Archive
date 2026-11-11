@@ -6,6 +6,7 @@ import { requireAnyPagePermission } from "@/app/.server/auth/authorize";
 import { listPublicWorkMaintainers } from "@/app/.server/db/work-maintainers";
 import { WorkMaintainerEditor } from "@/app/components/work/work-maintainer-editor";
 import { getWorkForAdminEdit } from "@/app/.server/db/game-library";
+import { getWorkNetplaySpaceId, listNetplaySpaces } from "@/app/.server/db/netplay-spaces";
 
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
@@ -18,6 +19,8 @@ import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
+import { RedirectForm } from "@/app/components/ui/redirect-form";
+import { SelectField } from "@/app/components/ui/select";
 import { RelationEditor } from "@/app/games/[id]/relation-editor";
 import {
   canMergeWorks,
@@ -48,6 +51,9 @@ export async function loader(args: LoaderFunctionArgs) {
     ? await listPublicWorkMaintainers(runtime, workId)
     : [];
   const relationCapabilities = await getWorkRelationEditorCapabilities(runtime, workId, adminUser);
+  const netplay = hasPermission(adminUser, "work.distribution.update_any") && work.status !== "deleted"
+    ? { spaceId: await getWorkNetplaySpaceId(runtime, workId), spaces: (await listNetplaySpaces(runtime)).map(({ id, name }) => ({ id, name })) }
+    : null;
 
   return {
     workId,
@@ -57,6 +63,7 @@ export async function loader(args: LoaderFunctionArgs) {
     canUpdateStatus,
     maintainers,
     relationCapabilities,
+    netplay,
   };
 }
 
@@ -81,6 +88,7 @@ export default function AdminWorkEditPage() {
     canUpdateStatus,
     maintainers,
     relationCapabilities,
+    netplay,
   } = useLoaderData<typeof loader>();
   return (
     <main key={work.id}>
@@ -110,6 +118,19 @@ export default function AdminWorkEditPage() {
           ) : null}
         </StickySaveBar>
       </WorkEditForm>
+      {netplay ? <Pane heading="联机空间">
+        <RedirectForm action={`/api/admin/works/${workId}/netplay-space`} className="flex flex-wrap items-end gap-3">
+          <FormField controlId="work-netplay-space" label="空间">
+            <SelectField id="work-netplay-space" name="space_id"
+              defaultValue={netplay.spaceId === null ? "none" : String(netplay.spaceId)}
+              options={[{ value: "none", label: "不加入联机空间" }, ...netplay.spaces.map((space) => ({ value: String(space.id), label: space.name }))]} />
+          </FormField>
+          <Button type="submit">保存联机空间</Button>
+          {hasPermission(adminUser, "system.maintenance.run") ? (
+            <Link to="/admin/netplay-spaces" className={buttonVariants({ variant: "outline" })}>管理空间</Link>
+          ) : null}
+        </RedirectForm>
+      </Pane> : null}
       {canUpdateStatus ? (
         <Pane heading="作品管理">
           <ConfirmingForm action={`/api/admin/works/${workId}/lifecycle`} confirmField="operation"

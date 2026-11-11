@@ -30,7 +30,7 @@ staging 保留该 Environment 的 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKE
 
 正式入口采用[主站社区 CNAME 优选](./main-ingress-selection.md)：原 Worker 的 `viprpg.org/*` Route 配合灰云 CNAME `cf.090227.xyz`。2026-10-08 已按负责人授权切换并同步正式配置 secret，routes 直接保存，不再加载或覆盖试用配置。后续正式 secret、Route、DNS 的变更及发布仍须取得对应目标和操作范围的确认。
 
-玉露弹（作品 282）的正式网页版默认进入 `netplay-hk.viprpg.org` 的自动选线房间池。香港正式进程监听本机 8788，`NETPLAY_ARCHIVE_VERSION` 与当前正式归档一致，独立于预生产 8787。正式 Environment 的 `PRODUCTION_NETPLAY_HK_IDENTITY_KEY` 与正式进程的签名密钥一致，由部署步骤随 Worker 发布。旧 APK 的联机地址查询保留同源入口，归档 335 仍可查询联机地址和使用同版本房间。
+玉露弹（作品 282）的联机空间默认使用 `netplay-hk.viprpg.org` 的自动选线房间池。香港正式进程监听本机 8788，独立于预生产 8787。进程的 `NETPLAY_ARCHIVE_VERSION` 与空间外部地址中的固定数字路径一致。正式 Environment 的 `PRODUCTION_NETPLAY_HK_IDENTITY_KEY` 与正式进程的签名密钥一致，由部署步骤随 Worker 发布。旧 APK 的联机地址查询保留同源入口，归档 335 仍可查询联机地址和使用同版本房间。
 
 ## 本地准备与执行
 
