@@ -20,11 +20,13 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Worker 联机的归档可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
 
-预生产玉露弹归档版本 17 使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 协助 WebRTC 直连，两边都确认接通后直接传对战数据。连接失败或 8 秒内未完成时，开战前切到香港 WebSocket 转发。在网页版游玩地址加 `?netplayRelay=1` 可进纯转发房间池做对照，两台设备使用同一入口。香港服务以 Debian 的 Node.js 和 `node-ws` 运行，设置 `NETPLAY_ARCHIVE_VERSION=17`，Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
+预生产玉露弹（作品 18）使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 以 Debian 的 Node.js 和 `node-ws` 运行，`NETPLAY_ARCHIVE_VERSION` 与当前归档版本 ID 一致。Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
 
 在网页版游玩地址加 `?netplayTurn=1` 进入独立的香港 UDP TURN 房间池。该入口要求双方经 coturn 中继，连接失败时房主留在原房间等待，来客可从大厅重新加入。coturn 在香港服务器的公网 IPv4 和 IPv6 上监听 UDP 3478，两类连接都使用同一服务器的 IPv4 分配 UDP 49160–49259 中继端口，中继对端限定为同一服务器上的分配。野草云 P 型 VPS 还需在客户中心的产品防火墙规则中允许 `net0` 入站 UDP 3478。香港联机服务使用与 coturn 配置一致的 `NETPLAY_HK_TURN_SECRET` 签发短期凭据，实际使用的中继协议见香港服的 `netplay_ice_stats` 日志。
 
 使用 `?netplayTurn=443` 可单独测试 UDP 443。该房间池使用 coturn 的 IPv4 和 IPv6 辅助监听地址，沿用同一组中继端口和凭据。野草云产品防火墙需放行入站 UDP 443，coturn 的 systemd 服务通过 `CAP_NET_BIND_SERVICE` 绑定该端口。
+
+预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN 443，房间服务收到双方确认后宣布房间就绪。混用旧 Player 时走 WebSocket。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs` 与 `netplay-route-selection.mjs` 放在同一目录。
 
 ## 干净种子
 

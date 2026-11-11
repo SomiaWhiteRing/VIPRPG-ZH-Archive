@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { workReadCondition } from "@/app/.server/db/work-visibility";
 import type { AppRuntime } from "@/app/.server/runtime";
 import {
-  stagingNetplayEdgeOrigin, stagingNetplayHongKongArchive, stagingNetplayHongKongOrigin, stagingNetplaySiteOrigin,
+  stagingNetplayEdgeOrigin, stagingNetplayHongKongOrigin, stagingNetplayHongKongWork, stagingNetplaySiteOrigin,
 } from "@/lib/archive/netplay-ingress";
 import { getUserAvatarSrc } from "@/lib/user-profile";
 
@@ -46,11 +46,12 @@ export type ArchiveDownloadRecord = {
 export async function getArchiveNetplayEndpoint(runtime: AppRuntime, record: ArchiveDownloadRecord): Promise<string | undefined> {
   if (!record.netplayService || !runtime.env.NETPLAY_ROOM) return;
   let path = `/api/netplay/v1/${record.id}/`;
-  if (runtime.origin === stagingNetplaySiteOrigin && record.id === stagingNetplayHongKongArchive) {
+  if (runtime.origin === stagingNetplaySiteOrigin && record.workId === stagingNetplayHongKongWork) {
     const options = new URL(runtime.request.url).searchParams;
     if (options.get("netplayTurn") === "443") path += "turn443/";
     else if (options.get("netplayTurn") === "1") path += "turn/";
-    else if (options.get("netplayRelay") !== "1") path += "direct/";
+    else if (options.get("netplayDirect") === "1") path += "direct/";
+    else if (options.get("netplayRelay") !== "1") path += "auto/";
     const user = await getCurrentUser(runtime);
     if (!user) return new URL(path, stagingNetplayHongKongOrigin).href;
     const key = runtime.env.NETPLAY_HK_IDENTITY_KEY;

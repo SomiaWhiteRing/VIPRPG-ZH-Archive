@@ -147,6 +147,143 @@ function createRenderer(canvas) {
   };
 }
 
+function closeNetplayPort(port) {
+  port?.postMessage({type: 'close'});
+  port?.close();
+}
+
+function createNetplayRouteSelection({round, paths, offer}, {sendControl, sendSocket, socketReady, receive, activate, disconnect}) {
+  const candidates = new Map();
+  let selected, active;
+  const send = (type, path, fields) => sendControl({type, round, path, ...fields});
+  const sendData = (candidate, data) => {
+    if (candidate.port) candidate.port.postMessage({type: 'data', data}, [data]);
+    else sendSocket(data);
+  };
+  const stopProbe = candidate => {
+    clearInterval(candidate.interval);
+    clearTimeout(candidate.deadline);
+  };
+  const dispose = candidate => {
+    stopProbe(candidate);
+    closeNetplayPort(candidate.port);
+    candidates.delete(candidate.id);
+  };
+  const isOpen = candidate => candidate?.id === 'websocket' ? socketReady() : candidate?.open;
+  const receiveProbe = (candidate, data) => {
+    if (!(data instanceof ArrayBuffer) || data.byteLength !== 10) return false;
+    if (!candidate || active) return true;
+    const packet = new DataView(data);
+    const kind = packet.getUint8(0), sequence = packet.getUint8(1);
+    if (packet.getFloat64(2, true) !== round) return true;
+    if (kind === 128) {
+      packet.setUint8(0, 129);
+      sendData(candidate, data);
+    } else if (kind === 129 && candidate.sentAt?.[sequence] !== undefined && candidate.rtts[sequence] === null) {
+      const now = performance.now();
+      if (now > candidate.probeUntil) return true;
+      candidate.rtts[sequence] = Math.round(now - candidate.sentAt[sequence]);
+      if (candidate.lastReply !== undefined) candidate.longestGap = Math.max(candidate.longestGap, now - candidate.lastReply);
+      candidate.lastReply = now;
+    }
+    return true;
+  };
+
+  for (const {id, iceServers, relayOnly} of paths) {
+    const candidate = {id, open: id === 'websocket', early: []};
+    candidates.set(id, candidate);
+    if (id === 'websocket') {
+      send('ready', id);
+      continue;
+    }
+    const {port1, port2} = new MessageChannel();
+    candidate.port = port1;
+    port1.onmessage = ({data}) => {
+      if (candidates.get(id) !== candidate) return;
+      if (data.type === 'open') {
+        candidate.open = true;
+        send('ready', id);
+      } else if (data.type === 'signal') {
+        send('signal', id, {value: data.value});
+      } else if (data.type === 'data') {
+        if (receiveProbe(candidate, data.data)) return;
+        if (active === candidate) receive(data.data);
+        else if (selected === candidate && candidate.early.length < 256) candidate.early.push(data.data);
+      } else if (data.type === 'closed') {
+        send('failed', id);
+        dispose(candidate);
+        if (active === candidate) disconnect();
+      } else if (data.type === 'ice-pair' && data.final && active === candidate) {
+        send('ice-pair', id, {value: data.value});
+      }
+    };
+    postMessage({type: 'netplay-rtc', path: id, port: port2, iceServers, offer, relayOnly, compareRelay: false}, [port2]);
+  }
+
+  return {
+    round,
+    close() {
+      for (const candidate of candidates.values()) dispose(candidate);
+    },
+    receiveSocket(data) {
+      return receiveProbe(candidates.get('websocket'), data);
+    },
+    receive(message) {
+      const {type, path} = message;
+      if (message.round !== round || active) return;
+      const candidate = candidates.get(path);
+      if (type === 'signal') {
+        candidate?.port?.postMessage({type: 'signal', value: message.value});
+      } else if (type === 'probe' && isOpen(candidate) && !candidate.rtts) {
+        const {samples, intervalMs, durationMs} = message;
+        if (!Number.isSafeInteger(samples) || samples < 1 || samples > 32 ||
+            !Number.isSafeInteger(intervalMs) || intervalMs < 1 ||
+            !Number.isSafeInteger(durationMs) || durationMs < samples * intervalMs || durationMs > 5_000) return;
+        candidate.sentAt = [];
+        candidate.probeUntil = performance.now() + durationMs;
+        candidate.rtts = Array(samples).fill(null);
+        candidate.longestGap = 0;
+        const sendSample = () => {
+          const index = candidate.sentAt.length;
+          const packet = new DataView(new ArrayBuffer(10));
+          packet.setUint8(0, 128);
+          packet.setUint8(1, index);
+          packet.setFloat64(2, round, true);
+          candidate.sentAt.push(performance.now());
+          sendData(candidate, packet.buffer);
+          if (candidate.sentAt.length === samples) clearInterval(candidate.interval);
+        };
+        candidate.interval = setInterval(sendSample, intervalMs);
+        candidate.deadline = setTimeout(() => {
+          stopProbe(candidate);
+          candidate.sentAt = undefined;
+          send('measurement', path, {rtts: candidate.rtts, longestGapMs: Math.round(candidate.longestGap)});
+        }, durationMs);
+        sendSample();
+      } else if (type === 'select') {
+        if (selected) selected.early.length = 0;
+        selected = candidate;
+        send(isOpen(candidate) ? 'accept' : 'failed', path);
+      } else if (type === 'commit' && selected === candidate && candidate) {
+        if (!isOpen(candidate)) {
+          send('failed', path);
+          disconnect();
+          return;
+        }
+        active = candidate;
+        for (const other of candidates.values()) {
+          if (other === active) stopProbe(other);
+          else dispose(other);
+        }
+        activate(active.port, round);
+        for (const packet of active.early) receive(packet);
+        active.early.length = 0;
+        active.port?.postMessage({type: 'ice-pair'});
+      }
+    },
+  };
+}
+
 function createNetplay(endpoint, rtcSupported) {
   if (!endpoint) return;
   const base = rtcSupported ? new URL('rtc/', endpoint) : new URL(endpoint);
@@ -158,15 +295,15 @@ function createNetplay(endpoint, rtcSupported) {
   directory.searchParams.set('guest', guest);
   const directoryHttp = new URL(directory);
   directoryHttp.protocol = base.protocol === 'wss:' ? 'https:' : 'http:';
-  let socket, state = 0;
-  let rtcPort, rtcRound, rtcSelected = false;
+  let socket, state = 0, joinResult = 0;
+  let rtcPort, rtcRound, rtcSelected = false, routeSelection;
   const directoryTimeout = 5000;
   let subscription, directoryDeadline = 0, nextProbe = 0, retry = 0;
   let fallback = false, nextPoll = 0, poll;
   let rooms, identity, online = -1;
   let probe = 0, probeSent = 0, latency = -1;
   let resumeToken, resumeTimer, resumeDeadline = 0;
-  let inputMatch, lastInputAt = 0, inputs = 0, peakInputGap = 0, peakInputWait = 0;
+  let inputMatch, lastInputAt = 0, inputs = 0, peakInputGap = 0;
   let sentMatch = 0, sentFrame = -1;
   const avatarPaths = new Set(), avatars = new Map();
   const inbox = [], frames = [];
@@ -238,13 +375,14 @@ function createNetplay(endpoint, rtcSupported) {
     frames.length = 0;
     latency = -1;
     inputMatch = undefined;
-    lastInputAt = inputs = peakInputGap = peakInputWait = 0;
+    lastInputAt = inputs = peakInputGap = 0;
     sentMatch = 0;
     sentFrame = -1;
   };
   const closeRtc = () => {
-    rtcPort?.postMessage({type: 'close'});
-    rtcPort?.close();
+    if (routeSelection) routeSelection.close();
+    else closeNetplayPort(rtcPort);
+    routeSelection = undefined;
     rtcPort = undefined;
     rtcRound = undefined;
     rtcSelected = false;
@@ -256,7 +394,7 @@ function createNetplay(endpoint, rtcSupported) {
     const old = socket;
     socket = undefined;
     clear();
-    state = 0;
+    state = joinResult = 0;
     closeRtc();
     old?.close();
   };
@@ -279,6 +417,7 @@ function createNetplay(endpoint, rtcSupported) {
     stopDirectory,
     refreshDirectory,
     state: () => state,
+    joinResult: () => joinResult,
     rooms() {
       const now = performance.now();
       if (subscription && directoryDeadline && now >= directoryDeadline) endDirectory(subscription);
@@ -358,6 +497,7 @@ function createNetplay(endpoint, rtcSupported) {
       }
       address.searchParams.set('heartbeat', '1');
       address.searchParams.set('inputStats', '1');
+      address.searchParams.set('routeSelection', '1');
       if (rtcSupported) address.searchParams.set('rtcResume', '1');
       const sendRtc = value => {
         if (socket?.readyState === WebSocket.OPEN) {
@@ -365,11 +505,12 @@ function createNetplay(endpoint, rtcSupported) {
         }
       };
       state = 1;
-      const ended = () => {
+      const ended = (result = 0) => {
         const inRoom = state >= 2;
         close();
         state = -1;
-        if (inRoom) refreshDirectory();
+        joinResult = result;
+        if (inRoom || result) refreshDirectory();
       };
       const receiveMatchData = data => {
         if (data instanceof ArrayBuffer && data.byteLength === 8) {
@@ -385,20 +526,46 @@ function createNetplay(endpoint, rtcSupported) {
             lastInputAt = now;
             inputs++;
           }
-          frames.push([match, frame, packet.getInt32(8, true), now]);
+          frames.push([match, frame, packet.getInt32(8, true)]);
         } else if (data instanceof ArrayBuffer && data.byteLength === 4 && inbox.length < 256) {
           inbox.push(new DataView(data).getInt32(0, true));
         } else {
           ended();
         }
       };
+      const sendRouteControl = message => {
+        if (socket?.readyState === WebSocket.OPEN) socket.send('route:' + JSON.stringify(message));
+      };
       const receiveRoomMessage = ({data, target: connection}) => {
         if (socket !== connection) return;
+        if (data instanceof ArrayBuffer && data.byteLength === 10) {
+          routeSelection?.receiveSocket(data);
+          return;
+        }
         if (data === 'room:ping' || data === 'room:ping:stats') {
           connection.send('room:pong');
           if (data === 'room:ping:stats' && inputs) {
-            connection.send(`room:input:${inputs}:${Math.round(peakInputGap)}:${Math.round(peakInputWait)}:${latency}`);
+            connection.send(`room:input:${inputs}:${Math.round(peakInputGap)}:${latency}`);
           }
+        } else if (typeof data === 'string' && data.startsWith('route:')) {
+          let message;
+          try { message = JSON.parse(data.slice(6)); } catch { return; }
+          if (message?.type === 'rejected') {
+            if (state === 1 && (message.round === undefined || message.round === routeSelection?.round)) {
+              const reasons = {full: 1, closed: 2, transport: 3};
+              ended(Object.hasOwn(reasons, message.reason) ? reasons[message.reason] : 0);
+            }
+          } else if (message?.type === 'start' && (state === 1 || state === 2)) {
+            if (!Number.isSafeInteger(message.round) || !Array.isArray(message.paths) || message.paths.length > 3 ||
+                !message.paths.every(path => ['websocket', 'direct', 'turn'].includes(path?.id))) return;
+            closeRtc();
+            routeSelection = createNetplayRouteSelection(message, {
+              sendControl: sendRouteControl, socketReady: () => socket?.readyState === WebSocket.OPEN,
+              sendSocket: bytes => { if (socket?.readyState === WebSocket.OPEN) socket.send(bytes); },
+              receive: receiveMatchData, disconnect: ended,
+              activate(port, round) { rtcPort = port; rtcRound = round; rtcSelected = Boolean(port); },
+            });
+          } else if (message) routeSelection?.receive(message);
         } else if (typeof data === 'string' && /^room:resume:[A-Za-z0-9_-]{32}$/.test(data)) {
           resumeToken = data.slice('room:resume:'.length);
         } else if (data === '2' || data === '3' || data === '4') {
@@ -501,11 +668,7 @@ function createNetplay(endpoint, rtcSupported) {
       const next = frames[0];
       // A faster peer can reach the rollback window before this browser's next tick.
       if (next?.[0] === sentMatch && next[1] > sentFrame + 1) return;
-      const packet = frames.shift();
-      if (!packet) return;
-      const receivedAt = packet.pop();
-      if (packet[1] >= 0) peakInputWait = Math.max(peakInputWait, performance.now() - receivedAt);
-      return packet;
+      return frames.shift();
     },
   };
 }

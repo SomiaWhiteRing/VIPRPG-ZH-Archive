@@ -15,7 +15,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   const masterVolume = context.createGain();
   masterVolume.connect(context.destination);
   const worker = new Worker(new URL('player-worker.js', base));
-  let closeNetplayRtc = () => {};
+  const netplayRtc = new Map();
   const audioWorker = new Worker(new URL('player-audio-worker.js', base));
   let audioReadyResolve, audioReadyReject;
   const audioReady = new Promise((resolve, reject) => { audioReadyResolve = resolve; audioReadyReject = reject; });
@@ -556,7 +556,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       stopMovie();
     }
   };
-  function connectNetplayRtc({port, iceServers, offer, diagnostics, relayOnly, compareRelay = true}) {
+  function connectNetplayRtc({port, iceServers, offer, diagnostics, relayOnly, compareRelay = true}, onClosed) {
     let peer;
     let channel;
     let open = true;
@@ -569,7 +569,6 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const startedAt = performance.now();
     const pendingCandidates = [];
     const milestones = new Set();
-    const sampleTimers = [];
     const candidateNumbers = new Map();
     const localSignals = [];
     const remoteSignals = [];
@@ -578,7 +577,6 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const probeReplies = new Map();
     const stunErrors = new Map();
     const elapsed = () => Math.round(performance.now() - startedAt);
-    const clearSamples = () => sampleTimers.forEach(timer => clearTimeout(timer));
     const mark = milestone => {
       if (!open || milestones.has(milestone)) return;
       milestones.add(milestone);
@@ -587,11 +585,11 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const close = () => {
       if (!open) return;
       open = false;
-      clearSamples();
       clearTimeout(finishTimer);
       for (const complete of probeReplies.values()) complete(false);
       port.close();
       peer?.close();
+      onClosed();
     };
     const fail = milestone => {
       if (!open || finishing) return;
@@ -723,7 +721,6 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       }
       if (finishing) return;
       finishing = true;
-      clearSamples();
       // The game has already fallen back or received the failure. Bound the lifetime of the old peer.
       finishTimer = setTimeout(() => {
         sendIceStats(phase, 'timeout');
@@ -732,7 +729,6 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       void sampleStats(phase).finally(close);
     };
     const reportIcePair = async final => {
-      if (final) clearSamples();
       const {status, stats} = await readStats();
       if (final) sendIceStats('connected', status, stats);
       let value = 'unavailable';
@@ -811,7 +807,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       };
       channel.onmessage = ({data}) => {
         if (!(data instanceof ArrayBuffer)) return fail('channel_error');
-        if (relayOnly && data.byteLength === 2) {
+        if (relayOnly && compareRelay && data.byteLength === 2) {
           const [command, sample] = new Uint8Array(data);
           if (command === relayPing) {
             if (channel.readyState === 'open') channel.send(Uint8Array.of(relayPong, sample));
@@ -895,10 +891,6 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
         }).catch(() => fail('invalid_signal'));
       }
     };
-    if (diagnostics) {
-      sampleTimers.push(setTimeout(() => void sampleStats('2s'), 2000));
-      sampleTimers.push(setTimeout(() => void sampleStats('6s'), 6000));
-    }
     if (offer) {
       try {
         attach(peer.createDataChannel('easyrpg-netplay', {ordered: true}));
@@ -986,8 +978,13 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
         if (url.protocol === 'https:' || url.protocol === 'http:') window.open(url.href, '_blank', 'noopener,noreferrer');
       } catch { /* Invalid game-supplied URL. */ }
     } else if (data.type === 'netplay-rtc') {
-      closeNetplayRtc();
-      closeNetplayRtc = connectNetplayRtc(data);
+      const path = data.path ?? 'legacy';
+      netplayRtc.get(path)?.close();
+      const session = {};
+      netplayRtc.set(path, session);
+      session.close = connectNetplayRtc(data, () => {
+        if (netplayRtc.get(path) === session) netplayRtc.delete(path);
+      });
     } else if (data.type === 'movie-open') {
       void openMovie(data);
     } else if (data.type === 'movie-stop' && data.id === movieId) stopMovie();
@@ -1205,7 +1202,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   }
   startStartupTimer();
   const shutdown = async () => {
-    closeNetplayRtc();
+    for (const session of netplayRtc.values()) session.close();
     nameInput?.finish(null);
     fileOutputConfirmation?.cancel();
     closeConsoleWindow();

@@ -6,7 +6,6 @@ import type { PlayerSession } from "@/app/play/[workId]/web-play-player";
 import { useWebPlayScreenshots } from "@/app/play/[workId]/web-play-screenshots";
 import { WebPlaySurface } from "@/app/play/[workId]/web-play-surface";
 import type { WebPlayInstallation } from "@/app/play/[workId]/web-play-types";
-import { stagingNetplayHongKongArchive, stagingNetplayHongKongOrigin, stagingNetplaySiteOrigin } from "@/lib/archive/netplay-ingress";
 import { requestJson } from "@/lib/ui/api-response";
 import { ArrowLeft, RectangleHorizontal, RectangleVertical } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -155,13 +154,11 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
       const timeout = setTimeout(() => netplayLookup.abort(), 2_000);
       netplayEndpoint = requestJson<{ netplayEndpoint?: unknown }>(
         `/api/archive-versions/${installation.archiveVersionId}/web-play?fields=netplayEndpoint`,
-        { cache: "no-store", signal: netplayLookup.signal },
+        { cache: "no-store", redirect: "error", signal: netplayLookup.signal },
       ).then(({ netplayEndpoint }) => {
         if (typeof netplayEndpoint !== "string") return;
         const endpoint = new URL(netplayEndpoint);
-        if (endpoint.origin === window.location.origin ||
-            (window.location.origin === stagingNetplaySiteOrigin &&
-              installation.archiveVersionId === stagingNetplayHongKongArchive && endpoint.origin === stagingNetplayHongKongOrigin)) {
+        if (endpoint.origin === window.location.origin || endpoint.protocol === "https:") {
           return endpoint.href;
         }
       }).catch(() => undefined).finally(() => clearTimeout(timeout));

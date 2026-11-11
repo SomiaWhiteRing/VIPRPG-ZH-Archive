@@ -3,6 +3,7 @@ import { createServer, STATUS_CODES } from "node:http";
 import { createRequire } from "node:module";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { startRouteSelection } from "./netplay-route-selection.mjs";
 
 const { WebSocket, WebSocketServer } = createRequire(import.meta.url)("ws");
 const origin = "https://staging.viprpg.org";
@@ -19,7 +20,8 @@ const relay = { rooms: new Map(), directory: new Map() };
 const direct = { rooms: new Map(), directory: new Map() };
 const turn = { rooms: new Map(), directory: new Map(), turnPort: 3478 };
 const turn443 = { rooms: new Map(), directory: new Map(), turnPort: 443 };
-const pools = { direct, turn, turn443 };
+const auto = { rooms: new Map(), directory: new Map() };
+const pools = { direct, turn, turn443, auto };
 const wss = new WebSocketServer({ noServer: true, maxPayload: 64, perMessageDeflate: false });
 const rtcWss = new WebSocketServer({ noServer: true, maxPayload: 50_000, perMessageDeflate: false });
 const heartbeatIntervalMs = 5_000;
@@ -30,7 +32,7 @@ const iceServers = [{ urls: ["stun:stun.hitv.com:3478", "stun:stun.cloudflare.co
 function route(request) {
   if (!URL.canParse(request.url, origin)) return;
   const url = new URL(request.url, origin);
-  const match = /^\/api\/netplay\/v1\/([1-9]\d*)\/(?:(direct|turn|turn443)\/)?(?:identity\/([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)\/)?(?:rtc\/)?(rooms|[1-9]\d{0,5})$/.exec(url.pathname);
+  const match = /^\/api\/netplay\/v1\/([1-9]\d*)\/(?:(direct|turn|turn443|auto)\/)?(?:identity\/([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)\/)?(?:rtc\/)?(rooms|[1-9]\d{0,5})$/.exec(url.pathname);
   if (Number(match?.[1]) !== archiveVersionId) return;
   const [, , modePool, payload, signature, target] = match;
   const pool = pools[modePool] ?? relay;
@@ -56,6 +58,7 @@ function route(request) {
     mode: url.searchParams.get("mode"),
     pool,
     rtc: url.searchParams.get("rtcResume") === "1",
+    routeSelection: url.searchParams.get("routeSelection") === "1",
     inputStats: url.searchParams.get("inputStats") === "1",
     platform: /Android/i.test(agent) ? "android" : /Windows/i.test(agent) ? "windows" : /iPhone|iPad/i.test(agent) ? "ios" : "other",
     resume: url.searchParams.get("resume"),
@@ -75,6 +78,21 @@ function listRooms({ rooms }) {
 
 function send(socket, data) {
   if (socket?.readyState === WebSocket.OPEN) socket.send(data);
+}
+
+function sendRoute(seat, message) {
+  send(seat.socket, "route:" + JSON.stringify(message));
+}
+
+function turnIceServers(roomId, index, turnPort, startedAt) {
+  const username = `${Math.floor(startedAt / 1000) + 7200}:gyokuro-${roomId}-${index + 1}-${randomBytes(6).toString("hex")}`;
+  return [{
+    urls: [
+      `turn:netplay-hk-staging.viprpg.org:${turnPort}?transport=udp`,
+      `turn:[2001:df1:7880:6::953]:${turnPort}?transport=udp`,
+    ],
+    username, credential: createHmac("sha1", turnKey).update(username).digest("base64"),
+  }];
 }
 
 function publishDirectory(pool) {
@@ -98,22 +116,23 @@ function watchDirectory(socket, { pool, identity }) {
   publishDirectory(pool);
 }
 
-function selectRoute(room, route, reason) {
+function selectRoute(room, route, reason, choice) {
   if (room.seats.size !== 2) return;
   clearTimeout(room.negotiation?.timer);
   room.route = route;
+  room.activeSelection = choice && { round: choice.round, path: choice.path };
   const seats = [...room.seats];
   const details = room.negotiation && {
     negotiationStartedAt: room.negotiation.startedAt,
     negotiationMs: Date.now() - room.negotiation.startedAt,
     seats: seats.map(seat => ({ platform: seat.platform, signals: seat.signals, milestones: seat.milestones })),
   };
-  const turnPort = room.pool.turnPort;
+  const turnPort = choice?.path === "turn" ? 443 : room.pool.turnPort;
   const connected = route === "webrtc";
   const loggedRoute = turnPort ? "hong_kong_turn_udp" : route;
   console.log(JSON.stringify({ event: "netplay_route", archiveVersionId, roomId: room.id,
-    route: loggedRoute, reason, ...(turnPort && { connected, turnPort }), ...details }));
-  if (turnPort && !connected) {
+    route: loggedRoute, reason, ...(turnPort && { connected, turnPort }), ...details, ...choice }));
+  if (room.pool.turnPort && !connected) {
     leave(room, seats[1], "turn_unavailable");
     return;
   }
@@ -124,7 +143,8 @@ function selectRoute(room, route, reason) {
       seat.resumeToken = randomBytes(24).toString("base64url");
       send(seat.socket, "room:resume:" + seat.resumeToken);
     }
-    send(seat.socket, connected ? "rtc:webrtc" : "rtc:websocket");
+    if (choice) sendRoute(seat, { type: "commit", ...room.activeSelection });
+    else send(seat.socket, connected ? "rtc:webrtc" : "rtc:websocket");
     send(seat.socket, String(3 + index));
   }
 }
@@ -134,6 +154,7 @@ function leave(room, seat, reason, closeCode) {
   const heartbeat = [...room.seats].map(({ rttMs, peakRttMs }) => ({ rttMs, peakRttMs }));
   const input = [...room.seats].map(player => player.input);
   const route = room.route;
+  const turnPort = room.activeSelection?.path === "turn" ? 443 : room.pool.turnPort;
   const leaving = reason === "rtc_failed" ? [...room.seats] : [seat];
   for (const player of leaving) {
     clearInterval(player.ping);
@@ -143,6 +164,8 @@ function leave(room, seat, reason, closeCode) {
     player.socket?.close(1000);
   }
   clearTimeout(room.negotiation?.timer);
+  room.selection?.stop();
+  room.selection = room.activeSelection = undefined;
   room.ready = room.negotiation = room.route = undefined;
   const remaining = room.seats.values().next().value;
   if (remaining?.socket) {
@@ -155,7 +178,7 @@ function leave(room, seat, reason, closeCode) {
     room.pool.rooms.delete(room.id);
   }
   console.log(JSON.stringify({ event: "netplay_departure", archiveVersionId, roomId: room.id,
-    route: room.pool.turnPort ? "hong_kong_turn_udp" : route, turnPort: room.pool.turnPort, reason, closeCode,
+    route: turnPort ? "hong_kong_turn_udp" : route, turnPort, reason, closeCode,
     remaining: remaining?.socket ? room.seats.size : 0, forwarded: room.forwarded, heartbeat, input }));
   publishDirectory(room.pool);
 }
@@ -190,12 +213,35 @@ function receiveText(room, seat, data) {
     return;
   }
   if (seat.inputStats && room.seats.size === 2) {
-    const input = /^room:input:(\d{1,9}):(\d{1,9}):(\d{1,9}):(-1|\d{1,9})$/.exec(data);
+    const input = /^room:input:(\d{1,9}):(\d{1,9}):(?:\d{1,9}:)?(-1|\d{1,9})$/.exec(data);
     if (input) {
-      const [received, peakReceiveGapMs, peakClientWaitMs, peerRttMs] = input.slice(1).map(Number);
-      seat.input = { received, peakReceiveGapMs, peakClientWaitMs, peerRttMs };
+      const [received, peakReceiveGapMs, peerRttMs] = input.slice(1).map(Number);
+      seat.input = { received, peakReceiveGapMs, peerRttMs };
       return;
     }
+  }
+
+  if (room.selection && data.startsWith("route:")) {
+    let message;
+    try {
+      message = JSON.parse(data.slice(6));
+    } catch {
+      return;
+    }
+    const active = room.activeSelection;
+    if (room.route === "pending" && Buffer.byteLength(data) <= 24_576) room.selection.receive(seat, message);
+    else if (active && message?.round === active.round && message.path === active.path) {
+      if (message.type === "failed") leave(room, seat, "rtc_failed");
+      else if (message.type === "ice-pair") {
+        const pair = /^(host|srflx|prflx|relay):(host|srflx|prflx|relay):(udp|tcp)$/.exec(message.value);
+        if (pair) {
+          const [, localCandidateType, remoteCandidateType, protocol] = pair;
+          console.log(JSON.stringify({ event: "netplay_ice_pair", archiveVersionId, roomId: room.id,
+            seat: [...room.seats].indexOf(seat) + 1, path: active.path, localCandidateType, remoteCandidateType, protocol }));
+        }
+      }
+    }
+    return;
   }
 
   const rtc = room.negotiation;
@@ -208,8 +254,7 @@ function receiveText(room, seat, data) {
       return;
     }
     const phase = snapshot?.phase;
-    const expectedRoute = phase === "connected" ? "webrtc" : phase === "fallback" ? "hong_kong_websocket"
-      : phase === "6s" && room.pool.turnPort ? "pending" : undefined;
+    const expectedRoute = phase === "connected" ? "webrtc" : phase === "fallback" ? "hong_kong_websocket" : undefined;
     if (!expectedRoute || room.route !== expectedRoute || snapshot?.negotiationStartedAt !== rtc.startedAt || seat.iceStatsPhase === phase) return;
     seat.iceStatsPhase = phase;
     const counts = ["localCandidatesGathered", "remoteCandidatesReceived", "remoteCandidatesApplied", "candidateCount", "pairCount"];
@@ -294,6 +339,11 @@ function attachRoomSocket(socket, room, seat) {
       receiveText(room, seat, data.toString());
       return;
     }
+    const other = [...room.seats].find(player => player !== seat);
+    if (room.route === "pending" && room.selection?.acceptsSocketProbe(data)) {
+      send(other?.socket, data);
+      return;
+    }
     if (room.route !== "hong_kong_websocket" || room.seats.size !== 2 || ![4, 8, 12].includes(data.length)) return;
     if (data.length === 12 && data.readInt32LE(4) === -1) {
       const ready = room.ready;
@@ -306,7 +356,6 @@ function attachRoomSocket(socket, room, seat) {
       send(socket, ready.data);
       return;
     }
-    const other = [...room.seats].find(player => player !== seat);
     if (other?.socket?.readyState === WebSocket.OPEN) {
       send(other.socket, data);
       room.forwarded++;
@@ -314,9 +363,9 @@ function attachRoomSocket(socket, room, seat) {
   });
 }
 
-function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, platform }) {
+function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, platform, routeSelection }) {
   const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0 };
-  const seat = { identity, rtc, inputStats, platform, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
+  const seat = { identity, rtc, routeSelection, inputStats, platform, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
   room.seats.add(seat);
   pool.rooms.set(roomId, room);
   attachRoomSocket(socket, room, seat);
@@ -331,21 +380,44 @@ function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, platform })
       player.signals = 0;
       player.milestones = [];
     }
-    if (pool !== relay && [...room.seats].every(player => player.rtc)) {
+    const seats = [...room.seats];
+    if (pool === auto && seats.every(player => player.routeSelection)) {
+      room.route = "pending";
+      const round = room.lastRound = Math.max(Date.now(), (room.lastRound ?? 0) + 1);
+      const paths = ["websocket"];
+      if (seats.every(player => player.rtc)) {
+        paths.push("direct");
+        if (turnKey) paths.push("turn");
+      }
+      room.selection = startRouteSelection({
+        round, seats, paths, send: sendRoute,
+        commit(path, measurements) {
+          selectRoute(room, path === "websocket" ? "hong_kong_websocket" : "webrtc", "measured", { round, path, measurements });
+        },
+        fail(measurements) {
+          console.log(JSON.stringify({ event: "netplay_route", archiveVersionId, roomId, round,
+            reason: "no_usable_route", negotiationMs: Date.now() - round, measurements }));
+          sendRoute(seats[1], { type: "rejected", round, reason: "transport" });
+          leave(room, seats[1], "route_unavailable");
+        },
+      });
+      for (const [index, player] of seats.entries()) {
+        sendRoute(player, {
+          type: "start", round, offer: index === 0,
+          paths: paths.map(path => path === "websocket" ? { id: path } : {
+            id: path, relayOnly: path === "turn",
+            iceServers: path === "turn" ? turnIceServers(roomId, index, 443, round) : iceServers,
+          }),
+        });
+      }
+    } else if (pool !== relay && pool !== auto && seats.every(player => player.rtc)) {
       room.route = "pending";
       const startedAt = room.lastRound = Math.max(Date.now(), (room.lastRound ?? 0) + 1);
       room.negotiation = { startedAt, ready: new Set(),
         timer: setTimeout(() => selectRoute(room, "hong_kong_websocket", "timeout"), 8_000) };
-      for (const [index, player] of [...room.seats].entries()) {
+      for (const [index, player] of seats.entries()) {
         const relayOnly = Boolean(pool.turnPort);
-        const username = relayOnly ? `${Math.floor(startedAt / 1000) + 7200}:gyokuro-${roomId}-${index + 1}-${randomBytes(6).toString("hex")}` : undefined;
-        const servers = relayOnly ? [{
-          urls: [
-            `turn:netplay-hk-staging.viprpg.org:${pool.turnPort}?transport=udp`,
-            `turn:[2001:df1:7880:6::953]:${pool.turnPort}?transport=udp`,
-          ],
-          username, credential: createHmac("sha1", turnKey).update(username).digest("base64"),
-        }] : iceServers;
+        const servers = relayOnly ? turnIceServers(roomId, index, pool.turnPort, startedAt) : iceServers;
         send(player.socket, "rtc:start:" + JSON.stringify({ iceServers: servers, offer: index === 0,
           negotiationStartedAt: startedAt, scoped: true, relayOnly, ...(relayOnly && { compareRelay: false }) }));
       }
@@ -411,6 +483,14 @@ server.on("upgrade", (request, socket, head) => {
     : target.resume ? (resume ? 0 : 404)
     : room && (room.seats.size === 2 || target.mode === "create" || isStale(room)) ? 409 : 0;
   if (status) {
+    if (target?.pool === auto && target.routeSelection && target.mode === "join" && (status === 404 || status === 409)) {
+      rtcWss.handleUpgrade(request, socket, head, client => {
+        client.on("error", () => client.terminate());
+        sendRoute({ socket: client }, { type: "rejected", reason: status === 409 ? "full" : "closed" });
+        client.close(1000);
+      });
+      return;
+    }
     socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
     return;
   }
