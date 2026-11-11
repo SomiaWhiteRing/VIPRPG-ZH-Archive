@@ -41,8 +41,9 @@ function route(request) {
   const pool = pools[modePool] ?? relay;
   if (pool.turnPort && !turnKey) return;
   const guest = url.searchParams.get("guest");
+  const guestId = /^[0-9a-f]{4}$/.test(guest ?? "") ? guest : randomBytes(2).toString("hex");
   let identity = {
-    name: "访客 " + (/^[0-9a-f]{4}$/.test(guest ?? "") ? guest : randomBytes(2).toString("hex")),
+    name: "访客 " + guestId,
     avatar: defaultAvatar,
   };
   if (payload) {
@@ -68,7 +69,7 @@ function route(request) {
     diagnostics: url.searchParams.get("diagnostics") === "1",
     platform: /Android/i.test(agent) ? "android" : /Windows/i.test(agent) ? "windows" : /iPhone|iPad/i.test(agent) ? "ios" : "other",
     resume: url.searchParams.get("resume"),
-    identity,
+    identity: payload ? identity : { ...identity, guest: guestId },
   };
 }
 
