@@ -20,7 +20,7 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Worker 联机的归档可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
 
-预生产玉露弹归档版本 17 使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。房间和对战消息均由 [香港联机服务](../scripts/netplay-hk-relay.mjs) 处理。服务器以 Debian 的 Node.js 和 `node-ws` 运行该脚本，设置 `NETPLAY_ARCHIVE_VERSION=17`，Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
+预生产玉露弹归档版本 17 使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 协助 WebRTC 直连，两边都确认接通后直接传对战数据。连接失败或 8 秒内未完成时，开战前切到香港 WebSocket 转发。在网页版游玩地址加 `?netplayRelay=1` 可进纯转发房间池做对照，两台设备使用同一入口。香港服务以 Debian 的 Node.js 和 `node-ws` 运行，设置 `NETPLAY_ARCHIVE_VERSION=17`，Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
 
 ## 干净种子
 

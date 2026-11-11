@@ -1,7 +1,7 @@
 {
-  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect-hitv-staging",
+  "version": "2026.11.11-site-40afbf126-webrtc.5-hk-direct-v2-staging",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers-direct-first-hitv-staging",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers-direct-first-hitv-staging-hk-direct",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
@@ -36,6 +36,13 @@
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
       "beforeSha256": "3515f005b0454918079a9db84f040d19141e3cee46d023728fffec886e26ffcb",
       "afterSha256": "d0ce34097142e0774dbf0ce8bb03c297efb9e37dee1b4f971a7a2457e4236aea"
+    },
+    {
+      "file": "player-worker.js",
+      "path": "scripts/runtime-patches/kai-netplay-hk-control.patch",
+      "sha256": "df7a7ff88e9c9a05e5f733a57054b848ce3af77f4fb9f891f7061fc454cfff72",
+      "beforeSha256": "b84eacb44e3ff1ac542953afeac3d08367d9c36c1bb7756c8c28f49a7e2d6956",
+      "afterSha256": "29c7a2b0f442842ecb3f032be4359e9450e50d6523d3f789236a66eeb8b67b00"
     }
   ],
   "sourcePatches": [

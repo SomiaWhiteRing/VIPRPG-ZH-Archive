@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect-hitv-staging",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers-direct-first-hitv-staging",
+  "version": "2026.11.11-site-40afbf126-webrtc.5-hk-direct-v2-staging",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers-direct-first-hitv-staging-hk-direct",
   "artifact": "Kai-Web-2026.11.11-hitv-staging-site.zip",
   "archiveSha256": "efc3f8ad407f3057f309e687490822d0f0fd05f43e9a102f63523e200f228c0d",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/3398943413d0b99076498a3997911b74e54898a2",
@@ -121,6 +121,13 @@
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
       "beforeSha256": "3515f005b0454918079a9db84f040d19141e3cee46d023728fffec886e26ffcb",
       "afterSha256": "d0ce34097142e0774dbf0ce8bb03c297efb9e37dee1b4f971a7a2457e4236aea"
+    },
+    {
+      "file": "player-worker.js",
+      "path": "scripts/runtime-patches/kai-netplay-hk-control.patch",
+      "sha256": "df7a7ff88e9c9a05e5f733a57054b848ce3af77f4fb9f891f7061fc454cfff72",
+      "beforeSha256": "b84eacb44e3ff1ac542953afeac3d08367d9c36c1bb7756c8c28f49a7e2d6956",
+      "afterSha256": "29c7a2b0f442842ecb3f032be4359e9450e50d6523d3f789236a66eeb8b67b00"
     }
   ],
   "files": {
@@ -149,8 +156,8 @@
       "sha256": "75d4586bc6be9c66680fa7699ad47e0e11ef15097accdebcac28eff2cb3de70f"
     },
     "player-worker.js": {
-      "size": 23925,
-      "sha256": "b84eacb44e3ff1ac542953afeac3d08367d9c36c1bb7756c8c28f49a7e2d6956"
+      "size": 25941,
+      "sha256": "29c7a2b0f442842ecb3f032be4359e9450e50d6523d3f789236a66eeb8b67b00"
     },
     "player-audio.js": {
       "size": 1858,

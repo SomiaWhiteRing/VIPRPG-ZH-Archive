@@ -57,10 +57,10 @@ if (sha256(files["movie-decoder.LICENSE.txt"]) !== runtime.movieDecoder.licenseS
 if (sha256(files["LICENSE-rime-pinyin-simp.txt"]) !== runtime.pinyinDictionary.licenseSha256)
   throw new Error("Pinyin dictionary license does not match the pinned digest");
 
-// Preserve upstream bytes except for explicitly pinned, reproducible host patches.
+// Preserve upstream bytes except for explicitly pinned, reproducible JavaScript patches.
 const patches = runtime.patches ?? [];
 for (const patch of patches) {
-  if (patch.file !== "player-host.js" || !/^scripts\/runtime-patches\/[a-z0-9.-]+\.patch$/.test(patch.path))
+  if (!["player-host.js", "player-worker.js"].includes(patch.file) || !/^scripts\/runtime-patches\/[a-z0-9.-]+\.patch$/.test(patch.path))
     throw new Error("Unsupported runtime patch target or path");
   const patchPath = resolve(root, patch.path);
   if (sha256(readFileSync(patchPath)) !== patch.sha256 || sha256(files[patch.file]) !== patch.beforeSha256)
