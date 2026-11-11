@@ -24,6 +24,10 @@ const heartbeatIntervalMs = 5_000;
 const heartbeatHideMs = 10_000;
 const heartbeatTimeoutMs = 15_000;
 const iceServers = [{ urls: ["stun:stun.hitv.com:3478", "stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"] }];
+const turnUrls = [
+  "turn:netplay-hk-staging.viprpg.org:3478?transport=udp",
+  "turn:[2001:df1:7880:6::953]:3478?transport=udp",
+];
 
 function route(request) {
   if (!URL.canParse(request.url, origin)) return;
@@ -46,6 +50,7 @@ function route(request) {
     if (archive !== archiveVersionId || expires <= Date.now()) return;
     identity = { name, avatar };
   }
+  const agent = request.headers["user-agent"] ?? "";
   return {
     directory: target === "rooms",
     roomId: Number(target),
@@ -53,6 +58,7 @@ function route(request) {
     pool: modePool === "turn" ? turn : modePool === "direct" ? direct : relay,
     rtc: url.searchParams.get("rtcResume") === "1",
     inputStats: url.searchParams.get("inputStats") === "1",
+    platform: /Android/i.test(agent) ? "android" : /Windows/i.test(agent) ? "windows" : /iPhone|iPad/i.test(agent) ? "ios" : "other",
     resume: url.searchParams.get("resume"),
     identity,
   };
@@ -101,7 +107,7 @@ function selectRoute(room, route, reason) {
   const details = room.negotiation && {
     negotiationStartedAt: room.negotiation.startedAt,
     negotiationMs: Date.now() - room.negotiation.startedAt,
-    seats: seats.map(seat => ({ signals: seat.signals, milestones: seat.milestones })),
+    seats: seats.map(seat => ({ platform: seat.platform, signals: seat.signals, milestones: seat.milestones })),
   };
   const turnTest = room.pool === turn;
   const connected = route === "webrtc";
@@ -203,8 +209,9 @@ function receiveText(room, seat, data) {
       return;
     }
     const phase = snapshot?.phase;
-    const expectedRoute = phase === "connected" ? "webrtc" : phase === "fallback" ? "hong_kong_websocket" : undefined;
-    if (room.route !== expectedRoute || snapshot?.negotiationStartedAt !== rtc.startedAt || seat.iceStatsPhase === phase) return;
+    const expectedRoute = phase === "connected" ? "webrtc" : phase === "fallback" ? "hong_kong_websocket"
+      : phase === "6s" && room.pool === turn ? "pending" : undefined;
+    if (!expectedRoute || room.route !== expectedRoute || snapshot?.negotiationStartedAt !== rtc.startedAt || seat.iceStatsPhase === phase) return;
     seat.iceStatsPhase = phase;
     const counts = ["localCandidatesGathered", "remoteCandidatesReceived", "remoteCandidatesApplied", "candidateCount", "pairCount"];
     const checks = ["local", "remote", "requestsSent", "requestsReceived", "responsesSent", "responsesReceived", "roundTripMs"];
@@ -218,8 +225,13 @@ function receiveText(room, seat, data) {
     const remote = selected && candidates.find(candidate => candidate?.number === selected.remote && candidate.side === "remote");
     const types = ["host", "srflx", "prflx", "relay"];
     const protocols = ["udp", "tcp", "tls"];
+    const stunErrors = Array.isArray(snapshot.stunErrors) ? snapshot.stunErrors.slice(0, 8)
+      .filter(error => Number.isSafeInteger(error?.code)).map(error => ({
+        code: error.code,
+        addressKind: ["ipv4", "ipv6", "unknown"].includes(error.addressKind) ? error.addressKind : undefined,
+      })) : [];
     console.log(JSON.stringify({ event: "netplay_ice_stats", archiveVersionId, roomId: room.id,
-      seat: [...room.seats].indexOf(seat) + 1, phase, pairs,
+      seat: [...room.seats].indexOf(seat) + 1, platform: seat.platform, phase, pairs, stunErrors,
       localCandidateType: types.includes(local?.type) ? local.type : undefined,
       remoteCandidateType: types.includes(remote?.type) ? remote.type : undefined,
       relayProtocol: protocols.includes(local?.relayProtocol) ? local.relayProtocol : undefined,
@@ -303,9 +315,9 @@ function attachRoomSocket(socket, room, seat) {
   });
 }
 
-function joinRoom(socket, { roomId, pool, identity, rtc, inputStats }) {
+function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, platform }) {
   const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0 };
-  const seat = { identity, rtc, inputStats, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
+  const seat = { identity, rtc, inputStats, platform, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
   room.seats.add(seat);
   pool.rooms.set(roomId, room);
   attachRoomSocket(socket, room, seat);
@@ -329,7 +341,7 @@ function joinRoom(socket, { roomId, pool, identity, rtc, inputStats }) {
         const relayOnly = pool === turn;
         const username = relayOnly ? `${Math.floor(startedAt / 1000) + 7200}:gyokuro-${roomId}-${index + 1}-${randomBytes(6).toString("hex")}` : undefined;
         const servers = relayOnly ? [{
-          urls: "turn:netplay-hk-staging.viprpg.org:3478?transport=udp",
+          urls: turnUrls,
           username, credential: createHmac("sha1", turnKey).update(username).digest("base64"),
         }] : iceServers;
         send(player.socket, "rtc:start:" + JSON.stringify({ iceServers: servers, offer: index === 0,
