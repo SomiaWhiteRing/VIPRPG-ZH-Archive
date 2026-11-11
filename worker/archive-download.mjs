@@ -113,7 +113,7 @@ async function handleArchiveDownload(request, env, ctx, access) {
       const files = layout.entries.filter(file => !shouldSkipWebPlayLocalWrite(file.path))
         .map(({ path, size, crc32, dataStart }) => ({ path, size, crc32, offset: dataStart }));
       if (request.method === "HEAD") return new Response(null, { headers: { ...importHeaders, "Content-Type": "application/json" } });
-      return jsonResponse({ schema: 1, archiveVersionId: record.id, workId: record.workId,
+      return jsonResponse({ ok: true, schema: 1, archiveVersionId: record.id, workId: record.workId,
         manifestSha256: record.manifestSha256, zipSize: layout.size,
         etag: downloadEtag(record, webPlayDownloadProfile), files }, { headers: importHeaders });
     }
