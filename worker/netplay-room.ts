@@ -7,6 +7,7 @@ import { stagingNetplayEdgeOrigin, stagingNetplaySiteOrigin } from "../lib/archi
 import { json } from "../lib/http";
 import { requestJsonValue } from "../lib/ui/api-response";
 import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
+import { parseNetplayDiagnostic } from "../scripts/netplay-diagnostics.mjs";
 
 const standardStunUrls = ["stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"];
 const directIceServers = [{ urls: standardStunUrls }];
@@ -158,6 +159,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     }
 
     const id = Number(path.slice(path.lastIndexOf("/") + 1));
+    const diagnostics = url.searchParams.get("diagnostics") === "1";
     const mode = url.searchParams.get("mode");
     const existing = this.rooms.get(id);
     if (existing) {
@@ -177,6 +179,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     const socket = pair[1];
     socket.binaryType = "arraybuffer";
     socket.accept();
+    if (diagnostics) socket.send("room:diagnostics:1");
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Netplay-Identity")!)) as Identity;
     const disconnect = (reason: DisconnectReason, closeCode?: number) => {
       if (!peers.has(socket)) return;
@@ -246,6 +249,14 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       if (!peers.has(socket)) return;
       const rtc = room.rtc;
       if (typeof data === "string") {
+        if (diagnostics && data.startsWith("room:diagnostic:")) {
+          const diagnostic = parseNetplayDiagnostic(data);
+          if (diagnostic) console.log({
+            ...diagnostic, event: "netplay_stall", ...room.details,
+            seat: socket === peers.keys().next().value ? 1 : 2, route: rtc?.route ?? "websocket",
+          });
+          return;
+        }
         if (data === "room:pong" && heartbeat) {
           renewHeartbeat();
           return;

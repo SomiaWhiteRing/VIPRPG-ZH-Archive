@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { startRouteSelection } from "./netplay-route-selection.mjs";
+import { parseNetplayDiagnostic } from "./netplay-diagnostics.mjs";
 
 const { WebSocket, WebSocketServer } = createRequire(import.meta.url)("ws");
 const origin = process.env.NETPLAY_SITE_ORIGIN ?? "https://staging.viprpg.org";
@@ -62,6 +63,7 @@ function route(request) {
     routeSelection: url.searchParams.get("routeSelection") === "1",
     inputStats: url.searchParams.get("inputStats") === "1",
     inputProtocol: url.searchParams.get("inputProtocol") === "1" ? 1 : 0,
+    diagnostics: url.searchParams.get("diagnostics") === "1",
     platform: /Android/i.test(agent) ? "android" : /Windows/i.test(agent) ? "windows" : /iPhone|iPad/i.test(agent) ? "ios" : "other",
     resume: url.searchParams.get("resume"),
     identity,
@@ -200,6 +202,15 @@ function renewHeartbeat(room, seat) {
 }
 
 function receiveText(room, seat, data) {
+  if (seat.diagnostics && data.startsWith("room:diagnostic:")) {
+    const diagnostic = parseNetplayDiagnostic(data);
+    if (diagnostic) console.log(JSON.stringify({
+      ...diagnostic, event: "netplay_stall", archiveVersionId, roomId: room.id,
+      seat: [...room.seats].indexOf(seat) + 1, platform: seat.platform, route: room.route,
+      path: room.activeSelection?.path, inputProtocol: room.inputProtocol ?? 0,
+    }));
+    return;
+  }
   if (data === "room:pong") {
     if (room.route !== "webrtc" && Date.now() - seat.lastPong >= heartbeatTimeoutMs) {
       leave(room, seat, "heartbeat_timeout");
@@ -317,6 +328,7 @@ function receiveText(room, seat, data) {
 
 function attachRoomSocket(socket, room, seat) {
   seat.socket = socket;
+  if (seat.diagnostics) send(socket, "room:diagnostics:1");
   renewHeartbeat(room, seat);
   seat.ping = setInterval(() => {
     seat.pingAt = performance.now();
@@ -366,9 +378,9 @@ function attachRoomSocket(socket, room, seat) {
   });
 }
 
-function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtocol, platform, routeSelection }) {
+function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtocol, platform, routeSelection, diagnostics }) {
   const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0 };
-  const seat = { identity, rtc, routeSelection, inputStats, inputProtocol, platform, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
+  const seat = { identity, rtc, routeSelection, inputStats, inputProtocol, platform, diagnostics, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
   room.seats.add(seat);
   pool.rooms.set(roomId, room);
   attachRoomSocket(socket, room, seat);
@@ -499,7 +511,7 @@ server.on("upgrade", (request, socket, head) => {
     socket.end(`HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
     return;
   }
-  const handler = target.pool === relay ? wss : rtcWss;
+  const handler = target.pool === relay && !target.diagnostics ? wss : rtcWss;
   handler.handleUpgrade(request, socket, head, client => {
     client.on("error", () => client.terminate());
     if (target.directory) watchDirectory(client, target);

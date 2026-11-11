@@ -26,7 +26,11 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 使用 `?netplayTurn=443` 可单独测试 UDP 443。该房间池使用 coturn 的 IPv4 和 IPv6 辅助监听地址，沿用同一组中继端口和凭据。野草云产品防火墙需放行入站 UDP 443，coturn 的 systemd 服务通过 `CAP_NET_BIND_SERVICE` 绑定该端口。
 
-预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN 443，房间服务收到双方确认后宣布房间就绪。混用旧 Player 时走 WebSocket。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs` 与 `netplay-route-selection.mjs` 放在同一目录。
+预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN 443，房间服务收到双方确认后宣布房间就绪。混用旧 Player 时走 WebSocket。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs`、`netplay-route-selection.mjs` 与 `netplay-diagnostics.mjs` 放在同一目录。
+
+配套 Player 通过 `diagnostics=1` 请求局内诊断，房间服务确认支持后接收 `netplay_stall` 日志。日志包含实际等待输入超过 100 ms 的起止、每五秒的累计等待及帧进度、输入确认和补发计数、发送缓冲、页面可见性、暂停状态，以及主线程和游戏线程的调度停顿。通过房间、座位、对局 ID、客户端序号和帧号关联双方记录。持续时长使用单调时钟，设备时间可能存在偏差。控制连接恢复期间最多暂存 32 条事件，并记录丢弃数量。
+
+`inputSentPackets` 和 `inputRepeatedFrames` 统计 Worker 发起的发送及其中重复携带的帧。`rtcInputPacketsSent` 统计实际交给数据通道的消息，`rtcInputReplacements` 记录发送缓冲拥堵时被更新的待发副本。比较这些计数和 `inputPending`、`inputAckAgeMs`，可区分等待对端确认和本机通道积压。
 
 双方 Player 声明 `inputProtocol=1` 时，香港服务在 RTC 协商中启用抗丢包按键协议，并将实际协议记入 `netplay_route.inputProtocol`。开局和房间消息继续可靠传输，按键改走无序、不重传的独立 DataChannel：每包重复尚未确认的逐帧输入，接收方去重、补齐后交给原回滚时间线；停止产生新帧时仍每 50 ms 尝试补发。浏览器发送缓冲未清空时，只保留最新输入历史并合并最新确认，避免旧副本积压。协议使用对局 ID 隔离旧包，最多保留 256 帧，不能用丢弃未确认输入来跳过缺口。选线探测使用同一按键通道。混用旧 Player 或选择 WebSocket 时仍使用原输入协议。
 
