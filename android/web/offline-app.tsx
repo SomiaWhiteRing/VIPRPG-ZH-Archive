@@ -40,8 +40,9 @@ export function OfflineApp() {
   const [selected, setSelected] = useState<WebPlayInstallation | null>(null);
   const refresh = useCallback(async () => {
     try {
-      const { items: rows } = await localRequest<{ items: WebPlayInstallation[] }>("list");
       const key = await localRequest<string | null>("pendingPlay");
+      if (!key) return;
+      const { items: rows } = await localRequest<{ items: WebPlayInstallation[] }>("list");
       const item = rows.find(row => row.playKey === key);
       if (item?.status === "ready" && item.workId) setSelected(item);
     } catch (reason) {

@@ -37,6 +37,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -105,6 +106,8 @@ public final class MainActivity extends Activity {
     private boolean checkedUpdates;
     private boolean checkingUpdates;
     private boolean checkingGameUpdates;
+    private AlertDialog gameUpdateDialog;
+    private String gameUpdateTarget;
     private final ConnectivityManager.NetworkCallback gameUpdateNetwork = new ConnectivityManager.NetworkCallback() {
         @Override public void onCapabilitiesChanged(Network network, NetworkCapabilities capabilities) {
             runOnUiThread(() -> { if (resumed && library && !isDestroyed()) checkGameUpdates(); });
@@ -166,6 +169,7 @@ public final class MainActivity extends Activity {
         nativeLibrary = new NativeLibrary(this, libraryPlayerUpdate, new NativeLibrary.Actions() {
             @Override public void refresh() { refreshLocalGames(); checkGameUpdates(); }
             @Override public void play(String key) { openLocalLibrary(key); }
+            @Override public void playDuringUpdate(String target, String installed) { confirmGameUpdate(target, installed); }
             @Override public void delete(List<String> keys) {
                 localIo.execute(() -> {
                     try { for (String key : keys) localGames.store.delete(key); }
@@ -585,17 +589,52 @@ public final class MainActivity extends Activity {
     volatile String pendingLocalPlay;
     void openLocalLibrary(String key) {
         showLibrary(key == null);
-        if (key == null || !playerRuntime.ready()) { pendingLocalPlay = null; return; }
+        if (key == null || !canStartLocalGame() || gameUpdateDialog != null) return;
         updateExecutor.execute(() -> {
             String playKey = localGames.store.checkUpdate(key);
             runOnUiThread(() -> {
-                if (isDestroyed() || playing || !library) return;
-                pendingLocalPlay = playKey;
+                if (!canStartLocalGame() || gameUpdateDialog != null) return;
                 if (localGames.store.next() != null) InstallService.start(this);
+                if (playKey.equals(key)) startLocalGame(key, null);
+                else confirmGameUpdate(playKey, key);
                 refreshLocalGames();
-                sendLibraryCommand("play", JSONObject.quote(playKey));
             });
         });
+    }
+
+    private boolean canStartLocalGame() {
+        return library && !gallery && !version && !playing && !onlinePlaying && !isFinishing() && !isDestroyed()
+            && pendingLocalPlay == null && localGames.store.playingKey == null && playerRuntime.ready();
+    }
+
+    private void confirmGameUpdate(String target, String installed) {
+        if (!canStartLocalGame() || gameUpdateDialog != null || startLocalGame(target, null)) return;
+        AlertDialog dialog = NativeControls.dialog(this)
+            .setMessage("游戏已有新版本，是否不更新直接启动？")
+            .setPositiveButton("是", (ignored, which) -> startLocalGame(target, installed))
+            .setNegativeButton("否", null)
+            .create();
+        gameUpdateDialog = dialog;
+        gameUpdateTarget = target;
+        dialog.setOnDismissListener(ignored -> {
+            gameUpdateDialog = null;
+            gameUpdateTarget = null;
+        });
+        dialog.show();
+    }
+
+    private boolean startLocalGame(String target, String fallback) {
+        if (!canStartLocalGame()) return false;
+        try {
+            String key = localGames.store.reservePlay(target, fallback);
+            if (key == null) return false;
+            pendingLocalPlay = key;
+            sendLibraryCommand("play", JSONObject.quote(key));
+            return true;
+        } catch (Exception e) {
+            nativeLibrary.setError(e.getMessage());
+            return false;
+        }
     }
 
     private void checkGameUpdates() {
@@ -631,15 +670,18 @@ public final class MainActivity extends Activity {
     }
     private void refreshLocalGames() {
         if (isDestroyed() || localGames == null || nativeLibrary == null) return;
+        if (resumed && gameUpdateDialog != null && gameUpdateDialog.isShowing() && startLocalGame(gameUpdateTarget, null)) {
+            gameUpdateDialog.dismiss();
+        }
         try {
-            JSONObject snapshot = new JSONObject(localGames.store.snapshot());
+            JSONObject snapshot = localGames.store.librarySnapshot();
             nativeLibrary.setSnapshot(snapshot.toString());
             JSONArray items = snapshot.getJSONArray("items");
             java.util.Set<String> currentKeys = new java.util.HashSet<>();
-            for (int i = 0; i < items.length(); i++) currentKeys.add(items.getJSONObject(i).getString("playKey"));
+            for (int i = 0; i < items.length(); i++) currentKeys.add(items.getJSONObject(i).getString("coverKey"));
             loadedCovers.retainAll(currentKeys);
             for (int i = 0; i < items.length(); i++) {
-                JSONObject item = items.getJSONObject(i); String key = item.getString("playKey");
+                JSONObject item = items.getJSONObject(i); String key = item.getString("coverKey");
                 if (!item.optString("coverBlobSha256").matches("[a-f0-9]{64}") || !loadedCovers.add(key)) continue;
                 coverIo.execute(() -> {
                     String cover = null; try { cover = localGames.store.cover(key); } catch (Exception ignored) { }
@@ -656,7 +698,7 @@ public final class MainActivity extends Activity {
 
     private void setPlaying(boolean value) {
         playing = value;
-        if (!value && localGames != null) { localGames.store.playingKey = null; checkGameUpdates(); }
+        if (!value && localGames != null && pendingLocalPlay == null) { localGames.store.playingKey = null; checkGameUpdates(); }
         if (library && !version && !gallery) {
             offlineBrowser.setVisibility(value ? View.VISIBLE : View.GONE);
             libraryPanel.setVisibility(value ? View.GONE : View.VISIBLE);
@@ -1035,12 +1077,13 @@ public final class MainActivity extends Activity {
         if (localGames.store.next() != null) InstallService.start(this);
         restoreOfflinePlayerFocus();
         if (gallery) galleryPanel.refreshOnResume();
-        if (library && !playing && !gallery && !version) { sendLibraryCommand("refresh", "null"); checkGameUpdates(); }
+        if (library && !playing && !gallery && !version) { refreshLocalGames(); checkGameUpdates(); }
         showPendingUpdate();
     }
 
     @Override
     protected void onDestroy() {
+        if (gameUpdateDialog != null) gameUpdateDialog.dismiss();
         getSystemService(ConnectivityManager.class).unregisterNetworkCallback(gameUpdateNetwork);
         playerRuntime.removeObserver(playerObserver);
         if (fileChooser != null) fileChooser.onReceiveValue(null);

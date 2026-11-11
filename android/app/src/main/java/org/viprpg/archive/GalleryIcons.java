@@ -26,6 +26,7 @@ final class GalleryIcons extends Drawable {
     static final String REFRESH = "M20,11 A8,8 0,1 0,20,14 M20,4 V11 H13 M4,13 A8,8 0,1 0,4,10 M4,20 V13 H11";
     static final String PAUSE = "M8,5 V19 M16,5 V19";
     static final String PLAY = "M7,4 L20,12 L7,20 Z";
+    static final String DOWNLOAD = "M12,3 V15 M7,10 L12,15 L17,10 M4,16 V21 H20 V16";
     static final String SORT = "M4,6 H20 M4,12 H15 M4,18 H10";
     static final String SEARCH = "M21,21 L16.5,16.5 M18,10.5 A7.5,7.5 0,1 1,3,10.5 A7.5,7.5 0,1 1,18,10.5";
     static final String INFO = "M12,17 V11 M12,7 L12,7.01 M22,12 A10,10 0,1 1,2,12 A10,10 0,1 1,22,12";

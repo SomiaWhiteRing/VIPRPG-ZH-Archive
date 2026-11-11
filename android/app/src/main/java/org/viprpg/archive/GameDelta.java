@@ -2,6 +2,7 @@ package org.viprpg.archive;
 
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
@@ -58,7 +59,7 @@ final class GameDelta {
         for (int i = 0; i < oldFiles.length(); i++) {
             JSONObject file = oldFiles.getJSONObject(i); old.put(file.getString("filename").toLowerCase(Locale.ROOT), file);
         }
-        long needed = 0, downloaded = 0, reusedBytes = 0;
+        long needed = 0, downloaded = 0, reusedBytes = 0, downloadMillis = 0;
         int reusedFiles = 0;
         byte[] buffer = new byte[262144];
         try (ParcelFileDescriptor descriptor = store.storage.open(oldZip, "r");
@@ -78,7 +79,8 @@ final class GameDelta {
                 needed += size;
             }
             synchronized (store) {
-                task.put("downloadedBytes", 0).put("downloadBytesTotal", needed).put("reusedFiles", 0).put("reusedBytes", 0); store.persist();
+                task.put("downloadedBytes", 0).put("downloadBytesTotal", needed).put("bytesPerSecond", 0)
+                    .put("reusedFiles", 0).put("reusedBytes", 0); store.persist();
             }
             try (FileOutputStream raw = new FileOutputStream(output); ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(raw), StandardCharsets.UTF_8)) {
                 for (int i = 0; i < files.length(); i++) {
@@ -95,6 +97,7 @@ final class GameDelta {
                             if (n < 0) throw new EOFException("ZIP 不完整。"); zip.write(buffer, 0, n); left -= n; }
                         reusedFiles++; reusedBytes += size;
                     } else if (size > 0) {
+                        long started = SystemClock.elapsedRealtime(), reported = started;
                         HttpURLConnection download = store.connect(metadata.getString("downloadUrl"), 0);
                         download.setRequestProperty("Range", "bytes=" + offset + "-" + (offset + size - 1));
                         download.setRequestProperty("If-Range", etag);
@@ -104,15 +107,32 @@ final class GameDelta {
                                 throw new IOException("续传范围无效。");
                             try (InputStream input = download.getInputStream()) {
                                 long left = size;
-                                while (left > 0) { store.check(task); int n = input.read(buffer, 0, (int)Math.min(left, buffer.length));
-                                    if (n < 0) throw new EOFException("下载文件不完整。"); zip.write(buffer, 0, n); left -= n; downloaded += n; }
+                                while (left > 0) {
+                                    store.check(task);
+                                    int n = input.read(buffer, 0, (int)Math.min(left, buffer.length));
+                                    if (n < 0) throw new EOFException("下载文件不完整。");
+                                    zip.write(buffer, 0, n); left -= n; downloaded += n;
+                                    long now = SystemClock.elapsedRealtime();
+                                    if (now - reported >= 500) {
+                                        synchronized (store) {
+                                            store.check(task);
+                                            task.put("downloadedBytes", downloaded)
+                                                .put("bytesPerSecond", downloaded * 1000 / (downloadMillis + now - started));
+                                            store.persist();
+                                        }
+                                        reported = now;
+                                    }
+                                }
                                 if (input.read() != -1) throw new IOException("下载文件不完整。");
                             }
                         } finally { download.disconnect(); }
+                        downloadMillis += Math.max(1, SystemClock.elapsedRealtime() - started);
                     }
                     zip.closeEntry(); // ZipOutputStream also verifies the CRC of copied and downloaded bytes.
                     synchronized (store) {
-                        task.put("downloadedBytes", downloaded).put("reusedFiles", reusedFiles).put("reusedBytes", reusedBytes); store.persist();
+                        store.check(task);
+                        task.put("downloadedBytes", downloaded).put("bytesPerSecond", downloaded * 1000 / Math.max(1, downloadMillis))
+                            .put("reusedFiles", reusedFiles).put("reusedBytes", reusedBytes); store.persist();
                     }
                 }
                 zip.finish(); zip.flush(); raw.getFD().sync();

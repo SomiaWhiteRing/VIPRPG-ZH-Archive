@@ -47,6 +47,7 @@ final class NativeLibrary extends LinearLayout {
     interface Actions {
         void refresh();
         void play(String key);
+        void playDuringUpdate(String target, String installed);
         void delete(List<String> keys);
         void retry(long archiveVersionId);
         void toggleDownload(String key);
@@ -215,13 +216,13 @@ final class NativeLibrary extends LinearLayout {
             JSONObject snapshot = new JSONObject(json);
             JSONArray rows = snapshot.getJSONArray("items");
             entries.clear();
-            Set<String> keys = new HashSet<>();
+            Set<String> keys = new HashSet<>(), coverKeys = new HashSet<>();
             for (int i = 0; i < rows.length(); i++) {
                 JSONObject row = rows.getJSONObject(i);
                 Entry entry = new Entry(row);
-                entries.add(entry); keys.add(entry.key);
+                entries.add(entry); keys.add(entry.key); coverKeys.add(entry.coverKey);
             }
-            covers.keySet().retainAll(keys);
+            covers.keySet().retainAll(coverKeys);
             selected.retainAll(keys);
             usage = snapshot.isNull("usage") ? -1 : snapshot.optLong("usage", -1);
             loading = false; error = null; refreshLayout.setRefreshing(false); render();
@@ -295,7 +296,7 @@ final class NativeLibrary extends LinearLayout {
         String query = searchQuery.toLowerCase(Locale.ROOT);
         List<Entry> result = new ArrayList<>();
         for (Entry entry : entries) {
-            if (!filter.equals("all") && (filter.equals("ready") != entry.ready)) continue;
+            if (!filter.equals("all") && (filter.equals("ready") ? !entry.installed : entry.ready)) continue;
             if (!entry.title.toLowerCase(Locale.ROOT).contains(query)) continue;
             result.add(entry);
         }
@@ -311,7 +312,7 @@ final class NativeLibrary extends LinearLayout {
         if (items == null || summary == null || sorting == null) return;
         sorting.setTooltipText("排序：" + SORT_NAMES[sortOrder]);
         sorting.setContentDescription("排序：" + SORT_NAMES[sortOrder]);
-        int ready = 0; for (Entry item : entries) if (item.ready) ready++;
+        int ready = 0; for (Entry item : entries) if (item.installed) ready++;
         summary.setText(ready + " 款已安装" + (usage < 0 ? "" : "  ·  游戏文件 " + bytes(usage))
             + (searchQuery.isEmpty() ? "" : "\n搜索：" + searchQuery));
         searchButton.setIconTint(ColorStateList.valueOf(searchQuery.isEmpty() ? ink() : teal()));
@@ -327,8 +328,9 @@ final class NativeLibrary extends LinearLayout {
             : shown.isEmpty() ? "没有符合条件的作品" : "");
         message.setVisibility(error != null || loading || shown.isEmpty() ? VISIBLE : GONE);
         StringBuilder structure = new StringBuilder().append(managing).append(loading).append(playerReady);
-        for (Entry entry : shown) structure.append('|').append(entry.key).append(':').append(entry.ready)
-            .append(':').append(entry.title).append(':').append(entry.workId).append(':').append(entry.lastPlayed);
+        for (Entry entry : shown) structure.append('|').append(entry.key).append(':').append(entry.taskKey).append(':').append(entry.ready)
+            .append(':').append(entry.title).append(':').append(entry.workId).append(':').append(entry.lastPlayed)
+            .append(':').append(entry.coverKey).append(':').append(entry.bytes).append(':').append(entry.installed);
         String signature = structure.toString();
         if (!loading && signature.equals(renderedRows)) {
             for (Entry entry : shown) updateDownload(entry);
@@ -361,7 +363,7 @@ final class NativeLibrary extends LinearLayout {
         ImageView cover = new ImageView(getContext());
         cover.setScaleType(ImageView.ScaleType.FIT_CENTER);
         cover.setBackground(box(getContext().getColor(R.color.native_tint), dp(5), getContext().getColor(R.color.native_tint)));
-        Bitmap bitmap = covers.get(entry.key);
+        Bitmap bitmap = covers.get(entry.coverKey);
         TextView placeholder = label(entry.title.isEmpty() ? "?" : entry.title.substring(0, 1), 20, teal(), true);
         placeholder.setGravity(Gravity.CENTER);
         placeholder.setBackground(box(getContext().getColor(R.color.native_tint), dp(5), getContext().getColor(R.color.native_tint)));
@@ -370,13 +372,13 @@ final class NativeLibrary extends LinearLayout {
         if (bitmap != null) cover.setImageBitmap(bitmap);
         cover.setVisibility(bitmap == null ? GONE : VISIBLE);
         coverFrame.addView(cover, new FrameLayout.LayoutParams(-1, -1));
-        visibleCovers.put(entry.key, cover); coverPlaceholders.put(entry.key, placeholder);
+        visibleCovers.put(entry.coverKey, cover); coverPlaceholders.put(entry.coverKey, placeholder);
         if (!managing && entry.workId > 0) {
             coverFrame.setContentDescription("查看 " + entry.title + " 的详情");
             coverFrame.setForeground(new RippleDrawable(ColorStateList.valueOf(0x221f6f67), null,
                 box(Color.WHITE, dp(5), Color.WHITE)));
             coverFrame.setOnClickListener(view -> actions.details(entry.workId));
-            coverFrame.setOnLongClickListener(view -> { if (entry.ready) actions.saves(entry.key); else enterSelection(entry.key); return true; });
+            coverFrame.setOnLongClickListener(view -> { if (entry.installed) actions.saves(entry.coverKey); else enterSelection(entry.key); return true; });
         }
         line.addView(coverFrame, new LayoutParams(dp(96), dp(72)));
         LinearLayout details = column(); details.setPadding(dp(12), 0, dp(4), 0);
@@ -390,7 +392,7 @@ final class NativeLibrary extends LinearLayout {
             subtitle.setPadding(0, dp(5), 0, 0); details.addView(subtitle);
             line.addView(details, new LayoutParams(0, -2, 1));
             if (!managing) {
-                MaterialButton play = icon(GalleryIcons.PLAY, teal(), () -> actions.play(entry.key));
+                MaterialButton play = icon(GalleryIcons.PLAY, teal(), () -> actions.play(entry.taskKey));
                 play.setContentDescription("游玩 " + entry.title);
                 play.setEnabled(playerReady);
                 line.addView(play, new LayoutParams(dp(48), dp(48)));
@@ -399,9 +401,15 @@ final class NativeLibrary extends LinearLayout {
             DownloadViews views = new DownloadViews();
             LinearLayout top = row(); top.setGravity(Gravity.CENTER_VERTICAL);
             top.addView(title, new LayoutParams(0, -2, 1));
-            views.toggle = icon(GalleryIcons.PAUSE, teal(), () -> actions.toggleDownload(entry.key));
+            views.toggle = icon(GalleryIcons.PAUSE, teal(), () -> actions.toggleDownload(entry.taskKey));
             views.toggle.setVisibility(managing ? GONE : VISIBLE);
             top.addView(views.toggle, new LayoutParams(dp(48), dp(48)));
+            if (entry.installed && !managing) {
+                MaterialButton play = icon(GalleryIcons.PLAY, teal(), () -> actions.playDuringUpdate(entry.taskKey, entry.coverKey));
+                play.setContentDescription("游玩 " + entry.title);
+                play.setEnabled(playerReady);
+                top.addView(play, new LayoutParams(dp(48), dp(48)));
+            }
             details.addView(top, new LayoutParams(-1, dp(48)));
             LinearLayout numbers = row(); numbers.setGravity(Gravity.CENTER_VERTICAL);
             views.progress = label("", 11, muted(), false); views.progress.setSingleLine(true);
@@ -427,7 +435,7 @@ final class NativeLibrary extends LinearLayout {
             items.addView(line, new LayoutParams(-1, -2));
         }
         else {
-            line.setOnLongClickListener(view -> { if (entry.ready) actions.saves(entry.key); else enterSelection(entry.key); return true; });
+            line.setOnLongClickListener(view -> { if (entry.installed) actions.saves(entry.coverKey); else enterSelection(entry.key); return true; });
             SwipeGameRow swipe = new SwipeGameRow(getContext(), line, entry.title,
                 () -> confirmDelete(java.util.Collections.singletonList(entry.key)), row -> {
                     if (openRow != null && openRow != row) openRow.close();
@@ -442,9 +450,9 @@ final class NativeLibrary extends LinearLayout {
     private void updateDownload(Entry entry) {
         DownloadViews views = downloads.get(entry.key); if (views == null) return;
         views.progress.setText(entry.progress);
-        views.speed.setText(entry.installing ? bytes(entry.speed) + "/s" : "");
+        views.speed.setText(entry.installing ? (entry.installed ? "更新中  " : "") + bytes(entry.speed) + "/s" : "");
         views.bar.setProgress(entry.total > 0 ? (int)Math.min(1000, entry.downloaded * 1000 / entry.total) : 0);
-        views.toggle.setIcon(new GalleryIcons(entry.installing ? GalleryIcons.PAUSE : GalleryIcons.PLAY, teal()));
+        views.toggle.setIcon(new GalleryIcons(entry.installing ? GalleryIcons.PAUSE : GalleryIcons.DOWNLOAD, teal()));
         views.toggle.setContentDescription((entry.installing ? "暂停下载 " : "继续下载 ") + entry.title);
         views.toggle.setTooltipText(entry.installing ? "暂停" : "继续");
     }
@@ -499,7 +507,11 @@ final class NativeLibrary extends LinearLayout {
         NativeControls.dialog(getContext()).setTitle("删除 " + keys.size() + " 项本地作品？")
             .setMessage("移除下载任务及游戏文件；存档和截图不会删除。")
             .setNegativeButton("取消", null)
-            .setPositiveButton("删除", (dialog, which) -> { loading = true; selected.clear(); managing = false; render(); actions.delete(keys); })
+            .setPositiveButton("删除", (dialog, which) -> {
+                List<String> taskKeys = new ArrayList<>();
+                for (Entry entry : entries) if (keys.contains(entry.key)) taskKeys.addAll(entry.taskKeys);
+                loading = true; selected.clear(); managing = false; render(); actions.delete(taskKeys);
+            })
             .show();
     }
 
@@ -537,12 +549,15 @@ final class NativeLibrary extends LinearLayout {
     }
 
     private static final class Entry {
-        final String key, title, lastPlayed, recent, progress;
-        final long workId, archiveVersionId, bytes, downloaded, total, speed;
-        final boolean ready, installing;
+        final String key, taskKey, coverKey, title, lastPlayed, recent, progress;
+        final List<String> taskKeys = new ArrayList<>();
+        final long workId, bytes, downloaded, total, speed;
+        final boolean ready, installed, installing;
         Entry(JSONObject row) {
-            key = row.optString("playKey"); title = row.optString("title");
-            workId = row.optLong("workId"); archiveVersionId = row.optLong("archiveVersionId");
+            key = row.optString("libraryKey"); taskKey = row.optString("playKey"); coverKey = row.optString("coverKey");
+            JSONArray versions = row.optJSONArray("taskKeys");
+            for (int i = 0; i < versions.length(); i++) taskKeys.add(versions.optString(i));
+            title = row.optString("title"); workId = row.optLong("workId"); installed = row.optBoolean("installed");
             String status = row.optString("status");
             installing = "created".equals(status) || "installing".equals(status);
             downloaded = row.optLong("downloadedBytes"); total = row.optLong("downloadBytesTotal"); speed = row.optLong("bytesPerSecond");
@@ -552,7 +567,7 @@ final class NativeLibrary extends LinearLayout {
             bytes = row.optLong("installedBytes"); ready = "ready".equals(row.optString("status"));
             String played = row.optString("lastPlayedAt", "");
             lastPlayed = "null".equals(played) ? "" : played;
-            recent = lastPlayed.isEmpty() ? row.optString("readyAt", row.optString("updatedAt")) : lastPlayed;
+            recent = lastPlayed.isEmpty() ? row.optString("libraryReadyAt") : lastPlayed;
         }
     }
 }

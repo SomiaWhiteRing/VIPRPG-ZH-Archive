@@ -122,6 +122,55 @@ final class GameStore {
         for (int i = 0; i < tasks.length(); i++) { JSONObject task = tasks.getJSONObject(i); if (!"deleted".equals(task.optString("status"))) { rows.put(task); usage += task.optLong("installedBytes"); } }
         return new JSONObject().put("items", rows).put("usage", usage).toString();
     }
+
+    // Keep a native library row anchored to the original install as its archive changes.
+    synchronized JSONObject librarySnapshot() throws JSONException {
+        Map<String, JSONObject> byKey = new LinkedHashMap<>();
+        for (int i = 0; i < tasks.length(); i++) {
+            JSONObject task = tasks.getJSONObject(i);
+            byKey.put(task.getString("playKey"), task);
+        }
+        Map<String, List<JSONObject>> groups = new HashMap<>();
+        long usage = 0;
+        for (Map.Entry<String, JSONObject> item : byKey.entrySet()) {
+            JSONObject task = item.getValue();
+            if ("deleted".equals(task.optString("status"))) continue;
+            usage += task.optLong("installedBytes");
+            String anchor = item.getKey();
+            List<String> path = new ArrayList<>();
+            while (!path.contains(anchor)) {
+                path.add(anchor);
+                String previous = byKey.get(anchor).optString("updateFrom");
+                if (!byKey.containsKey(previous)) break;
+                anchor = previous;
+            }
+            anchor = Collections.min(path.subList(path.indexOf(anchor), path.size()));
+            groups.computeIfAbsent(anchor, key -> new ArrayList<>()).add(task);
+        }
+        JSONArray rows = new JSONArray();
+        for (String key : byKey.keySet()) {
+            List<JSONObject> group = groups.get(key);
+            if (group == null) continue;
+            group.sort(Comparator.comparing((JSONObject task) -> task.optString("updatedAt")).reversed());
+            JSONObject task = group.get(0);
+            JSONObject installed = null;
+            JSONArray taskKeys = new JSONArray();
+            for (JSONObject version : group) {
+                taskKeys.put(version.getString("playKey"));
+                if (installed == null && "ready".equals(version.optString("status"))) installed = version;
+            }
+            JSONObject display = installed == null ? task : installed;
+            JSONObject row = new JSONObject(task.toString());
+            row.put("libraryKey", key).put("taskKeys", taskKeys).put("installed", installed != null)
+                .put("coverKey", display.getString("playKey")).put("coverBlobSha256", display.optString("coverBlobSha256"))
+                .put("title", display.getString("title")).put("installedBytes", display.optLong("installedBytes"))
+                .put("lastPlayedAt", display.optString("lastPlayedAt"))
+                .put("libraryReadyAt", byKey.get(key).optString("readyAt", display.optString("readyAt", display.optString("updatedAt"))));
+            rows.put(row);
+        }
+        return new JSONObject().put("items", rows).put("usage", usage);
+    }
+
     synchronized void reconcile() throws Exception {
         if (busy()) return;
         Map<String, Uri> folders = storage.children(storage.directory("games"));
@@ -181,6 +230,15 @@ final class GameStore {
         }
         throw new IOException("安装记录损坏，无法覆盖现有游戏文件。");
     }
+    synchronized String reservePlay(String target, String fallback) throws Exception {
+        if (playingKey != null) return null;
+        if (!"ready".equals(byKey(target).optString("status"))) target = fallback;
+        if (target == null || !"ready".equals(byKey(target).optString("status"))) return null;
+        // Keep the selected archive available until the WebView starts reading it.
+        playingKey = target;
+        return target;
+    }
+
     synchronized JSONObject start(String key) throws Exception {
         if (playingKey != null && !playingKey.equals(key)) throw new IOException("请先退出当前游戏。");
         JSONObject task = byKey(key);
