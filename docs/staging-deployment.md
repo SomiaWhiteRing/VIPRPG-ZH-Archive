@@ -18,7 +18,9 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 运行包可使用 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json) 声明的备用资源入口。对应域名须保留社区 CNAME 链，并将运行包路径 Route 绑定到同一环境的原 Worker；Environment 的配置 secret 同步保存这条精确 Route。它只供引擎和音色库的客户端传输选择，部署 origin、游戏安装和存档路径保持原协议。正式入口的新增、撤销与配置同步遵守[主站入口说明](./main-ingress-selection.md#运行包入口的预生产验证)的批准边界。
 
-联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。预生产网页版游玩地址加 `?netplayEdge=1` 可通过该入口以访客身份进入同一房间池，普通地址使用主站入口。对照测试使用 WebSocket 的实际双端往返时间。
+联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Worker 联机的归档可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
+
+预生产玉露弹归档版本 17 使用 `netplay-hk-staging.viprpg.org`。双方以访客身份连到同一台香港服务器，房间和对战消息均由 [香港联机服务](../scripts/netplay-hk-relay.mjs) 处理。服务器以 Debian 的 Node.js 和 `node-ws` 运行该脚本，设置 `NETPLAY_ARCHIVE_VERSION=17`，Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。
 
 ## 干净种子
 

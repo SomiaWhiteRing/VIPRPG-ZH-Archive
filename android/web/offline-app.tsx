@@ -6,6 +6,7 @@ import type { PlayerSession } from "@/app/play/[workId]/web-play-player";
 import { useWebPlayScreenshots } from "@/app/play/[workId]/web-play-screenshots";
 import { WebPlaySurface } from "@/app/play/[workId]/web-play-surface";
 import type { WebPlayInstallation } from "@/app/play/[workId]/web-play-types";
+import { stagingNetplayHongKongArchive, stagingNetplayHongKongOrigin, stagingNetplaySiteOrigin } from "@/lib/archive/netplay-ingress";
 import { requestJson } from "@/lib/ui/api-response";
 import { ArrowLeft, RectangleHorizontal, RectangleVertical } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -158,7 +159,11 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
       ).then(({ netplayEndpoint }) => {
         if (typeof netplayEndpoint !== "string") return;
         const endpoint = new URL(netplayEndpoint);
-        if (endpoint.origin === window.location.origin) return endpoint.href;
+        if (endpoint.origin === window.location.origin ||
+            (window.location.origin === stagingNetplaySiteOrigin &&
+              installation.archiveVersionId === stagingNetplayHongKongArchive && endpoint.origin === stagingNetplayHongKongOrigin)) {
+          return endpoint.href;
+        }
       }).catch(() => undefined).finally(() => clearTimeout(timeout));
     }
     const session = createPlayerSession(host, {
