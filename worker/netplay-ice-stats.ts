@@ -6,7 +6,7 @@ const protocols = ["udp", "tcp"];
 const relayProtocols = [...protocols, "tls"];
 const addressKinds = ["ipv4", "ipv6", "mdns", "unknown"];
 const stunSchemes = ["stun", "stuns", "turn", "turns"];
-const iceServers = ["cloudflare-stun", "nextcloud-stun", "cloudflare-turn"];
+const iceServers = ["cloudflare-stun", "nextcloud-stun", "hitv-stun", "cloudflare-turn"];
 
 type Fields = Record<string, unknown>;
 

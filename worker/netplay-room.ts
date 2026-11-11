@@ -7,7 +7,10 @@ import { json } from "../lib/http";
 import { requestJsonValue } from "../lib/ui/api-response";
 import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
 
-const directIceServers = [{ urls: ["stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"] }];
+const stagingOrigin = "https://staging.viprpg.org";
+const standardStunUrls = ["stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"];
+const directIceServers = [{ urls: standardStunUrls }];
+const stagingIceServers = [{ urls: ["stun:stun.hitv.com:3478", ...standardStunUrls] }];
 // Staging Chrome nominated the slower UDP relay when both were offered.
 const relayUrl = "turns:turn.cloudflare.com:443?transport=tcp";
 const heartbeatIntervalMs = 5_000;
@@ -356,8 +359,9 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       timeout: setTimeout(() => this.selectRoute(room, "timeout"), turn ? 5000 : 8000),
     };
     const send = (peer: WebSocket, offer: boolean, relay?: RTCIceServer) => {
+      const stun = this.env.APP_ORIGIN === stagingOrigin ? stagingIceServers : directIceServers;
       peer.send("rtc:start:" + JSON.stringify({
-        iceServers: relay ? [relay] : directIceServers, offer, negotiationStartedAt: startedAt, scoped,
+        iceServers: relay ? [relay] : stun, offer, negotiationStartedAt: startedAt, scoped,
         relayOnly: Boolean(relay),
       }));
     };
@@ -387,7 +391,8 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     if (rtc?.route !== "pending" || first?.readyState !== WebSocket.OPEN || second?.readyState !== WebSocket.OPEN) return;
     clearTimeout(rtc.timeout);
     const { NETPLAY_TURN_KEY_ID: id, NETPLAY_TURN_KEY: token } = this.env;
-    if (reason !== "connected" && rtc.turn === "disabled" && rtc.scoped && id && token) {
+    if (reason !== "connected" && rtc.turn === "disabled" && rtc.scoped && id && token &&
+        this.env.APP_ORIGIN !== stagingOrigin) {
       this.logNegotiation(room, rtc, "netplay_direct_attempt", reason, reporter);
       this.startNegotiation(room, first, second, { id, token });
       return;

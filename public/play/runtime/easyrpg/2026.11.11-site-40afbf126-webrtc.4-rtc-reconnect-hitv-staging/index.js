@@ -619,6 +619,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       const host = /^[a-z]+:([^:?]+)/i.exec(url)?.[1].toLowerCase();
       if (host === 'stun.cloudflare.com') return 'cloudflare-stun';
       if (host === 'stun.nextcloud.com') return 'nextcloud-stun';
+      if (host === 'stun.hitv.com') return 'hitv-stun';
       if (host === 'turn.cloudflare.com') return 'cloudflare-turn';
     };
     const describeCandidate = (candidate, type) => ({

@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "3398943413d0b99076498a3997911b74e54898a2",
-  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect-direct-first",
-  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers-direct-first",
-  "artifact": "Kai-Web-2026.11.11-direct-first-site.zip",
-  "archiveSha256": "1e31082e6b59feac7649055efa3b4181b94f09ba14b713d440b3560434ab1fc6",
+  "version": "2026.11.11-site-40afbf126-webrtc.4-rtc-reconnect-hitv-staging",
+  "build": "40afbf126-web-transport-webrtc.4-rtc-pool-heartbeat-opening-liveness-diagnostics-reconnect-ice-pair-ice-stats-ice-servers-direct-first-hitv-staging",
+  "artifact": "Kai-Web-2026.11.11-hitv-staging-site.zip",
+  "archiveSha256": "efc3f8ad407f3057f309e687490822d0f0fd05f43e9a102f63523e200f228c0d",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/3398943413d0b99076498a3997911b74e54898a2",
   "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/3398943413d0b99076498a3997911b74e54898a2/COPYING",
   "sourceState": "patched-commit",
@@ -68,6 +68,10 @@
     {
       "path": "scripts/runtime-patches/kai-netplay-direct-first.patch",
       "sha256": "b20fdd8035d86e985b011e80693b99e3541a4c94967361e8b4e8e9178efd8989"
+    },
+    {
+      "path": "scripts/runtime-patches/kai-netplay-hitv-staging.patch",
+      "sha256": "d3618fce2efd6ed52a1ff602502b61ddef13d2e8f9342c483fa2c133e9fbcd74"
     }
   ],
   "sourceSnapshot": null,
@@ -101,28 +105,28 @@
       "file": "player-host.js",
       "path": "scripts/runtime-patches/console-scrollback.patch",
       "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "fbc44cc6aadb62fb4277bd2c6ccb6ba867a3e9e497431d4da54fd275ce541215",
-      "afterSha256": "c8a735a4d6511ab9635e818f2f45151973053ccb8486bc80e1a294419518d539"
+      "beforeSha256": "89b71544afa03a5ad1879ceeee0a9dd42398ce03bfbad2c00d7cc356db502d89",
+      "afterSha256": "1d17c3d3d815e92dfc30b98956c2d310f9837eb34e88c73179d4b793a4631dea"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/pointer-position.patch",
       "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "c8a735a4d6511ab9635e818f2f45151973053ccb8486bc80e1a294419518d539",
-      "afterSha256": "f0b6f59664be85ead85334fb9b54d312f2d709a639a52be42ed203b6b17ace48"
+      "beforeSha256": "1d17c3d3d815e92dfc30b98956c2d310f9837eb34e88c73179d4b793a4631dea",
+      "afterSha256": "3515f005b0454918079a9db84f040d19141e3cee46d023728fffec886e26ffcb"
     },
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/startup-regional-assets.patch",
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
-      "beforeSha256": "f0b6f59664be85ead85334fb9b54d312f2d709a639a52be42ed203b6b17ace48",
-      "afterSha256": "12774469846a46f5858ac0dd196c5719299943e9bad5a2280322f8091d7784de"
+      "beforeSha256": "3515f005b0454918079a9db84f040d19141e3cee46d023728fffec886e26ffcb",
+      "afterSha256": "d0ce34097142e0774dbf0ce8bb03c297efb9e37dee1b4f971a7a2457e4236aea"
     }
   ],
   "files": {
     "index.js": {
-      "size": 62431,
-      "sha256": "12774469846a46f5858ac0dd196c5719299943e9bad5a2280322f8091d7784de"
+      "size": 62487,
+      "sha256": "d0ce34097142e0774dbf0ce8bb03c297efb9e37dee1b4f971a7a2457e4236aea"
     },
     "easyrpg-player.js": {
       "size": 128884,
@@ -271,6 +275,10 @@
     "kai-netplay-direct-first.patch": {
       "size": 12259,
       "sha256": "b20fdd8035d86e985b011e80693b99e3541a4c94967361e8b4e8e9178efd8989"
+    },
+    "kai-netplay-hitv-staging.patch": {
+      "size": 695,
+      "sha256": "d3618fce2efd6ed52a1ff602502b61ddef13d2e8f9342c483fa2c133e9fbcd74"
     }
   }
 }
