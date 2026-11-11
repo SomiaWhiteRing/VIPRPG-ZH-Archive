@@ -20,7 +20,6 @@ import {
 } from "@/app/components/media/media-picker";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
-import { SelectField } from "@/app/components/ui/select";
 import { LanguageField } from "@/app/components/work/language-field";
 import { WorkVisibilityField } from "@/app/components/work/work-visibility-field";
 import { legacyWorkVisibilityInput, parseWorkVisibility, type WorkVisibility } from "@/lib/work-visibility";
@@ -98,13 +97,11 @@ type PreparedCharacterFaceSheets = {
 };
 
 type AdminSettings = Pick<NonNullable<ArchiveCommitMetadata["admin"]>, "externalLinks">;
-type AdminNetplaySetting = { archiveVersionId: number; enabled: boolean };
 type AdminEditSubmission = {
   settings: AdminSettings;
   initialWork: UploadInitialWork;
   associationDefaults: AssociationDefaults;
   downloadLink?: GameExternalLink;
-  netplay?: AdminNetplaySetting;
 };
 
 export type UploadInitialWork = WorkVisibility & {
@@ -155,7 +152,7 @@ export function UploadClient({
   adminOptions?: {
     canUpdateStatus: boolean;
     externalLinks: GameExternalLink[];
-    netplayArchive?: AdminNetplaySetting;
+    netplaySpace?: ReactNode;
     footer: ReactNode;
   };
   suggestions: UploadSuggestions;
@@ -197,7 +194,6 @@ export function UploadClient({
   const [adminSettings, setAdminSettings] = useState<AdminSettings | undefined>(() => adminOptions ? {
     externalLinks: adminOptions.externalLinks.filter((link) => link.linkType !== "download_page"),
   } : undefined);
-  const [netplayOverride, setNetplayOverride] = useState<AdminNetplaySetting>();
   const [coverBlobSha256, setCoverBlobSha256] = useState(initialWork?.coverBlobSha256 ?? "");
   const [sourceMode, setSourceMode] = useState<"archive" | "external">(() =>
     isArchiveEngineFamily(form.engineFamily) && !initialWork?.externalDownloadUrl
@@ -270,12 +266,6 @@ export function UploadClient({
   );
   const { saveFormDraft } = upload;
   const localTaskId = upload.task?.localTaskId;
-  const netplayArchive = archiveMode && !sourceSummary && !upload.active &&
-    adminOptions?.netplayArchive?.archiveVersionId === existingArchive?.id &&
-    currentUser.permissionKeys.includes("archive_version.update")
-    ? adminOptions?.netplayArchive : undefined;
-  const netplayChange = netplayArchive && netplayOverride?.archiveVersionId === netplayArchive.archiveVersionId &&
-    netplayOverride.enabled !== netplayArchive.enabled ? netplayOverride : undefined;
 
   useEffect(() => {
     saveFormDraft({
@@ -305,7 +295,6 @@ export function UploadClient({
     initialWork: { ...initialWork, coverBlobSha256 },
     associationDefaults,
     downloadLink: adminOptions?.externalLinks.find((link) => link.linkType === "download_page"),
-    netplay: netplayChange,
   } : undefined;
 
   useEffect(() => {
@@ -693,7 +682,6 @@ export function UploadClient({
         );
         toast.success("作品资料已保存。");
         await navigate(saveRedirectTo);
-        setNetplayOverride(undefined);
         return;
       }
       const images = await prepareSelectedImages(
@@ -1151,20 +1139,7 @@ export function UploadClient({
                   <ExternalLinkList values={adminSettings.externalLinks} onChange={(externalLinks) =>
                     setAdminSettings((current) => current ? { ...current, externalLinks } : current)} />
                 </fieldset>
-                {netplayArchive ? (
-                  <WorkbenchField controlId="admin-netplay-service" label="联机服务">
-                    <SelectField
-                      id="admin-netplay-service"
-                      value={(netplayChange?.enabled ?? netplayArchive.enabled) ? "1" : "0"}
-                      disabled={formDisabled}
-                      onValueChange={(value) => setNetplayOverride({ ...netplayArchive, enabled: value === "1" })}
-                      options={[
-                        { value: "0", label: "关闭" },
-                        { value: "1", label: "开启" },
-                      ]}
-                    />
-                  </WorkbenchField>
-                ) : null}
+                {adminOptions.netplaySpace}
                 <details>
                   <summary className="cursor-pointer text-sm font-bold">已上传封面引用</summary>
                   <div className="mt-3 grid gap-4">
@@ -1724,10 +1699,6 @@ async function submitEditedWork(
   if (admin) {
     body.set("work_id", String(workId));
     body.set("archive_source_url", distribution === "archive" ? form.archiveSourceUrl.trim() : "");
-    if (admin.netplay) {
-      body.set("netplay_archive_version_id", String(admin.netplay.archiveVersionId));
-      body.set("netplay_service", admin.netplay.enabled ? "1" : "0");
-    }
     body.set("cover_blob_sha256", admin.initialWork.coverBlobSha256);
     body.set("preview_blob_sha256s", admin.initialWork.previewBlobSha256s.join("\n"));
     body.set("work_staff", JSON.stringify(buildMetadata(form, {

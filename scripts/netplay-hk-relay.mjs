@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { startRouteSelection } from "./netplay-route-selection.mjs";
 import { parseNetplayDiagnostic } from "./netplay-diagnostics.mjs";
+import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "./netplay-room-password.mjs";
 
 const { WebSocket, WebSocketServer } = createRequire(import.meta.url)("ws");
 const origin = process.env.NETPLAY_SITE_ORIGIN ?? "https://staging.viprpg.org";
@@ -40,8 +41,9 @@ function route(request) {
   const pool = pools[modePool] ?? relay;
   if (pool.turnPort && !turnKey) return;
   const guest = url.searchParams.get("guest");
+  const guestId = /^[0-9a-f]{4}$/.test(guest ?? "") ? guest : randomBytes(2).toString("hex");
   let identity = {
-    name: "访客 " + (/^[0-9a-f]{4}$/.test(guest ?? "") ? guest : randomBytes(2).toString("hex")),
+    name: "访客 " + guestId,
     avatar: defaultAvatar,
   };
   if (payload) {
@@ -58,6 +60,7 @@ function route(request) {
     directory: target === "rooms",
     roomId: Number(target),
     mode: url.searchParams.get("mode"),
+    roomAccess: url.searchParams.get("roomAccess") === "1",
     pool,
     rtc: url.searchParams.get("rtcResume") === "1",
     routeSelection: url.searchParams.get("routeSelection") === "1",
@@ -66,7 +69,7 @@ function route(request) {
     diagnostics: url.searchParams.get("diagnostics") === "1",
     platform: /Android/i.test(agent) ? "android" : /Windows/i.test(agent) ? "windows" : /iPhone|iPad/i.test(agent) ? "ios" : "other",
     resume: url.searchParams.get("resume"),
-    identity,
+    identity: payload ? identity : { ...identity, guest: guestId },
   };
 }
 
@@ -77,7 +80,7 @@ function isStale(room) {
 
 function listRooms({ rooms }) {
   return [...rooms].filter(([, room]) => !isStale(room))
-    .map(([id, room]) => ({ id, players: [...room.seats].map(seat => seat.identity) }));
+    .map(([id, room]) => ({ id, players: [...room.seats].map(seat => seat.identity), locked: room.password.enabled }));
 }
 
 function send(socket, data) {
@@ -86,6 +89,11 @@ function send(socket, data) {
 
 function sendRoute(seat, message) {
   send(seat.socket, "route:" + JSON.stringify(message));
+}
+
+function sendRoomSettings(room) {
+  const settings = "room:settings:" + JSON.stringify(room.password);
+  for (const seat of room.seats) if (seat.roomAccess) send(seat.socket, settings);
 }
 
 function turnIceServers(roomId, index, turnPort, startedAt) {
@@ -202,6 +210,15 @@ function renewHeartbeat(room, seat) {
 }
 
 function receiveText(room, seat, data) {
+  if (data.startsWith("room:password:")) {
+    if ([...room.seats][0] !== seat) return;
+    const password = parseRoomPassword(data.slice(14));
+    if (!password) return;
+    room.password = password;
+    sendRoomSettings(room);
+    publishDirectory(room.pool);
+    return;
+  }
   if (seat.diagnostics && data.startsWith("room:diagnostic:")) {
     const diagnostic = parseNetplayDiagnostic(data);
     const turnPort = room.activeSelection?.path === "turn" ? 443 : room.pool.turnPort;
@@ -380,13 +397,14 @@ function attachRoomSocket(socket, room, seat) {
   });
 }
 
-function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtocol, platform, routeSelection, diagnostics }) {
-  const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0 };
-  const seat = { identity, rtc, routeSelection, inputStats, inputProtocol, platform, diagnostics,
+function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtocol, platform, routeSelection, diagnostics, roomAccess }) {
+  const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0, password: createRoomPassword() };
+  const seat = { identity, rtc, routeSelection, inputStats, inputProtocol, platform, diagnostics, roomAccess,
     seatNumber: room.seats.size + 1, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
   room.seats.add(seat);
   pool.rooms.set(roomId, room);
   attachRoomSocket(socket, room, seat);
+  sendRoomSettings(room);
   if (room.seats.size === 1) {
     send(socket, "2");
   } else {
@@ -460,7 +478,7 @@ function json(response, body) {
 
 const server = createServer(async (request, response) => {
   if (request.method === "GET" && request.url === "/healthz") {
-    json(response, { ok: true, route: "hong_kong_websocket", direct: true, turnUdp: Boolean(turnKey), archiveVersionId, profileIdentity: Boolean(identityKey) });
+    json(response, { ok: true, route: "hong_kong_websocket", direct: true, turnUdp: Boolean(turnKey), roomPassword: true, archiveVersionId, profileIdentity: Boolean(identityKey) });
   } else if (request.headers.origin && request.headers.origin !== origin) {
     response.writeHead(403).end();
   } else if (request.method === "GET" && (request.url === defaultAvatar ||
@@ -494,15 +512,23 @@ const server = createServer(async (request, response) => {
   }
 });
 
+function joinError(target, code) {
+  const room = target.pool.rooms.get(target.roomId);
+  if (target.mode === "join" && (!room || isStale(room))) return "closed";
+  if (room && (room.seats.size === 2 || target.mode === "create" || isStale(room))) return "full";
+  if (room?.password.enabled && code !== room.password.code) return code === null ? "password_required" : "password_incorrect";
+}
+
 server.on("upgrade", (request, socket, head) => {
   const target = route(request);
   const room = target?.pool.rooms.get(target.roomId);
   const resume = target?.resume && room?.route === "webrtc" &&
     [...room.seats].find(seat => !seat.socket && seat.resumeToken === target.resume);
+  const error = target && !target.directory && !target.roomAccess && !target.resume ? joinError(target, null) : undefined;
   const status = request.headers.origin !== origin ? 403
-    : !target || target.mode === "join" && (!room || isStale(room)) ? 404
+    : !target ? 404
     : target.resume ? (resume ? 0 : 404)
-    : room && (room.seats.size === 2 || target.mode === "create" || isStale(room)) ? 409 : 0;
+    : error === "closed" ? 404 : error === "full" ? 409 : error ? 403 : 0;
   if (status) {
     if (target?.pool === auto && target.routeSelection && target.mode === "join" && (status === 404 || status === 409)) {
       rtcWss.handleUpgrade(request, socket, head, client => {
@@ -521,9 +547,25 @@ server.on("upgrade", (request, socket, head) => {
     if (target.directory) watchDirectory(client, target);
     else if (resume) {
       attachRoomSocket(client, room, resume);
+      sendRoomSettings(room);
       send(client, String(3 + [...room.seats].indexOf(resume)));
       console.log(JSON.stringify({ event: "netplay_control_resumed", archiveVersionId, roomId: room.id,
         seat: [...room.seats].indexOf(resume) + 1 }));
+    } else if (target.roomAccess) {
+      const timer = setTimeout(() => client.close(1008), 5_000);
+      client.once("close", () => clearTimeout(timer));
+      client.once("message", (data, binary) => {
+        clearTimeout(timer);
+        const entry = !binary && parseJoinPassword(data.toString());
+        if (!entry) return client.close(1008);
+        const error = joinError(target, entry.code);
+        if (error) {
+          send(client, "room:rejected:" + error);
+          client.close(1000);
+          return;
+        }
+        joinRoom(client, target);
+      });
     } else joinRoom(client, target);
   });
 });

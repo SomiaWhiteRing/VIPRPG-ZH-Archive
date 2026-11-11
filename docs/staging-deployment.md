@@ -18,15 +18,19 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 运行包可使用 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json) 声明的备用资源入口。对应域名须保留社区 CNAME 链，并将运行包路径 Route 绑定到同一环境的原 Worker；Environment 的配置 secret 同步保存这条精确 Route。它只供引擎和音色库的客户端传输选择，部署 origin、游戏安装和存档路径保持原协议。正式入口的新增、撤销与配置同步遵守[主站入口说明](./main-ingress-selection.md#运行包入口的预生产验证)的批准边界。
 
-联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Worker 联机的归档可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
+在控制台「联机空间」创建或编辑空间，再在作品维护页绑定。使用 Cloudflare 托管时，空间拥有固定的 `/api/netplay/v1/spaces/<空间 ID>/` 入口。同一空间的作品共享大厅。外部托管填写支持 Player 房间协议的完整 HTTPS 基础地址，包含服务器分配给这个空间的路径。联机作品的新归档需要保留 `EasyRPG.ini` 的联机声明。
 
-预生产玉露弹（作品 18）使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 以 Debian 的 Node.js 和 `node-ws` 运行，`NETPLAY_ARCHIVE_VERSION` 与当前归档版本 ID 一致。Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
+联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Cloudflare 托管的作品可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
+
+预生产玉露弹（作品 18）的联机空间使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 以 Debian 的 Node.js 和 `node-ws` 运行。沿用的 `NETPLAY_ARCHIVE_VERSION` 表示该中继地址的固定数字路径，随空间配置管理。Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
 
 在网页版游玩地址加 `?netplayTurn=1` 进入独立的香港 UDP TURN 房间池。该入口要求双方经 coturn 中继，连接失败时房主留在原房间等待，来客可从大厅重新加入。coturn 在香港服务器的公网 IPv4 和 IPv6 上监听 UDP 3478，两类连接都使用同一服务器的 IPv4 分配 UDP 49160–49259 中继端口，中继对端限定为同一服务器上的分配。野草云 P 型 VPS 还需在客户中心的产品防火墙规则中允许 `net0` 入站 UDP 3478。香港联机服务使用与 coturn 配置一致的 `NETPLAY_HK_TURN_SECRET` 签发短期凭据，实际使用的中继协议见香港服的 `netplay_ice_stats` 日志。
 
 使用 `?netplayTurn=443` 可单独测试 UDP 443。该房间池使用 coturn 的 IPv4 和 IPv6 辅助监听地址，沿用同一组中继端口和凭据。野草云产品防火墙需放行入站 UDP 443，coturn 的 systemd 服务通过 `CAP_NET_BIND_SERVICE` 绑定该端口。
 
-预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN 443，房间服务收到双方确认后宣布房间就绪。混用旧 Player 时走 WebSocket。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs`、`netplay-route-selection.mjs` 与 `netplay-diagnostics.mjs` 放在同一目录。
+预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN 443，房间服务收到双方确认后宣布房间就绪。混用旧 Player 时走 WebSocket。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs`、`netplay-route-selection.mjs`、`netplay-diagnostics.mjs` 与 `netplay-room-password.mjs` 放在同一目录。
+
+房间建立时生成四位密码，默认关闭。大厅只接收 `locked` 标记，支持 `roomAccess=1` 的成员通过私有 `room:settings` 消息取得开关与密码。新版 Player 在 WebSocket 接通后发送 `room:join`，服务校验当前房间和密码后才占座、协商线路。房主通过 `room:password` 修改设置。香港服务与 Cloudflare 房间服务使用同一口令格式，无密码旧客户端仍可进入未加锁房间。数字输入及第三行“密码”的显示由游戏事件负责。
 
 配套 Player 通过 `diagnostics=1` 请求局内诊断，房间服务确认支持后接收 `netplay_stall` 日志。日志包含实际等待输入超过 100 ms 的起止、每五秒的累计等待及帧进度、输入确认和补发计数、发送缓冲、页面可见性、暂停状态，以及主线程和游戏线程的调度停顿。通过房间、座位、对局 ID、客户端序号和帧号关联双方记录。持续时长使用单调时钟，设备时间可能存在偏差。控制连接恢复期间最多暂存 32 条事件，并记录丢弃数量。
 

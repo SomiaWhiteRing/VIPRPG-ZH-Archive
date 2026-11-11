@@ -1,13 +1,17 @@
 import { DurableObject } from "cloudflare:workers";
 import { getCurrentUser } from "../app/.server/auth/current-user";
 import { getPublishedArchiveDownloadRecord } from "../app/.server/db/archive-downloads";
+import { isCloudflareSpaceReadable } from "../app/.server/db/netplay-spaces";
 import { createRuntime } from "../app/.server/runtime";
 import { getUserAvatarSrc } from "../lib/user-profile";
-import { stagingNetplayEdgeOrigin, stagingNetplaySiteOrigin } from "../lib/archive/netplay-ingress";
+import { productionNetplayHongKongOrigin, productionNetplayHongKongWork, productionNetplayLegacyArchive,
+  productionNetplaySiteOrigin, stagingNetplayEdgeOrigin, stagingNetplaySiteOrigin } from "../lib/archive/netplay-ingress";
 import { json } from "../lib/http";
 import { requestJsonValue } from "../lib/ui/api-response";
 import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
 import { parseNetplayDiagnostic } from "../scripts/netplay-diagnostics.mjs";
+import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "../scripts/netplay-room-password.mjs";
+import type { RoomPassword } from "../scripts/netplay-room-password.mjs";
 
 const standardStunUrls = ["stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"];
 const directIceServers = [{ urls: standardStunUrls }];
@@ -28,7 +32,7 @@ const rtcMilestones = new Set([
   "channel_open", "channel_closed", "channel_error", "invalid_signal",
   "relay_probe_ok", "relay_probe_slow", "relay_probe_timeout",
 ]);
-type Identity = { name: string; avatar: string };
+type Identity = { name: string; avatar: string; guest?: string };
 type DisconnectReason = "socket_close" | "socket_error" | "heartbeat_timeout" | "rtc_failed";
 type RtcReason = "connected" | "client_failure" | "timeout" | "turn_unavailable";
 type Heartbeat = {
@@ -56,14 +60,16 @@ type Negotiation = {
   timeout: ReturnType<typeof setTimeout>;
 };
 type Room = {
-  details: { archiveVersionId: number; roomId: number; pool: "rtc" | "legacy" };
+  details: { archiveVersionId?: number; netplaySpaceId?: number; roomId: number; pool: "space" | "rtc" | "legacy" };
   peers: Map<WebSocket, {
     identity: Identity;
     rtc: boolean;
     relayProbe: boolean;
+    roomAccess: boolean;
     seatNumber: number;
     heartbeat?: Heartbeat;
   }>;
+  password: RoomPassword;
   hidden: boolean;
   ready?: { socket: WebSocket; packet: ArrayBuffer };
   rtc?: Negotiation;
@@ -113,7 +119,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     const now = Date.now();
     const rooms = [];
     for (const [id, room] of this.rooms) {
-      if (!this.isRoomStale(room, now)) rooms.push({ id, players: Array.from(room.peers.values(), ({ identity }) => identity) });
+      if (!this.isRoomStale(room, now)) rooms.push({ id, players: Array.from(room.peers.values(), ({ identity }) => identity), locked: room.password.enabled });
     }
     return rooms;
   }
@@ -159,27 +165,74 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
 
-    const id = Number(path.slice(path.lastIndexOf("/") + 1));
-    const diagnostics = url.searchParams.get("diagnostics") === "1";
-    const mode = url.searchParams.get("mode");
-    const existing = this.rooms.get(id);
-    if (existing) {
-      if (this.isRoomStale(existing, Date.now())) return new Response(null, { status: mode === "join" ? 404 : 409 });
-      if (existing.peers.size === 2 || mode === "create") return new Response(null, { status: 409 });
-    } else if (mode === "join") return new Response(null, { status: 404 });
-    const [, , , , archive, pool] = path.split("/");
-    const room: Room = existing ?? {
-      details: { archiveVersionId: Number(archive), roomId: id, pool: pool === "rtc" ? "rtc" : "legacy" },
-      peers: new Map(),
-      hidden: false,
-    };
-    const { peers } = room;
-    const first = peers.keys().next().value;
-
+    const roomAccess = url.searchParams.get("roomAccess") === "1";
+    if (!roomAccess) {
+      const error = this.joinError(url, null);
+      if (error) return new Response(null, { status: error === "closed" ? 404 : error === "full" ? 409 : 403 });
+    }
     const pair = new WebSocketPair();
     const socket = pair[1];
     socket.binaryType = "arraybuffer";
     socket.accept();
+    if (roomAccess) {
+      const timer = setTimeout(() => socket.close(1008), 5_000);
+      socket.addEventListener("close", () => clearTimeout(timer), { once: true });
+      socket.addEventListener("message", ({ data }) => {
+        clearTimeout(timer);
+        const entry = parseJoinPassword(data);
+        if (!entry) {
+          socket.close(1008);
+          return;
+        }
+        this.joinRoom(request, url, socket, entry.code);
+      }, { once: true });
+    } else {
+      this.joinRoom(request, url, socket, null);
+    }
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  private joinError(url: URL, code: string | null) {
+    const id = Number(url.pathname.slice(url.pathname.lastIndexOf("/") + 1));
+    const mode = url.searchParams.get("mode");
+    const room = this.rooms.get(id);
+    if (mode === "join" && (!room || this.isRoomStale(room, Date.now()))) return "closed";
+    if (room && (room.peers.size === 2 || mode === "create" || this.isRoomStale(room, Date.now()))) return "full";
+    if (room?.password.enabled && code !== room.password.code) return code === null ? "password_required" : "password_incorrect";
+  }
+
+  private sendRoomSettings(room: Room) {
+    const settings = "room:settings:" + JSON.stringify(room.password);
+    for (const [peer, state] of room.peers) {
+      if (state.roomAccess && peer.readyState === WebSocket.OPEN) peer.send(settings);
+    }
+  }
+
+  private joinRoom(request: Request, url: URL, socket: WebSocket, code: string | null) {
+    const path = url.pathname;
+    const id = Number(path.slice(path.lastIndexOf("/") + 1));
+    const diagnostics = url.searchParams.get("diagnostics") === "1";
+    const error = this.joinError(url, code);
+    if (error) {
+      socket.send("room:rejected:" + error);
+      socket.close(1000);
+      return;
+    }
+    const existing = this.rooms.get(id);
+    const [, , , , scope, key] = path.split("/");
+    const space = scope === "spaces";
+    const room: Room = existing ?? {
+      details: {
+        ...(space ? { netplaySpaceId: Number(key) } : { archiveVersionId: Number(scope) }),
+        roomId: id, pool: space ? "space" : key === "rtc" ? "rtc" : "legacy",
+      },
+      peers: new Map(),
+      hidden: false,
+      password: createRoomPassword(),
+    };
+    const { peers } = room;
+    const first = peers.keys().next().value;
+
     if (diagnostics) socket.send("room:diagnostics:1");
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Netplay-Identity")!)) as Identity;
     const disconnect = (reason: DisconnectReason, closeCode?: number) => {
@@ -243,14 +296,24 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     };
     peers.set(socket, {
       identity, rtc: url.searchParams.get("rtc") === "1", relayProbe: url.searchParams.get("rtcProbe") === "2", heartbeat,
-      seatNumber: first ? 2 : 1,
+      seatNumber: first ? 2 : 1, roomAccess: url.searchParams.get("roomAccess") === "1",
     });
     this.rooms.set(id, room);
+    this.sendRoomSettings(room);
     renewHeartbeat();
     socket.addEventListener("message", ({ data }) => {
       if (!peers.has(socket)) return;
       const rtc = room.rtc;
       if (typeof data === "string") {
+        if (data.startsWith("room:password:")) {
+          if (socket !== peers.keys().next().value) return;
+          const password = parseRoomPassword(data.slice(14));
+          if (!password) return;
+          room.password = password;
+          this.sendRoomSettings(room);
+          this.publishDirectory();
+          return;
+        }
         if (diagnostics && data.startsWith("room:diagnostic:")) {
           const diagnostic = parseNetplayDiagnostic(data);
           if (diagnostic) console.log({
@@ -371,7 +434,6 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       socket.send("2");
     }
     this.publishDirectory();
-    return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
   private startNegotiation(room: Room, first: WebSocket, second: WebSocket, turn?: { id: string; token: string }) {
@@ -461,11 +523,11 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
 export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEnv, ctx: ExecutionContext) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/netplay/v1/")) return;
-  const route = /^\/api\/netplay\/v1\/([1-9]\d*)\/(rtc\/)?(rooms|[1-9]\d{0,5})$/.exec(url.pathname);
+  const route = /^\/api\/netplay\/v1\/(spaces\/)?([1-9]\d*)\/(rtc\/)?(rooms|[1-9]\d{0,5})$/.exec(url.pathname);
   if (!route || !env.NETPLAY_ROOM) return new Response(null, { status: 404 });
-  const [, archive, rtc, target] = route;
-  const archiveVersionId = Number(archive);
-  if (!Number.isSafeInteger(archiveVersionId)) return new Response(null, { status: 404 });
+  const [, space, key, rtc, target] = route;
+  const id = Number(key);
+  if (!Number.isSafeInteger(id)) return new Response(null, { status: 404 });
   const directory = target === "rooms";
   if (rtc && !directory && url.searchParams.get("rtc") !== "1") return new Response(null, { status: 404 });
   const websocket = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
@@ -479,9 +541,23 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
       ((websocket || origin !== null) && origin !== runtime.origin)) {
     return new Response(null, { status: 403 });
   }
-  const record = await getPublishedArchiveDownloadRecord(runtime, archiveVersionId, true);
-  if (!record?.netplayService) return new Response(null, { status: 404 });
-  const pool = rtc ? `v1/${archiveVersionId}/rtc` : `v1/${archiveVersionId}`;
+  let pool = `v1/spaces/${id}`;
+  if (space) {
+    if (!await isCloudflareSpaceReadable(runtime, id)) return new Response(null, { status: 404 });
+  } else {
+    const record = await getPublishedArchiveDownloadRecord(runtime, id, true);
+    if (!record?.netplayCapable || record.netplaySpaceId === null) return new Response(null, { status: 404 });
+    // Previously published archive URLs remain usable for installed clients.
+    const legacy = runtime.origin === productionNetplaySiteOrigin && record.workId === productionNetplayHongKongWork &&
+      (id === productionNetplayLegacyArchive ||
+        (record.netplayExternalEndpoint && new URL(record.netplayExternalEndpoint).origin === productionNetplayHongKongOrigin));
+    if (legacy) {
+      pool = rtc ? `v1/${id}/rtc` : `v1/${id}`;
+    } else {
+      if (record.netplayExternalEndpoint) return new Response(null, { status: 404 });
+      pool = `v1/spaces/${record.netplaySpaceId}`;
+    }
+  }
   const rooms = env.NETPLAY_ROOM.getByName(pool);
   if (directory && !websocket) {
     const response = await rooms.fetch(request);
@@ -493,9 +569,11 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
 
   const user = stagingEdge ? null : await getCurrentUser(runtime);
   const guest = url.searchParams.get("guest");
+  const guestId = user ? undefined : guest && /^[0-9a-f]{4}$/.test(guest) ? guest : crypto.randomUUID().slice(0, 4);
   const identity: Identity = {
-    name: user?.displayName ?? "访客 " + (guest && /^[0-9a-f]{4}$/.test(guest) ? guest : crypto.randomUUID().slice(0, 4)),
+    name: user?.displayName ?? "访客 " + guestId,
     avatar: getUserAvatarSrc(user?.avatarBlobSha256),
+    guest: guestId,
   };
   const headers = new Headers(request.headers);
   headers.set("X-Netplay-Identity", encodeURIComponent(JSON.stringify(identity)));

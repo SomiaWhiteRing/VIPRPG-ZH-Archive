@@ -229,12 +229,20 @@ export default function AdminPage() {
             </Link>
           ) : null}
           {canRunMaintenance ? (
-            <Link
-              className={buttonVariants({ variant: "outline" })}
-              to="/admin/maintenance"
-            >
-              维护与一致性
-            </Link>
+            <>
+              <Link
+                className={buttonVariants({ variant: "outline" })}
+                to="/admin/netplay-spaces"
+              >
+                联机空间
+              </Link>
+              <Link
+                className={buttonVariants({ variant: "outline" })}
+                to="/admin/maintenance"
+              >
+                维护与一致性
+              </Link>
+            </>
           ) : null}
           {canReadAudit ? (
             <Link
