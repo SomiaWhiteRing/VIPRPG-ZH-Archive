@@ -97,10 +97,11 @@ function selectRoute(room, route, reason) {
   if (room.seats.size !== 2) return;
   clearTimeout(room.negotiation?.timer);
   room.route = route;
+  const seats = [...room.seats];
   const details = room.negotiation && {
     negotiationStartedAt: room.negotiation.startedAt,
     negotiationMs: Date.now() - room.negotiation.startedAt,
-    seats: [...room.seats].map(seat => ({ signals: seat.signals, milestones: seat.milestones })),
+    seats: seats.map(seat => ({ signals: seat.signals, milestones: seat.milestones })),
   };
   const turnTest = room.pool === turn;
   const connected = route === "webrtc";
@@ -108,10 +109,10 @@ function selectRoute(room, route, reason) {
   console.log(JSON.stringify({ event: "netplay_route", archiveVersionId, roomId: room.id,
     route: loggedRoute, reason, ...(turnTest && { connected }), ...details }));
   if (turnTest && !connected) {
-    leave(room, room.seats.values().next().value, "turn_unavailable");
+    leave(room, seats[1], "turn_unavailable");
     return;
   }
-  for (const [index, seat] of [...room.seats].entries()) {
+  for (const [index, seat] of seats.entries()) {
     if (connected) {
       clearTimeout(seat.hide);
       clearTimeout(seat.expire);
@@ -128,7 +129,7 @@ function leave(room, seat, reason, closeCode) {
   const heartbeat = [...room.seats].map(({ rttMs, peakRttMs }) => ({ rttMs, peakRttMs }));
   const input = [...room.seats].map(player => player.input);
   const route = room.route;
-  const leaving = reason === "rtc_failed" || reason === "turn_unavailable" ? [...room.seats] : [seat];
+  const leaving = reason === "rtc_failed" ? [...room.seats] : [seat];
   for (const player of leaving) {
     clearInterval(player.ping);
     clearTimeout(player.hide);
