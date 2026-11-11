@@ -8,6 +8,8 @@ import { json } from "../lib/http";
 import { requestJsonValue } from "../lib/ui/api-response";
 import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
 import { parseNetplayDiagnostic } from "../scripts/netplay-diagnostics.mjs";
+import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "../scripts/netplay-room-password.mjs";
+import type { RoomPassword } from "../scripts/netplay-room-password.mjs";
 
 const standardStunUrls = ["stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"];
 const directIceServers = [{ urls: standardStunUrls }];
@@ -61,9 +63,11 @@ type Room = {
     identity: Identity;
     rtc: boolean;
     relayProbe: boolean;
+    roomAccess: boolean;
     seatNumber: number;
     heartbeat?: Heartbeat;
   }>;
+  password: RoomPassword;
   hidden: boolean;
   ready?: { socket: WebSocket; packet: ArrayBuffer };
   rtc?: Negotiation;
@@ -113,7 +117,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     const now = Date.now();
     const rooms = [];
     for (const [id, room] of this.rooms) {
-      if (!this.isRoomStale(room, now)) rooms.push({ id, players: Array.from(room.peers.values(), ({ identity }) => identity) });
+      if (!this.isRoomStale(room, now)) rooms.push({ id, players: Array.from(room.peers.values(), ({ identity }) => identity), locked: room.password.enabled });
     }
     return rooms;
   }
@@ -159,27 +163,70 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
 
+    const roomAccess = url.searchParams.get("roomAccess") === "1";
+    if (!roomAccess) {
+      const error = this.joinError(url, null);
+      if (error) return new Response(null, { status: error === "closed" ? 404 : error === "full" ? 409 : 403 });
+    }
+    const pair = new WebSocketPair();
+    const socket = pair[1];
+    socket.binaryType = "arraybuffer";
+    socket.accept();
+    if (roomAccess) {
+      const timer = setTimeout(() => socket.close(1008), 5_000);
+      socket.addEventListener("close", () => clearTimeout(timer), { once: true });
+      socket.addEventListener("message", ({ data }) => {
+        clearTimeout(timer);
+        const entry = parseJoinPassword(data);
+        if (!entry) {
+          socket.close(1008);
+          return;
+        }
+        this.joinRoom(request, url, socket, entry.code);
+      }, { once: true });
+    } else {
+      this.joinRoom(request, url, socket, null);
+    }
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  private joinError(url: URL, code: string | null) {
+    const id = Number(url.pathname.slice(url.pathname.lastIndexOf("/") + 1));
+    const mode = url.searchParams.get("mode");
+    const room = this.rooms.get(id);
+    if (mode === "join" && (!room || this.isRoomStale(room, Date.now()))) return "closed";
+    if (room && (room.peers.size === 2 || mode === "create" || this.isRoomStale(room, Date.now()))) return "full";
+    if (room?.password.enabled && code !== room.password.code) return code === null ? "password_required" : "password_incorrect";
+  }
+
+  private sendRoomSettings(room: Room) {
+    const settings = "room:settings:" + JSON.stringify(room.password);
+    for (const [peer, state] of room.peers) {
+      if (state.roomAccess && peer.readyState === WebSocket.OPEN) peer.send(settings);
+    }
+  }
+
+  private joinRoom(request: Request, url: URL, socket: WebSocket, code: string | null) {
+    const path = url.pathname;
     const id = Number(path.slice(path.lastIndexOf("/") + 1));
     const diagnostics = url.searchParams.get("diagnostics") === "1";
-    const mode = url.searchParams.get("mode");
+    const error = this.joinError(url, code);
+    if (error) {
+      socket.send("room:rejected:" + error);
+      socket.close(1000);
+      return;
+    }
     const existing = this.rooms.get(id);
-    if (existing) {
-      if (this.isRoomStale(existing, Date.now())) return new Response(null, { status: mode === "join" ? 404 : 409 });
-      if (existing.peers.size === 2 || mode === "create") return new Response(null, { status: 409 });
-    } else if (mode === "join") return new Response(null, { status: 404 });
     const [, , , , archive, pool] = path.split("/");
     const room: Room = existing ?? {
       details: { archiveVersionId: Number(archive), roomId: id, pool: pool === "rtc" ? "rtc" : "legacy" },
       peers: new Map(),
       hidden: false,
+      password: createRoomPassword(),
     };
     const { peers } = room;
     const first = peers.keys().next().value;
 
-    const pair = new WebSocketPair();
-    const socket = pair[1];
-    socket.binaryType = "arraybuffer";
-    socket.accept();
     if (diagnostics) socket.send("room:diagnostics:1");
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Netplay-Identity")!)) as Identity;
     const disconnect = (reason: DisconnectReason, closeCode?: number) => {
@@ -243,14 +290,24 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     };
     peers.set(socket, {
       identity, rtc: url.searchParams.get("rtc") === "1", relayProbe: url.searchParams.get("rtcProbe") === "2", heartbeat,
-      seatNumber: first ? 2 : 1,
+      seatNumber: first ? 2 : 1, roomAccess: url.searchParams.get("roomAccess") === "1",
     });
     this.rooms.set(id, room);
+    this.sendRoomSettings(room);
     renewHeartbeat();
     socket.addEventListener("message", ({ data }) => {
       if (!peers.has(socket)) return;
       const rtc = room.rtc;
       if (typeof data === "string") {
+        if (data.startsWith("room:password:")) {
+          if (socket !== peers.keys().next().value) return;
+          const password = parseRoomPassword(data.slice(14));
+          if (!password) return;
+          room.password = password;
+          this.sendRoomSettings(room);
+          this.publishDirectory();
+          return;
+        }
         if (diagnostics && data.startsWith("room:diagnostic:")) {
           const diagnostic = parseNetplayDiagnostic(data);
           if (diagnostic) console.log({
@@ -371,7 +428,6 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       socket.send("2");
     }
     this.publishDirectory();
-    return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
   private startNegotiation(room: Room, first: WebSocket, second: WebSocket, turn?: { id: string; token: string }) {
