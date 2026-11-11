@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { parse } from "jsonc-parser";
 import { downloadSubrequestLimit } from "../lib/archive/download.ts";
 import { DAILY_AUDIT_CRON } from "../lib/audit-report-config.mjs";
-import { readConfig, selectDeployment, validateDeployment, validateIsolation } from "./deployment-config.mjs";
+import { readConfig, selectDeployment, stagingNetplayRoute, validateDeployment, validateIsolation } from "./deployment-config.mjs";
 
 const { values } = parseArgs({ options: { env: { type: "string" } } });
 const template = readConfig("wrangler.example.jsonc");
@@ -21,6 +21,9 @@ const infrastructure = ["name", "routes", "workers_dev", "preview_urls", "d1_dat
   "send_email", "ratelimits", "vars", "triggers", "observability", "limits", "placement", "queues"];
 const target = structuredClone(base);
 for (const key of infrastructure) if (Object.hasOwn(selected, key)) target[key] = selected[key];
+if (values.env === "staging" && !target.routes?.some(route => route.pattern === stagingNetplayRoute.pattern)) {
+  target.routes = [...(target.routes ?? []), stagingNetplayRoute];
+}
 if (values.env === "production") {
   // Public analytics switches come from the production Environment, separately
   // from the resource secret so enabling analytics cannot replace ingress data.

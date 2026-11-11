@@ -18,6 +18,8 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 运行包可使用 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json) 声明的备用资源入口。对应域名须保留社区 CNAME 链，并将运行包路径 Route 绑定到同一环境的原 Worker；Environment 的配置 secret 同步保存这条精确 Route。它只供引擎和音色库的客户端传输选择，部署 origin、游戏安装和存档路径保持原协议。正式入口的新增、撤销与配置同步遵守[主站入口说明](./main-ingress-selection.md#运行包入口的预生产验证)的批准边界。
 
+联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。预生产网页版游玩地址加 `?netplayEdge=1` 可通过该入口以访客身份进入同一房间池，普通地址使用主站入口。对照测试使用 WebSocket 的实际双端往返时间。
+
 ## 干净种子
 
 不要把本地开发数据库整体上传到远端。准备独立的预生产导入包：

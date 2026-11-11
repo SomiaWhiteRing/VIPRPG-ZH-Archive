@@ -4,11 +4,16 @@ import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parse } from "jsonc-parser";
 import { downloadSubrequestLimit } from "../lib/archive/download.ts";
+import { stagingNetplayEdgeOrigin } from "../lib/archive/netplay-ingress.ts";
 import easyRpgDelivery from "../lib/archive/easyrpg-delivery.json" with { type: "json" };
 
 export const deploymentOrigins = {
   production: "https://viprpg.org",
   staging: "https://staging.viprpg.org",
+};
+export const stagingNetplayRoute = {
+  pattern: `${new URL(stagingNetplayEdgeOrigin).hostname}/api/netplay/v1/*`,
+  zone_name: "viprpg.org",
 };
 
 export function readConfig(path = "wrangler.jsonc") {
@@ -39,12 +44,15 @@ export function validateDeployment(target, environment, directory = ".") {
   const routes = Array.isArray(target.routes) ? target.routes : [];
   const assetHostname = new URL(easyRpgDelivery[origin]).hostname;
   const assetPattern = `${assetHostname}/play/runtime/easyrpg/*`;
-  const assetRoutes = routes.filter(route => route.pattern === assetPattern);
-  const siteRoutes = routes.filter(route => route.pattern !== assetPattern);
-  if (assetRoutes.length > 1 || assetRoutes.some(route => route.zone_name !== "viprpg.org" ||
+  const additionalPatterns = new Set([assetPattern]);
+  if (environment === "staging") additionalPatterns.add(stagingNetplayRoute.pattern);
+  const additionalRoutes = routes.filter(route => additionalPatterns.has(route.pattern));
+  const siteRoutes = routes.filter(route => !additionalPatterns.has(route.pattern));
+  if (new Set(additionalRoutes.map(route => route.pattern)).size !== additionalRoutes.length ||
+      additionalRoutes.some(route => route.zone_name !== "viprpg.org" ||
       (route.custom_domain !== undefined && route.custom_domain !== false) ||
       Object.keys(route).some(key => !["pattern", "zone_name", "custom_domain"].includes(key))))
-    throw new Error(`Configure only ${assetPattern} as the optional runtime asset Route`);
+    throw new Error(`Configure only ${[...additionalPatterns].join(", ")} as additional Routes`);
   const route = siteRoutes.length === 1 ? siteRoutes[0] : null;
   const hostname = new URL(origin).hostname;
   const customDomain = route?.pattern === hostname && route.custom_domain === true;
@@ -53,7 +61,7 @@ export function validateDeployment(target, environment, directory = ".") {
     (route.custom_domain === undefined || route.custom_domain === false) &&
     Object.keys(route).every((key) => ["pattern", "zone_name", "custom_domain"].includes(key));
   if (target.workers_dev !== false || target.preview_urls !== false || (!customDomain && !productionRoute))
-    throw new Error(`Configure only the ${origin} custom domain${environment === "production" ? ` or ${hostname}/* Route with zone_name=${hostname}` : ""}, with an optional ${assetPattern} Route; disable workers_dev and preview_urls`);
+    throw new Error(`Configure only the ${origin} custom domain${environment === "production" ? ` or ${hostname}/* Route with zone_name=${hostname}` : ""}, with optional additional Routes; disable workers_dev and preview_urls`);
   const database = target.d1_databases?.find((binding) => binding.binding === "DB");
   const bucket = target.r2_buckets?.find((binding) => binding.binding === "ARCHIVE_BUCKET");
   if (target.d1_databases?.length !== 1 || target.r2_buckets?.length !== 1 ||

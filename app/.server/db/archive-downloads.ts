@@ -2,6 +2,7 @@ import { getD1 } from "@/app/.server/db/d1";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { workReadCondition } from "@/app/.server/db/work-visibility";
 import type { AppRuntime } from "@/app/.server/runtime";
+import { stagingNetplayEdgeOrigin, stagingNetplaySiteOrigin } from "@/lib/archive/netplay-ingress";
 
 type DownloadRow = {
   id: number;
@@ -39,7 +40,9 @@ export type ArchiveDownloadRecord = {
 
 export function getArchiveNetplayEndpoint(runtime: AppRuntime, record: ArchiveDownloadRecord): string | undefined {
   if (!record.netplayService || !runtime.env.NETPLAY_ROOM) return;
-  return new URL(`/api/netplay/v1/${record.id}/`, runtime.origin).href;
+  const useStagingEdge = runtime.origin === stagingNetplaySiteOrigin &&
+    new URL(runtime.request.url).searchParams.get("netplayEdge") === "1";
+  return new URL(`/api/netplay/v1/${record.id}/`, useStagingEdge ? stagingNetplayEdgeOrigin : runtime.origin).href;
 }
 
 export function parseArchiveVersionId(value: string): number {

@@ -3,11 +3,11 @@ import { getCurrentUser } from "../app/.server/auth/current-user";
 import { getPublishedArchiveDownloadRecord } from "../app/.server/db/archive-downloads";
 import { createRuntime } from "../app/.server/runtime";
 import { getUserAvatarSrc } from "../lib/user-profile";
+import { stagingNetplayEdgeOrigin, stagingNetplaySiteOrigin } from "../lib/archive/netplay-ingress";
 import { json } from "../lib/http";
 import { requestJsonValue } from "../lib/ui/api-response";
 import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
 
-const stagingOrigin = "https://staging.viprpg.org";
 const standardStunUrls = ["stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"];
 const directIceServers = [{ urls: standardStunUrls }];
 const stagingIceServers = [{ urls: ["stun:stun.hitv.com:3478", ...standardStunUrls] }];
@@ -359,7 +359,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       timeout: setTimeout(() => this.selectRoute(room, "timeout"), turn ? 5000 : 8000),
     };
     const send = (peer: WebSocket, offer: boolean, relay?: RTCIceServer) => {
-      const stun = this.env.APP_ORIGIN === stagingOrigin ? stagingIceServers : directIceServers;
+      const stun = this.env.APP_ORIGIN === stagingNetplaySiteOrigin ? stagingIceServers : directIceServers;
       peer.send("rtc:start:" + JSON.stringify({
         iceServers: relay ? [relay] : stun, offer, negotiationStartedAt: startedAt, scoped,
         relayOnly: Boolean(relay),
@@ -392,7 +392,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     clearTimeout(rtc.timeout);
     const { NETPLAY_TURN_KEY_ID: id, NETPLAY_TURN_KEY: token } = this.env;
     if (reason !== "connected" && rtc.turn === "disabled" && rtc.scoped && id && token &&
-        this.env.APP_ORIGIN !== stagingOrigin) {
+        this.env.APP_ORIGIN !== stagingNetplaySiteOrigin) {
       this.logNegotiation(room, rtc, "netplay_direct_attempt", reason, reporter);
       this.startNegotiation(room, first, second, { id, token });
       return;
@@ -442,16 +442,24 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
   }
   const runtime = createRuntime(request, env, ctx, import.meta.env.DEV);
   const origin = request.headers.get("Origin");
-  if (url.origin !== runtime.origin || (websocket && origin !== runtime.origin) || (origin !== null && origin !== runtime.origin)) {
+  const stagingEdge = runtime.origin === stagingNetplaySiteOrigin && url.origin === stagingNetplayEdgeOrigin;
+  if ((!stagingEdge && url.origin !== runtime.origin) ||
+      ((websocket || origin !== null) && origin !== runtime.origin)) {
     return new Response(null, { status: 403 });
   }
   const record = await getPublishedArchiveDownloadRecord(runtime, archiveVersionId);
   if (!record?.netplayService) return new Response(null, { status: 404 });
   const pool = rtc ? `v1/${archiveVersionId}/rtc` : `v1/${archiveVersionId}`;
   const rooms = env.NETPLAY_ROOM.getByName(pool);
-  if (directory && !websocket) return rooms.fetch(request);
+  if (directory && !websocket) {
+    const response = await rooms.fetch(request);
+    if (!stagingEdge) return response;
+    const edgeResponse = new Response(response.body, response);
+    edgeResponse.headers.set("Access-Control-Allow-Origin", stagingNetplaySiteOrigin);
+    return edgeResponse;
+  }
 
-  const user = await getCurrentUser(runtime);
+  const user = stagingEdge ? null : await getCurrentUser(runtime);
   const guest = url.searchParams.get("guest");
   const identity: Identity = {
     name: user?.displayName ?? "访客 " + (guest && /^[0-9a-f]{4}$/.test(guest) ? guest : crypto.randomUUID().slice(0, 4)),
