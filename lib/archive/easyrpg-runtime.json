@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.11-site-kai-stall-diagnostics.1",
-  "revision": "f082094229a815531481ff26812f85fa2a9edcef",
-  "build": "kai-web-stall-diagnostics.1",
+  "version": "2026.11.11-site-kai-stall-diagnostics.2",
+  "revision": "f7a5bec7b67d9f038ebc4a245cf324ebb6e5b60b",
+  "build": "kai-web-stall-diagnostics.2",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "commit",
-  "archiveSha256": "b1ffc4c4b8d6e52f926836119c7713134dd1e854c2cb324f2363393aa05297e7",
+  "archiveSha256": "0d12f82d4798c65fbc4ab3e34b03d6bbba640c40fe5c6dc50d200b7d3cfde302",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {

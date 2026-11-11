@@ -1,12 +1,12 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "f082094229a815531481ff26812f85fa2a9edcef",
-  "version": "2026.11.11-site-kai-stall-diagnostics.1",
-  "build": "kai-web-stall-diagnostics.1",
-  "artifact": "Kai-Web-2026.11.11-stall-diagnostics-site.zip",
-  "archiveSha256": "b1ffc4c4b8d6e52f926836119c7713134dd1e854c2cb324f2363393aa05297e7",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/f082094229a815531481ff26812f85fa2a9edcef",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/f082094229a815531481ff26812f85fa2a9edcef/COPYING",
+  "revision": "f7a5bec7b67d9f038ebc4a245cf324ebb6e5b60b",
+  "version": "2026.11.11-site-kai-stall-diagnostics.2",
+  "build": "kai-web-stall-diagnostics.2",
+  "artifact": "Kai-Web-2026.11.11-stall-diagnostics.2-site.zip",
+  "archiveSha256": "0d12f82d4798c65fbc4ab3e34b03d6bbba640c40fe5c6dc50d200b7d3cfde302",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/f7a5bec7b67d9f038ebc4a245cf324ebb6e5b60b",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/f7a5bec7b67d9f038ebc4a245cf324ebb6e5b60b/COPYING",
   "sourceState": "commit",
   "sourcePatches": [],
   "sourceSnapshot": null,
@@ -84,8 +84,8 @@
       "sha256": "813f23ef22a4f80d50f871cc8e5e25a968b81fb7f9c2efb4501c9f04c8e8398c"
     },
     "player-worker.js": {
-      "size": 45380,
-      "sha256": "8ab841a8e926ab6365c7284d1328f620a95b7e9b817c00b924455af0c167b07a"
+      "size": 45405,
+      "sha256": "9a0008264079e02e68e72bbf1b3f2a04979dadd1243421903732ebff5b7f7eb1"
     },
     "player-audio.js": {
       "size": 1858,

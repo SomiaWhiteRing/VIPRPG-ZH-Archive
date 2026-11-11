@@ -61,6 +61,7 @@ type Room = {
     identity: Identity;
     rtc: boolean;
     relayProbe: boolean;
+    seatNumber: number;
     heartbeat?: Heartbeat;
   }>;
   hidden: boolean;
@@ -242,6 +243,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     };
     peers.set(socket, {
       identity, rtc: url.searchParams.get("rtc") === "1", relayProbe: url.searchParams.get("rtcProbe") === "2", heartbeat,
+      seatNumber: first ? 2 : 1,
     });
     this.rooms.set(id, room);
     renewHeartbeat();
@@ -253,7 +255,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
           const diagnostic = parseNetplayDiagnostic(data);
           if (diagnostic) console.log({
             ...diagnostic, event: "netplay_stall", ...room.details,
-            seat: socket === peers.keys().next().value ? 1 : 2, route: rtc?.route ?? "websocket",
+            seat: peers.get(socket)!.seatNumber, route: rtc?.route ?? "websocket",
           });
           return;
         }
@@ -357,6 +359,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     socket.addEventListener("close", (event) => disconnect("socket_close", event.code));
     socket.addEventListener("error", () => disconnect("socket_error"));
     if (first) {
+      peers.get(first)!.seatNumber = 1;
       if (peers.get(first)?.rtc && peers.get(socket)?.rtc) {
         this.startNegotiation(room, first, socket);
       } else {

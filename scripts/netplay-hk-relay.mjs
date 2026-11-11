@@ -204,10 +204,12 @@ function renewHeartbeat(room, seat) {
 function receiveText(room, seat, data) {
   if (seat.diagnostics && data.startsWith("room:diagnostic:")) {
     const diagnostic = parseNetplayDiagnostic(data);
+    const turnPort = room.activeSelection?.path === "turn" ? 443 : room.pool.turnPort;
     if (diagnostic) console.log(JSON.stringify({
       ...diagnostic, event: "netplay_stall", archiveVersionId, roomId: room.id,
-      seat: [...room.seats].indexOf(seat) + 1, platform: seat.platform, route: room.route,
-      path: room.activeSelection?.path, inputProtocol: room.inputProtocol ?? 0,
+      seat: seat.seatNumber, platform: seat.platform,
+      route: turnPort ? "hong_kong_turn_udp" : room.route,
+      path: room.activeSelection?.path, inputProtocol: room.route === "webrtc" ? room.inputProtocol ?? 0 : 0,
     }));
     return;
   }
@@ -380,7 +382,8 @@ function attachRoomSocket(socket, room, seat) {
 
 function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtocol, platform, routeSelection, diagnostics }) {
   const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0 };
-  const seat = { identity, rtc, routeSelection, inputStats, inputProtocol, platform, diagnostics, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
+  const seat = { identity, rtc, routeSelection, inputStats, inputProtocol, platform, diagnostics,
+    seatNumber: room.seats.size + 1, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
   room.seats.add(seat);
   pool.rooms.set(roomId, room);
   attachRoomSocket(socket, room, seat);
@@ -388,7 +391,8 @@ function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtoc
     send(socket, "2");
   } else {
     room.forwarded = 0;
-    for (const player of room.seats) {
+    for (const [index, player] of [...room.seats].entries()) {
+      player.seatNumber = index + 1;
       player.rttMs = player.peakRttMs = null;
       player.input = undefined;
       player.iceStatsPhase = undefined;
