@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { workReadCondition } from "@/app/.server/db/work-visibility";
 import type { AppRuntime } from "@/app/.server/runtime";
 import {
+  productionNetplayHongKongOrigin, productionNetplayHongKongWork, productionNetplayLegacyArchive, productionNetplaySiteOrigin,
   stagingNetplayEdgeOrigin, stagingNetplayHongKongOrigin, stagingNetplayHongKongWork, stagingNetplaySiteOrigin,
 } from "@/lib/archive/netplay-ingress";
 import { getUserAvatarSrc } from "@/lib/user-profile";
@@ -43,27 +44,35 @@ export type ArchiveDownloadRecord = {
   engineFamily: string;
 };
 
-export async function getArchiveNetplayEndpoint(runtime: AppRuntime, record: ArchiveDownloadRecord): Promise<string | undefined> {
+export async function getArchiveNetplayEndpoint(
+  runtime: AppRuntime,
+  record: ArchiveDownloadRecord,
+  supportsExternal = true,
+): Promise<string | undefined> {
   if (!record.netplayService || !runtime.env.NETPLAY_ROOM) return;
   let path = `/api/netplay/v1/${record.id}/`;
-  if (runtime.origin === stagingNetplaySiteOrigin && record.workId === stagingNetplayHongKongWork) {
-    const options = new URL(runtime.request.url).searchParams;
-    if (options.get("netplayTurn") === "443") path += "turn443/";
-    else if (options.get("netplayTurn") === "1") path += "turn/";
-    else if (options.get("netplayDirect") === "1") path += "direct/";
-    else if (options.get("netplayRelay") !== "1") path += "auto/";
+  const options = new URL(runtime.request.url).searchParams;
+  const staging = runtime.origin === stagingNetplaySiteOrigin && record.workId === stagingNetplayHongKongWork;
+  const production = runtime.origin === productionNetplaySiteOrigin && record.workId === productionNetplayHongKongWork &&
+    record.id !== productionNetplayLegacyArchive && supportsExternal && Boolean(runtime.env.NETPLAY_HK_IDENTITY_KEY);
+  const hongKong = staging ? stagingNetplayHongKongOrigin : production ? productionNetplayHongKongOrigin : undefined;
+  if (hongKong) {
+    if (staging && options.get("netplayTurn") === "443") path += "turn443/";
+    else if (staging && options.get("netplayTurn") === "1") path += "turn/";
+    else if (staging && options.get("netplayDirect") === "1") path += "direct/";
+    else if (!staging || options.get("netplayRelay") !== "1") path += "auto/";
     const user = await getCurrentUser(runtime);
-    if (!user) return new URL(path, stagingNetplayHongKongOrigin).href;
+    if (!user) return new URL(path, hongKong).href;
     const key = runtime.env.NETPLAY_HK_IDENTITY_KEY;
     if (!key) throw new Error("Missing NETPLAY_HK_IDENTITY_KEY");
     const expires = Date.now() + 24 * 60 * 60 * 1000;
     const profile = [expires, record.id, user.displayName, getUserAvatarSrc(user.avatarBlobSha256)];
     const payload = Buffer.from(JSON.stringify(profile)).toString("base64url");
     const signature = createHmac("sha256", key).update(payload).digest("base64url");
-    return new URL(`${path}identity/${payload}.${signature}/`, stagingNetplayHongKongOrigin).href;
+    return new URL(`${path}identity/${payload}.${signature}/`, hongKong).href;
   }
   const useStagingEdge = runtime.origin === stagingNetplaySiteOrigin &&
-    new URL(runtime.request.url).searchParams.get("netplayEdge") === "1";
+    options.get("netplayEdge") === "1";
   return new URL(path, useStagingEdge ? stagingNetplayEdgeOrigin : runtime.origin).href;
 }
 
@@ -73,8 +82,11 @@ export function parseArchiveVersionId(value: string): number {
 export async function getPublishedArchiveDownloadRecord(
   runtime: AppRuntime,
   id: number,
+  includeLegacyNetplay = false,
 ): Promise<ArchiveDownloadRecord | null> {
   const access = workReadCondition(await getCurrentUser(runtime));
+  const legacyWork = includeLegacyNetplay && runtime.origin === productionNetplaySiteOrigin &&
+    id === productionNetplayLegacyArchive ? productionNetplayHongKongWork : null;
   const row = await getD1(runtime)
     .prepare(
       `SELECT av.id,
@@ -96,11 +108,11 @@ export async function getPublishedArchiveDownloadRecord(
        JOIN works w ON w.id = av.work_id
        WHERE av.id = ?
          AND av.status = 'published'
-         AND av.is_current = 1
+         AND (av.is_current = 1 OR (av.work_id = ? AND av.netplay_service = 1 AND av.purged_at IS NULL))
          AND ${access.sql}
        LIMIT 1`,
     )
-    .bind(id, ...access.binds)
+    .bind(id, legacyWork, ...access.binds)
     .first<DownloadRow>();
   if (!row || !row.work_original_title) return null;
   return {

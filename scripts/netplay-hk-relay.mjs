@@ -6,14 +6,15 @@ import { pipeline } from "node:stream/promises";
 import { startRouteSelection } from "./netplay-route-selection.mjs";
 
 const { WebSocket, WebSocketServer } = createRequire(import.meta.url)("ws");
-const origin = "https://staging.viprpg.org";
+const origin = process.env.NETPLAY_SITE_ORIGIN ?? "https://staging.viprpg.org";
+const turnHost = process.env.NETPLAY_TURN_HOST ?? "netplay-hk-staging.viprpg.org";
 const defaultAvatar = "/icon/alex.png";
 const archiveVersionId = Number(process.env.NETPLAY_ARCHIVE_VERSION);
 const identityKey = process.env.NETPLAY_HK_IDENTITY_KEY;
 const turnKey = process.env.NETPLAY_HK_TURN_SECRET;
 const port = Number(process.env.NETPLAY_PORT ?? 8787);
 if (!Number.isSafeInteger(archiveVersionId) || archiveVersionId < 1) {
-  throw new Error("Set NETPLAY_ARCHIVE_VERSION to the staging archive version");
+  throw new Error("Set NETPLAY_ARCHIVE_VERSION to the current archive version");
 }
 
 const relay = { rooms: new Map(), directory: new Map() };
@@ -88,7 +89,7 @@ function turnIceServers(roomId, index, turnPort, startedAt) {
   const username = `${Math.floor(startedAt / 1000) + 7200}:gyokuro-${roomId}-${index + 1}-${randomBytes(6).toString("hex")}`;
   return [{
     urls: [
-      `turn:netplay-hk-staging.viprpg.org:${turnPort}?transport=udp`,
+      `turn:${turnHost}:${turnPort}?transport=udp`,
       `turn:[2001:df1:7880:6::953]:${turnPort}?transport=udp`,
     ],
     username, credential: createHmac("sha1", turnKey).update(username).digest("base64"),

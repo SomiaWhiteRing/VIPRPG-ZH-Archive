@@ -129,5 +129,13 @@ jobs:
           GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
           GA_GATEWAY_PATH: ${{ vars.GA_GATEWAY_PATH }}
       - name: Deploy approved candidate
-        run: npm run deploy:production -- --apply-migrations --confirm viprpg.org
+        env:
+          NETPLAY_HK_IDENTITY_KEY: ${{ secrets.PRODUCTION_NETPLAY_HK_IDENTITY_KEY }}
+        run: |
+          test -n "$NETPLAY_HK_IDENTITY_KEY"
+          export NETPLAY_HK_SECRETS_FILE="$(mktemp "$RUNNER_TEMP/netplay-hk-secrets.XXXXXX")"
+          trap 'rm -f -- "$NETPLAY_HK_SECRETS_FILE"' EXIT
+          node -e 'require("node:fs").writeFileSync(process.argv[1], JSON.stringify({NETPLAY_HK_IDENTITY_KEY: process.env.NETPLAY_HK_IDENTITY_KEY}), {mode:0o600})' "$NETPLAY_HK_SECRETS_FILE"
+          unset NETPLAY_HK_IDENTITY_KEY
+          npm run deploy:production -- --apply-migrations --confirm viprpg.org
       - run: npm run smoke:production

@@ -153,7 +153,7 @@ function OfflineGame({ installation, onClose }: { installation: WebPlayInstallat
     if (navigator.onLine) {
       const timeout = setTimeout(() => netplayLookup.abort(), 2_000);
       netplayEndpoint = requestJson<{ netplayEndpoint?: unknown }>(
-        `/api/archive-versions/${installation.archiveVersionId}/web-play?fields=netplayEndpoint`,
+        `/api/archive-versions/${installation.archiveVersionId}/web-play?fields=netplayEndpoint&netplayExternal=1`,
         { cache: "no-store", redirect: "error", signal: netplayLookup.signal },
       ).then(({ netplayEndpoint }) => {
         if (typeof netplayEndpoint !== "string") return;

@@ -57,6 +57,8 @@ else if (command === "build" || command === "preview") {
     } else if (values["apply-migrations"]) {
       run("node_modules/wrangler/bin/wrangler.js", ["d1", "migrations", "apply", "DB", "--remote", "--env", "staging", "--config", "wrangler.jsonc"]);
     }
-    run("node_modules/wrangler/bin/wrangler.js", ["deploy", "--config", "build/server/wrangler.json"]);
+    const secrets = environment === "production" && process.env.NETPLAY_HK_SECRETS_FILE;
+    run("node_modules/wrangler/bin/wrangler.js", ["deploy", "--config", "build/server/wrangler.json",
+      ...(secrets ? ["--secrets-file", secrets] : [])]);
   }
 } else throw new Error(`Unknown app command: ${command}`);

@@ -465,7 +465,7 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
       ((websocket || origin !== null) && origin !== runtime.origin)) {
     return new Response(null, { status: 403 });
   }
-  const record = await getPublishedArchiveDownloadRecord(runtime, archiveVersionId);
+  const record = await getPublishedArchiveDownloadRecord(runtime, archiveVersionId, true);
   if (!record?.netplayService) return new Response(null, { status: 404 });
   const pool = rtc ? `v1/${archiveVersionId}/rtc` : `v1/${archiveVersionId}`;
   const rooms = env.NETPLAY_ROOM.getByName(pool);

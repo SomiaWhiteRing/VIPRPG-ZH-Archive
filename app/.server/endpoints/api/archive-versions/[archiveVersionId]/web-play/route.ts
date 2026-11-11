@@ -29,9 +29,12 @@ export async function GET(
   try {
     const { archiveVersionId: rawArchiveVersionId } = await context.params;
     const archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
+    const options = new URL(request.url).searchParams;
+    const endpointOnly = options.get("fields") === "netplayEndpoint";
     const record = await getPublishedArchiveDownloadRecord(
       runtime,
       archiveVersionId,
+      endpointOnly,
     );
 
     if (!record) {
@@ -44,8 +47,8 @@ export async function GET(
       );
     }
 
-    if (new URL(request.url).searchParams.get("fields") === "netplayEndpoint") {
-      return json({ ok: true, netplayEndpoint: await getArchiveNetplayEndpoint(runtime, record) });
+    if (endpointOnly) {
+      return json({ ok: true, netplayEndpoint: await getArchiveNetplayEndpoint(runtime, record, options.get("netplayExternal") === "1") });
     }
 
     const easyRpg = await readArchiveEasyRpgConfig(runtime, record.manifestSha256);
