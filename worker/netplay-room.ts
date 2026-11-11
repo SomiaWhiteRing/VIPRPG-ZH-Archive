@@ -32,7 +32,7 @@ const rtcMilestones = new Set([
   "channel_open", "channel_closed", "channel_error", "invalid_signal",
   "relay_probe_ok", "relay_probe_slow", "relay_probe_timeout",
 ]);
-type Identity = { name: string; avatar: string };
+type Identity = { name: string; avatar: string; guest?: string };
 type DisconnectReason = "socket_close" | "socket_error" | "heartbeat_timeout" | "rtc_failed";
 type RtcReason = "connected" | "client_failure" | "timeout" | "turn_unavailable";
 type Heartbeat = {
@@ -569,9 +569,11 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
 
   const user = stagingEdge ? null : await getCurrentUser(runtime);
   const guest = url.searchParams.get("guest");
+  const guestId = user ? undefined : guest && /^[0-9a-f]{4}$/.test(guest) ? guest : crypto.randomUUID().slice(0, 4);
   const identity: Identity = {
-    name: user?.displayName ?? "访客 " + (guest && /^[0-9a-f]{4}$/.test(guest) ? guest : crypto.randomUUID().slice(0, 4)),
+    name: user?.displayName ?? "访客 " + guestId,
     avatar: getUserAvatarSrc(user?.avatarBlobSha256),
+    guest: guestId,
   };
   const headers = new Headers(request.headers);
   headers.set("X-Netplay-Identity", encodeURIComponent(JSON.stringify(identity)));
