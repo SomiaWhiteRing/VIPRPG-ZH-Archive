@@ -3,11 +3,12 @@ import { UploadClient } from "@/app/upload/upload-client";
 import type { AdminWorkEdit } from "@/lib/dto/db/game-library";
 import type { ComponentProps, ReactNode } from "react";
 
-export function WorkEditForm({ work, currentUser, suggestions, canUpdateStatus, children }: {
+export function WorkEditForm({ work, currentUser, suggestions, canUpdateStatus, netplaySpace, children }: {
   work: AdminWorkEdit;
   currentUser: ComponentProps<typeof UploadClient>["currentUser"];
   suggestions: ComponentProps<typeof UploadClient>["suggestions"];
   canUpdateStatus: boolean;
+  netplaySpace?: ReactNode;
   children: ReactNode;
 }) {
   return <UploadClient
@@ -18,6 +19,7 @@ export function WorkEditForm({ work, currentUser, suggestions, canUpdateStatus, 
     adminOptions={{
       canUpdateStatus,
       externalLinks: work.externalLinks,
+      netplaySpace,
       footer: children,
     }}
   />;

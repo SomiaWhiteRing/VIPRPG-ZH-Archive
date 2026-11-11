@@ -152,6 +152,7 @@ export function UploadClient({
   adminOptions?: {
     canUpdateStatus: boolean;
     externalLinks: GameExternalLink[];
+    netplaySpace?: ReactNode;
     footer: ReactNode;
   };
   suggestions: UploadSuggestions;
@@ -1138,6 +1139,7 @@ export function UploadClient({
                   <ExternalLinkList values={adminSettings.externalLinks} onChange={(externalLinks) =>
                     setAdminSettings((current) => current ? { ...current, externalLinks } : current)} />
                 </fieldset>
+                {adminOptions.netplaySpace}
                 <details>
                   <summary className="cursor-pointer text-sm font-bold">已上传封面引用</summary>
                   <div className="mt-3 grid gap-4">

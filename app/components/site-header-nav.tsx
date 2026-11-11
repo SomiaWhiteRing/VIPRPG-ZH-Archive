@@ -90,7 +90,6 @@ const ADMIN_NAVIGATION: Array<
       },
       { href: "/admin/tags", label: "标签", permission: "tag.read_private" },
       { href: "/admin/genres", label: "类型", permission: "genre.manage" },
-      { href: "/admin/netplay-spaces", label: "联机空间", permission: "system.maintenance.run" },
       {
         href: "/admin/archive-versions/trash",
         label: "回收站",

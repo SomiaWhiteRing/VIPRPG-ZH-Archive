@@ -90,6 +90,7 @@ export default function AdminWorkEditPage() {
     relationCapabilities,
     netplay,
   } = useLoaderData<typeof loader>();
+  const netplayFormId = "work-netplay-space-form";
   return (
     <main key={work.id}>
       <PageHeader
@@ -97,7 +98,27 @@ export default function AdminWorkEditPage() {
         title={work.chineseTitle || work.originalTitle}
         actions={<BackLink href="/admin/works" label="返回游戏维护" />}
       />
-      <WorkEditForm work={work} currentUser={adminUser} suggestions={suggestions} canUpdateStatus={canUpdateStatus}>
+      {netplay ? <RedirectForm id={netplayFormId} action={`/api/admin/works/${workId}/netplay-space`} /> : null}
+      <WorkEditForm
+        work={work}
+        currentUser={adminUser}
+        suggestions={suggestions}
+        canUpdateStatus={canUpdateStatus}
+        netplaySpace={netplay ? (
+          <fieldset className="rounded-md border border-border p-3">
+            <legend className="px-1 text-sm font-semibold">联机空间</legend>
+            <div className="flex flex-wrap items-end gap-3">
+              <SelectField name="space_id" form={netplayFormId} aria-label="联机空间"
+                defaultValue={netplay.spaceId === null ? "none" : String(netplay.spaceId)}
+                options={[{ value: "none", label: "不加入联机空间" }, ...netplay.spaces.map((space) => ({ value: String(space.id), label: space.name }))]} />
+              <Button type="submit" form={netplayFormId}>保存联机空间</Button>
+              {hasPermission(adminUser, "system.maintenance.run") ? (
+                <Link to="/admin/netplay-spaces" className={buttonVariants({ variant: "outline" })}>管理空间</Link>
+              ) : null}
+            </div>
+          </fieldset>
+        ) : null}
+      >
         {!work.hasUsableDistribution ? <p className="text-sm text-muted">缺少可用下载来源。已发布的作品资料仍按可见性展示，恢复来源后可重新下载。</p> : null}
         <StickySaveBar>
           {work.status === "published" && work.hasUsableDistribution ? (
@@ -118,19 +139,6 @@ export default function AdminWorkEditPage() {
           ) : null}
         </StickySaveBar>
       </WorkEditForm>
-      {netplay ? <Pane heading="联机空间">
-        <RedirectForm action={`/api/admin/works/${workId}/netplay-space`} className="flex flex-wrap items-end gap-3">
-          <FormField controlId="work-netplay-space" label="空间">
-            <SelectField id="work-netplay-space" name="space_id"
-              defaultValue={netplay.spaceId === null ? "none" : String(netplay.spaceId)}
-              options={[{ value: "none", label: "不加入联机空间" }, ...netplay.spaces.map((space) => ({ value: String(space.id), label: space.name }))]} />
-          </FormField>
-          <Button type="submit">保存联机空间</Button>
-          {hasPermission(adminUser, "system.maintenance.run") ? (
-            <Link to="/admin/netplay-spaces" className={buttonVariants({ variant: "outline" })}>管理空间</Link>
-          ) : null}
-        </RedirectForm>
-      </Pane> : null}
       {canUpdateStatus ? (
         <Pane heading="作品管理">
           <ConfirmingForm action={`/api/admin/works/${workId}/lifecycle`} confirmField="operation"
