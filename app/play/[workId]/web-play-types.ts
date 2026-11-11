@@ -67,6 +67,8 @@ export type WebPlayInstallation = {
   downloadBytesTotal: number;
   installedFiles: number;
   installedBytes: number;
+  reusedFiles?: number;
+  reusedBytes?: number;
   currentPath: string | null;
   persistedStorage: boolean | null;
   storageQuotaBytes: number | null;

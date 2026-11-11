@@ -54,7 +54,12 @@ final class LocalGames {
                         }
                         case "pendingPlay": {
                             if (!offline) throw new IOException("无效操作。");
-                            value = activity.pendingLocalPlay; activity.pendingLocalPlay = null; break;
+                            value = activity.pendingLocalPlay;
+                            if (value != null) {
+                                String status = store.byKey((String) value).optString("status");
+                                if ("ready".equals(status) || "failed".equals(status) || "deleted".equals(status)) activity.pendingLocalPlay = null;
+                            }
+                            break;
                         }
                         case "start": {
                             if (!offline) throw new IOException("请从本地游戏启动。");

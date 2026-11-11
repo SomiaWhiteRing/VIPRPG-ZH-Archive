@@ -8,6 +8,7 @@ import * as workMaintainerRequestsEndpoint from './endpoints/api/works/[workId]/
 import { timelineApi } from "./timeline/api";
 import { pushApi } from "./push/api";
 import * as localLibraryWorksEndpoint from "./endpoints/api/works/local-library/route";
+import * as currentWebPlayEndpoint from "./endpoints/api/works/[workId]/web-play/route";
 import { uploadCommentImage, readCommentImage } from "@/app/.server/comments/images";
 import * as genresEndpoint from "@/app/.server/endpoints/api/genres/route";
 import * as homeRecommendationsEndpoint from "@/app/.server/endpoints/api/admin/home-recommendations/route";
@@ -928,6 +929,13 @@ api.all("/api/admin/works/:workId/update", (_c) =>
     Allow: "POST, OPTIONS",
   } }),
 );
+api.on(["GET", "HEAD"], "/api/works/:workId/web-play", (c) =>
+  currentWebPlayEndpoint.GET(c.get("runtime"), c.req.raw, { params: { workId: c.req.param("workId") } }),
+);
+api.options("/api/works/:workId/web-play", (c) => c.body(null, 204, { Allow: "GET, HEAD, OPTIONS" }));
+api.all("/api/works/:workId/web-play", () => jsonResponse({ ok: false, error: "Method not allowed" }, {
+  status: 405, headers: { Allow: "GET, HEAD, OPTIONS" },
+}));
 api.on(
   ["GET", "HEAD"],
   "/api/archive-versions/:archiveVersionId/web-play",

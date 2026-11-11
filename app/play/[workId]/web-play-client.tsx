@@ -36,6 +36,7 @@ import { WebPlaySaveExport } from "./web-play-save-export";
 import { WorkSidebar } from "@/app/components/work/work-page-layout";
 import {
   getWebPlayInstallation,
+  listWebPlayInstallations,
 } from "@/app/play/[workId]/web-play-db";
 import { canManageGameResources, cleanupExpiredGameResources, cleanupObsoleteGameResources, deleteLocalGame } from "./web-play-cleanup";
 import { chooseGameStorage } from "./web-play-storage";
@@ -50,6 +51,7 @@ import type {
 } from "@/app/play/[workId]/web-play-types";
 import { DISPLAY_TIME_ZONE, formatBytes, parseTimestamp } from "@/lib/format";
 import { installStatusLabel } from "@/lib/labels";
+import { requestJson } from "@/lib/ui/api-response";
 import {
   Camera,
   Expand,
@@ -92,13 +94,17 @@ type WebPlayClientProps = {
 export function WebPlayClient({
   comments,
   engagement,
-  metadata,
+  metadata: providedMetadata,
   notice,
   secondary,
   stats,
 }: WebPlayClientProps) {
   const toast = useToast();
   const clientEnvironment = useClientEnvironment();
+  const [metadata, setMetadata] = useState(providedMetadata);
+  const [availableMetadata, setAvailableMetadata] = useState(providedMetadata);
+  const [hasPreviousInstallation, setHasPreviousInstallation] = useState(false);
+  const automaticInstallAttempts = useRef(new Set<string>());
   const [installation, setInstallation] = useState<WebPlayInstallation | null>(
     null,
   );
@@ -153,6 +159,43 @@ export function WebPlayClient({
   const immersive = nativeFullscreen || pageFullscreen;
   const desktopControlsHelp = clientEnvironment === "browser" && !mobileControls;
   const captureDisabled = !running || playerStopping || loadingScreenshots || capturing;
+
+  useEffect(() => { setAvailableMetadata(providedMetadata); }, [providedMetadata]);
+
+  // A running game keeps its resource and room-service version until it stops.
+  useEffect(() => {
+    if (playerBusy || installSessionActive || availableMetadata === metadata) return;
+    if (availableMetadata.playKey !== metadata.playKey) {
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      setInstallation(null);
+      setHasPreviousInstallation(false);
+      setLoadingLocalState(true);
+    }
+    setMetadata(availableMetadata);
+  }, [availableMetadata, installSessionActive, metadata, playerBusy]);
+
+  const checkForUpdate = useCallback(async () => {
+    if (!navigator.onLine) return null;
+    const next = await requestJson<WebPlayMetadata>(
+      `/api/works/${metadata.workId}/web-play${window.location.search}`,
+      { cache: "no-store", signal: AbortSignal.timeout(10_000) },
+    ).catch(() => null);
+    if (next && !lifetimeRef.current?.signal.aborted) setAvailableMetadata(next);
+    return next;
+  }, [metadata.workId]);
+
+  useEffect(() => {
+    if (playerBusy || installSessionActive) return;
+    const check = () => { if (!document.hidden) void checkForUpdate(); };
+    check();
+    window.addEventListener("online", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      window.removeEventListener("online", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [checkForUpdate, installSessionActive, playerBusy]);
 
   useEffect(() => {
     setAndroidOnlinePlaying(playerBusy, immersive);
@@ -261,8 +304,12 @@ export function WebPlayClient({
           if (mounted) addLog("warning", error instanceof Error ? error.message : "本地资源暂未清理。");
         });
         const value = await getWebPlayInstallation(metadata.playKey);
+        const previous = value?.status === "ready" ? false : (await listWebPlayInstallations()).some(
+          row => row.workId === metadata.workId && row.playKey !== metadata.playKey && row.status === "ready",
+        );
         if (!mounted) return;
         setInstallation(value);
+        setHasPreviousInstallation(previous);
         if (value?.status === "installing") {
           addLog("warning", "检测到安装尚未完成。如果其他页面仍在安装，请等待完成后刷新。");
         }
@@ -284,7 +331,7 @@ export function WebPlayClient({
       unsubscribe();
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [addLog, metadata.playKey, installSessionActive, playerBusy]);
+  }, [addLog, metadata.playKey, metadata.workId, installSessionActive, playerBusy]);
 
 
   useEffect(() => {
@@ -402,6 +449,7 @@ export function WebPlayClient({
   const startInstall = useCallback(async () => {
     const signal = lifetimeRef.current!.signal;
     setOperationError(null);
+    automaticInstallAttempts.current.add(metadata.playKey);
 
     analyticsInstallStarted.current = canTrackAnalytics() ? performance.now() : null;
     if (analyticsInstallStarted.current !== null) trackAnalytics("install_start", {
@@ -455,6 +503,12 @@ export function WebPlayClient({
     }
   }, [addLog, ensureWorker, metadata, playerBusy]);
 
+  useEffect(() => {
+    if (loadingLocalState || !hasPreviousInstallation || installed || installing || playerBusy || installSessionActive ||
+        automaticInstallAttempts.current.has(metadata.playKey)) return;
+    void startInstall();
+  }, [hasPreviousInstallation, installed, installing, installSessionActive, loadingLocalState, metadata.playKey, playerBusy, startInstall]);
+
   const cancelInstall = useCallback(() => {
     workerRef.current?.postMessage({
       type: "cancel",
@@ -492,9 +546,7 @@ export function WebPlayClient({
     const signal = lifetimeRef.current!.signal;
     setOperationError(null);
 
-    const analyticsStarted = canTrackAnalytics() ? performance.now() : null;
-    if (analyticsStarted !== null) trackAnalytics("play_start", { work_id: metadata.workId,
-      archive_version_id: metadata.archiveVersionId });
+    let analyticsStarted: number | null = null;
     try {
       if (!installed) {
         throw new Error("需要先完成本地安装。");
@@ -502,9 +554,14 @@ export function WebPlayClient({
 
       startingRef.current = true;
       setPlayerStarting(true);
+      const latest = await checkForUpdate();
       signal.throwIfAborted();
+      if (latest && latest.playKey !== metadata.playKey) return false;
       if (!playerHostRef.current) return false;
-      const player = createPlayerSession(playerHostRef.current, metadata, addLog, () => {
+      analyticsStarted = canTrackAnalytics() ? performance.now() : null;
+      if (analyticsStarted !== null) trackAnalytics("play_start", { work_id: metadata.workId,
+        archive_version_id: metadata.archiveVersionId });
+      const player = createPlayerSession(playerHostRef.current, latest ?? metadata, addLog, () => {
         if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
         else setPageFullscreen(value => !value);
         focusPlayerCanvas();
@@ -545,7 +602,7 @@ export function WebPlayClient({
       startingRef.current = false;
       if (!signal.aborted) setPlayerStarting(false);
     }
-  }, [addLog, installed, metadata, running]);
+  }, [addLog, checkForUpdate, installed, metadata, running]);
 
   const lockOrientation = useCallback(
     async (next: DisplayOrientation): Promise<boolean> => {

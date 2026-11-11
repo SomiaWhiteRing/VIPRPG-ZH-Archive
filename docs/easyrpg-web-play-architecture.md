@@ -21,6 +21,7 @@
 - Android 在线页随网站更新；离线页与原生安装记录处理封装在 VIPRPG APK 中，需要发布新版 APK 才能在新安装中保存并应用 `easyRpg`。旧安装记录缺少配置时沿用原启动行为，不在启动时联网补判。
 - 显式 `EasyRPG.ini` 配置优先；自动判定时先核对 LDB 的 2000/2003 系列，只接受同系列 EXE 的版本和 Maniac 证据。EXE 与数据库跨系列冲突时，同时忽略该 EXE 的版本、Maniac 标记和大小，再按数据库/标准运行库标记 → MP3/有效 EXE 大小 → 编码回退选择具体版本，避免替换的 2003/Maniac 执行文件把 2000 游戏带入错误模式。缺少数据库时仍可使用 EXE 证据；显式补丁配置及独立 DLL 标记沿用现有规则。没有版本依据且原包未声明编码时，`engine=null`、`engineSource=fallback`，仅保留 liblcf 原有的编码自动识别和版本回退，避免再实现一套近似的 ICU 字符集判定。DLL 只使用文件名和 Harmony 的已知大小，不分析 DLL 内容。
 - IndexedDB 只保存安装状态、文件清单、版本键、进度、校验信息和错误信息。
+- `/api/works/<workId>/web-play` 解析作品当前公开或当前用户有权访问的归档；原有按归档 ID 的接口仍保持固定版本语义。网页进入、恢复前台、重新联网时检查当前版本，启动前再核对，不定时轮询。检测到本地已安装旧版时自动复用现有安装器下载新版；首次安装仍由用户发起。运行中的会话保留其归档和房间服务地址，退出后切换；新版完成之前保留旧资源、存档和截图。主动取消或当次失败不会触发页面内无限重试。已有旧版时读取 `/api/archive-versions/<id>/file-index`，按路径、大小与实际 CRC 校验值复用本地文件，变动文件通过既有 ZIP Range 接口下载；所有内容写入独立新版 pack，完成后发布索引。没有可复用安装时沿用完整 ZIP。
 - 普通下载 ZIP 使用 STORE，且 local file header 写入明确的 `crc32`、compressed size 和 uncompressed size；不使用 data descriptor。
 - 启动前校验 OPFS `pack-index.json`，把 pack 的 `File` 与切片索引交给播放器 Worker，由 Emscripten WORKERFS 挂载为只读 `/game`。
 - 引擎在 Worker 内同步读取本地文件，不发逐资源 HTTP 请求，不使用 Service Worker 资源桥，也不把整部作品复制进 WASM 内存。

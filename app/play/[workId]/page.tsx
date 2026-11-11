@@ -2,11 +2,10 @@ import { parseAccountPage } from "@/app/.server/auth/account-user";
 import type { WorkFavoriteUpdate } from "@/lib/user-tags";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import {
-  getArchiveNetplayEndpoint,
   getPublishedArchiveDownloadRecord,
 } from "@/app/.server/db/archive-downloads";
 import { getGameWorkDetail } from "@/app/.server/db/game-library";
-import { readArchiveEasyRpgConfig } from "@/app/.server/storage/archive-bucket";
+import { readWebPlayMetadata } from "@/app/.server/resources/web-play";
 import {
   canPinWorkComments,
   listWorkCollections,
@@ -30,17 +29,7 @@ import {
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { WebPlayClient } from "@/app/play/[workId]/web-play-client";
-import type { WebPlayMetadata } from "@/app/play/[workId]/web-play-types";
-import { downloadZipBuilderVersion } from "@/lib/archive/download";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import {
-  buildWebPlayDownloadUrl,
-  buildWebPlayKey,
-  easyRpgRuntimeBasePath,
-  easyRpgRuntimeAssetBasePath,
-  easyRpgRuntimeVersion,
-  webPlayInstallerVersion,
-} from "@/lib/archive/web-play";
 import { AlertTriangle } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
@@ -87,36 +76,7 @@ export async function loader(args: LoaderFunctionArgs) {
     listWorkCollections(runtime, work.id, page, true),
   ]);
 
-  const easyRpg = await readArchiveEasyRpgConfig(runtime, record.manifestSha256);
-  const netplayEndpoint = easyRpg?.netplay ? await getArchiveNetplayEndpoint(runtime, record) : undefined;
-  const metadata: WebPlayMetadata = {
-    ok: true,
-    archiveVersionId: record.id,
-    workId: record.workId,
-    title: record.workChineseTitle || record.workOriginalTitle,
-    originalTitle: record.workOriginalTitle,
-    chineseTitle: record.workChineseTitle,
-    coverBlobSha256: work.coverBlobSha256,
-    manifestSha256: record.manifestSha256,
-    downloadZipBuilderVersion,
-    webPlayInstallerVersion,
-    easyRpgRuntimeVersion,
-    runtimeBasePath: easyRpgRuntimeBasePath,
-    runtimeAssetBasePath: easyRpgRuntimeAssetBasePath(runtime.origin),
-    playKey: buildWebPlayKey({
-      archiveVersionId: record.id,
-      manifestSha256: record.manifestSha256,
-    }),
-    downloadUrl: buildWebPlayDownloadUrl(record.id),
-    totalFiles: record.totalFiles,
-    totalSizeBytes: record.totalSizeBytes,
-    installTotalFiles: record.installTotalFiles,
-    installTotalSizeBytes: record.installTotalSizeBytes,
-    estimatedR2GetCount: record.estimatedR2GetCount,
-    engineFamily: record.engineFamily,
-    easyRpg,
-    netplayEndpoint,
-  };
+  const metadata = await readWebPlayMetadata(runtime, record);
 
   return {
     record,
@@ -158,7 +118,7 @@ export default function WebPlayPage() {
   </DetailPageShell>;
   return (
     <DetailPageShell
-      key={`${metadata.playKey}:${currentUser?.id ?? "anonymous"}`}
+      key={`${metadata.workId}:${currentUser?.id ?? "anonymous"}`}
     >
       <WorkViewTracker workId={work.id} />
       <WorkPageHeader

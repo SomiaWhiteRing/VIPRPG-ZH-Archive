@@ -2,6 +2,8 @@ package org.viprpg.archive;
 
 import android.content.Context;
 import android.net.Uri;
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.provider.DocumentsContract;
 import android.util.AtomicFile;
 import java.io.*;
@@ -75,10 +77,14 @@ final class GameStore {
     }
     synchronized void toggleDownload(String key) throws Exception {
         JSONObject task = byKey(key); String status = task.optString("status");
+        task.remove("waitingForUnmetered");
         if ("ready".equals(status) || "deleted".equals(status)) return;
         if ("created".equals(status) || "installing".equals(status)) {
             task.put("status", "paused").put("bytesPerSecond", 0).remove("resumeRequested"); persist();
-        } else enqueue(task.getLong("archiveVersionId"));
+        } else {
+            if (task.has("updateFrom")) task.put("allowMeteredUpdate", !automaticUpdateNetwork());
+            enqueue(task.getLong("archiveVersionId"));
+        }
     }
     synchronized JSONObject next() { for (int i = 0; i < tasks.length(); i++) if ("created".equals(tasks.optJSONObject(i).optString("status"))) return tasks.optJSONObject(i); return null; }
     synchronized boolean busy() { return next() != null || !active.isEmpty(); }
@@ -96,7 +102,21 @@ final class GameStore {
         if ("deleted".equals(task.optString("status")) || "paused".equals(task.optString("status"))) return;
         task.put("bytesPerSecond", 0).put("status", status).put("error", error == null ? JSONObject.NULL : error).put("updatedAt", Instant.now().toString()); persist();
     }
-    synchronized void check(JSONObject task) throws IOException { if (Thread.currentThread().isInterrupted() || "deleted".equals(task.optString("status")) || "paused".equals(task.optString("status"))) throw new IOException("安装已取消。"); }
+    synchronized void check(JSONObject task) throws IOException {
+        if (task.has("updateFrom") && !task.optBoolean("allowMeteredUpdate") && !automaticUpdateNetwork()
+            && Arrays.asList("created", "installing").contains(task.optString("status"))) {
+            put(task, "status", "paused"); put(task, "waitingForUnmetered", true); put(task, "bytesPerSecond", 0); persist();
+        }
+        if (Thread.currentThread().isInterrupted() || "deleted".equals(task.optString("status")) || "paused".equals(task.optString("status"))) throw new IOException("安装已取消。");
+    }
+
+    private boolean automaticUpdateNetwork() {
+        ConnectivityManager connectivity = context.getSystemService(ConnectivityManager.class);
+        NetworkCapabilities network = connectivity.getNetworkCapabilities(connectivity.getActiveNetwork());
+        return network != null && network.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            && !network.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+            && network.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED);
+    }
     synchronized String snapshot() throws Exception {
         JSONArray rows = new JSONArray(); long usage = 0;
         for (int i = 0; i < tasks.length(); i++) { JSONObject task = tasks.getJSONObject(i); if (!"deleted".equals(task.optString("status"))) { rows.put(task); usage += task.optLong("installedBytes"); } }
@@ -134,10 +154,19 @@ final class GameStore {
             if (folder != null && !storage.delete(folder)) throw new IOException("游戏文件未删除。");
         } catch (Exception e) { task.put("status", "failed").put("error", "删除失败：" + e.getMessage()); persist(); throw e; }
         File partial = new File(context.getCacheDir(), "game-" + task.getLong("archiveVersionId") + ".part"); partial.delete();
+        new File(context.getCacheDir(), "game-" + task.getLong("archiveVersionId") + ".delta").delete();
     }
     synchronized JSONObject byKey(String key) throws Exception {
         for (int i = 0; i < tasks.length(); i++) if (key.equals(tasks.getJSONObject(i).optString("playKey"))) return tasks.getJSONObject(i);
         throw new IOException("游戏不存在。");
+    }
+    synchronized JSONObject deltaBase(long workId, String targetKey) throws JSONException {
+        for (int i = tasks.length() - 1; i >= 0; i--) {
+            JSONObject task = tasks.getJSONObject(i);
+            if (task.optLong("workId") == workId && !targetKey.equals(task.optString("playKey")) && "ready".equals(task.optString("status")))
+                return new JSONObject(task.toString());
+        }
+        return null;
     }
     Uri folder(JSONObject task, boolean create) throws Exception { return storage.child(storage.directory("games"), Long.toString(task.getLong("archiveVersionId")), DocumentsContract.Document.MIME_TYPE_DIR, create); }
     private void requireManaged(Uri folder, JSONObject task) throws Exception {
@@ -157,6 +186,105 @@ final class GameStore {
         JSONObject task = byKey(key);
         if (!"ready".equals(task.optString("status"))) throw new IOException("游戏尚未安装完成。");
         storage.root(); playingKey = key; task.put("lastPlayedAt", Instant.now().toString()); persist(); return new JSONObject(task.toString());
+    }
+
+    void checkUpdates() {
+        Map<Long, String> installed = new LinkedHashMap<>();
+        synchronized (this) {
+            if (playingKey != null) return;
+            for (int i = 0; i < tasks.length(); i++) {
+                JSONObject task = tasks.optJSONObject(i);
+                if ("ready".equals(task.optString("status")) && task.optLong("workId") > 0)
+                    installed.put(task.optLong("workId"), task.optString("playKey"));
+            }
+        }
+        List<Long> ids = new ArrayList<>(installed.keySet());
+        for (int start = 0; start < ids.size(); start += 100) {
+            if (Thread.currentThread().isInterrupted() || playingKey != null) return;
+            try {
+                String values = new JSONArray(ids.subList(start, Math.min(start + 100, ids.size()))).join(",");
+                HttpURLConnection request = connect("/api/works/local-library?ids=" + values, 0);
+                request.setConnectTimeout(5000); request.setReadTimeout(5000); request.setUseCaches(false);
+                JSONArray works;
+                try {
+                    if (request.getResponseCode() != 200) return;
+                    try (InputStream input = request.getInputStream()) {
+                        works = new JSONObject(new String(readStream(input, 1048576), StandardCharsets.UTF_8)).getJSONArray("works");
+                    }
+                } finally { request.disconnect(); }
+                for (int i = 0; i < works.length(); i++) {
+                    if (Thread.currentThread().isInterrupted() || playingKey != null) return;
+                    JSONObject work = works.getJSONObject(i);
+                    String key = installed.get(work.getLong("workId"));
+                    long current = work.optLong("currentArchiveVersionId");
+                    if (key == null || current <= 0) continue;
+                    synchronized (this) {
+                        JSONObject source = byKey(key);
+                        if (source.getLong("archiveVersionId") == current) { removeUpdatedSource(source); continue; }
+                    }
+                    checkUpdate(key);
+                }
+            } catch (Exception unavailable) { android.util.Log.w("GameStore", "Game update list unavailable", unavailable); }
+        }
+    }
+
+    String checkUpdate(String key) {
+        try {
+            JSONObject source;
+            synchronized (this) {
+                if (playingKey != null) return key;
+                source = new JSONObject(byKey(key).toString());
+            }
+            long workId = source.optLong("workId");
+            if (workId <= 0) return key;
+            ConnectivityManager connectivity = context.getSystemService(ConnectivityManager.class);
+            NetworkCapabilities network = connectivity.getNetworkCapabilities(connectivity.getActiveNetwork());
+            if (network == null || !network.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return key;
+            boolean automatic = automaticUpdateNetwork();
+            HttpURLConnection request = connect("/api/works/" + workId + "/web-play", 0);
+            request.setConnectTimeout(5000); request.setReadTimeout(5000); request.setUseCaches(false);
+            JSONObject metadata;
+            try {
+                if (request.getResponseCode() != 200) return key;
+                try (InputStream input = request.getInputStream()) {
+                    metadata = new JSONObject(new String(readStream(input, 1048576), StandardCharsets.UTF_8));
+                }
+            } finally { request.disconnect(); }
+            long id = metadata.getLong("archiveVersionId");
+            if (id <= 0 || metadata.getLong("workId") != workId) return key;
+            synchronized (this) {
+                if (playingKey != null) return key;
+                JSONObject target = find(id);
+                if (id != source.getLong("archiveVersionId") && (target == null ||
+                    Arrays.asList("failed", "deleted").contains(target.optString("status")))) {
+                    target = enqueue(id, metadata);
+                    target.put("updateFrom", key);
+                    target.remove("allowMeteredUpdate");
+                    target.remove("waitingForUnmetered");
+                    if (source.has("lastPlayedAt")) target.put("lastPlayedAt", source.get("lastPlayedAt"));
+                    if (!automatic) target.put("status", "paused").put("waitingForUnmetered", true);
+                    persist();
+                } else if (target != null && target.optBoolean("waitingForUnmetered") && automatic) {
+                    target.remove("waitingForUnmetered");
+                    enqueue(id);
+                }
+                if (target == null) return key;
+                removeUpdatedSource(target);
+                return target.getString("playKey");
+            }
+        } catch (Exception unavailable) {
+            android.util.Log.w("GameStore", "Game update check unavailable", unavailable);
+            return key;
+        }
+    }
+
+    private synchronized void removeUpdatedSource(JSONObject target) {
+        String sourceKey = target.optString("updateFrom");
+        if (!"ready".equals(target.optString("status")) || sourceKey.isEmpty() || sourceKey.equals(playingKey)) return;
+        try {
+            JSONObject source = byKey(sourceKey);
+            if ("ready".equals(source.optString("status"))) delete(sourceKey);
+        } catch (Exception retained) { android.util.Log.w("GameStore", "Previous game resources retained", retained); }
     }
     HttpURLConnection connect(String path, long offset) throws Exception {
         URI url = new URI(BuildConfig.SITE_ORIGIN).resolve(path);
@@ -191,6 +319,10 @@ final class GameStore {
             for (String field : new String[]{"workId", "title", "manifestSha256", "coverBlobSha256", "engineFamily", "easyRpg", "downloadUrl", "installTotalSizeBytes", "installTotalFiles"}) task.put(field, metadata.opt(field));
             update(task, "installing", null);
         }
+        File delta = new File(context.getCacheDir(), "game-" + id + ".delta");
+        File candidate = partial;
+        if (GameDelta.install(this, task, metadata, delta)) candidate = delta;
+        else {
         long offset = partial.length(); HttpURLConnection download = connect(metadata.getString("downloadUrl"), offset);
         try {
             int code = download.getResponseCode();
@@ -210,9 +342,11 @@ final class GameStore {
                 synchronized (this) { check(task); task.put("bytesPerSecond", 0).put("downloadedBytes", count).put("downloadBytesTotal", count); persist(); }
             }
         } finally { download.disconnect(); }
+        }
+
         check(task);
         JSONArray index;
-        try { index = indexZip(partial, task); } catch (Exception invalid) { check(task); partial.delete(); throw invalid; }
+        try { index = indexZip(candidate, task); } catch (Exception invalid) { check(task); candidate.delete(); throw invalid; }
         Uri folder = folder(task, true);
         requireManaged(folder, task);
         storage.write(storage.child(folder, ".viprpg-install.json", "application/json", true), new JSONObject()
@@ -221,7 +355,7 @@ final class GameStore {
         if (marker != null) storage.delete(marker);
         Uri zip = storage.child(folder, "game.zip", "application/zip", true);
         java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-        try (InputStream in = new FileInputStream(partial); android.os.ParcelFileDescriptor descriptor = storage.open(zip, "rwt");
+        try (InputStream in = new FileInputStream(candidate); android.os.ParcelFileDescriptor descriptor = storage.open(zip, "rwt");
             FileOutputStream out = new android.os.ParcelFileDescriptor.AutoCloseOutputStream(descriptor)) {
             byte[] bytes = new byte[262144]; int n;
             while ((n = in.read(bytes)) != -1) { check(task); out.write(bytes, 0, n); digest.update(bytes, 0, n); } out.getFD().sync();
@@ -235,12 +369,13 @@ final class GameStore {
             try { storage.write(storage.child(folder, "installation.json", "application/json", true), task.toString().getBytes(StandardCharsets.UTF_8)); persist(); }
             catch (Exception e) { task.put("status", "failed"); throw e; }
         }
-        partial.delete();
+        partial.delete(); delta.delete();
         File cover = new File(context.getCacheDir(), "cover-" + task.optString("coverBlobSha256") + ".jpg");
         if (cover.isFile()) try (InputStream in = new FileInputStream(cover)) {
             storage.write(storage.child(folder, "cover.jpg", "image/jpeg", true), readStream(in, 150000));
         } catch (Exception optionalCover) { }
-        reportInstalledPlay(task.getLong("workId"));
+        if (!task.has("updateFrom")) reportInstalledPlay(task.getLong("workId"));
+        removeUpdatedSource(task);
     }
     private void reportInstalledPlay(long workId) {
         try {
