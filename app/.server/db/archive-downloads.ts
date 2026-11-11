@@ -48,7 +48,8 @@ export async function getArchiveNetplayEndpoint(runtime: AppRuntime, record: Arc
   let path = `/api/netplay/v1/${record.id}/`;
   if (runtime.origin === stagingNetplaySiteOrigin && record.id === stagingNetplayHongKongArchive) {
     const options = new URL(runtime.request.url).searchParams;
-    if (options.get("netplayTurn") === "1") path += "turn/";
+    if (options.get("netplayTurn") === "443") path += "turn443/";
+    else if (options.get("netplayTurn") === "1") path += "turn/";
     else if (options.get("netplayRelay") !== "1") path += "direct/";
     const user = await getCurrentUser(runtime);
     if (!user) return new URL(path, stagingNetplayHongKongOrigin).href;

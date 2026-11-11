@@ -17,25 +17,24 @@ if (!Number.isSafeInteger(archiveVersionId) || archiveVersionId < 1) {
 
 const relay = { rooms: new Map(), directory: new Map() };
 const direct = { rooms: new Map(), directory: new Map() };
-const turn = { rooms: new Map(), directory: new Map() };
+const turn = { rooms: new Map(), directory: new Map(), turnPort: 3478 };
+const turn443 = { rooms: new Map(), directory: new Map(), turnPort: 443 };
+const pools = { direct, turn, turn443 };
 const wss = new WebSocketServer({ noServer: true, maxPayload: 64, perMessageDeflate: false });
 const rtcWss = new WebSocketServer({ noServer: true, maxPayload: 50_000, perMessageDeflate: false });
 const heartbeatIntervalMs = 5_000;
 const heartbeatHideMs = 10_000;
 const heartbeatTimeoutMs = 15_000;
 const iceServers = [{ urls: ["stun:stun.hitv.com:3478", "stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"] }];
-const turnUrls = [
-  "turn:netplay-hk-staging.viprpg.org:3478?transport=udp",
-  "turn:[2001:df1:7880:6::953]:3478?transport=udp",
-];
 
 function route(request) {
   if (!URL.canParse(request.url, origin)) return;
   const url = new URL(request.url, origin);
-  const match = /^\/api\/netplay\/v1\/([1-9]\d*)\/(?:(direct|turn)\/)?(?:identity\/([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)\/)?(?:rtc\/)?(rooms|[1-9]\d{0,5})$/.exec(url.pathname);
+  const match = /^\/api\/netplay\/v1\/([1-9]\d*)\/(?:(direct|turn|turn443)\/)?(?:identity\/([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)\/)?(?:rtc\/)?(rooms|[1-9]\d{0,5})$/.exec(url.pathname);
   if (Number(match?.[1]) !== archiveVersionId) return;
   const [, , modePool, payload, signature, target] = match;
-  if (modePool === "turn" && !turnKey) return;
+  const pool = pools[modePool] ?? relay;
+  if (pool.turnPort && !turnKey) return;
   const guest = url.searchParams.get("guest");
   let identity = {
     name: "访客 " + (/^[0-9a-f]{4}$/.test(guest ?? "") ? guest : randomBytes(2).toString("hex")),
@@ -55,7 +54,7 @@ function route(request) {
     directory: target === "rooms",
     roomId: Number(target),
     mode: url.searchParams.get("mode"),
-    pool: modePool === "turn" ? turn : modePool === "direct" ? direct : relay,
+    pool,
     rtc: url.searchParams.get("rtcResume") === "1",
     inputStats: url.searchParams.get("inputStats") === "1",
     platform: /Android/i.test(agent) ? "android" : /Windows/i.test(agent) ? "windows" : /iPhone|iPad/i.test(agent) ? "ios" : "other",
@@ -109,12 +108,12 @@ function selectRoute(room, route, reason) {
     negotiationMs: Date.now() - room.negotiation.startedAt,
     seats: seats.map(seat => ({ platform: seat.platform, signals: seat.signals, milestones: seat.milestones })),
   };
-  const turnTest = room.pool === turn;
+  const turnPort = room.pool.turnPort;
   const connected = route === "webrtc";
-  const loggedRoute = turnTest ? "hong_kong_turn_udp" : route;
+  const loggedRoute = turnPort ? "hong_kong_turn_udp" : route;
   console.log(JSON.stringify({ event: "netplay_route", archiveVersionId, roomId: room.id,
-    route: loggedRoute, reason, ...(turnTest && { connected }), ...details }));
-  if (turnTest && !connected) {
+    route: loggedRoute, reason, ...(turnPort && { connected, turnPort }), ...details }));
+  if (turnPort && !connected) {
     leave(room, seats[1], "turn_unavailable");
     return;
   }
@@ -156,7 +155,7 @@ function leave(room, seat, reason, closeCode) {
     room.pool.rooms.delete(room.id);
   }
   console.log(JSON.stringify({ event: "netplay_departure", archiveVersionId, roomId: room.id,
-    route: room.pool === turn ? "hong_kong_turn_udp" : route, reason, closeCode,
+    route: room.pool.turnPort ? "hong_kong_turn_udp" : route, turnPort: room.pool.turnPort, reason, closeCode,
     remaining: remaining?.socket ? room.seats.size : 0, forwarded: room.forwarded, heartbeat, input }));
   publishDirectory(room.pool);
 }
@@ -210,7 +209,7 @@ function receiveText(room, seat, data) {
     }
     const phase = snapshot?.phase;
     const expectedRoute = phase === "connected" ? "webrtc" : phase === "fallback" ? "hong_kong_websocket"
-      : phase === "6s" && room.pool === turn ? "pending" : undefined;
+      : phase === "6s" && room.pool.turnPort ? "pending" : undefined;
     if (!expectedRoute || room.route !== expectedRoute || snapshot?.negotiationStartedAt !== rtc.startedAt || seat.iceStatsPhase === phase) return;
     seat.iceStatsPhase = phase;
     const counts = ["localCandidatesGathered", "remoteCandidatesReceived", "remoteCandidatesApplied", "candidateCount", "pairCount"];
@@ -231,7 +230,7 @@ function receiveText(room, seat, data) {
         addressKind: ["ipv4", "ipv6", "unknown"].includes(error.addressKind) ? error.addressKind : undefined,
       })) : [];
     console.log(JSON.stringify({ event: "netplay_ice_stats", archiveVersionId, roomId: room.id,
-      seat: [...room.seats].indexOf(seat) + 1, platform: seat.platform, phase, pairs, stunErrors,
+      seat: [...room.seats].indexOf(seat) + 1, platform: seat.platform, turnPort: room.pool.turnPort, phase, pairs, stunErrors,
       localCandidateType: types.includes(local?.type) ? local.type : undefined,
       remoteCandidateType: types.includes(remote?.type) ? remote.type : undefined,
       relayProtocol: protocols.includes(local?.relayProtocol) ? local.relayProtocol : undefined,
@@ -338,10 +337,13 @@ function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, platform })
       room.negotiation = { startedAt, ready: new Set(),
         timer: setTimeout(() => selectRoute(room, "hong_kong_websocket", "timeout"), 8_000) };
       for (const [index, player] of [...room.seats].entries()) {
-        const relayOnly = pool === turn;
+        const relayOnly = Boolean(pool.turnPort);
         const username = relayOnly ? `${Math.floor(startedAt / 1000) + 7200}:gyokuro-${roomId}-${index + 1}-${randomBytes(6).toString("hex")}` : undefined;
         const servers = relayOnly ? [{
-          urls: turnUrls,
+          urls: [
+            `turn:netplay-hk-staging.viprpg.org:${pool.turnPort}?transport=udp`,
+            `turn:[2001:df1:7880:6::953]:${pool.turnPort}?transport=udp`,
+          ],
           username, credential: createHmac("sha1", turnKey).update(username).digest("base64"),
         }] : iceServers;
         send(player.socket, "rtc:start:" + JSON.stringify({ iceServers: servers, offer: index === 0,
@@ -370,7 +372,7 @@ const server = createServer(async (request, response) => {
     response.writeHead(403).end();
   } else if (request.method === "GET" && (request.url === defaultAvatar ||
       /^\/api\/media\/blobs\/[a-f0-9]{64}$/.test(request.url) &&
-      [relay, direct, turn].some(({ directory, rooms }) =>
+      [relay, ...Object.values(pools)].some(({ directory, rooms }) =>
         [...directory.values()].some(identity => identity.avatar === request.url) ||
         [...rooms.values()].some(({ seats }) => [...seats].some(({ identity }) => identity.avatar === request.url))))) {
     const upstream = await fetch(origin + request.url, { signal: AbortSignal.timeout(8_000) }).catch(() => null);
