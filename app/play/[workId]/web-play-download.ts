@@ -21,7 +21,8 @@ export class WebPlayDownload {
   totalBytes: number | null = null;
   get reconnectCount(): number { return this.reconnects; }
 
-  constructor(private readonly url: string, private readonly signal: AbortSignal) {
+  constructor(private readonly url: string, private readonly signal: AbortSignal,
+    private readonly range?: { offset: number; size: number; zipSize: number; etag: string }) {
     signal.addEventListener("abort", this.abort);
   }
 
@@ -74,7 +75,10 @@ export class WebPlayDownload {
     this.assertNotCanceled();
     this.controller = new AbortController();
     const headers: Record<string, string> = {};
-    if (this.downloadedBytes > 0) {
+    if (this.range) {
+      headers.Range = `bytes=${this.range.offset + this.downloadedBytes}-${this.range.offset + this.range.size - 1}`;
+      headers["If-Range"] = this.range.etag;
+    } else if (this.downloadedBytes > 0) {
       headers.Range = `bytes=${this.downloadedBytes}-`;
       headers["If-Range"] = this.etag!;
     }
@@ -88,7 +92,17 @@ export class WebPlayDownload {
       const length = positiveInteger(response.headers.get("Content-Length"));
       const etag = strongEtag(response.headers.get("ETag"));
       const encoding = response.headers.get("Content-Encoding");
-      if (this.downloadedBytes > 0) {
+      if (this.range) {
+        const expectedRange = `bytes ${this.range.offset + this.downloadedBytes}-${this.range.offset + this.range.size - 1}/${this.range.zipSize}`;
+        if (response.status !== 206 || response.headers.get("Content-Range") !== expectedRange ||
+            etag !== this.range.etag || (length !== null && length !== this.range.size - this.downloadedBytes) ||
+            (encoding !== null && encoding.toLowerCase() !== "identity")) {
+          throw new DownloadResponseError("游戏压缩包中的文件大小异常。");
+        }
+        this.totalBytes = this.range.size;
+        this.etag = etag;
+        this.resumable = true;
+      } else if (this.downloadedBytes > 0) {
         const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get("Content-Range") ?? "");
         if (response.status !== 206 || !range ||
           Number(range[1]) !== this.downloadedBytes || Number(range[2]) !== this.totalBytes! - 1 ||

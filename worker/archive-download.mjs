@@ -60,7 +60,7 @@ export async function maybeHandleArchiveDownload(request, env, ctx) {
 async function handleArchiveDownload(request, env, ctx, access) {
   const startedAt = Date.now();
   const url = new URL(request.url);
-  const match = /^\/api\/archive-versions\/(\d+)\/(download|kai-import)\/?$/.exec(url.pathname);
+  const match = /^\/api\/archive-versions\/(\d+)\/(download|kai-import|file-index)\/?$/.exec(url.pathname);
 
   if (!match) {
     return null;
@@ -106,6 +106,16 @@ async function handleArchiveDownload(request, env, ctx, access) {
 
     if (match[2] === "kai-import") {
       return await kaiImportMetadata(request, env.ARCHIVE_BUCKET, record);
+    }
+    if (match[2] === "file-index") {
+      const manifest = await loadManifest(bucket, record.manifestSha256);
+      const layout = prepareZipLayout(buildZipEntries(manifest.files.filter(file => !shouldSkipWebPlayDownloadFile(file.path))));
+      const files = layout.entries.filter(file => !shouldSkipWebPlayLocalWrite(file.path))
+        .map(({ path, size, crc32, dataStart }) => ({ path, size, crc32, offset: dataStart }));
+      if (request.method === "HEAD") return new Response(null, { headers: { ...importHeaders, "Content-Type": "application/json" } });
+      return jsonResponse({ schema: 1, archiveVersionId: record.id, workId: record.workId,
+        manifestSha256: record.manifestSha256, zipSize: layout.size,
+        etag: downloadEtag(record, webPlayDownloadProfile), files }, { headers: importHeaders });
     }
 
     if (url.searchParams.has("player") && (profile || !record.usesSharedPlayer || !url.searchParams.get("player"))) {

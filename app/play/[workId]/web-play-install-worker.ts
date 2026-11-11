@@ -1,19 +1,20 @@
-import { ApiResponseError } from "@/lib/ui/api-response";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 import { formatBytes, formatDuration } from "@/lib/format";
 
 /// <reference lib="webworker" />
 
-import { clearWebPlayFileRecords, getWebPlayInstallation, saveWebPlayFileRecords, saveWebPlayInstallation } from "@/app/play/[workId]/web-play-db";
-import { createGamePackWritable, ensureOpfsSupported, resetGameOpfsDirectory, writeGamePackIndexJson } from "@/app/play/[workId]/web-play-opfs";
+import { clearWebPlayFileRecords, getWebPlayInstallation, listWebPlayInstallations, saveWebPlayFileRecords, saveWebPlayInstallation } from "@/app/play/[workId]/web-play-db";
+import { createGamePackWritable, ensureOpfsSupported, readGamePackages, resetGameOpfsDirectory, writeGamePackIndexJson } from "@/app/play/[workId]/web-play-opfs";
 import type { WebPlayFileRecord, WebPlayInstallation, WebPlayInstallWorkerInput, WebPlayInstallWorkerOutput, WebPlayMetadata, WebPlayStorageSnapshot, WebPlayStorageKind } from "@/app/play/[workId]/web-play-types";
 import { contentTypeForArchivePath } from "@/lib/archive/file-policy";
 import { shouldSkipWebPlayLocalWrite } from "@/lib/archive/web-play-local-policy";
-import { withGameResourceWriteLock } from "./web-play-locks";
+import { acquireGameResourceReadLock, withGameResourceWriteLock } from "./web-play-locks";
 import { cacheWebPlayCover } from "./web-play-cover";
 import { renewGameBucket } from "./web-play-storage";
 import { notifyGameResourcesChanged } from "./web-play-events";
 import { finishInstallObservation, installObserver, observeInstallTask, startInstallObservation } from "./web-play-install-observer";
 import { WebPlayDownload } from "./web-play-download";
+import { Crc32 } from "@/lib/archive/crc32";
 
 type LocalZipEntry = {
   name: string;
@@ -204,6 +205,8 @@ async function runInstallAttempt(input: {
       downloadBytesTotal: 0,
       installedFiles: 0,
       installedBytes: 0,
+      reusedFiles: 0,
+      reusedBytes: 0,
       currentPath: null,
       error: null,
       updatedAt: new Date().toISOString(),
@@ -211,22 +214,20 @@ async function runInstallAttempt(input: {
     true,
   );
 
-  const download = new WebPlayDownload(metadata.downloadUrl, input.signal);
-  let result: Awaited<ReturnType<typeof streamZipToPacks>>;
-  try {
-    await observeInstallTask("network.headers", () => download.open(), { url: metadata.downloadUrl });
-    installation = await persistAndPost(
-      {
-        ...installation,
+  let result = await tryDeltaInstall({ ...input, installation });
+  if (!result) {
+    const download = new WebPlayDownload(metadata.downloadUrl, input.signal);
+    try {
+      await observeInstallTask("network.headers", () => download.open(), { url: metadata.downloadUrl });
+      installation = await persistAndPost({ ...installation,
         downloadBytesTotal: download.totalBytes ?? metadata.installTotalSizeBytes,
         updatedAt: new Date().toISOString(),
-      },
-      true,
-    );
-    result = await streamZipToPacks({ metadata, download, installation });
-  } finally {
-    installObserver?.event("network.end", { reconnects: download.reconnectCount });
-    download.close();
+      }, true);
+      result = await streamZipToPacks({ metadata, download, installation });
+    } finally {
+      installObserver?.event("network.end", { reconnects: download.reconnectCount });
+      download.close();
+    }
   }
   installation = result.installation;
 
@@ -262,6 +263,104 @@ async function runInstallAttempt(input: {
   );
 
   return installation;
+}
+
+async function tryDeltaInstall(input: {
+  metadata: WebPlayMetadata; installation: WebPlayInstallation; signal: AbortSignal;
+}): Promise<{ installation: WebPlayInstallation; packIndex: WebPlayPackIndex } | null> {
+  const { metadata, signal } = input;
+  const base = (await listWebPlayInstallations()).filter(row => row.status === "ready" &&
+    row.workId === metadata.workId && row.playKey !== metadata.playKey)
+    .sort((a, b) => (b.readyAt ?? "").localeCompare(a.readyAt ?? ""))[0];
+  if (!base) return null;
+  let release: (() => void) | undefined;
+  try {
+    let packages;
+    try {
+      release = await acquireGameResourceReadLock(base.playKey, signal);
+      packages = await readGamePackages(base, base.archiveVersionId, base.manifestSha256, signal);
+    } catch {
+      signal.throwIfAborted();
+      return null;
+    }
+    const index = await requestJson<{
+      schema: number; archiveVersionId: number; workId: number; manifestSha256: string;
+      zipSize: number; etag: string; files: Array<{ path: string; offset: number; size: number; crc32: number }>;
+    }>(`/api/archive-versions/${metadata.archiveVersionId}/file-index`, { cache: "no-store", signal })
+      .catch((error: unknown) => {
+        if (error instanceof ApiResponseError && error.status === 404) return null;
+        throw error;
+      });
+    if (!index) return null;
+    if (index.schema !== 1 || index.archiveVersionId !== metadata.archiveVersionId || index.workId !== metadata.workId ||
+        index.manifestSha256 !== metadata.manifestSha256 || !Number.isSafeInteger(index.zipSize) || index.zipSize <= 0 ||
+        typeof index.etag !== "string" || !/^"[^"\r\n]+"$/.test(index.etag) ||
+        !Array.isArray(index.files) || index.files.length !== metadata.installTotalFiles) throw new Error("游戏压缩包中的文件大小异常。");
+    const keys = new Set<string>();
+    let bytes = 0;
+    for (const file of index.files) {
+      if (typeof file?.path !== "string" || normalizeZipEntryPath(file.path) !== file.path ||
+          file.path.split("/").some(part => Object.hasOwn(Object.prototype, part)) ||
+          shouldSkipWebPlayLocalWrite(file.path) || keys.has(packLookupKey(file.path)) ||
+          !Number.isSafeInteger(file.size) || file.size < 0 || !Number.isSafeInteger(file.offset) || file.offset < 0 ||
+          file.offset + file.size > index.zipSize || !Number.isInteger(file.crc32) || file.crc32 < 0 || file.crc32 > 0xffffffff)
+        throw new Error("游戏压缩包中的文件大小异常。");
+      keys.add(packLookupKey(file.path)); bytes += file.size;
+    }
+    if (bytes !== metadata.installTotalSizeBytes) throw new Error("游戏压缩包中的文件大小异常。");
+    const local = new Map<string, Blob>();
+    for (const pack of packages) for (const file of pack.metadata.files)
+      local.set(packLookupKey(file.filename.slice(1)), pack.blob.slice(file.start, file.end));
+    const reusable = new Map<string, Blob>();
+    for (const file of index.files) {
+      const blob = local.get(packLookupKey(file.path));
+      if (blob?.size !== file.size) continue;
+      const crc = new Crc32();
+      for await (const chunk of blob.stream()) { signal.throwIfAborted(); crc.update(chunk); }
+      if (crc.digest() === file.crc32) reusable.set(file.path, blob);
+    }
+    let installation = await persistAndPost({ ...input.installation, phase: "extracting_zip",
+      downloadBytesTotal: index.files.reduce((total, file) => total + (reusable.has(file.path) ? 0 : file.size), 0),
+      reusedFiles: 0, reusedBytes: 0,
+    }, true);
+    const writer = new PackWriter(installation), records: WebPlayFileRecord[] = [];
+    const packIndex: WebPlayPackIndex = { version: 1, archiveVersionId: metadata.archiveVersionId,
+      manifestSha256: metadata.manifestSha256, webPlayInstallerVersion: metadata.webPlayInstallerVersion,
+      packs: writer.packs, files: {} };
+    try {
+      for (const file of index.files) {
+        signal.throwIfAborted();
+        const location = await writer.beginEntry(file.size), crc = new Crc32();
+        const blob = reusable.get(file.path);
+        if (blob) {
+          for await (const chunk of blob.stream()) { signal.throwIfAborted(); crc.update(chunk); await writer.write(chunk); }
+        } else if (file.size) {
+          const download = new WebPlayDownload(metadata.downloadUrl, signal, { ...file, zipSize: index.zipSize, etag: index.etag });
+          try {
+            await download.open();
+            while (true) {
+              const chunk = await download.read(); if (chunk.done) break;
+              crc.update(chunk.value); await writer.write(chunk.value);
+              installation.downloadedBytes += chunk.value.byteLength;
+              installation = await persistAndPost({ ...installation, currentPath: file.path, updatedAt: new Date().toISOString() });
+            }
+          } finally { download.close(); }
+        }
+        if (crc.digest() !== file.crc32) throw new Error(`游戏文件校验失败：${file.path}`);
+        packIndex.files[packLookupKey(file.path)] = { path: file.path, ...location, length: file.size,
+          crc32: file.crc32, contentType: contentTypeForArchivePath(file.path) };
+        records.push({ id: `${metadata.playKey}:${file.path}`, playKey: metadata.playKey,
+          path: file.path, size: file.size, updatedAt: new Date().toISOString() });
+        installation = await persistAndPost({ ...installation, installedFiles: installation.installedFiles + 1,
+          installedBytes: installation.installedBytes + file.size, currentPath: file.path,
+          reusedFiles: (installation.reusedFiles ?? 0) + Number(Boolean(blob)),
+          reusedBytes: (installation.reusedBytes ?? 0) + (blob ? file.size : 0), updatedAt: new Date().toISOString(),
+        });
+      }
+    } finally { await writer.close(); }
+    await saveFileRecordsInBatches(records);
+    return { installation: await persistAndPost(installation, true), packIndex };
+  } finally { release?.(); }
 }
 
 async function requestStorage(

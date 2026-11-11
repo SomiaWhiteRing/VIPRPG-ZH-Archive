@@ -10,6 +10,7 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
@@ -103,6 +104,12 @@ public final class MainActivity extends Activity {
     private UpdateChecker.Result currentUpdate;
     private boolean checkedUpdates;
     private boolean checkingUpdates;
+    private boolean checkingGameUpdates;
+    private final ConnectivityManager.NetworkCallback gameUpdateNetwork = new ConnectivityManager.NetworkCallback() {
+        @Override public void onCapabilitiesChanged(Network network, NetworkCapabilities capabilities) {
+            runOnUiThread(() -> { if (resumed && library && !isDestroyed()) checkGameUpdates(); });
+        }
+    };
     private static boolean startupChecked;
     private boolean pendingUpdatePrompt;
     private boolean resumed;
@@ -157,7 +164,7 @@ public final class MainActivity extends Activity {
         playerRuntime = PlayerRuntime.get(this);
         libraryPlayerUpdate = new PlayerUpdateDrawer(this, playerRuntime::toggle);
         nativeLibrary = new NativeLibrary(this, libraryPlayerUpdate, new NativeLibrary.Actions() {
-            @Override public void refresh() { refreshLocalGames(); }
+            @Override public void refresh() { refreshLocalGames(); checkGameUpdates(); }
             @Override public void play(String key) { openLocalLibrary(key); }
             @Override public void delete(List<String> keys) {
                 localIo.execute(() -> {
@@ -181,6 +188,7 @@ public final class MainActivity extends Activity {
         libraryPanel.addView(nativeLibrary);
         localGames = new LocalGames(this, browser, offlineBrowser, playerRuntime);
         localGames.store.changed = () -> runOnUiThread(this::refreshLocalGames);
+        getSystemService(ConnectivityManager.class).registerDefaultNetworkCallback(gameUpdateNetwork);
         screenshots = new ScreenshotController(this, browser, offlineBrowser);
         FaceImageShare.attach(this, browser);
         galleryPanel = new ScreenshotGallery(this, screenshots);
@@ -530,7 +538,8 @@ public final class MainActivity extends Activity {
         if (requestCode == DeviceNotifications.PERMISSION_REQUEST) deviceNotifications.permissionResult(grantResults.length > 0);
     }
 
-    private void showLibrary() {
+    private void showLibrary() { showLibrary(true); }
+    private void showLibrary(boolean checkUpdates) {
         if (playing || onlineImmersive || fullscreenView != null || screenshots.isBusy()) return;
         boolean entering = !library || gallery || version;
         pauseOnlineBrowser();
@@ -542,7 +551,7 @@ public final class MainActivity extends Activity {
         libraryPanel.setVisibility(playing ? View.GONE : View.VISIBLE);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         library = true;
-        if (entering) playerRuntime.check();
+        if (entering) { playerRuntime.check(); if (checkUpdates) checkGameUpdates(); }
         if (!isBrowserOffline()) {
             nativeLibrary.loading();
             offlineBrowser.loadUrl(offlineUrl);
@@ -575,10 +584,32 @@ public final class MainActivity extends Activity {
     }
     volatile String pendingLocalPlay;
     void openLocalLibrary(String key) {
-        String playKey = playerRuntime.ready() ? key : null;
-        pendingLocalPlay = playKey;
-        showLibrary();
-        if (playKey != null) sendLibraryCommand("play", JSONObject.quote(playKey));
+        showLibrary(key == null);
+        if (key == null || !playerRuntime.ready()) { pendingLocalPlay = null; return; }
+        updateExecutor.execute(() -> {
+            String playKey = localGames.store.checkUpdate(key);
+            runOnUiThread(() -> {
+                if (isDestroyed() || playing || !library) return;
+                pendingLocalPlay = playKey;
+                if (localGames.store.next() != null) InstallService.start(this);
+                refreshLocalGames();
+                sendLibraryCommand("play", JSONObject.quote(playKey));
+            });
+        });
+    }
+
+    private void checkGameUpdates() {
+        if (checkingGameUpdates || playing || onlinePlaying || localGames == null || !hasNetwork()) return;
+        checkingGameUpdates = true;
+        updateExecutor.execute(() -> {
+            localGames.store.checkUpdates();
+            runOnUiThread(() -> {
+                checkingGameUpdates = false;
+                if (isDestroyed()) return;
+                if (localGames.store.next() != null) InstallService.start(this);
+                refreshLocalGames();
+            });
+        });
     }
 
     private void showPlayerUpdate(PlayerRuntime.State state) {
@@ -625,7 +656,7 @@ public final class MainActivity extends Activity {
 
     private void setPlaying(boolean value) {
         playing = value;
-        if (!value && localGames != null) localGames.store.playingKey = null;
+        if (!value && localGames != null) { localGames.store.playingKey = null; checkGameUpdates(); }
         if (library && !version && !gallery) {
             offlineBrowser.setVisibility(value ? View.VISIBLE : View.GONE);
             libraryPanel.setVisibility(value ? View.GONE : View.VISIBLE);
@@ -1004,12 +1035,13 @@ public final class MainActivity extends Activity {
         if (localGames.store.next() != null) InstallService.start(this);
         restoreOfflinePlayerFocus();
         if (gallery) galleryPanel.refreshOnResume();
-        if (library && !playing && !gallery && !version) sendLibraryCommand("refresh", "null");
+        if (library && !playing && !gallery && !version) { sendLibraryCommand("refresh", "null"); checkGameUpdates(); }
         showPendingUpdate();
     }
 
     @Override
     protected void onDestroy() {
+        getSystemService(ConnectivityManager.class).unregisterNetworkCallback(gameUpdateNetwork);
         playerRuntime.removeObserver(playerObserver);
         if (fileChooser != null) fileChooser.onReceiveValue(null);
         galleryPanel.close();
