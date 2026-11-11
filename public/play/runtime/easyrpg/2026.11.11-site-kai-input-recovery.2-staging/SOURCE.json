@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "e61027d5521ee63e4bbb48f4d60d6c2677318daa",
-  "version": "2026.11.11-site-kai-input-recovery-staging",
-  "build": "kai-web-input-recovery-staging",
+  "version": "2026.11.11-site-kai-input-recovery.2-staging",
+  "build": "kai-web-input-recovery.2-staging",
   "artifact": "Kai-Web-2026.11.11-auto-selection-site.zip",
   "archiveSha256": "d50e1c42a3005aec843c4b4b509dca7e4edd2ef90aba82b6ca1994ecc460b3f5",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/e61027d5521ee63e4bbb48f4d60d6c2677318daa",
@@ -60,22 +60,22 @@
     {
       "file": "player-host.js",
       "path": "scripts/runtime-patches/kai-netplay-input-host.patch",
-      "sha256": "4f52fe796d00bff2cbafa6e3042762df0a68dc32f07007a055c9a3d62fbdc578",
+      "sha256": "0c66d3ac59f6f7b27406773e9863eb2e56a59fac590161ad1fe7a4b7d3026f94",
       "beforeSha256": "81cd4e72f32c3fcfa42e3b207b3c29919ceef1b462cb5b02bd8f2a258b29759e",
-      "afterSha256": "6b21185b6bc51741739dcf6c5f6b33f0b953e426dc3c389849ed8fc2b821b3c2"
+      "afterSha256": "1c08e079ef572c9c4ebda3ec47ac015fc42e0dbf68039affaed7360ae406b66c"
     },
     {
       "file": "player-worker.js",
       "path": "scripts/runtime-patches/kai-netplay-input-worker.patch",
-      "sha256": "621dc81447291be328c4896cc0aee375c9be58a48317982622cfb7a5ff7d27ae",
+      "sha256": "9fff0b6c358377af9c98107e7b2704ca52e02672e863d5b5e5f5b52c39df9452",
       "beforeSha256": "6324e26f3c4f7e3ec68681dcaf201fdf2382b07a1e7f760db199d9ec2dfd3927",
       "afterSha256": "8ea756be37d3a7f484120c96f26c901d21a9acbabdb1c041f489632c642693e7"
     }
   ],
   "files": {
     "index.js": {
-      "size": 63222,
-      "sha256": "6b21185b6bc51741739dcf6c5f6b33f0b953e426dc3c389849ed8fc2b821b3c2"
+      "size": 64204,
+      "sha256": "1c08e079ef572c9c4ebda3ec47ac015fc42e0dbf68039affaed7360ae406b66c"
     },
     "easyrpg-player.js": {
       "size": 128930,

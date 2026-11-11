@@ -28,7 +28,7 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN 443，房间服务收到双方确认后宣布房间就绪。混用旧 Player 时走 WebSocket。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs` 与 `netplay-route-selection.mjs` 放在同一目录。
 
-双方 Player 声明 `inputProtocol=1` 时，香港服务在 RTC 协商中启用抗丢包按键协议，并将实际协议记入 `netplay_route.inputProtocol`。开局和房间消息继续可靠传输，按键改走无序、不重传的独立 DataChannel：每包重复尚未确认的逐帧输入，接收方去重、补齐后交给原回滚时间线；停止产生新帧时仍每 50 ms 尝试补发。协议使用对局 ID 隔离旧包，最多保留 256 帧，不能用丢弃未确认输入来跳过缺口。选线探测使用同一按键通道。混用旧 Player 或选择 WebSocket 时仍使用原输入协议。
+双方 Player 声明 `inputProtocol=1` 时，香港服务在 RTC 协商中启用抗丢包按键协议，并将实际协议记入 `netplay_route.inputProtocol`。开局和房间消息继续可靠传输，按键改走无序、不重传的独立 DataChannel：每包重复尚未确认的逐帧输入，接收方去重、补齐后交给原回滚时间线；停止产生新帧时仍每 50 ms 尝试补发。浏览器发送缓冲未清空时，只保留最新输入历史并合并最新确认，避免旧副本积压。协议使用对局 ID 隔离旧包，最多保留 256 帧，不能用丢弃未确认输入来跳过缺口。选线探测使用同一按键通道。混用旧 Player 或选择 WebSocket 时仍使用原输入协议。
 
 ## 干净种子
 

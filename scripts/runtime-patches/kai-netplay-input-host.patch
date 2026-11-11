@@ -1,8 +1,8 @@
 diff --git a/player-host.js b/player-host.js
-index 1f2f7a9ab..b84f491ff 100644
+index 1f2f7a9ab..933cd5e9f 100644
 --- a/player-host.js
 +++ b/player-host.js
-@@ -511,9 +511,10 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+@@ -511,9 +511,16 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
        stopMovie();
      }
    };
@@ -10,11 +10,17 @@ index 1f2f7a9ab..b84f491ff 100644
 +  function connectNetplayRtc({port, iceServers, offer, diagnostics, relayOnly, inputProtocol, compareRelay = true}, onClosed) {
      let peer;
      let channel;
-+    let inputChannel, notifiedOpen = false;
++    let inputChannel, pendingInput, notifiedOpen = false;
++    const flushInput = () => {
++      if (!pendingInput || inputChannel?.readyState !== 'open' || inputChannel.bufferedAmount) return;
++      const packet = pendingInput;
++      pendingInput = undefined;
++      inputChannel.send(packet);
++    };
      let open = true;
      let finishing = false;
      let finishTimer;
-@@ -736,6 +737,9 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+@@ -736,6 +743,9 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
        else port.postMessage({type: 'socket-probe', sample});
      });
      const readyChannel = async () => {
@@ -24,7 +30,7 @@ index 1f2f7a9ab..b84f491ff 100644
        if (relayOnly && compareRelay) {
          let relayTotal = 0;
          let socketTotal = 0;
-@@ -754,13 +758,15 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+@@ -754,13 +764,19 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
        port.postMessage({type: 'open'});
      };
      const attach = dataChannel => {
@@ -32,7 +38,11 @@ index 1f2f7a9ab..b84f491ff 100644
 -      channel.binaryType = 'arraybuffer';
 -      channel.onopen = () => {
 -        mark('channel_open');
-+      if (dataChannel.label === 'easyrpg-input-v1' && inputProtocol === 1) inputChannel = dataChannel;
++      if (dataChannel.label === 'easyrpg-input-v1' && inputProtocol === 1) {
++        inputChannel = dataChannel;
++        inputChannel.bufferedAmountLowThreshold = 0;
++        inputChannel.onbufferedamountlow = flushInput;
++      }
 +      else if (dataChannel.label === 'easyrpg-netplay') channel = dataChannel;
 +      else return fail('channel_error');
 +      dataChannel.binaryType = 'arraybuffer';
@@ -45,7 +55,7 @@ index 1f2f7a9ab..b84f491ff 100644
          if (!(data instanceof ArrayBuffer)) return fail('channel_error');
          if (relayOnly && compareRelay && data.byteLength === 2) {
            const [command, sample] = new Uint8Array(data);
-@@ -775,8 +781,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+@@ -775,8 +791,8 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
          }
          port.postMessage({type: 'data', data}, [data]);
        };
@@ -56,20 +66,31 @@ index 1f2f7a9ab..b84f491ff 100644
      };
      peer.onicecandidate = ({candidate}) => {
        if (!open || !candidate) return;
-@@ -820,8 +826,10 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+@@ -820,9 +836,20 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
          void reportIcePair(true);
        } else if (data.type === 'socket-probe-pong') {
          probeReplies.get('socket' + data.sample)?.(true);
 -      } else if (data.type === 'data') {
 -        if (channel?.readyState === 'open') channel.send(data.data);
+-        else fail('channel_closed');
 +      } else if (data.type === 'data' || data.type === 'input') {
 +        const target = data.type === 'input' || (inputProtocol === 1 && data.data.byteLength === 10)
 +          ? inputChannel : channel;
-+        if (target?.readyState === 'open') target.send(data.data);
-         else fail('channel_closed');
++        if (target?.readyState !== 'open') return fail('channel_closed');
++        if (data.type === 'input') {
++          // A newer history packet replaces queued copies. An ACK-only packet
++          // updates its acknowledgement without throwing away pending inputs.
++          const next = new DataView(data.data);
++          const pending = pendingInput && new DataView(pendingInput);
++          if (data.data.byteLength === 16 && pending && pending.getInt32(4, true) === next.getInt32(4, true)) {
++            pending.setInt32(8, Math.max(pending.getInt32(8, true), next.getInt32(8, true)), true);
++          } else pendingInput = data.data;
++          flushInput();
++        } else target.send(data.data);
        } else if (data.type === 'signal') {
          signaling = signaling.then(async () => {
-@@ -849,6 +857,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
+           if (!open) return;
+@@ -849,6 +876,7 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
      if (offer) {
        try {
          attach(peer.createDataChannel('easyrpg-netplay', {ordered: true}));

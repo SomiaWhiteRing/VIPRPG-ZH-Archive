@@ -5,7 +5,7 @@ index 2ee3a7a05..fe0019793 100644
 @@ -152,7 +152,89 @@ function closeNetplayPort(port) {
    port?.close();
  }
- 
+
 -function createNetplayRouteSelection({round, paths, offer}, {sendControl, sendSocket, socketReady, receive, activate, disconnect}) {
 +// Like GGPO/Slippi, repeat unacknowledged inputs in new packets. The game still
 +// receives each frame exactly once, in order; only the wire is unreliable.
@@ -100,7 +100,7 @@ index 2ee3a7a05..fe0019793 100644
 -    postMessage({type: 'netplay-rtc', path: id, port: port2, iceServers, offer, relayOnly, compareRelay: false}, [port2]);
 +    postMessage({type: 'netplay-rtc', path: id, port: port2, iceServers, offer, relayOnly, inputProtocol, compareRelay: false}, [port2]);
    }
- 
+
    return {
 @@ -275,7 +357,7 @@ function createNetplayRouteSelection({round, paths, offer}, {sendControl, sendSo
            if (other === active) stopProbe(other);

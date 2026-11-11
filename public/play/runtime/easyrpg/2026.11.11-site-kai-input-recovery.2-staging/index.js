@@ -559,7 +559,13 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   function connectNetplayRtc({port, iceServers, offer, diagnostics, relayOnly, inputProtocol, compareRelay = true}, onClosed) {
     let peer;
     let channel;
-    let inputChannel, notifiedOpen = false;
+    let inputChannel, pendingInput, notifiedOpen = false;
+    const flushInput = () => {
+      if (!pendingInput || inputChannel?.readyState !== 'open' || inputChannel.bufferedAmount) return;
+      const packet = pendingInput;
+      pendingInput = undefined;
+      inputChannel.send(packet);
+    };
     let open = true;
     let finishing = false;
     let finishTimer;
@@ -803,7 +809,11 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       port.postMessage({type: 'open'});
     };
     const attach = dataChannel => {
-      if (dataChannel.label === 'easyrpg-input-v1' && inputProtocol === 1) inputChannel = dataChannel;
+      if (dataChannel.label === 'easyrpg-input-v1' && inputProtocol === 1) {
+        inputChannel = dataChannel;
+        inputChannel.bufferedAmountLowThreshold = 0;
+        inputChannel.onbufferedamountlow = flushInput;
+      }
       else if (dataChannel.label === 'easyrpg-netplay') channel = dataChannel;
       else return fail('channel_error');
       dataChannel.binaryType = 'arraybuffer';
@@ -874,8 +884,17 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
       } else if (data.type === 'data' || data.type === 'input') {
         const target = data.type === 'input' || (inputProtocol === 1 && data.data.byteLength === 10)
           ? inputChannel : channel;
-        if (target?.readyState === 'open') target.send(data.data);
-        else fail('channel_closed');
+        if (target?.readyState !== 'open') return fail('channel_closed');
+        if (data.type === 'input') {
+          // A newer history packet replaces queued copies. An ACK-only packet
+          // updates its acknowledgement without throwing away pending inputs.
+          const next = new DataView(data.data);
+          const pending = pendingInput && new DataView(pendingInput);
+          if (data.data.byteLength === 16 && pending && pending.getInt32(4, true) === next.getInt32(4, true)) {
+            pending.setInt32(8, Math.max(pending.getInt32(8, true), next.getInt32(8, true)), true);
+          } else pendingInput = data.data;
+          flushInput();
+        } else target.send(data.data);
       } else if (data.type === 'signal') {
         signaling = signaling.then(async () => {
           if (!open) return;
