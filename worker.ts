@@ -114,6 +114,12 @@ app.get("/robots.txt", (c) => c.text(c.env.SITE_NOINDEX === "true"
   ? "User-agent: *\nDisallow: /\n"
   : publicRobots(c.get("runtime").origin)));
 app.all(
+  "/api/archive-versions/:id/file-index",
+  async (c) =>
+    (await maybeHandleArchiveDownload(c.req.raw, c.env, c.executionCtx)) ??
+    c.notFound(),
+);
+app.all(
   "/api/archive-versions/:id/kai-import",
   async (c) =>
     (await maybeHandleArchiveDownload(c.req.raw, c.env, c.executionCtx)) ??
