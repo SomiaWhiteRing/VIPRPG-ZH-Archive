@@ -1,9 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
 import { getCurrentUser } from "../app/.server/auth/current-user";
 import { getPublishedArchiveDownloadRecord } from "../app/.server/db/archive-downloads";
+import { isCloudflareSpaceReadable } from "../app/.server/db/netplay-spaces";
 import { createRuntime } from "../app/.server/runtime";
 import { getUserAvatarSrc } from "../lib/user-profile";
-import { stagingNetplayEdgeOrigin, stagingNetplaySiteOrigin } from "../lib/archive/netplay-ingress";
+import { productionNetplayHongKongOrigin, productionNetplayHongKongWork, productionNetplayLegacyArchive,
+  productionNetplaySiteOrigin, stagingNetplayEdgeOrigin, stagingNetplaySiteOrigin } from "../lib/archive/netplay-ingress";
 import { json } from "../lib/http";
 import { requestJsonValue } from "../lib/ui/api-response";
 import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
@@ -58,7 +60,7 @@ type Negotiation = {
   timeout: ReturnType<typeof setTimeout>;
 };
 type Room = {
-  details: { archiveVersionId: number; roomId: number; pool: "rtc" | "legacy" };
+  details: { archiveVersionId?: number; netplaySpaceId?: number; roomId: number; pool: "space" | "rtc" | "legacy" };
   peers: Map<WebSocket, {
     identity: Identity;
     rtc: boolean;
@@ -217,9 +219,13 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       return;
     }
     const existing = this.rooms.get(id);
-    const [, , , , archive, pool] = path.split("/");
+    const [, , , , scope, key] = path.split("/");
+    const space = scope === "spaces";
     const room: Room = existing ?? {
-      details: { archiveVersionId: Number(archive), roomId: id, pool: pool === "rtc" ? "rtc" : "legacy" },
+      details: {
+        ...(space ? { netplaySpaceId: Number(key) } : { archiveVersionId: Number(scope) }),
+        roomId: id, pool: space ? "space" : key === "rtc" ? "rtc" : "legacy",
+      },
       peers: new Map(),
       hidden: false,
       password: createRoomPassword(),
@@ -517,11 +523,11 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
 export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEnv, ctx: ExecutionContext) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/netplay/v1/")) return;
-  const route = /^\/api\/netplay\/v1\/([1-9]\d*)\/(rtc\/)?(rooms|[1-9]\d{0,5})$/.exec(url.pathname);
+  const route = /^\/api\/netplay\/v1\/(spaces\/)?([1-9]\d*)\/(rtc\/)?(rooms|[1-9]\d{0,5})$/.exec(url.pathname);
   if (!route || !env.NETPLAY_ROOM) return new Response(null, { status: 404 });
-  const [, archive, rtc, target] = route;
-  const archiveVersionId = Number(archive);
-  if (!Number.isSafeInteger(archiveVersionId)) return new Response(null, { status: 404 });
+  const [, space, key, rtc, target] = route;
+  const id = Number(key);
+  if (!Number.isSafeInteger(id)) return new Response(null, { status: 404 });
   const directory = target === "rooms";
   if (rtc && !directory && url.searchParams.get("rtc") !== "1") return new Response(null, { status: 404 });
   const websocket = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
@@ -535,9 +541,23 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
       ((websocket || origin !== null) && origin !== runtime.origin)) {
     return new Response(null, { status: 403 });
   }
-  const record = await getPublishedArchiveDownloadRecord(runtime, archiveVersionId, true);
-  if (!record?.netplayService) return new Response(null, { status: 404 });
-  const pool = rtc ? `v1/${archiveVersionId}/rtc` : `v1/${archiveVersionId}`;
+  let pool = `v1/spaces/${id}`;
+  if (space) {
+    if (!await isCloudflareSpaceReadable(runtime, id)) return new Response(null, { status: 404 });
+  } else {
+    const record = await getPublishedArchiveDownloadRecord(runtime, id, true);
+    if (!record?.netplayCapable || record.netplaySpaceId === null) return new Response(null, { status: 404 });
+    // Previously published archive URLs remain usable for installed clients.
+    const legacy = runtime.origin === productionNetplaySiteOrigin && record.workId === productionNetplayHongKongWork &&
+      (id === productionNetplayLegacyArchive ||
+        (record.netplayExternalEndpoint && new URL(record.netplayExternalEndpoint).origin === productionNetplayHongKongOrigin));
+    if (legacy) {
+      pool = rtc ? `v1/${id}/rtc` : `v1/${id}`;
+    } else {
+      if (record.netplayExternalEndpoint) return new Response(null, { status: 404 });
+      pool = `v1/spaces/${record.netplaySpaceId}`;
+    }
+  }
   const rooms = env.NETPLAY_ROOM.getByName(pool);
   if (directory && !websocket) {
     const response = await rooms.fetch(request);

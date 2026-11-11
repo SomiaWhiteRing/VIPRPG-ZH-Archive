@@ -15,6 +15,7 @@ import * as homeRecommendationsEndpoint from "@/app/.server/endpoints/api/admin/
 import * as workLifecycleEndpoint from "@/app/.server/endpoints/api/admin/works/[workId]/lifecycle/route";
 import * as auditReportExportEndpoint from "@/app/.server/endpoints/api/admin/audit/reports/[date]/export/route";
 import * as genreMergeEndpoint from "@/app/.server/endpoints/api/admin/genres/merge/route";
+import * as netplaySpacesEndpoint from "@/app/.server/endpoints/api/admin/netplay-spaces/route";
 import * as showcaseEndpoint from "@/app/.server/endpoints/api/account/showcase/route";
 import * as creatorAvatarEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/avatar/route";
 import * as creatorUpdateEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/update/route";
@@ -812,6 +813,13 @@ api.all("/api/genres", (_c) => jsonResponse({ ok: false, error: "Method not allo
 api.on("POST", "/api/admin/genres/merge", (c) => genreMergeEndpoint.POST(c.get("runtime"), c.req.raw));
 api.options("/api/admin/genres/merge", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
 api.all("/api/admin/genres/merge", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }));
+api.on("POST", "/api/admin/netplay-spaces", (c) => netplaySpacesEndpoint.POST(c.get("runtime"), c.req.raw));
+api.options("/api/admin/netplay-spaces", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
+api.all("/api/admin/netplay-spaces", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }));
+api.post("/api/admin/works/:workId/netplay-space", (c) =>
+  netplaySpacesEndpoint.bindWork(c.get("runtime"), c.req.raw, c.req.param("workId")));
+api.options("/api/admin/works/:workId/netplay-space", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
+api.all("/api/admin/works/:workId/netplay-space", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }));
 api.on("POST", "/api/admin/tags/update", (c) =>
   endpoint49.POST(c.get("runtime"), c.req.raw),
 );

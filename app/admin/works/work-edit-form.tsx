@@ -18,10 +18,6 @@ export function WorkEditForm({ work, currentUser, suggestions, canUpdateStatus, 
     adminOptions={{
       canUpdateStatus,
       externalLinks: work.externalLinks,
-      netplayArchive: work.currentArchive?.netplayService != null ? {
-        archiveVersionId: work.currentArchive.id,
-        enabled: work.currentArchive.netplayService,
-      } : undefined,
       footer: children,
     }}
   />;

@@ -6,13 +6,15 @@ import { workReadCondition } from "@/app/.server/db/work-visibility";
 import type { AppRuntime } from "@/app/.server/runtime";
 import {
   productionNetplayHongKongOrigin, productionNetplayHongKongWork, productionNetplayLegacyArchive, productionNetplaySiteOrigin,
-  stagingNetplayEdgeOrigin, stagingNetplayHongKongOrigin, stagingNetplayHongKongWork, stagingNetplaySiteOrigin,
+  stagingNetplayEdgeOrigin, stagingNetplayHongKongOrigin, stagingNetplaySiteOrigin,
 } from "@/lib/archive/netplay-ingress";
 import { getUserAvatarSrc } from "@/lib/user-profile";
 
 type DownloadRow = {
   id: number;
   netplay_service: number | null;
+  netplay_space_id: number | null;
+  netplay_external_endpoint: string | null;
   work_id: number;
   manifest_sha256: string;
   packer_version: string;
@@ -29,7 +31,9 @@ type DownloadRow = {
 
 export type ArchiveDownloadRecord = {
   id: number;
-  netplayService: boolean;
+  netplayCapable: boolean;
+  netplaySpaceId: number | null;
+  netplayExternalEndpoint: string | null;
   manifestSha256: string;
   packerVersion: string;
   totalFiles: number;
@@ -49,31 +53,41 @@ export async function getArchiveNetplayEndpoint(
   record: ArchiveDownloadRecord,
   supportsExternal = true,
 ): Promise<string | undefined> {
-  if (!record.netplayService || !runtime.env.NETPLAY_ROOM) return;
-  let path = `/api/netplay/v1/${record.id}/`;
+  if (!record.netplayCapable || record.netplaySpaceId === null) return;
   const options = new URL(runtime.request.url).searchParams;
-  const staging = runtime.origin === stagingNetplaySiteOrigin && record.workId === stagingNetplayHongKongWork;
-  const production = runtime.origin === productionNetplaySiteOrigin && record.workId === productionNetplayHongKongWork &&
-    record.id !== productionNetplayLegacyArchive && supportsExternal && Boolean(runtime.env.NETPLAY_HK_IDENTITY_KEY);
-  const hongKong = staging ? stagingNetplayHongKongOrigin : production ? productionNetplayHongKongOrigin : undefined;
-  if (hongKong) {
-    if (staging && options.get("netplayTurn") === "443") path += "turn443/";
-    else if (staging && options.get("netplayTurn") === "1") path += "turn/";
-    else if (staging && options.get("netplayDirect") === "1") path += "direct/";
-    else if (!staging || options.get("netplayRelay") !== "1") path += "auto/";
+  const production = runtime.origin === productionNetplaySiteOrigin && record.workId === productionNetplayHongKongWork;
+  const external = record.netplayExternalEndpoint ? new URL(record.netplayExternalEndpoint) : null;
+  const legacy = production && (record.id === productionNetplayLegacyArchive ||
+    (!supportsExternal && external?.origin === productionNetplayHongKongOrigin));
+  if (legacy) {
+    return runtime.env.NETPLAY_ROOM ? new URL(`/api/netplay/v1/${record.id}/`, runtime.origin).href : undefined;
+  }
+  if (external) {
+    const staging = runtime.origin === stagingNetplaySiteOrigin && external.origin === stagingNetplayHongKongOrigin;
+    if (!supportsExternal && !staging) return;
+    const hongKong = staging || (runtime.origin === productionNetplaySiteOrigin && external.origin === productionNetplayHongKongOrigin);
+    const relay = hongKong && /^\/api\/netplay\/v1\/([1-9]\d*)\/(?:(?:auto|direct|turn|turn443)\/)?$/.exec(external.pathname);
+    if (!relay) return external.href;
+    if (staging) {
+      const base = `/api/netplay/v1/${relay[1]}/`;
+      if (options.get("netplayTurn") === "443") external.pathname = base + "turn443/";
+      else if (options.get("netplayTurn") === "1") external.pathname = base + "turn/";
+      else if (options.get("netplayDirect") === "1") external.pathname = base + "direct/";
+      else if (options.get("netplayRelay") === "1") external.pathname = base;
+    }
     const user = await getCurrentUser(runtime);
-    if (!user) return new URL(path, hongKong).href;
     const key = runtime.env.NETPLAY_HK_IDENTITY_KEY;
-    if (!key) throw new Error("Missing NETPLAY_HK_IDENTITY_KEY");
+    if (!user || !key) return external.href;
     const expires = Date.now() + 24 * 60 * 60 * 1000;
-    const profile = [expires, record.id, user.displayName, getUserAvatarSrc(user.avatarBlobSha256)];
+    const profile = [expires, Number(relay[1]), user.displayName, getUserAvatarSrc(user.avatarBlobSha256)];
     const payload = Buffer.from(JSON.stringify(profile)).toString("base64url");
     const signature = createHmac("sha256", key).update(payload).digest("base64url");
-    return new URL(`${path}identity/${payload}.${signature}/`, hongKong).href;
+    return new URL(`identity/${payload}.${signature}/`, external).href;
   }
+  if (!runtime.env.NETPLAY_ROOM) return;
   const useStagingEdge = runtime.origin === stagingNetplaySiteOrigin &&
     options.get("netplayEdge") === "1";
-  return new URL(path, useStagingEdge ? stagingNetplayEdgeOrigin : runtime.origin).href;
+  return new URL(`/api/netplay/v1/spaces/${record.netplaySpaceId}/`, useStagingEdge ? stagingNetplayEdgeOrigin : runtime.origin).href;
 }
 
 export function parseArchiveVersionId(value: string): number {
@@ -91,6 +105,8 @@ export async function getPublishedArchiveDownloadRecord(
     .prepare(
       `SELECT av.id,
           av.netplay_service,
+          w.netplay_space_id,
+          s.external_endpoint AS netplay_external_endpoint,
           av.work_id,
           av.manifest_sha256,
           av.packer_version,
@@ -106,6 +122,7 @@ export async function getPublishedArchiveDownloadRecord(
           w.engine_family
        FROM archive_versions av
        JOIN works w ON w.id = av.work_id
+       LEFT JOIN netplay_spaces s ON s.id = w.netplay_space_id
        WHERE av.id = ?
          AND av.status = 'published'
          AND (av.is_current = 1 OR (av.work_id = ? AND av.netplay_service = 1 AND av.purged_at IS NULL))
@@ -117,7 +134,9 @@ export async function getPublishedArchiveDownloadRecord(
   if (!row || !row.work_original_title) return null;
   return {
     id: row.id,
-    netplayService: row.netplay_service === 1,
+    netplayCapable: row.netplay_service !== null,
+    netplaySpaceId: row.netplay_space_id,
+    netplayExternalEndpoint: row.netplay_external_endpoint,
     manifestSha256: row.manifest_sha256,
     packerVersion: row.packer_version,
     totalFiles: row.total_files,

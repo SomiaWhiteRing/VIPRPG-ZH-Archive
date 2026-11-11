@@ -18,9 +18,11 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 运行包可使用 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json) 声明的备用资源入口。对应域名须保留社区 CNAME 链，并将运行包路径 Route 绑定到同一环境的原 Worker；Environment 的配置 secret 同步保存这条精确 Route。它只供引擎和音色库的客户端传输选择，部署 origin、游戏安装和存档路径保持原协议。正式入口的新增、撤销与配置同步遵守[主站入口说明](./main-ingress-selection.md#运行包入口的预生产验证)的批准边界。
 
-联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Worker 联机的归档可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
+在控制台「联机空间」创建或编辑空间，再在作品维护页绑定。使用 Cloudflare 托管时，空间拥有固定的 `/api/netplay/v1/spaces/<空间 ID>/` 入口。同一空间的作品共享大厅。外部托管填写支持 Player 房间协议的完整 HTTPS 基础地址，包含服务器分配给这个空间的路径。联机作品的新归档需要保留 `EasyRPG.ini` 的联机声明。
 
-预生产玉露弹（作品 18）使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 以 Debian 的 Node.js 和 `node-ws` 运行，`NETPLAY_ARCHIVE_VERSION` 与当前归档版本 ID 一致。Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
+联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Cloudflare 托管的作品可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
+
+预生产玉露弹（作品 18）的联机空间使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 以 Debian 的 Node.js 和 `node-ws` 运行。沿用的 `NETPLAY_ARCHIVE_VERSION` 表示该中继地址的固定数字路径，随空间配置管理。Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
 
 在网页版游玩地址加 `?netplayTurn=1` 进入独立的香港 UDP TURN 房间池。该入口要求双方经 coturn 中继，连接失败时房主留在原房间等待，来客可从大厅重新加入。coturn 在香港服务器的公网 IPv4 和 IPv6 上监听 UDP 3478，两类连接都使用同一服务器的 IPv4 分配 UDP 49160–49259 中继端口，中继对端限定为同一服务器上的分配。野草云 P 型 VPS 还需在客户中心的产品防火墙规则中允许 `net0` 入站 UDP 3478。香港联机服务使用与 coturn 配置一致的 `NETPLAY_HK_TURN_SECRET` 签发短期凭据，实际使用的中继协议见香港服的 `netplay_ice_stats` 日志。
 

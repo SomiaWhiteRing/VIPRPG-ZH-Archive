@@ -211,12 +211,10 @@ type WorkEditInput = WorkVisibilityInput & {
   externalLinks: GameExternalLink[];
   distribution?: "archive" | "external";
   archiveSourceUrl?: string | null;
-  netplay?: { archiveVersionId: number; service: 0 | 1 };
 };
 
 type ArchiveEditInput = {
   archiveVersionId: number;
-  netplayService?: 0 | 1;
   status: string;
   sourceName: string | null;
   sourceUrl: string | null;
@@ -1223,12 +1221,6 @@ export async function updateWorkForAdmin(
   } else if (canUpdateDistribution && archiveSourceUrl !== undefined) {
     statements.push(database.prepare(`UPDATE archive_versions SET source_url=? WHERE work_id=? AND is_current=1`).bind(archiveSourceUrl, input.workId));
   }
-  if (input.netplay && input.distribution !== "external" && hasPermission(actor, "archive_version.update")) {
-    statements.push(database.prepare(`UPDATE archive_versions SET netplay_service=?
-      WHERE id=? AND work_id=? AND is_current=1 AND status='published'
-        AND purged_at IS NULL AND netplay_service IS NOT NULL`)
-      .bind(input.netplay.service, input.netplay.archiveVersionId, input.workId));
-  }
   if (canUpdateMetadata) {
     for (const alias of aliases) {
       statements.push(
@@ -1481,7 +1473,6 @@ export async function updateArchiveVersionForAdmin(
        SET status = ?,
          source_name = ?,
          source_url = ?,
-         netplay_service = CASE WHEN netplay_service IS NOT NULL THEN COALESCE(?, netplay_service) END,
          is_current = CASE
            WHEN ? <> 'published' THEN 0
            ELSE is_current
@@ -1494,7 +1485,6 @@ export async function updateArchiveVersionForAdmin(
       input.status,
       input.sourceName,
       sourceUrl,
-      input.netplayService ?? null,
       input.status,
       input.archiveVersionId,
     );
@@ -1513,7 +1503,6 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
   if (distribution !== null && distribution !== "archive" && distribution !== "external") {
     throw new HttpError(400, "distribution 不合法");
   }
-  const netplayService = parseNetplayService(form.get("netplay_service"));
   return {
     workId: positive(form.get("work_id")),
     chineseTitle: clean(form.get("chinese_title")),
@@ -1539,26 +1528,15 @@ export function parseWorkEditForm(form: FormData): WorkEditInput {
     externalLinks: parseLinks(form.get("external_links")),
     distribution: distribution ?? undefined,
     archiveSourceUrl: form.has("archive_source_url") ? clean(form.get("archive_source_url")) : undefined,
-    netplay: netplayService === undefined ? undefined : {
-      archiveVersionId: positive(form.get("netplay_archive_version_id")),
-      service: netplayService,
-    },
   };
 }
 export function parseArchiveVersionEditForm(form: FormData): ArchiveEditInput {
   return {
     archiveVersionId: positive(form.get("archive_version_id")),
-    netplayService: parseNetplayService(form.get("netplay_service")),
     status: String(form.get("status") ?? "published"),
     sourceName: clean(form.get("source_name")),
     sourceUrl: clean(form.get("source_url")),
   };
-}
-function parseNetplayService(value: FormDataEntryValue | null): 0 | 1 | undefined {
-  if (value === null) return undefined;
-  if (value === "0") return 0;
-  if (value === "1") return 1;
-  throw new HttpError(400, "联机服务设置无效");
 }
 function legacyPlayCountSql(): string {
   return `(SELECT COUNT(*) FROM user_work_entries e WHERE e.work_id=w.id AND e.last_played_at IS NOT NULL) AS legacy_player_count`;
