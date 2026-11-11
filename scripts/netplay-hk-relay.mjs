@@ -61,6 +61,7 @@ function route(request) {
     rtc: url.searchParams.get("rtcResume") === "1",
     routeSelection: url.searchParams.get("routeSelection") === "1",
     inputStats: url.searchParams.get("inputStats") === "1",
+    inputProtocol: url.searchParams.get("inputProtocol") === "1" ? 1 : 0,
     platform: /Android/i.test(agent) ? "android" : /Windows/i.test(agent) ? "windows" : /iPhone|iPad/i.test(agent) ? "ios" : "other",
     resume: url.searchParams.get("resume"),
     identity,
@@ -132,7 +133,8 @@ function selectRoute(room, route, reason, choice) {
   const connected = route === "webrtc";
   const loggedRoute = turnPort ? "hong_kong_turn_udp" : route;
   console.log(JSON.stringify({ event: "netplay_route", archiveVersionId, roomId: room.id,
-    route: loggedRoute, reason, ...(turnPort && { connected, turnPort }), ...details, ...choice }));
+    route: loggedRoute, reason, inputProtocol: connected ? room.inputProtocol : 0,
+    ...(turnPort && { connected, turnPort }), ...details, ...choice }));
   if (room.pool.turnPort && !connected) {
     leave(room, seats[1], "turn_unavailable");
     return;
@@ -364,9 +366,9 @@ function attachRoomSocket(socket, room, seat) {
   });
 }
 
-function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, platform, routeSelection }) {
+function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtocol, platform, routeSelection }) {
   const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0 };
-  const seat = { identity, rtc, routeSelection, inputStats, platform, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
+  const seat = { identity, rtc, routeSelection, inputStats, inputProtocol, platform, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
   room.seats.add(seat);
   pool.rooms.set(roomId, room);
   attachRoomSocket(socket, room, seat);
@@ -382,6 +384,7 @@ function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, platform, r
       player.milestones = [];
     }
     const seats = [...room.seats];
+    room.inputProtocol = seats.every(player => player.inputProtocol === 1) ? 1 : 0;
     if (pool === auto && seats.every(player => player.routeSelection)) {
       room.route = "pending";
       const round = room.lastRound = Math.max(Date.now(), (room.lastRound ?? 0) + 1);
@@ -404,7 +407,7 @@ function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, platform, r
       });
       for (const [index, player] of seats.entries()) {
         sendRoute(player, {
-          type: "start", round, offer: index === 0,
+          type: "start", round, offer: index === 0, inputProtocol: room.inputProtocol,
           paths: paths.map(path => path === "websocket" ? { id: path } : {
             id: path, relayOnly: path === "turn",
             iceServers: path === "turn" ? turnIceServers(roomId, index, 443, round) : iceServers,
@@ -420,7 +423,8 @@ function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, platform, r
         const relayOnly = Boolean(pool.turnPort);
         const servers = relayOnly ? turnIceServers(roomId, index, pool.turnPort, startedAt) : iceServers;
         send(player.socket, "rtc:start:" + JSON.stringify({ iceServers: servers, offer: index === 0,
-          negotiationStartedAt: startedAt, scoped: true, relayOnly, ...(relayOnly && { compareRelay: false }) }));
+          negotiationStartedAt: startedAt, scoped: true, relayOnly, inputProtocol: room.inputProtocol,
+          ...(relayOnly && { compareRelay: false }) }));
       }
     } else {
       selectRoute(room, "hong_kong_websocket", pool === relay ? "forced_relay" : "rtc_unavailable");

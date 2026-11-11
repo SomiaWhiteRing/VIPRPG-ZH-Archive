@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "e61027d5521ee63e4bbb48f4d60d6c2677318daa",
-  "version": "2026.11.11-site-kai-auto-selection-staging",
-  "build": "kai-web-auto-selection-staging",
+  "version": "2026.11.11-site-kai-input-recovery-staging",
+  "build": "kai-web-input-recovery-staging",
   "artifact": "Kai-Web-2026.11.11-auto-selection-site.zip",
   "archiveSha256": "d50e1c42a3005aec843c4b4b509dca7e4edd2ef90aba82b6ca1994ecc460b3f5",
   "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/e61027d5521ee63e4bbb48f4d60d6c2677318daa",
@@ -56,12 +56,26 @@
       "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
       "beforeSha256": "05474695760d34463d58f9ea1d100e0229ada97f1d8fd83f360ba440dd48707c",
       "afterSha256": "81cd4e72f32c3fcfa42e3b207b3c29919ceef1b462cb5b02bd8f2a258b29759e"
+    },
+    {
+      "file": "player-host.js",
+      "path": "scripts/runtime-patches/kai-netplay-input-host.patch",
+      "sha256": "4f52fe796d00bff2cbafa6e3042762df0a68dc32f07007a055c9a3d62fbdc578",
+      "beforeSha256": "81cd4e72f32c3fcfa42e3b207b3c29919ceef1b462cb5b02bd8f2a258b29759e",
+      "afterSha256": "6b21185b6bc51741739dcf6c5f6b33f0b953e426dc3c389849ed8fc2b821b3c2"
+    },
+    {
+      "file": "player-worker.js",
+      "path": "scripts/runtime-patches/kai-netplay-input-worker.patch",
+      "sha256": "621dc81447291be328c4896cc0aee375c9be58a48317982622cfb7a5ff7d27ae",
+      "beforeSha256": "6324e26f3c4f7e3ec68681dcaf201fdf2382b07a1e7f760db199d9ec2dfd3927",
+      "afterSha256": "8ea756be37d3a7f484120c96f26c901d21a9acbabdb1c041f489632c642693e7"
     }
   ],
   "files": {
     "index.js": {
-      "size": 62446,
-      "sha256": "81cd4e72f32c3fcfa42e3b207b3c29919ceef1b462cb5b02bd8f2a258b29759e"
+      "size": 63222,
+      "sha256": "6b21185b6bc51741739dcf6c5f6b33f0b953e426dc3c389849ed8fc2b821b3c2"
     },
     "easyrpg-player.js": {
       "size": 128930,
@@ -84,8 +98,8 @@
       "sha256": "edb5f1e5d5f1c02b760625320619e24dc20e16f0b5ab59b988d5e6b448ea2347"
     },
     "player-worker.js": {
-      "size": 33203,
-      "sha256": "6324e26f3c4f7e3ec68681dcaf201fdf2382b07a1e7f760db199d9ec2dfd3927"
+      "size": 37528,
+      "sha256": "8ea756be37d3a7f484120c96f26c901d21a9acbabdb1c041f489632c642693e7"
     },
     "player-audio.js": {
       "size": 1858,
