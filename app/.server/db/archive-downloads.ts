@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+import { Buffer } from "node:buffer";
 import { getD1 } from "@/app/.server/db/d1";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { workReadCondition } from "@/app/.server/db/work-visibility";
@@ -5,6 +7,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import {
   stagingNetplayEdgeOrigin, stagingNetplayHongKongArchive, stagingNetplayHongKongOrigin, stagingNetplaySiteOrigin,
 } from "@/lib/archive/netplay-ingress";
+import { getUserAvatarSrc } from "@/lib/user-profile";
 
 type DownloadRow = {
   id: number;
@@ -40,14 +43,23 @@ export type ArchiveDownloadRecord = {
   engineFamily: string;
 };
 
-export function getArchiveNetplayEndpoint(runtime: AppRuntime, record: ArchiveDownloadRecord): string | undefined {
+export async function getArchiveNetplayEndpoint(runtime: AppRuntime, record: ArchiveDownloadRecord): Promise<string | undefined> {
   if (!record.netplayService || !runtime.env.NETPLAY_ROOM) return;
+  const path = `/api/netplay/v1/${record.id}/`;
   if (runtime.origin === stagingNetplaySiteOrigin && record.id === stagingNetplayHongKongArchive) {
-    return new URL(`/api/netplay/v1/${record.id}/`, stagingNetplayHongKongOrigin).href;
+    const user = await getCurrentUser(runtime);
+    if (!user) return new URL(path, stagingNetplayHongKongOrigin).href;
+    const key = runtime.env.NETPLAY_HK_IDENTITY_KEY;
+    if (!key) throw new Error("Missing NETPLAY_HK_IDENTITY_KEY");
+    const expires = Date.now() + 24 * 60 * 60 * 1000;
+    const profile = [expires, record.id, user.displayName, getUserAvatarSrc(user.avatarBlobSha256)];
+    const payload = Buffer.from(JSON.stringify(profile)).toString("base64url");
+    const signature = createHmac("sha256", key).update(payload).digest("base64url");
+    return new URL(`${path}identity/${payload}.${signature}/`, stagingNetplayHongKongOrigin).href;
   }
   const useStagingEdge = runtime.origin === stagingNetplaySiteOrigin &&
     new URL(runtime.request.url).searchParams.get("netplayEdge") === "1";
-  return new URL(`/api/netplay/v1/${record.id}/`, useStagingEdge ? stagingNetplayEdgeOrigin : runtime.origin).href;
+  return new URL(path, useStagingEdge ? stagingNetplayEdgeOrigin : runtime.origin).href;
 }
 
 export function parseArchiveVersionId(value: string): number {

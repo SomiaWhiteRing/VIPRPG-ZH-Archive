@@ -88,7 +88,7 @@ export async function loader(args: LoaderFunctionArgs) {
   ]);
 
   const easyRpg = await readArchiveEasyRpgConfig(runtime, record.manifestSha256);
-  const netplayEndpoint = easyRpg?.netplay ? getArchiveNetplayEndpoint(runtime, record) : undefined;
+  const netplayEndpoint = easyRpg?.netplay ? await getArchiveNetplayEndpoint(runtime, record) : undefined;
   const metadata: WebPlayMetadata = {
     ok: true,
     archiveVersionId: record.id,

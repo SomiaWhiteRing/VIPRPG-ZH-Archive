@@ -44,9 +44,8 @@ export async function GET(
       );
     }
 
-    const netplayEndpoint = getArchiveNetplayEndpoint(runtime, record);
     if (new URL(request.url).searchParams.get("fields") === "netplayEndpoint") {
-      return json({ ok: true, netplayEndpoint });
+      return json({ ok: true, netplayEndpoint: await getArchiveNetplayEndpoint(runtime, record) });
     }
 
     const easyRpg = await readArchiveEasyRpgConfig(runtime, record.manifestSha256);
@@ -77,7 +76,7 @@ export async function GET(
       estimatedR2GetCount: record.estimatedR2GetCount,
       engineFamily: record.engineFamily,
       easyRpg,
-      netplayEndpoint: easyRpg?.netplay ? netplayEndpoint : undefined,
+      netplayEndpoint: easyRpg?.netplay ? await getArchiveNetplayEndpoint(runtime, record) : undefined,
     });
   } catch (error) {
     return jsonError("Web Play metadata failed", error);
