@@ -34,6 +34,7 @@ type Heartbeat = {
   lastPong: number;
   probe: ReturnType<typeof setInterval>;
   deadline?: ReturnType<typeof setTimeout>;
+  reset: (now: number) => void;
 };
 type RtcProgress = {
   milestones: Map<string, number>;
@@ -66,6 +67,10 @@ type Room = {
   rtc?: Negotiation;
 };
 
+function isDirectMatch(room: Room) {
+  return room.peers.size === 2 && room.rtc?.route === "webrtc" && room.rtc.turn === "disabled";
+}
+
 type NetplayEnvironment = CloudflareEnv & { NETPLAY_TURN_KEY_ID?: string; NETPLAY_TURN_KEY?: string };
 
 async function createTurnServer(id: string, token: string): Promise<RTCIceServer | undefined> {
@@ -94,8 +99,10 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
   private directory = new Map<WebSocket, Identity>();
 
   private isRoomStale(room: Room, now: number) {
+    const checkHeartbeat = !isDirectMatch(room);
     for (const [socket, { heartbeat }] of room.peers) {
-      if (socket.readyState !== WebSocket.OPEN || (heartbeat && now - heartbeat.lastPong >= heartbeatHideMs)) return true;
+      if (socket.readyState !== WebSocket.OPEN ||
+          (checkHeartbeat && heartbeat && now - heartbeat.lastPong >= heartbeatHideMs)) return true;
     }
     return false;
   }
@@ -174,6 +181,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     const disconnect = (reason: DisconnectReason, closeCode?: number) => {
       if (!peers.has(socket)) return;
       const seats = peers.size;
+      const wasDirect = isDirectMatch(room);
       const negotiationStartedAt = room.rtc?.startedAt;
       const route = room.rtc?.route ?? (seats === 2 ? "websocket" : undefined);
       const seat = socket === peers.keys().next().value ? 1 : 2;
@@ -192,7 +200,8 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       room.rtc = undefined;
       if (peers.size === 0) this.rooms.delete(id);
       else {
-        const remaining = peers.keys().next().value!;
+        const [remaining, { heartbeat }] = peers.entries().next().value!;
+        if (wasDirect) heartbeat?.reset(Date.now());
         if (remaining.readyState === WebSocket.OPEN) remaining.send("2");
       }
       room.hidden = this.isRoomStale(room, Date.now());
@@ -200,20 +209,8 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       console.log({ event: "netplay_reclaim", ...room.details, reason, route, negotiationStartedAt, seat, seats, released: leaving.length, closeCode });
       for (const peer of leaving) peer.close(1000);
     };
-    const heartbeat: Heartbeat | undefined = url.searchParams.get("heartbeat") === "1" ? {
-      lastPong: Date.now(),
-      probe: setInterval(() => {
-        if (socket.readyState === WebSocket.OPEN) socket.send("room:ping");
-        else disconnect("socket_close");
-      }, heartbeatIntervalMs),
-    } : undefined;
-    const renewHeartbeat = () => {
+    const resetHeartbeat = (now: number) => {
       if (!heartbeat) return;
-      const now = Date.now();
-      if (now - heartbeat.lastPong >= heartbeatTimeoutMs) {
-        disconnect("heartbeat_timeout");
-        return;
-      }
       heartbeat.lastPong = now;
       clearTimeout(heartbeat.deadline);
       heartbeat.deadline = setTimeout(() => {
@@ -221,6 +218,23 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
         this.refreshVisibility(room, now);
         heartbeat.deadline = setTimeout(() => disconnect("heartbeat_timeout"), heartbeat.lastPong + heartbeatTimeoutMs - now);
       }, heartbeatHideMs);
+    };
+    const heartbeat: Heartbeat | undefined = url.searchParams.get("heartbeat") === "1" ? {
+      lastPong: Date.now(),
+      reset: resetHeartbeat,
+      probe: setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) socket.send("room:ping");
+        else disconnect("socket_close");
+      }, heartbeatIntervalMs),
+    } : undefined;
+    const renewHeartbeat = () => {
+      if (!heartbeat || isDirectMatch(room)) return;
+      const now = Date.now();
+      if (now - heartbeat.lastPong >= heartbeatTimeoutMs) {
+        disconnect("heartbeat_timeout");
+        return;
+      }
+      resetHeartbeat(now);
       if (room.hidden) this.refreshVisibility(room, now);
     };
     peers.set(socket, {
@@ -399,6 +413,10 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     }
     const route = reason === "connected" ? "webrtc" : "websocket";
     rtc.route = route;
+    if (isDirectMatch(room)) {
+      for (const { heartbeat } of room.peers.values()) clearTimeout(heartbeat?.deadline);
+      this.refreshVisibility(room, Date.now());
+    }
     this.logNegotiation(room, rtc, "netplay_route", reason, reporter);
     first.send("rtc:" + route);
     second.send("rtc:" + route);
