@@ -247,8 +247,10 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Netplay-Identity")!)) as Identity;
     const accountHeader = request.headers.get("X-Netplay-Account");
     const account = accountHeader ? JSON.parse(accountHeader) as RecordingParticipant["account"] : undefined;
-    const recording = url.searchParams.get("recording") === "1";
-    if (recording) socket.send("room:record:1");
+    const requestedRecording = url.searchParams.get("recording");
+    const recordingKey = this.env.NETPLAY_HK_IDENTITY_KEY;
+    const recording = requestedRecording === "2" && recordingKey ? 2 : requestedRecording === "1" ? 1 : 0;
+    if (recording) socket.send(`room:record:${recording}`);
     const disconnect = (reason: DisconnectReason, closeCode?: number) => {
       if (!peers.has(socket)) return;
       const seats = peers.size;
@@ -329,8 +331,17 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
           return;
         }
         if (recording && data.startsWith("room:record:")) {
-          const write = room.record(data, peers.get(socket)!, [...peers.values()],
-            { ...room.details, route: rtc?.route ?? "websocket" },
+          const participant = peers.get(socket)!;
+          const players = [...peers.values()];
+          const details = { ...room.details, route: rtc?.route ?? "websocket" };
+          if (recording === 2 && recordingKey) {
+            if (data.startsWith("room:record:open:")) {
+              const grant = room.record.grant(Number(data.slice(17)), participant, players, details, recordingKey);
+              if (grant && socket.readyState === WebSocket.OPEN) socket.send(grant);
+            }
+            return;
+          }
+          const write = room.record.receive(data, participant, players, details,
             batch => saveNetplayRecording(this.env, batch),
             message => { if (socket.readyState === WebSocket.OPEN) socket.send(message); });
           if (write) this.ctx.waitUntil(write);
@@ -609,7 +620,7 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
   const headers = new Headers(request.headers);
   headers.set("X-Netplay-Identity", encodeURIComponent(JSON.stringify(identity)));
   headers.delete("X-Netplay-Account");
-  if (url.searchParams.get("recording") === "1") {
+  if (["1", "2"].includes(url.searchParams.get("recording") ?? "")) {
     const requested = Number(url.searchParams.get("archive"));
     const archive = Number.isSafeInteger(requested) && requested > 0
       ? await getPublishedArchiveDownloadRecord(runtime, requested) : null;

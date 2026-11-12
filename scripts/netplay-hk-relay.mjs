@@ -61,6 +61,7 @@ function route(request) {
     account = { userId, workId, archiveVersionId: versionId, spaceId };
   }
   const agent = request.headers["user-agent"] ?? "";
+  const recording = url.searchParams.get("recording");
   return {
     directory: target === "rooms",
     roomId: Number(target),
@@ -77,7 +78,7 @@ function route(request) {
     resume: url.searchParams.get("resume"),
     identity: payload && account?.userId !== null ? identity : { ...identity, guest: guestId },
     account,
-    recording: url.searchParams.get("recording") === "1" && Boolean(identityKey),
+    recording: identityKey && (recording === "1" || recording === "2") ? Number(recording) : 0,
     finishSync: url.searchParams.get("finishSync") === "1",
   };
 }
@@ -245,10 +246,18 @@ function receiveText(room, seat, data) {
     return;
   }
   if (seat.recording && data.startsWith("room:record:")) {
-    room.record(data, seat, [...room.seats], {
+    const details = {
       roomId: room.id, netplaySpaceId: seat.account?.spaceId, route: room.activeSelection?.path ?? room.route,
       backup: room.activeSelection?.backup,
-    }, async batch => {
+    };
+    if (seat.recording === 2) {
+      if (data.startsWith("room:record:open:")) {
+        const grant = room.record.grant(Number(data.slice(17)), seat, [...room.seats], details, identityKey);
+        if (grant) send(seat.socket, grant);
+      }
+      return;
+    }
+    room.record.receive(data, seat, [...room.seats], details, async batch => {
       const body = JSON.stringify(batch);
       const signature = createHmac("sha256", identityKey).update("netplay-recording/v1\n").update(body).digest("hex");
       const response = await fetch(new URL("/api/netplay-recordings/ingest", origin), {
@@ -406,7 +415,7 @@ function receiveText(room, seat, data) {
 function attachRoomSocket(socket, room, seat) {
   seat.socket = socket;
   if (seat.diagnostics) send(socket, "room:diagnostics:1");
-  if (seat.recording) send(socket, "room:record:1");
+  if (seat.recording) send(socket, `room:record:${seat.recording}`);
   renewHeartbeat(room, seat);
   seat.ping = setInterval(() => {
     seat.pingAt = performance.now();

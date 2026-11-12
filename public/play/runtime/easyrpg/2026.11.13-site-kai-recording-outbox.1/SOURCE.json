@@ -1,12 +1,12 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "c23798c92a79f70ef53b6484b48d9d3803768cdf",
-  "version": "2026.11.13-site-kai-finish-sync.1",
-  "build": "kai-web-finish-sync",
-  "artifact": "Kai-Web-2026.11.13-finish-sync.zip",
-  "archiveSha256": "0f20bbda68f02b680c3ada09a7011409fe5c77ef3b5046a5525624e455276629",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/c23798c92a79f70ef53b6484b48d9d3803768cdf",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/c23798c92a79f70ef53b6484b48d9d3803768cdf/COPYING",
+  "revision": "05a09ebff843ec392a5d18fecd556ab78dfdd88e",
+  "version": "2026.11.13-site-kai-recording-outbox.1",
+  "build": "kai-web-recording-outbox",
+  "artifact": "Kai-Web-2026.11.13-recording-outbox.zip",
+  "archiveSha256": "40d5fbd9f2b797bdabf9810ef792afd71fc1c32e1f094d3665e0ff095cb4a408",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/05a09ebff843ec392a5d18fecd556ab78dfdd88e",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/05a09ebff843ec392a5d18fecd556ab78dfdd88e/COPYING",
   "sourceState": "commit",
   "sourcePatches": [],
   "sourceSnapshot": null,
@@ -47,7 +47,7 @@
     },
     "easyrpg-player.wasm": {
       "size": 13144863,
-      "sha256": "5a0adc5b40d66ad716170a1800391165de09bd96502b92f459f04bb19b4cb628"
+      "sha256": "152676bd31b6b338bb85213bec3e97be0d1312b6feca341653db3a45d2fc80cc"
     },
     "easyrpg-player.data": {
       "size": 7557598,
@@ -59,11 +59,11 @@
     },
     "easyrpg-player-asyncify.wasm": {
       "size": 17315999,
-      "sha256": "31ec8e4cfe010ee5cecb3eaa9a2e4c79c17356d802e24bd073ec26318d3e1821"
+      "sha256": "5d7c2781b090774b64e40371db3428a75c80dd7331495528ab36849ff5b07a03"
     },
     "player-worker.js": {
-      "size": 61271,
-      "sha256": "c5d5622dcc7bd3fc49a20c8c0a65782b52e8894ff69fc0681187f8a626765f47"
+      "size": 66118,
+      "sha256": "5ae58079cbe7100db30e5f10d0060e3abe285ff0be57e8ac17aae6f81ccf8703"
     },
     "player-audio.js": {
       "size": 1910,
@@ -118,16 +118,16 @@
       "sha256": "22ea534954e6bd50ef05157a9a6c02009815ff9f97769bb25df041385514c956"
     },
     "easyrpg-player.wasm.br": {
-      "size": 4044380,
-      "sha256": "bc9b62c0edf12867ef20eaf5b33abab721f76e8f6830a7476b597c1b40926bf2"
+      "size": 4044146,
+      "sha256": "dfb843e894f6bb27f2f87670b2743cbd01b3c603711af7bf7d4355d4b05c64c3"
     },
     "easyrpg-player.data.br": {
       "size": 6311434,
       "sha256": "dfeef2a7cca1aee072450b553c6e372c90c4f4c8b2149e95899b6b4bb634f702"
     },
     "easyrpg-player-asyncify.wasm.br": {
-      "size": 4643013,
-      "sha256": "95a59d5fb4921e114a706f8ac3a67b8600523f8e406aed4b6a4bf755fef89352"
+      "size": 4645254,
+      "sha256": "e797b07e912e1ad25d5c0c2bded7f3c4aca37a68838ec141ffaa5aebfe5ba50a"
     }
   }
 }

@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.13-site-kai-finish-sync.1",
-  "revision": "c23798c92a79f70ef53b6484b48d9d3803768cdf",
-  "build": "kai-web-finish-sync",
+  "version": "2026.11.13-site-kai-recording-outbox.1",
+  "revision": "05a09ebff843ec392a5d18fecd556ab78dfdd88e",
+  "build": "kai-web-recording-outbox",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "commit",
-  "archiveSha256": "0f20bbda68f02b680c3ada09a7011409fe5c77ef3b5046a5525624e455276629",
+  "archiveSha256": "40d5fbd9f2b797bdabf9810ef792afd71fc1c32e1f094d3665e0ff095cb4a408",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
