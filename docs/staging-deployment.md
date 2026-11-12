@@ -20,6 +20,8 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 在控制台「联机空间」创建或编辑空间，再在作品维护页绑定。使用 Cloudflare 托管时，空间拥有固定的 `/api/netplay/v1/spaces/<空间 ID>/` 入口。同一空间的作品共享大厅。外部托管填写支持 Player 房间协议的完整 HTTPS 基础地址，包含服务器分配给这个空间的路径。联机作品的新归档需要保留 `EasyRPG.ini` 的联机声明。
 
+同一联机空间只绑定使用相同对战规则、输入含义和同步事件的版本。翻译、素材和界面调整可沿用原空间；影响对战同步的更新使用新空间，避免已打开的旧版与新版进入同一场对局。
+
 联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Cloudflare 托管的作品可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
 
 预生产玉露弹（作品 18）的联机空间使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 以 Debian 的 Node.js 和 `node-ws` 运行。沿用的 `NETPLAY_ARCHIVE_VERSION` 表示该中继地址的固定数字路径，随空间配置管理。Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
@@ -33,6 +35,8 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 房间建立时生成四位密码，默认关闭。大厅只接收 `locked` 标记，支持 `roomAccess=1` 的成员通过私有 `room:settings` 消息取得开关与密码。新版 Player 在 WebSocket 接通后发送 `room:join`，服务校验当前房间和密码后才占座、协商线路。房主通过 `room:password` 修改设置。香港服务与 Cloudflare 房间服务使用同一口令格式，无密码旧客户端仍可进入未加锁房间。数字输入及第三行“密码”的显示由游戏事件负责。
 
 配套 Player 通过 `diagnostics=1` 请求局内诊断，房间服务确认支持后接收 `netplay_stall` 日志。日志包含实际等待输入超过 100 ms 的起止、每五秒的累计等待及帧进度、输入确认和补发计数、发送缓冲、页面可见性、暂停状态，以及主线程和游戏线程的调度停顿。通过房间、座位、对局 ID、客户端序号和帧号关联双方记录。持续时长使用单调时钟，设备时间可能存在偏差。控制连接恢复期间最多暂存 32 条事件，并记录丢弃数量。
+
+诊断协议 `v: 1` 中的字段可独立增加。接收端保留认识且校验通过的字段，忽略未知字段。事件类型和必要字段继续按协议校验。
 
 `inputSentPackets` 和 `inputRepeatedFrames` 统计 Worker 发起的发送及其中重复携带的帧。`rtcInputPacketsSent` 统计实际交给数据通道的消息，`rtcInputReplacements` 记录发送缓冲拥堵时被更新的待发副本。比较这些计数和 `inputPending`、`inputAckAgeMs`，可区分等待对端确认和本机通道积压。
 

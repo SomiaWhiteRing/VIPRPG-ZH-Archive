@@ -6,6 +6,10 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     throw new Error('当前浏览器不支持本站播放器所需的画面或音频功能。');
   if (!canvas.hasAttribute('tabindex')) canvas.tabIndex = 0;
   const base = new URL(options.runtimeBase, location.href).href;
+  const storage = options.storage ?? (options.nativeResources && {
+    module: new URL('native-storage.js', base).href, data: options.nativeResources,
+  });
+  const writeStorage = options.writeStorage ?? options.saveNative;
   const engineName = typeof WebAssembly.promising === 'function' && typeof WebAssembly.Suspending === 'function'
     ? 'easyrpg-player' : 'easyrpg-player-asyncify';
   const controller = new AbortController();
@@ -942,7 +946,12 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
   }
 
   worker.onmessage = ({data}) => {
-    if (data.type === 'ready') {
+    if (data.type === 'storage-write') {
+      Promise.resolve().then(() => writeStorage(data.files)).then(
+        () => send({type: 'storage-written', id: data.id}),
+        error => send({type: 'storage-written', id: data.id, error: String(error)}));
+    } else if (data.type === 'player-event') options.onEvent?.(data.event);
+    else if (data.type === 'ready') {
       keys = data.keys; width = data.width; height = data.height;
       mouse();
       started = true;
@@ -993,7 +1002,11 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     else if (data.type === 'console-input') requestConsoleInput(data);
     else if (data.type === 'file-output-confirmation') requestFileOutputConfirmation(data);
     else if (data.type === 'console-command') {
-      try { consoleCommand(data); } catch (error) { report(String(error)); }
+      try {
+        if (options.consoleOutput) {
+          if (data.op === 'write') options.consoleOutput(data.text);
+        } else consoleCommand(data);
+      } catch (error) { report(String(error)); }
     }
     else if (data.type === 'screenshot' && screenshot) {
       screenshot.resolve({blob: new Blob([data.bytes], {type: 'image/png'}), width: data.width, height: data.height});
@@ -1273,13 +1286,14 @@ window.createEasyRpgPlayer = async function createEasyRpgPlayer(options) {
     const controlChannel = new MessageChannel();
     node.port.postMessage({type: 'connect', port: audioChannel.port1}, [audioChannel.port1]);
     node.connect(masterVolume);
-    audioWorker.postMessage({type: 'start', runtimeBase: base, engineName, packages: options.packages,
+    audioWorker.postMessage({type: 'start', runtimeBase: base, engineName, packages: options.packages, storage,
       workId: options.workId, sampleRate: context.sampleRate, wasmModule, runtimeData,
       audioPort: audioChannel.port2, controlPort: controlChannel.port1},
       [audioChannel.port2, controlChannel.port1]);
     const audioCapabilities = await Promise.race([audioReady, ready]);
     const offscreen = canvas.transferControlToOffscreen();
-    worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, engineName, packages: options.packages,
+    worker.postMessage({type: 'start', canvas: offscreen, runtimeBase: base, engineName, packages: options.packages, storage,
+      observe: typeof options.onEvent === 'function',
       workId: options.workId, sampleRate: context.sampleRate, wasmModule, runtimeData, arguments: options.arguments || [],
       netplayEndpoint: options.netplayEndpoint,
       netplayRtc: typeof RTCPeerConnection === 'function' &&

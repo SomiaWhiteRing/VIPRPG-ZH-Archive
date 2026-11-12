@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.12-site-kai-result-top.1",
-  "revision": "28e7a9ee1ff98973347df7bd81d4d654ccd85cef",
-  "build": "kai-web-result-top",
+  "version": "2026.11.12-site-kai-boundaries.2",
+  "revision": "9182b19c9f1743a2ade01563f614e6706f367061",
+  "build": "kai-web-boundaries",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "commit",
-  "archiveSha256": "1ace77b473e69b4b9ca43503ec7e616c2c5eb488833b5ef73993d87ebef56bf8",
+  "archiveSha256": "f82b3504928cdae5daa6964eb3983d62e1380f548ac39f646d2c24184afe16ae",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -15,29 +15,7 @@
     "sourceSha256": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f",
     "licenseSha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
   },
-  "patches": [
-    {
-      "file": "player-host.js",
-      "path": "scripts/runtime-patches/console-scrollback.patch",
-      "sha256": "d0d71eaaaca3ed134d471157553e1970f1ddbd1014b4ac5217cff4e3dd327d79",
-      "beforeSha256": "66fc6382ed8a0be7a8f9fce6b2eff2dbf485f1b25bb67eefe49609495abd4ad0",
-      "afterSha256": "09e7783bc0b28efbba9d17777e60c5b0e29835c624fae6b5022c265966239540"
-    },
-    {
-      "file": "player-host.js",
-      "path": "scripts/runtime-patches/pointer-position.patch",
-      "sha256": "11265224ad1ea04cf34805ecb0a73f8776d8ca7caff2107f37df3836bf900f4e",
-      "beforeSha256": "09e7783bc0b28efbba9d17777e60c5b0e29835c624fae6b5022c265966239540",
-      "afterSha256": "10ac5bd2e34d40497198a904d42d9888ed29cd83834e3b12c2884e032b28977d"
-    },
-    {
-      "file": "player-host.js",
-      "path": "scripts/runtime-patches/startup-regional-assets.patch",
-      "sha256": "1381d6a124d70f5debd3480a61872636f32d936cecfe85e14461d6f90d768a18",
-      "beforeSha256": "10ac5bd2e34d40497198a904d42d9888ed29cd83834e3b12c2884e032b28977d",
-      "afterSha256": "e3882b4db54533546a5d32ec342a98636d64b2d89ef8f2d48bc813ac229f07ce"
-    }
-  ],
+  "patches": [],
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",
   "pinyinDictionary": {
     "name": "rime-pinyin-simp",

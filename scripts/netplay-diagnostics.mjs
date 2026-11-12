@@ -19,11 +19,16 @@ export function parseNetplayDiagnostic(message) {
   try { value = JSON.parse(message.slice(prefix.length)); } catch { return; }
   if (!value || value.v !== 1 || !kinds.has(value.kind) || !Number.isSafeInteger(value.match) || value.match < 1 ||
       !Number.isSafeInteger(value.atMs) || !Number.isSafeInteger(value.sequence)) return;
+  const diagnostic = { kind: value.kind };
   for (const [key, item] of Object.entries(value)) {
-    if (key === "kind") continue;
-    if (key === "reason" && typeof item === "string" && /^[a-z_]{1,40}$/.test(item)) continue;
-    if (key === "client" && typeof item === "string" && /^[A-Za-z0-9_.-]{1,128}$/.test(item)) continue;
-    if (!numbers.has(key) || typeof item !== "number" || !Number.isSafeInteger(item) || item < -1) return;
+    if (key === "reason") {
+      if (typeof item !== "string" || !/^[a-z_]{1,40}$/.test(item)) return;
+    } else if (key === "client") {
+      if (typeof item !== "string" || !/^[A-Za-z0-9_.-]{1,128}$/.test(item)) return;
+    } else if (numbers.has(key)) {
+      if (typeof item !== "number" || !Number.isSafeInteger(item) || item < -1) return;
+    } else continue;
+    diagnostic[key] = item;
   }
-  return value;
+  return diagnostic;
 }

@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { constants, gzipSync, gunzipSync, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import runtime from "../lib/archive/easyrpg-runtime.json" with { type: "json" };
-import { adaptAndroidRuntime } from "./android-runtime-adapter.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const delivery = "/play/runtime/android/v1";
@@ -27,7 +26,8 @@ export async function buildAndroidPlayer(assets, origin) {
     await cp(join(assets, "play/runtime/easyrpg", runtime.version), scratch, {
       recursive: true, filter: path => !path.endsWith(".br"),
     });
-    await adaptAndroidRuntime(root, scratch);
+    const adapter = await readFile(join(root, "scripts/android-native-storage.js"), "utf8");
+    await writeFile(join(scratch, "native-storage.js"), adapter.replaceAll("\r\n", "\n"));
     const files = [];
     for (const name of (await readdir(scratch)).sort()) {
       const bytes = await readFile(join(scratch, name));
