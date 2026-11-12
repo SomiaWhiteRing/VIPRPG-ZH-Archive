@@ -77,9 +77,10 @@ export async function getArchiveNetplayEndpoint(
     }
     const user = await getCurrentUser(runtime);
     const key = runtime.env.NETPLAY_HK_IDENTITY_KEY;
-    if (!user || !key) return external.href;
+    if (!key) return external.href;
     const expires = Date.now() + 24 * 60 * 60 * 1000;
-    const profile = [expires, Number(relay[1]), user.displayName, getUserAvatarSrc(user.avatarBlobSha256)];
+    const profile = [expires, Number(relay[1]), user?.displayName ?? "", getUserAvatarSrc(user?.avatarBlobSha256),
+      user?.id ?? null, record.workId, record.id, record.netplaySpaceId];
     const payload = Buffer.from(JSON.stringify(profile)).toString("base64url");
     const signature = createHmac("sha256", key).update(payload).digest("base64url");
     return new URL(`identity/${payload}.${signature}/`, external).href;
@@ -87,7 +88,9 @@ export async function getArchiveNetplayEndpoint(
   if (!runtime.env.NETPLAY_ROOM) return;
   const useStagingEdge = runtime.origin === stagingNetplaySiteOrigin &&
     options.get("netplayEdge") === "1";
-  return new URL(`/api/netplay/v1/spaces/${record.netplaySpaceId}/`, useStagingEdge ? stagingNetplayEdgeOrigin : runtime.origin).href;
+  const endpoint = new URL(`/api/netplay/v1/spaces/${record.netplaySpaceId}/`, useStagingEdge ? stagingNetplayEdgeOrigin : runtime.origin);
+  endpoint.searchParams.set("archive", String(record.id));
+  return endpoint.href;
 }
 
 export function parseArchiveVersionId(value: string): number {

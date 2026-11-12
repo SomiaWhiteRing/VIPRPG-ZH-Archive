@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { startRouteSelection } from "./netplay-route-selection.mjs";
 import { parseNetplayDiagnostic } from "./netplay-diagnostics.mjs";
+import { createMatchRecording } from "./netplay-recording.mjs";
 import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "./netplay-room-password.mjs";
 
 const { WebSocket, WebSocketServer } = createRequire(import.meta.url)("ws");
@@ -46,14 +47,17 @@ function route(request) {
     name: "访客 " + guestId,
     avatar: defaultAvatar,
   };
+  let account;
   if (payload) {
     if (!identityKey) return;
     const actual = Buffer.from(signature, "base64url");
     const expected = createHmac("sha256", identityKey).update(payload).digest();
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return;
-    const [expires, archive, name, avatar] = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const [expires, archive, name, avatar, userId, workId, versionId, spaceId] =
+      JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     if (archive !== archiveVersionId || expires <= Date.now()) return;
-    identity = { name, avatar };
+    if (name) identity = { name, avatar };
+    account = { userId, workId, archiveVersionId: versionId, spaceId };
   }
   const agent = request.headers["user-agent"] ?? "";
   return {
@@ -70,7 +74,9 @@ function route(request) {
     diagnostics: url.searchParams.get("diagnostics") === "1",
     platform: /Android/i.test(agent) ? "android" : /Windows/i.test(agent) ? "windows" : /iPhone|iPad/i.test(agent) ? "ios" : "other",
     resume: url.searchParams.get("resume"),
-    identity: payload ? identity : { ...identity, guest: guestId },
+    identity: payload && account?.userId !== null ? identity : { ...identity, guest: guestId },
+    account,
+    recording: url.searchParams.get("recording") === "1" && Boolean(identityKey),
   };
 }
 
@@ -230,6 +236,21 @@ function renewHeartbeat(room, seat) {
 }
 
 function receiveText(room, seat, data) {
+  if (seat.recording && data.startsWith("room:record:")) {
+    room.record(data, seat, [...room.seats], {
+      roomId: room.id, netplaySpaceId: seat.account?.spaceId, route: room.activeSelection?.path ?? room.route,
+      backup: room.activeSelection?.backup,
+    }, async batch => {
+      const body = JSON.stringify(batch);
+      const signature = createHmac("sha256", identityKey).update("netplay-recording/v1\n").update(body).digest("hex");
+      const response = await fetch(new URL("/api/netplay-recordings/ingest", origin), {
+        method: "POST", body, signal: AbortSignal.timeout(8000),
+        headers: { "Content-Type": "application/json", "X-Netplay-Recording": signature },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    }, message => send(seat.socket, message));
+    return;
+  }
   if (data.startsWith("room:password:")) {
     if ([...room.seats][0] !== seat) return;
     const password = parseRoomPassword(data.slice(14));
@@ -377,6 +398,7 @@ function receiveText(room, seat, data) {
 function attachRoomSocket(socket, room, seat) {
   seat.socket = socket;
   if (seat.diagnostics) send(socket, "room:diagnostics:1");
+  if (seat.recording) send(socket, "room:record:1");
   renewHeartbeat(room, seat);
   seat.ping = setInterval(() => {
     seat.pingAt = performance.now();
@@ -424,9 +446,10 @@ function attachRoomSocket(socket, room, seat) {
   });
 }
 
-function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtocol, platform, routeSelection, routeInputMirror, diagnostics, roomAccess }) {
-  const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0, password: createRoomPassword() };
-  const seat = { identity, rtc, routeSelection, routeInputMirror, inputStats, inputProtocol, platform, diagnostics, roomAccess,
+function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, inputProtocol, platform, routeSelection, routeInputMirror, diagnostics, roomAccess, recording }) {
+  const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0,
+    password: createRoomPassword(), record: createMatchRecording() };
+  const seat = { identity, account, rtc, routeSelection, routeInputMirror, inputStats, inputProtocol, platform, diagnostics, roomAccess, recording,
     seatNumber: room.seats.size + 1, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
   room.seats.add(seat);
   pool.rooms.set(roomId, room);

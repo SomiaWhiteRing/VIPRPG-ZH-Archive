@@ -10,6 +10,9 @@ import { json } from "../lib/http";
 import { requestJsonValue } from "../lib/ui/api-response";
 import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
 import { parseNetplayDiagnostic } from "../scripts/netplay-diagnostics.mjs";
+import { createMatchRecording } from "../scripts/netplay-recording.mjs";
+import type { RecordingParticipant } from "../scripts/netplay-recording.mjs";
+import { saveNetplayRecording } from "../app/.server/db/netplay-recordings";
 import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "../scripts/netplay-room-password.mjs";
 import type { RoomPassword } from "../scripts/netplay-room-password.mjs";
 
@@ -68,11 +71,13 @@ type Room = {
     roomAccess: boolean;
     seatNumber: number;
     heartbeat?: Heartbeat;
+    account?: RecordingParticipant["account"];
   }>;
   password: RoomPassword;
   hidden: boolean;
   ready?: { socket: WebSocket; packet: ArrayBuffer };
   rtc?: Negotiation;
+  record: ReturnType<typeof createMatchRecording>;
 };
 
 function isDirectMatch(room: Room) {
@@ -229,12 +234,17 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       peers: new Map(),
       hidden: false,
       password: createRoomPassword(),
+      record: createMatchRecording(),
     };
     const { peers } = room;
     const first = peers.keys().next().value;
 
     if (diagnostics) socket.send("room:diagnostics:1");
     const identity = JSON.parse(decodeURIComponent(request.headers.get("X-Netplay-Identity")!)) as Identity;
+    const accountHeader = request.headers.get("X-Netplay-Account");
+    const account = accountHeader ? JSON.parse(accountHeader) as RecordingParticipant["account"] : undefined;
+    const recording = url.searchParams.get("recording") === "1";
+    if (recording) socket.send("room:record:1");
     const disconnect = (reason: DisconnectReason, closeCode?: number) => {
       if (!peers.has(socket)) return;
       const seats = peers.size;
@@ -295,7 +305,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       if (room.hidden) this.refreshVisibility(room, now);
     };
     peers.set(socket, {
-      identity, rtc: url.searchParams.get("rtc") === "1", relayProbe: url.searchParams.get("rtcProbe") === "2", heartbeat,
+      identity, account, rtc: url.searchParams.get("rtc") === "1", relayProbe: url.searchParams.get("rtcProbe") === "2", heartbeat,
       seatNumber: first ? 2 : 1, roomAccess: url.searchParams.get("roomAccess") === "1",
     });
     this.rooms.set(id, room);
@@ -305,6 +315,14 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       if (!peers.has(socket)) return;
       const rtc = room.rtc;
       if (typeof data === "string") {
+        if (recording && data.startsWith("room:record:")) {
+          const write = room.record(data, peers.get(socket)!, [...peers.values()],
+            { ...room.details, route: rtc?.route ?? "websocket" },
+            batch => saveNetplayRecording(this.env, batch),
+            message => { if (socket.readyState === WebSocket.OPEN) socket.send(message); });
+          if (write) this.ctx.waitUntil(write);
+          return;
+        }
         if (data.startsWith("room:password:")) {
           if (socket !== peers.keys().next().value) return;
           const password = parseRoomPassword(data.slice(14));
@@ -577,5 +595,15 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
   };
   const headers = new Headers(request.headers);
   headers.set("X-Netplay-Identity", encodeURIComponent(JSON.stringify(identity)));
+  headers.delete("X-Netplay-Account");
+  if (url.searchParams.get("recording") === "1") {
+    const requested = Number(url.searchParams.get("archive"));
+    const archive = Number.isSafeInteger(requested) && requested > 0
+      ? await getPublishedArchiveDownloadRecord(runtime, requested) : null;
+    const associated = archive && pool === `v1/spaces/${archive.netplaySpaceId}` ? archive : null;
+    headers.set("X-Netplay-Account", JSON.stringify({
+      userId: user?.id ?? null, workId: associated?.workId ?? null, archiveVersionId: associated?.id ?? null,
+    }));
+  }
   return rooms.fetch(new Request(request, { headers }));
 }
