@@ -30,7 +30,7 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 使用 `?netplayTurn=443` 可单独测试 UDP 443。该房间池使用 coturn 的 IPv4 和 IPv6 辅助监听地址，沿用同一组中继端口和凭据。野草云产品防火墙需放行入站 UDP 443，coturn 的 systemd 服务通过 `CAP_NET_BIND_SERVICE` 绑定该端口。
 
-预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN，房间服务收到双方确认后宣布房间就绪。双方同时声明 `routeInputMirror=1` 和 `inputProtocol=1` 时测试 UDP 3478，其余客户端组合沿用原有选线和 UDP 443。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs`、`netplay-route-selection.mjs`、`netplay-diagnostics.mjs`、`netplay-room-password.mjs` 与 `netplay-recording.mjs` 放在同一目录。
+预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN，房间服务收到双方确认后宣布房间就绪。双方同时声明 `routeInputMirror=1` 和 `inputProtocol=1` 时测试 UDP 3478，其余客户端组合沿用原有选线和 UDP 443。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs`、`netplay-route-selection.mjs`、`netplay-diagnostics.mjs`、`netplay-room-password.mjs`、`netplay-recording.mjs` 与 `netplay-finish.mjs` 放在同一目录。
 
 自动选线保留直连。当双方支持双路、选线结果需要中转、WebSocket 和 UDP TURN 均可用时，房间服务在选线确认中保留两条线路。房间消息和开局确认走 WebSocket，局内输入和确认同时走两条线路，由 Player 按帧去重并交给原对战逻辑。WebSocket 即时发送，备用 UDP 合并待发的输入历史与确认，发送间隔至少 250 ms。UDP 通道关闭后，WebSocket 继续传送同一格式的输入。WebSocket 异常断开时，对战可经仍在线的 UDP 通道继续，Player 同时尝试在 15 秒内恢复房间连接。双路协商给探测预留最多 9 秒，再给双方确认预留 3 秒。通过 `netplay_route.backup`、`backupTurnPort` 和 `netplay_ice_pair` 核对实际启用的路径，用 `netplay_backup_closed` 和 `netplay_control_resumed` 识别局内回退及恢复。
 
@@ -43,6 +43,8 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 支持对局记录的 Player 使用 `recording=1` 协商。房间服务从已验证的联机身份取得账号和归档，在开打时绑定席位，写入 D1 对局索引及 R2 的 `netplay-recordings/v1/<对局>/<席位>/<序号>.json`。Player 分批记录双方的输入和接收时刻、开局随机数状态、确认帧检查点和结算事件。第 0 帧为双方的中立输入，记录从第 1 帧开始。香港服使用现有身份密钥签名上传，Cloudflare 房间直接写入同样的存储。
 
 参战账号可从 `GET /api/account/netplay-matches` 查到自己的对局和席位。核对完整记录时，比较双方的比分和结算帧、每个席位的分批序号及结束原因。强制退出时已确认上传的分批仍可用，未收到结束标记的席位可按部分记录排查。
+
+双方的 Player 与游戏均支持终局同步时，Player 将结算帧、比分和该帧之前的尾部输入发给对手。房间服务收到双方相同的终局报告后确认结果，游戏才显示结算并计胜场。预测窗口耗尽后连续 10 秒收不到新的连续输入会中断本局。本地算完后等待房间确认最多 16 秒。超时或终局分歧按 `finish_timeout` 或 `finish_mismatch` 写入对局记录，双方回房且不计胜场。房间的 15 秒控制连接恢复窗口独立计时。
 
 `inputSentPackets` 和 `inputRepeatedFrames` 统计 Worker 发起的发送及其中重复携带的帧。`rtcInputPacketsSent` 统计实际交给数据通道的消息，`rtcInputReplacements` 记录发送缓冲拥堵时被更新的待发副本。比较这些计数和 `inputPending`、`inputAckAgeMs`，可区分等待对端确认和本机通道积压。
 

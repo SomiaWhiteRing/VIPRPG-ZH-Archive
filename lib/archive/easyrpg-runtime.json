@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.13-site-kai-match-recording.2",
-  "revision": "4303ea48fda38d475703f40e57d1a178d3919e3f",
-  "build": "kai-web-match-recording",
+  "version": "2026.11.13-site-kai-finish-sync.1",
+  "revision": "c23798c92a79f70ef53b6484b48d9d3803768cdf",
+  "build": "kai-web-finish-sync",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "commit",
-  "archiveSha256": "7e73e34844aa4fc622de1f7fc990a2b3c160ecb39177eebfe9a0a29eed938bb3",
+  "archiveSha256": "0f20bbda68f02b680c3ada09a7011409fe5c77ef3b5046a5525624e455276629",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {

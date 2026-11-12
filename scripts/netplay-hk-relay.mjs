@@ -6,6 +6,7 @@ import { pipeline } from "node:stream/promises";
 import { startRouteSelection } from "./netplay-route-selection.mjs";
 import { parseNetplayDiagnostic } from "./netplay-diagnostics.mjs";
 import { createMatchRecording } from "./netplay-recording.mjs";
+import { createMatchFinish } from "./netplay-finish.mjs";
 import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "./netplay-room-password.mjs";
 
 const { WebSocket, WebSocketServer } = createRequire(import.meta.url)("ws");
@@ -77,6 +78,7 @@ function route(request) {
     identity: payload && account?.userId !== null ? identity : { ...identity, guest: guestId },
     account,
     recording: url.searchParams.get("recording") === "1" && Boolean(identityKey),
+    finishSync: url.searchParams.get("finishSync") === "1",
   };
 }
 
@@ -206,6 +208,7 @@ function leave(room, seat, reason, closeCode) {
   room.selection = room.activeSelection = undefined;
   room.turnPort = undefined;
   room.ready = room.negotiation = room.route = undefined;
+  room.finish.reset();
   const remaining = room.seats.values().next().value;
   if (remaining?.socket) {
     remaining.resumeToken = undefined;
@@ -236,6 +239,11 @@ function renewHeartbeat(room, seat) {
 }
 
 function receiveText(room, seat, data) {
+  if (data.startsWith("room:finish:")) {
+    const peers = [...room.seats];
+    if (peers.every(peer => peer.finishSync)) room.finish.receive(seat, peers, data);
+    return;
+  }
   if (seat.recording && data.startsWith("room:record:")) {
     room.record(data, seat, [...room.seats], {
       roomId: room.id, netplaySpaceId: seat.account?.spaceId, route: room.activeSelection?.path ?? room.route,
@@ -446,10 +454,10 @@ function attachRoomSocket(socket, room, seat) {
   });
 }
 
-function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, inputProtocol, platform, routeSelection, routeInputMirror, diagnostics, roomAccess, recording }) {
+function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, inputProtocol, platform, routeSelection, routeInputMirror, diagnostics, roomAccess, recording, finishSync }) {
   const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0,
-    password: createRoomPassword(), record: createMatchRecording() };
-  const seat = { identity, account, rtc, routeSelection, routeInputMirror, inputStats, inputProtocol, platform, diagnostics, roomAccess, recording,
+    password: createRoomPassword(), record: createMatchRecording(), finish: createMatchFinish((peer, text) => send(peer.socket, text)) };
+  const seat = { identity, account, rtc, routeSelection, routeInputMirror, inputStats, inputProtocol, platform, diagnostics, roomAccess, recording, finishSync,
     seatNumber: room.seats.size + 1, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
   room.seats.add(seat);
   pool.rooms.set(roomId, room);
@@ -469,6 +477,7 @@ function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, in
       player.milestones = [];
     }
     const seats = [...room.seats];
+    if (seats.every(peer => peer.finishSync)) for (const peer of seats) send(peer.socket, "room:finish:1");
     room.inputProtocol = seats.every(player => player.inputProtocol === 1) ? 1 : 0;
     if (pool === auto && seats.every(player => player.routeSelection)) {
       room.route = "pending";
@@ -604,6 +613,7 @@ server.on("upgrade", (request, socket, head) => {
       attachRoomSocket(client, room, resume);
       sendRoomSettings(room);
       send(client, String(3 + [...room.seats].indexOf(resume)));
+      room.finish.restore(resume);
       forwardMatchReady(room);
       console.log(JSON.stringify({ event: "netplay_control_resumed", archiveVersionId, roomId: room.id,
         seat: [...room.seats].indexOf(resume) + 1 }));

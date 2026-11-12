@@ -214,6 +214,23 @@ function createNetplayInputTransport(send, deliver, disconnect) {
       ready = true;
       flush();
     },
+    repair(id, first, masks, path) {
+      if (id !== match || first + masks.length - 1 > delivered + limit) return;
+      const at = performance.now();
+      for (let index = 0; index < masks.length; index++) {
+        const frame = first + index;
+        if (frame > delivered && !incoming.has(frame)) incoming.set(frame, [masks[index], at, path]);
+      }
+      while (incoming.has(receivedThrough + 1)) ++receivedThrough;
+      flush();
+      transmit(true);
+    },
+    discard(id) {
+      if (id !== match) return;
+      pending.length = 0;
+      incoming.clear();
+      ready = false;
+    },
     send(id, frame, input) {
       if (id !== match || frame !== localNext || pending.length === limit) {
         disconnect(pending.length === limit ? 'input_backlog' : 'input_sequence');
@@ -333,6 +350,10 @@ function createNetplayRouteSelection({round, paths, offer, inputProtocol}, {send
   return {
     round,
     hasBackup: () => Boolean(backup),
+    sendFinish(data) {
+      const port = active?.port ?? backup?.port;
+      port?.postMessage({type: 'data', data}, [data]);
+    },
     requestBackupStats: () => backup?.port.postMessage({type: 'transport-stats'}),
     close() {
       for (const candidate of candidates.values()) dispose(candidate);
@@ -530,6 +551,9 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
   let sentMatch = 0, sentFrame = -1;
   const avatarPaths = new Set(), avatars = new Map();
   const inbox = [], frames = [];
+  const finishMarker = 0x314e4946;
+  let finishCapable = false, finishOptIn = false, finish, finishTimer;
+  let repairPlainInputs;
   let diagnosticsAccepted = false, rtcStats = {}, rtcStatsAt = 0;
   const client = new URL(runtimeBase).pathname.split('/').filter(Boolean).at(-1) || 'unknown';
   let recordingEnabled = false, recording, recordingTimer;
@@ -568,6 +592,65 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
       recording.ended = true;
       flushRecord();
     }
+  };
+  const sendFinish = (packet, peer = false) => {
+    const text = JSON.stringify(packet);
+    if (socket?.readyState === WebSocket.OPEN) socket.send('room:finish:' + text);
+    if (peer && (rtcSelected || routeSelection?.hasBackup())) {
+      const payload = new TextEncoder().encode(text);
+      const data = new Uint8Array(4 + payload.length);
+      new DataView(data.buffer).setUint32(0, finishMarker, true);
+      data.set(payload, 4);
+      if (routeSelection) routeSelection.sendFinish(data.buffer);
+      else rtcPort?.postMessage({type: 'data', data: data.buffer}, [data.buffer]);
+    }
+  };
+  const applyFinishDecision = (status, reason) => {
+    if (!finish || finish.status) return;
+    finish.status = status;
+    clearTimeout(finishTimer);
+    if (status < 0) {
+      inputTransport?.discard(finish.match);
+      finish.incoming.clear();
+      diagnostics.end(reason);
+      finishRecord(reason);
+    }
+  };
+  const expireFinish = () => {
+    if (!finish || finish.status || finish.mode === 'legacy') return;
+    sendFinish({type: 'abort', match: finish.match});
+    applyFinishDecision(-1, 'finish_timeout');
+  };
+  const announceFinish = () => {
+    if (!finishCapable || !finish) return;
+    sendFinish({type: 'start', match: finish.match, enabled: finish.enabled});
+    if (finish.status < 0) sendFinish({type: 'abort', match: finish.match});
+    else if (finish.terminal && finish.mode !== 'legacy') sendFinish(finish.terminal, true);
+  };
+  const receiveFinish = (text, path, server) => {
+    let packet;
+    if (!finish || text.length > 1024) return;
+    try { packet = JSON.parse(text); } catch { return; }
+    if (packet?.match !== finish.match) return;
+    if (server && packet.type === 'ready') {
+      finish.mode = packet.enabled ? 'sync' : 'legacy';
+      if (finish.mode === 'legacy') clearTimeout(finishTimer);
+      return;
+    }
+    if (server && packet.type === 'decision') {
+      if (packet.status === -1) applyFinishDecision(-1, packet.reason);
+      else if (packet.status === 1 && finish.terminal && ['frame', 'first', 'second'].every(key => finish.terminal[key] === packet[key])) {
+        applyFinishDecision(1);
+      }
+      return;
+    }
+    if (packet.type !== 'terminal' || !finish.enabled || finish.mode === 'legacy' || finish.status || finish.terminal ||
+        !Number.isSafeInteger(packet.frame) || packet.frame < 1 || packet.frame > 0x7fffffff ||
+        !Array.isArray(packet.inputs) || packet.inputs.length > Math.min(192, packet.frame) ||
+        !packet.inputs.every(mask => Number.isInteger(mask) && mask >= 0 && mask <= 255)) return;
+    const first = packet.frame - packet.inputs.length + 1;
+    if (inputTransport) inputTransport.repair(finish.match, first, packet.inputs, path);
+    else repairPlainInputs?.(finish.match, first, packet.inputs, path);
   };
   const transportStats = value => { rtcStats = value; rtcStatsAt = performance.now(); };
   const diagnostics = createNetplayDiagnostics(
@@ -680,6 +763,9 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
     recordings.clear();
     recording = undefined;
     recordingEnabled = false;
+    clearTimeout(finishTimer);
+    finishCapable = finishOptIn = false;
+    finish = undefined;
     diagnostics.reset();
     diagnosticsAccepted = false;
     clearTimeout(resumeTimer);
@@ -698,6 +784,18 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
     const direct = rtcSelected && (values.length > 1 || resumeToken);
     if (values.length === 3) {
       [sentMatch, sentFrame] = values;
+      if (sentFrame === -1) {
+        clearTimeout(finishTimer);
+        finish = finishCapable ? {
+          match: sentMatch, enabled: finishOptIn, mode: finishOptIn ? 'pending' : 'legacy',
+          status: 0, history: new Map(), incoming: new Map(), received: 0,
+          waitAt: 0, waitFrame: -1,
+        } : undefined;
+        announceFinish();
+      } else if (finish?.enabled && finish.mode !== 'legacy') {
+        finish.history.set(sentFrame, values[2]);
+        finish.history.delete(sentFrame - 256);
+      }
       if (recordingEnabled && sentFrame === -1) {
         finishRecord('next_match');
         recording = {match: sentMatch, at: performance.now(), events: [], pending: new Map(), sequence: 0, dropped: 0};
@@ -725,7 +823,25 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
   return {
     close,
     send,
-    progress: diagnostics.progress,
+    progress(match, frame, confirmed, received, waiting, pending, ready, replay) {
+      diagnostics.progress(match, frame, confirmed, received, waiting, pending, ready, replay);
+      if (finish?.match !== match) return false;
+      if (finish.status < 0) return true;
+      if (finish.mode !== 'sync' || !waiting) {
+        finish.waitAt = 0;
+      } else {
+        const now = performance.now();
+        if (!finish.waitAt || finish.waitFrame !== received) {
+          finish.waitAt = now;
+          finish.waitFrame = received;
+        } else if (now - finish.waitAt >= 10_000) {
+          expireFinish();
+        }
+      }
+      return finish.status < 0;
+    },
+    setFinishSync: enabled => { finishOptIn = enabled; },
+    finishStatus: () => !finish || finish.mode === 'legacy' ? 1 : finish.status,
     endMatch(reason) {
       diagnostics.end(reason);
       if (recording?.terminal && reason === 'match_end') {
@@ -746,6 +862,16 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
       recordEvent(['checkpoint', frame, digest]);
     },
     recordTerminal(frame, first, second) {
+      if (finish?.enabled && finish.mode !== 'legacy' && !finish.status && first >= 0 && second >= 0) {
+        const inputs = [];
+        for (let index = frame; index > 0 && inputs.length < 192 && finish.history.has(index); index--) {
+          inputs.push(finish.history.get(index));
+        }
+        finish.terminal = {type: 'terminal', match: finish.match, frame, first, second, inputs: inputs.reverse()};
+        sendFinish(finish.terminal, true);
+        clearTimeout(finishTimer);
+        finishTimer = setTimeout(expireFinish, 16_000);
+      }
       if (!recording) return;
       recording.terminal = true;
       recordEvent(['terminal', frame, first, second, Math.round(performance.now() - recording.at)]);
@@ -853,6 +979,7 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
       address.searchParams.set('inputStats', '1');
       address.searchParams.set('diagnostics', '1');
       address.searchParams.set('recording', '1');
+      address.searchParams.set('finishSync', '1');
       if (archive) address.searchParams.set('archive', archive);
       address.searchParams.set('routeSelection', '1');
       if (rtcSupported) address.searchParams.set('routeInputMirror', '1');
@@ -872,7 +999,8 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
         if (inRoom || (result && result !== 4 && result !== 5)) refreshDirectory();
       };
       const receiveInput = (match, frame, input, at = performance.now(), path = 'websocket') => {
-        if (frames.length >= 256) {
+        const settled = finish?.match === match && (finish.status < 0 || finish.terminal);
+        if (!settled && frames.length >= 256) {
           diagnostics.failure('gameplay_queue');
           return ended();
         }
@@ -882,7 +1010,20 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
         lastInputAt = now;
         inputs++;
         if (recording?.match === match) recordEvent(['remote', frame, input, Math.round(at - recording.at), path]);
-        frames.push([match, frame, input]);
+        if (!settled) frames.push([match, frame, input]);
+      };
+      repairPlainInputs = (match, first, masks, path, at = performance.now()) => {
+        if (finish?.match !== match || finish.status < 0 || first + masks.length - 1 > finish.received + 256) return;
+        for (let i = 0; i < masks.length; i++) {
+          const frame = first + i;
+          if (frame > finish.received && !finish.incoming.has(frame)) finish.incoming.set(frame, [masks[i], at, path]);
+        }
+        while (finish?.match === match && finish.incoming.has(finish.received + 1)) {
+          const frame = ++finish.received;
+          const input = finish.incoming.get(frame);
+          finish.incoming.delete(frame);
+          receiveInput(match, frame, ...input);
+        }
       };
       const enableInputTransport = (protocol, sendInput = data => rtcPort?.postMessage({type: 'input', data}, [data])) => {
         if (protocol !== 1) return;
@@ -891,8 +1032,11 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
           reason => { diagnostics.failure(reason); ended(); });
       };
       const receiveMatchData = (data, path = 'websocket') => {
-        if (inputTransport && data instanceof ArrayBuffer && data.byteLength >= 16) {
-          inputTransport.receive(data, path);
+        if (finishCapable && data instanceof ArrayBuffer && data.byteLength > 16 && data.byteLength <= 1028 &&
+            new DataView(data).getUint32(0, true) === finishMarker) {
+          receiveFinish(new TextDecoder().decode(new Uint8Array(data, 4)), 'finish_' + path, false);
+        } else if (inputTransport && data instanceof ArrayBuffer && data.byteLength >= 16) {
+          if (!(finish?.status < 0 && new DataView(data).getInt32(4, true) === finish.match)) inputTransport.receive(data, path);
         } else if (data instanceof ArrayBuffer && data.byteLength === 8) {
           const packet = new DataView(data), kind = packet.getInt32(0, true), number = packet.getInt32(4, true);
           if (kind === 0) send(1, number);
@@ -901,7 +1045,9 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
           const packet = new DataView(data);
           const match = packet.getInt32(0, true), frame = packet.getInt32(4, true);
           if (frame >= 0) {
-            receiveInput(match, frame, packet.getInt32(8, true), performance.now(), path);
+            const input = packet.getInt32(8, true);
+            if (finish?.enabled && finish.match === match && finish.mode !== 'legacy' && frame > 0) repairPlainInputs(match, frame, [input], path);
+            else receiveInput(match, frame, input, performance.now(), path);
           } else {
             frames.push([match, frame, packet.getInt32(8, true)]);
             peerMatch = match;
@@ -918,6 +1064,14 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
       };
       const receiveRoomMessage = ({data, target: connection}) => {
         if (socket !== connection) return;
+        if (data === 'room:finish:1') {
+          finishCapable = true;
+          return;
+        }
+        if (typeof data === 'string' && data.startsWith('room:finish:')) {
+          receiveFinish(data.slice(12), 'finish_websocket', true);
+          return;
+        }
         if (data === 'room:record:1') {
           recordingEnabled = true;
           clearInterval(recordingTimer);
@@ -989,6 +1143,8 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
           if (data === '2') {
             diagnostics.end('peer_left');
             finishRecord('peer_left');
+            if (finish && finish.mode !== 'legacy' && !finish.status) applyFinishDecision(-1, 'peer_left');
+            finishCapable = false;
             clear();
             resumeToken = undefined;
             closeRtc();
@@ -1000,6 +1156,7 @@ function createNetplay(endpoint, rtcSupported, runtimeBase) {
             connection.send(pendingReady);
             pendingReady = undefined;
           }
+          if (state >= 3) announceFinish();
         } else if (data === 'rtc:webrtc') {
           rtcSelected = true;
           rtcPort?.postMessage({type: 'ice-pair'});

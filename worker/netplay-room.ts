@@ -11,6 +11,7 @@ import { requestJsonValue } from "../lib/ui/api-response";
 import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
 import { parseNetplayDiagnostic } from "../scripts/netplay-diagnostics.mjs";
 import { createMatchRecording } from "../scripts/netplay-recording.mjs";
+import { createMatchFinish } from "../scripts/netplay-finish.mjs";
 import type { RecordingParticipant } from "../scripts/netplay-recording.mjs";
 import { saveNetplayRecording } from "../app/.server/db/netplay-recordings";
 import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "../scripts/netplay-room-password.mjs";
@@ -69,6 +70,7 @@ type Room = {
     rtc: boolean;
     relayProbe: boolean;
     roomAccess: boolean;
+    finishSync: boolean;
     seatNumber: number;
     heartbeat?: Heartbeat;
     account?: RecordingParticipant["account"];
@@ -78,6 +80,7 @@ type Room = {
   ready?: { socket: WebSocket; packet: ArrayBuffer };
   rtc?: Negotiation;
   record: ReturnType<typeof createMatchRecording>;
+  finish: ReturnType<typeof createMatchFinish<WebSocket>>;
 };
 
 function isDirectMatch(room: Room) {
@@ -235,6 +238,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       hidden: false,
       password: createRoomPassword(),
       record: createMatchRecording(),
+      finish: createMatchFinish<WebSocket>((peer, text) => { if (peer.readyState === WebSocket.OPEN) peer.send(text); }),
     };
     const { peers } = room;
     const first = peers.keys().next().value;
@@ -263,6 +267,7 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
         peers.delete(peer);
       }
       room.ready = undefined;
+      room.finish.reset();
       if (room.rtc) clearTimeout(room.rtc.timeout);
       room.rtc = undefined;
       if (peers.size === 0) this.rooms.delete(id);
@@ -307,7 +312,11 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
     peers.set(socket, {
       identity, account, rtc: url.searchParams.get("rtc") === "1", relayProbe: url.searchParams.get("rtcProbe") === "2", heartbeat,
       seatNumber: first ? 2 : 1, roomAccess: url.searchParams.get("roomAccess") === "1",
+      finishSync: url.searchParams.get("finishSync") === "1",
     });
+    if (peers.size === 2 && [...peers.values()].every(peer => peer.finishSync)) {
+      for (const peer of peers.keys()) if (peer.readyState === WebSocket.OPEN) peer.send("room:finish:1");
+    }
     this.rooms.set(id, room);
     this.sendRoomSettings(room);
     renewHeartbeat();
@@ -315,6 +324,10 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       if (!peers.has(socket)) return;
       const rtc = room.rtc;
       if (typeof data === "string") {
+        if (data.startsWith("room:finish:")) {
+          if ([...peers.values()].every(peer => peer.finishSync)) room.finish.receive(socket, [...peers.keys()], data);
+          return;
+        }
         if (recording && data.startsWith("room:record:")) {
           const write = room.record(data, peers.get(socket)!, [...peers.values()],
             { ...room.details, route: rtc?.route ?? "websocket" },
