@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
+import { Link, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { listNetplaySpaces } from "@/app/.server/db/netplay-spaces";
 import { runtimeContext } from "@/app/.server/router-context";
-import { Button } from "@/app/components/ui/button";
+import { Button, buttonVariants } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { PageHeader } from "@/app/components/ui/page-header";
@@ -12,11 +12,12 @@ import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 import { SelectField } from "@/app/components/ui/select";
 import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { isAdministrator } from "@/lib/authz/roles";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
-  await requirePagePermission(runtime, "/admin/netplay-spaces", "system.maintenance.run");
-  return { spaces: await listNetplaySpaces(runtime) };
+  const user = await requirePagePermission(runtime, "/admin/netplay-spaces", "system.maintenance.run");
+  return { spaces: await listNetplaySpaces(runtime), canReadMatches: isAdministrator(user) };
 }
 
 export const meta: MetaFunction = ({ error }) =>
@@ -43,9 +44,11 @@ function SpaceForm({ space }: { space?: Awaited<ReturnType<typeof listNetplaySpa
 }
 
 export default function NetplaySpacesPage() {
-  const { spaces } = useLoaderData<typeof loader>();
+  const { spaces, canReadMatches } = useLoaderData<typeof loader>();
   return <main className="grid gap-4">
-    <PageHeader compact title="联机空间" />
+    <PageHeader compact title="联机空间" actions={canReadMatches ? (
+      <Link className={buttonVariants({ variant: "outline" })} to="/admin/netplay-spaces/matches">对局记录</Link>
+    ) : null} />
     <RedirectFeedback />
     <Pane heading="创建空间"><SpaceForm /></Pane>
     {spaces.map((space) => <details key={space.id} className="admin-panel admin-details">

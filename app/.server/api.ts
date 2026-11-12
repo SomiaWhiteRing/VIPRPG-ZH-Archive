@@ -16,6 +16,7 @@ import * as workLifecycleEndpoint from "@/app/.server/endpoints/api/admin/works/
 import * as auditReportExportEndpoint from "@/app/.server/endpoints/api/admin/audit/reports/[date]/export/route";
 import * as genreMergeEndpoint from "@/app/.server/endpoints/api/admin/genres/merge/route";
 import * as netplaySpacesEndpoint from "@/app/.server/endpoints/api/admin/netplay-spaces/route";
+import * as adminNetplayRecordingDownload from "@/app/.server/endpoints/api/admin/netplay-matches/download";
 import * as showcaseEndpoint from "@/app/.server/endpoints/api/account/showcase/route";
 import * as netplayMatchesEndpoint from "@/app/.server/endpoints/api/account/netplay-matches/route";
 import * as netplayRecordingIngestEndpoint from "@/app/.server/endpoints/api/netplay-recordings/ingest/route";
@@ -820,6 +821,8 @@ api.on("POST", "/api/admin/genres/merge", (c) => genreMergeEndpoint.POST(c.get("
 api.options("/api/admin/genres/merge", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
 api.all("/api/admin/genres/merge", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }));
 api.on("POST", "/api/admin/netplay-spaces", (c) => netplaySpacesEndpoint.POST(c.get("runtime"), c.req.raw));
+api.get("/api/admin/netplay-matches/:matchId/recordings/:seat", (c) =>
+  adminNetplayRecordingDownload.GET(c.get("runtime"), c.req.raw, c.req.param("matchId"), c.req.param("seat")));
 api.options("/api/admin/netplay-spaces", (c) => c.body(null, 204, { Allow: "POST, OPTIONS" }));
 api.all("/api/admin/netplay-spaces", (_c) => jsonResponse({ ok: false, error: "Method not allowed" }, { status: 405, headers: { Allow: "POST, OPTIONS" } }));
 api.post("/api/admin/works/:workId/netplay-space", (c) =>

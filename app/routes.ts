@@ -82,6 +82,8 @@ export default [
     route("tags", "admin/tags/page.tsx"),
     route("genres", "admin/genres/page.tsx"),
     route("netplay-spaces", "admin/netplay-spaces/page.tsx"),
+    route("netplay-spaces/matches", "admin/netplay-spaces/matches/page.tsx"),
+    route("netplay-spaces/matches/:matchId", "admin/netplay-spaces/matches/detail.tsx"),
     route("tags/edit", "admin/tags/edit/page.tsx"),
     route("users", "admin/users/page.tsx"),
     route("works", "admin/works/page.tsx"),

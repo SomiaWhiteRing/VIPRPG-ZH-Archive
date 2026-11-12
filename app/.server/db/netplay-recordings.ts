@@ -1,8 +1,12 @@
 import type { RecordingBatch } from "../../../scripts/netplay-recording.mjs";
 
+export function netplayRecordingKey(id: string, seat: number, seq: number) {
+  return `netplay-recordings/v1/${id}/${seat}/${seq}.json`;
+}
+
 export async function saveNetplayRecording(env: CloudflareEnv, batch: RecordingBatch, initialize = true) {
   const { id, match, startedAt, participants, room, seat, seq, events } = batch;
-  const object = `netplay-recordings/v1/${id}/${seat}/${seq}.json`;
+  const object = netplayRecordingKey(id, seat, seq);
   const terminal = events.find(event => event[0] === "terminal");
   const end = events.find(event => event[0] === "end");
   await env.ARCHIVE_BUCKET.put(object, JSON.stringify(events), {

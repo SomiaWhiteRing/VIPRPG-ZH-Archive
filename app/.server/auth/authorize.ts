@@ -6,6 +6,7 @@ import { redirectPage } from "@/app/.server/http/page-response";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { PermissionKey } from "@/lib/authz/permissions";
 import { hasPermission } from "@/lib/authz/permissions";
+import { isAdministrator } from "@/lib/authz/roles";
 import { json } from "@/lib/http";
 
 type AuthFailure = { response: Response };
@@ -46,6 +47,13 @@ export async function requireBootstrapAdmin(
   const auth = await requireRequestContext(runtime, request);
   if ("response" in auth) return auth;
   if (!auth.context.isBootstrapAdmin) return permissionDenied();
+  return { user: auth.context.user };
+}
+
+export async function requireAdministrator(runtime: AppRuntime, request: Request): Promise<AuthSuccess | AuthFailure> {
+  const auth = await requireRequestContext(runtime, request);
+  if ("response" in auth) return auth;
+  if (!isAdministrator(auth.context.user)) return permissionDenied();
   return { user: auth.context.user };
 }
 
@@ -118,5 +126,11 @@ export async function requireBootstrapAdminPage(
 ) {
   const context = await requirePageContext(runtime, nextPath);
   if (!context.isBootstrapAdmin) redirectPage("/");
+  return context.user;
+}
+
+export async function requireAdministratorPage(runtime: AppRuntime, nextPath: string) {
+  const context = await requirePageContext(runtime, nextPath);
+  if (!isAdministrator(context.user)) redirectPage("/");
   return context.user;
 }
