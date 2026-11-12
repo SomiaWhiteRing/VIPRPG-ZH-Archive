@@ -1,6 +1,7 @@
 const probe = { samples: 8, intervalMs: 100, durationMs: 1_800 };
 const selectionTimeoutMs = 8_000;
 const confirmationTimeoutMs = 1_000;
+const mirrorConfirmationTimeoutMs = 3_000;
 const directToleranceMs = 20;
 
 export function isRouteProbe(packet, round) {
@@ -23,9 +24,11 @@ function readMeasurement(message) {
   };
 }
 
-export function startRouteSelection({ round, seats, paths, send, commit, fail }) {
+export function startRouteSelection({ round, seats, paths, send, commit, fail, inputMirror = false }) {
   const candidates = new Map(paths.map(path => [path, { ready: new Set(), reports: new Map() }]));
-  const deadline = Date.now() + selectionTimeoutMs;
+  const probeTimeoutMs = inputMirror ? 9_000 : selectionTimeoutMs - confirmationTimeoutMs;
+  const timeoutMs = probeTimeoutMs + (inputMirror ? mirrorConfirmationTimeoutMs : confirmationTimeoutMs);
+  const deadline = Date.now() + timeoutMs;
   let timer, selected, closed = false;
   const acknowledged = new Set();
   const sendToBoth = message => {
@@ -45,8 +48,8 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail })
     clearTimeout(timer);
     const scores = [];
     for (const [path, candidate] of candidates) {
-      if (candidate.failed || candidate.reports.size !== seats.length) continue;
       const measures = [...candidate.reports.values()];
+      if (candidate.failed || measures.length !== seats.length || measures.some(value => !value)) continue;
       const worst = field => Math.max(...measures.map(value => value[field]));
       scores.push({
         path, missing: worst("missing"), tailRttMs: worst("tailRttMs"),
@@ -56,28 +59,33 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail })
     scores.sort((a, b) => a.missing - b.missing || a.tailRttMs - b.tailRttMs ||
       a.longestGapMs - b.longestGapMs || a.medianRttMs - b.medianRttMs);
     const fastest = scores[0];
-    if (!fastest || Date.now() >= deadline) {
+    const direct = scores.find(score => score.path === "direct");
+    selected = direct && direct.missing === fastest.missing &&
+      direct.tailRttMs <= fastest.tailRttMs + directToleranceMs &&
+      direct.longestGapMs <= fastest.longestGapMs + directToleranceMs ? direct.path : fastest?.path;
+    const socket = candidates.get("websocket");
+    const turn = candidates.get("turn");
+    // Keep a healthy direct connection. When relaying, both open paths can deliver the same input.
+    if (inputMirror && selected !== "direct" && !socket.failed && socket.ready.size === seats.length &&
+      (!selected || !turn.failed && turn.ready.size === seats.length)) selected = "websocket";
+    if (!selected || Date.now() >= deadline) {
       stop();
       fail(measurements());
       return;
     }
-    const direct = scores.find(score => score.path === "direct");
-    selected = direct && direct.missing === fastest.missing &&
-      direct.tailRttMs <= fastest.tailRttMs + directToleranceMs &&
-      direct.longestGapMs <= fastest.longestGapMs + directToleranceMs ? direct.path : fastest.path;
     acknowledged.clear();
     sendToBoth({ type: "select", path: selected });
     timer = setTimeout(() => {
       candidates.get(selected).failed = true;
       choose();
-    }, Math.min(confirmationTimeoutMs, deadline - Date.now()));
+    }, inputMirror && selected === "websocket" ? deadline - Date.now() : Math.min(confirmationTimeoutMs, deadline - Date.now()));
   };
   const chooseWhenMeasured = () => {
     if (!selected && [...candidates.values()].every(candidate =>
       candidate.failed || candidate.reports.size === seats.length)) choose();
   };
 
-  timer = setTimeout(choose, selectionTimeoutMs - confirmationTimeoutMs);
+  timer = setTimeout(choose, probeTimeoutMs);
   return {
     round,
     stop,
@@ -101,7 +109,7 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail })
         }
       } else if (type === "measurement" && candidate.probing && !selected && !candidate.reports.has(seat)) {
         const measurement = readMeasurement(message);
-        if (measurement) candidate.reports.set(seat, measurement);
+        if (measurement || inputMirror && path !== "direct") candidate.reports.set(seat, measurement);
         else candidate.failed = true;
         chooseWhenMeasured();
       } else if (type === "failed") {
@@ -112,7 +120,9 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail })
         acknowledged.add(seat);
         if (acknowledged.size === seats.length) {
           stop();
-          commit(path, measurements());
+          const turn = candidates.get("turn");
+          const backup = inputMirror && path === "websocket" && !turn.failed && turn.ready.size === seats.length ? "turn" : undefined;
+          commit(path, measurements(), backup);
         }
       }
     },

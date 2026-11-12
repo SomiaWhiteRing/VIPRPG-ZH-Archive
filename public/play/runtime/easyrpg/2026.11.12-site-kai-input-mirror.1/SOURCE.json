@@ -1,12 +1,12 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "9182b19c9f1743a2ade01563f614e6706f367061",
-  "version": "2026.11.12-site-kai-boundaries.2",
-  "build": "kai-web-boundaries",
-  "artifact": "Kai-Web-2026.11.12-boundaries-site.zip",
-  "archiveSha256": "f82b3504928cdae5daa6964eb3983d62e1380f548ac39f646d2c24184afe16ae",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/9182b19c9f1743a2ade01563f614e6706f367061",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/9182b19c9f1743a2ade01563f614e6706f367061/COPYING",
+  "revision": "c777b1057b3acf5f1fffc477363c99548258e6cd",
+  "version": "2026.11.12-site-kai-input-mirror.1",
+  "build": "kai-web-input-mirror",
+  "artifact": "Kai-Web-2026.11.12-input-mirror-rc4.zip",
+  "archiveSha256": "4a645e4d605b9219d9d0013ca1788809f9de099ad4fb8c325c4a67107ffa886b",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/c777b1057b3acf5f1fffc477363c99548258e6cd",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/c777b1057b3acf5f1fffc477363c99548258e6cd/COPYING",
   "sourceState": "commit",
   "sourcePatches": [],
   "sourceSnapshot": null,
@@ -38,8 +38,8 @@
   "patches": [],
   "files": {
     "index.js": {
-      "size": 66062,
-      "sha256": "0683ff36e4d707fc908bf7a7cb4461349dd92fe5897a0ea9c3e0a3263d86879c"
+      "size": 66700,
+      "sha256": "bbb2ff6503af4a02a102ad7b8f5489bfc4fb889feb228dc272b9767ae1c95762"
     },
     "easyrpg-player.js": {
       "size": 129537,
@@ -62,8 +62,8 @@
       "sha256": "28e735d91ac9982144e8cec1194812dacc35de59cb5b990d920bde62ff6d25da"
     },
     "player-worker.js": {
-      "size": 47990,
-      "sha256": "a9179aae4eab6659416ad07db3feb5c0ac452a91056dd14b7cf3f9d0462fa2e0"
+      "size": 49352,
+      "sha256": "26faf8eb53af302544a45db381c9fc57b60aef8ccbbf82f1beb5895eb99c21f0"
     },
     "player-audio.js": {
       "size": 1858,

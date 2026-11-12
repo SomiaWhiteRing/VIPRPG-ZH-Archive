@@ -30,7 +30,9 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 使用 `?netplayTurn=443` 可单独测试 UDP 443。该房间池使用 coturn 的 IPv4 和 IPv6 辅助监听地址，沿用同一组中继端口和凭据。野草云产品防火墙需放行入站 UDP 443，coturn 的 systemd 服务通过 `CAP_NET_BIND_SERVICE` 绑定该端口。
 
-预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN 443，房间服务收到双方确认后宣布房间就绪。混用旧 Player 时走 WebSocket。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs`、`netplay-route-selection.mjs`、`netplay-diagnostics.mjs` 与 `netplay-room-password.mjs` 放在同一目录。
+预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN，房间服务收到双方确认后宣布房间就绪。双方同时声明 `routeInputMirror=1` 和 `inputProtocol=1` 时测试 UDP 3478，其余客户端组合沿用原有选线和 UDP 443。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs`、`netplay-route-selection.mjs`、`netplay-diagnostics.mjs` 与 `netplay-room-password.mjs` 放在同一目录。
+
+自动选线保留直连。当双方支持双路、选线结果需要中转、WebSocket 和 UDP TURN 均可用时，房间服务在选线确认中保留两条线路。房间消息和开局确认走 WebSocket，局内输入和确认同时走两条线路，由 Player 按帧去重并交给原对战逻辑。WebSocket 即时发送，备用 UDP 合并待发的输入历史与确认，发送间隔至少 250 ms。UDP 通道关闭后，WebSocket 继续传送同一格式的输入。WebSocket 异常断开时，对战可经仍在线的 UDP 通道继续，Player 同时尝试在 15 秒内恢复房间连接。双路协商给探测预留最多 9 秒，再给双方确认预留 3 秒。通过 `netplay_route.backup`、`backupTurnPort` 和 `netplay_ice_pair` 核对实际启用的路径，用 `netplay_backup_closed` 和 `netplay_control_resumed` 识别局内回退及恢复。
 
 房间建立时生成四位密码，默认关闭。大厅只接收 `locked` 标记，支持 `roomAccess=1` 的成员通过私有 `room:settings` 消息取得开关与密码。新版 Player 在 WebSocket 接通后发送 `room:join`，服务校验当前房间和密码后才占座、协商线路。房主通过 `room:password` 修改设置。香港服务与 Cloudflare 房间服务使用同一口令格式，无密码旧客户端仍可进入未加锁房间。数字输入及第三行“密码”的显示由游戏事件负责。
 
@@ -40,7 +42,7 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 `inputSentPackets` 和 `inputRepeatedFrames` 统计 Worker 发起的发送及其中重复携带的帧。`rtcInputPacketsSent` 统计实际交给数据通道的消息，`rtcInputReplacements` 记录发送缓冲拥堵时被更新的待发副本。比较这些计数和 `inputPending`、`inputAckAgeMs`，可区分等待对端确认和本机通道积压。
 
-双方 Player 声明 `inputProtocol=1` 时，香港服务在 RTC 协商中启用抗丢包按键协议，并将实际协议记入 `netplay_route.inputProtocol`。开局和房间消息继续可靠传输，按键改走无序、不重传的独立 DataChannel：每包重复尚未确认的逐帧输入，接收方去重、补齐后交给原回滚时间线；停止产生新帧时仍每 50 ms 尝试补发。浏览器发送缓冲未清空时，只保留最新输入历史并合并最新确认，避免旧副本积压。协议使用对局 ID 隔离旧包，最多保留 256 帧，不能用丢弃未确认输入来跳过缺口。选线探测使用同一按键通道。混用旧 Player 或选择 WebSocket 时仍使用原输入协议。
+双方 Player 声明 `inputProtocol=1` 时，香港服务在 RTC 协商中启用抗丢包按键协议，并将实际协议记入 `netplay_route.inputProtocol`。开局和房间消息继续可靠传输，RTC 输入走无序、不重传的独立 DataChannel。每包重复尚未确认的逐帧输入，接收方去重、补齐后交给原回滚时间线。停止产生新帧时仍每 50 ms 尝试补发。浏览器发送缓冲未清空时，只保留最新输入历史并合并最新确认，避免旧副本积压。协议使用对局 ID 隔离旧包，最多保留 256 帧。双路对局在 WebSocket 上也传输此格式，普通纯 WebSocket 对局沿用原输入协议。
 
 ## 干净种子
 

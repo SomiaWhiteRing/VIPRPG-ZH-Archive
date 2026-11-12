@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.12-site-kai-boundaries.2",
-  "revision": "9182b19c9f1743a2ade01563f614e6706f367061",
-  "build": "kai-web-boundaries",
+  "version": "2026.11.12-site-kai-input-mirror.1",
+  "revision": "c777b1057b3acf5f1fffc477363c99548258e6cd",
+  "build": "kai-web-input-mirror",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "commit",
-  "archiveSha256": "f82b3504928cdae5daa6964eb3983d62e1380f548ac39f646d2c24184afe16ae",
+  "archiveSha256": "4a645e4d605b9219d9d0013ca1788809f9de099ad4fb8c325c4a67107ffa886b",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {

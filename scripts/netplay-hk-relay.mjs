@@ -64,6 +64,7 @@ function route(request) {
     pool,
     rtc: url.searchParams.get("rtcResume") === "1",
     routeSelection: url.searchParams.get("routeSelection") === "1",
+    routeInputMirror: url.searchParams.get("routeInputMirror") === "1",
     inputStats: url.searchParams.get("inputStats") === "1",
     inputProtocol: url.searchParams.get("inputProtocol") === "1" ? 1 : 0,
     diagnostics: url.searchParams.get("diagnostics") === "1",
@@ -132,18 +133,19 @@ function selectRoute(room, route, reason, choice) {
   if (room.seats.size !== 2) return;
   clearTimeout(room.negotiation?.timer);
   room.route = route;
-  room.activeSelection = choice && { round: choice.round, path: choice.path };
+  room.turnPort = choice?.turnPort;
+  room.activeSelection = choice && { round: choice.round, path: choice.path, backup: choice.backup };
   const seats = [...room.seats];
   const details = room.negotiation && {
     negotiationStartedAt: room.negotiation.startedAt,
     negotiationMs: Date.now() - room.negotiation.startedAt,
     seats: seats.map(seat => ({ platform: seat.platform, signals: seat.signals, milestones: seat.milestones })),
   };
-  const turnPort = choice?.path === "turn" ? 443 : room.pool.turnPort;
+  const turnPort = choice?.turnPort ?? room.pool.turnPort;
   const connected = route === "webrtc";
   const loggedRoute = turnPort ? "hong_kong_turn_udp" : route;
   console.log(JSON.stringify({ event: "netplay_route", archiveVersionId, roomId: room.id,
-    route: loggedRoute, reason, inputProtocol: connected ? room.inputProtocol : 0,
+    route: loggedRoute, reason, inputProtocol: connected || choice?.backup ? room.inputProtocol : 0,
     ...(turnPort && { connected, turnPort }), ...details, ...choice }));
   if (room.pool.turnPort && !connected) {
     leave(room, seats[1], "turn_unavailable");
@@ -153,6 +155,8 @@ function selectRoute(room, route, reason, choice) {
     if (connected) {
       clearTimeout(seat.hide);
       clearTimeout(seat.expire);
+    }
+    if (connected || choice?.backup) {
       seat.resumeToken = randomBytes(24).toString("base64url");
       send(seat.socket, "room:resume:" + seat.resumeToken);
     }
@@ -162,12 +166,27 @@ function selectRoute(room, route, reason, choice) {
   }
 }
 
+function canResumeControl(room) {
+  return room?.route === "webrtc" ||
+    (room?.activeSelection?.backup && [...room.seats].every(seat => !seat.backupClosed));
+}
+
+function forwardMatchReady(room) {
+  const ready = room.ready;
+  if (ready?.size !== 2) return;
+  const [first, second] = room.seats;
+  if (first.socket?.readyState !== WebSocket.OPEN || second.socket?.readyState !== WebSocket.OPEN) return;
+  room.ready = undefined;
+  send(first.socket, ready.get(second));
+  send(second.socket, ready.get(first));
+}
+
 function leave(room, seat, reason, closeCode) {
   if (!room.seats.has(seat)) return;
   const heartbeat = [...room.seats].map(({ rttMs, peakRttMs }) => ({ rttMs, peakRttMs }));
   const input = [...room.seats].map(player => player.input);
   const route = room.route;
-  const turnPort = room.activeSelection?.path === "turn" ? 443 : room.pool.turnPort;
+  const turnPort = room.turnPort ?? room.pool.turnPort;
   const leaving = reason === "rtc_failed" ? [...room.seats] : [seat];
   for (const player of leaving) {
     clearInterval(player.ping);
@@ -179,6 +198,7 @@ function leave(room, seat, reason, closeCode) {
   clearTimeout(room.negotiation?.timer);
   room.selection?.stop();
   room.selection = room.activeSelection = undefined;
+  room.turnPort = undefined;
   room.ready = room.negotiation = room.route = undefined;
   const remaining = room.seats.values().next().value;
   if (remaining?.socket) {
@@ -204,7 +224,7 @@ function renewHeartbeat(room, seat) {
   seat.hide = setTimeout(() => publishDirectory(room.pool), heartbeatHideMs);
   seat.expire = setTimeout(() => {
     const socket = seat.socket;
-    leave(room, seat, "heartbeat_timeout");
+    if (!canResumeControl(room)) leave(room, seat, "heartbeat_timeout");
     socket?.terminate();
   }, heartbeatTimeoutMs);
 }
@@ -221,17 +241,18 @@ function receiveText(room, seat, data) {
   }
   if (seat.diagnostics && data.startsWith("room:diagnostic:")) {
     const diagnostic = parseNetplayDiagnostic(data);
-    const turnPort = room.activeSelection?.path === "turn" ? 443 : room.pool.turnPort;
+    const turnPort = room.turnPort ?? room.pool.turnPort;
     if (diagnostic) console.log(JSON.stringify({
       ...diagnostic, event: "netplay_stall", archiveVersionId, roomId: room.id,
       seat: seat.seatNumber, platform: seat.platform,
       route: turnPort ? "hong_kong_turn_udp" : room.route,
-      path: room.activeSelection?.path, inputProtocol: room.route === "webrtc" ? room.inputProtocol ?? 0 : 0,
+      path: room.activeSelection?.path, backup: room.activeSelection?.backup,
+      inputProtocol: room.route === "webrtc" || room.activeSelection?.backup ? room.inputProtocol ?? 0 : 0,
     }));
     return;
   }
   if (data === "room:pong") {
-    if (room.route !== "webrtc" && Date.now() - seat.lastPong >= heartbeatTimeoutMs) {
+    if (!canResumeControl(room) && Date.now() - seat.lastPong >= heartbeatTimeoutMs) {
       leave(room, seat, "heartbeat_timeout");
       return;
     }
@@ -263,14 +284,22 @@ function receiveText(room, seat, data) {
     }
     const active = room.activeSelection;
     if (room.route === "pending" && Buffer.byteLength(data) <= 24_576) room.selection.receive(seat, message);
-    else if (active && message?.round === active.round && message.path === active.path) {
-      if (message.type === "failed") leave(room, seat, "rtc_failed");
+    else if (active && message?.round === active.round &&
+      (message.path === active.path || active.backup && message.path === active.backup)) {
+      if (message.type === "failed") {
+        if (message.path === active.path) leave(room, seat, "rtc_failed");
+        else {
+          seat.backupClosed = true;
+          console.log(JSON.stringify({ event: "netplay_backup_closed", archiveVersionId, roomId: room.id,
+            seat: seat.seatNumber, path: active.backup, turnPort: 3478 }));
+        }
+      }
       else if (message.type === "ice-pair") {
         const pair = /^(host|srflx|prflx|relay):(host|srflx|prflx|relay):(udp|tcp)$/.exec(message.value);
         if (pair) {
           const [, localCandidateType, remoteCandidateType, protocol] = pair;
           console.log(JSON.stringify({ event: "netplay_ice_pair", archiveVersionId, roomId: room.id,
-            seat: [...room.seats].indexOf(seat) + 1, path: active.path, localCandidateType, remoteCandidateType, protocol }));
+            seat: [...room.seats].indexOf(seat) + 1, path: message.path, localCandidateType, remoteCandidateType, protocol }));
         }
       }
     }
@@ -356,11 +385,13 @@ function attachRoomSocket(socket, room, seat) {
 
   socket.on("close", code => {
     if (!room.seats.has(seat) || seat.socket !== socket) return;
-    if (room.route !== "webrtc") {
+    if (!canResumeControl(room) || (room.route !== "webrtc" && (code === 1000 || code === 1001))) {
       leave(room, seat, "socket_close", code);
       return;
     }
     clearInterval(seat.ping);
+    clearTimeout(seat.hide);
+    clearTimeout(seat.expire);
     seat.socket = undefined;
     seat.expire = setTimeout(() => leave(room, seat, "control_resume_timeout", code), heartbeatTimeoutMs);
     console.log(JSON.stringify({ event: "netplay_control_disconnected", archiveVersionId, roomId: room.id,
@@ -378,16 +409,12 @@ function attachRoomSocket(socket, room, seat) {
       send(other?.socket, data);
       return;
     }
-    if (room.route !== "hong_kong_websocket" || room.seats.size !== 2 || ![4, 8, 12].includes(data.length)) return;
+    const mirroredInput = room.activeSelection?.backup && data.length >= 16 && data.length <= 272 &&
+      data.readUInt32LE(0) === 0x31504e49 && data.readInt32LE(4) > 0;
+    if (room.route !== "hong_kong_websocket" || room.seats.size !== 2 || !([4, 8, 12].includes(data.length) || mirroredInput)) return;
     if (data.length === 12 && data.readInt32LE(4) === -1) {
-      const ready = room.ready;
-      if (!ready || ready.socket === socket) {
-        room.ready = { socket, data };
-        return;
-      }
-      room.ready = undefined;
-      send(ready.socket, data);
-      send(socket, ready.data);
+      (room.ready ??= new Map()).set(seat, data);
+      forwardMatchReady(room);
       return;
     }
     if (other?.socket?.readyState === WebSocket.OPEN) {
@@ -397,9 +424,9 @@ function attachRoomSocket(socket, room, seat) {
   });
 }
 
-function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtocol, platform, routeSelection, diagnostics, roomAccess }) {
+function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtocol, platform, routeSelection, routeInputMirror, diagnostics, roomAccess }) {
   const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0, password: createRoomPassword() };
-  const seat = { identity, rtc, routeSelection, inputStats, inputProtocol, platform, diagnostics, roomAccess,
+  const seat = { identity, rtc, routeSelection, routeInputMirror, inputStats, inputProtocol, platform, diagnostics, roomAccess,
     seatNumber: room.seats.size + 1, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
   room.seats.add(seat);
   pool.rooms.set(roomId, room);
@@ -413,6 +440,7 @@ function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtoc
       player.seatNumber = index + 1;
       player.rttMs = player.peakRttMs = null;
       player.input = undefined;
+      player.backupClosed = false;
       player.iceStatsPhase = undefined;
       player.signals = 0;
       player.milestones = [];
@@ -422,15 +450,19 @@ function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtoc
     if (pool === auto && seats.every(player => player.routeSelection)) {
       room.route = "pending";
       const round = room.lastRound = Math.max(Date.now(), (room.lastRound ?? 0) + 1);
+      const inputMirror = Boolean(turnKey && room.inputProtocol === 1 && seats.every(player => player.rtc && player.routeInputMirror));
+      const turnPort = inputMirror ? 3478 : 443;
       const paths = ["websocket"];
       if (seats.every(player => player.rtc)) {
         paths.push("direct");
         if (turnKey) paths.push("turn");
       }
       room.selection = startRouteSelection({
-        round, seats, paths, send: sendRoute,
-        commit(path, measurements) {
-          selectRoute(room, path === "websocket" ? "hong_kong_websocket" : "webrtc", "measured", { round, path, measurements });
+        round, seats, paths, send: sendRoute, inputMirror,
+        commit(path, measurements, backup) {
+          selectRoute(room, path === "websocket" ? "hong_kong_websocket" : "webrtc",
+            "measured", { round, path, backup, measurements, turnPort: path === "turn" ? turnPort : undefined,
+              backupTurnPort: backup ? turnPort : undefined });
         },
         fail(measurements) {
           console.log(JSON.stringify({ event: "netplay_route", archiveVersionId, roomId, round,
@@ -444,7 +476,7 @@ function joinRoom(socket, { roomId, pool, identity, rtc, inputStats, inputProtoc
           type: "start", round, offer: index === 0, inputProtocol: room.inputProtocol,
           paths: paths.map(path => path === "websocket" ? { id: path } : {
             id: path, relayOnly: path === "turn",
-            iceServers: path === "turn" ? turnIceServers(roomId, index, 443, round) : iceServers,
+            iceServers: path === "turn" ? turnIceServers(roomId, index, turnPort, round) : iceServers,
           }),
         });
       }
@@ -522,7 +554,7 @@ function joinError(target, code) {
 server.on("upgrade", (request, socket, head) => {
   const target = route(request);
   const room = target?.pool.rooms.get(target.roomId);
-  const resume = target?.resume && room?.route === "webrtc" &&
+  const resume = target?.resume && canResumeControl(room) &&
     [...room.seats].find(seat => !seat.socket && seat.resumeToken === target.resume);
   const error = target && !target.directory && !target.roomAccess && !target.resume ? joinError(target, null) : undefined;
   const status = request.headers.origin !== origin ? 403
@@ -549,6 +581,7 @@ server.on("upgrade", (request, socket, head) => {
       attachRoomSocket(client, room, resume);
       sendRoomSettings(room);
       send(client, String(3 + [...room.seats].indexOf(resume)));
+      forwardMatchReady(room);
       console.log(JSON.stringify({ event: "netplay_control_resumed", archiveVersionId, roomId: room.id,
         seat: [...room.seats].indexOf(resume) + 1 }));
     } else if (target.roomAccess) {

@@ -32,6 +32,8 @@ staging 保留该 Environment 的 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKE
 
 玉露弹（作品 282）的联机空间默认使用 `netplay-hk.viprpg.org` 的自动选线房间池。香港正式进程监听本机 8788，独立于预生产 8787。进程的 `NETPLAY_ARCHIVE_VERSION` 与空间外部地址中的固定数字路径一致。正式 Environment 的 `PRODUCTION_NETPLAY_HK_IDENTITY_KEY` 与正式进程的签名密钥一致，由部署步骤随 Worker 发布。旧 APK 的联机地址查询保留同源入口，归档 335 仍可查询联机地址和使用同版本房间。
 
+发布双路输入时先核对正式网站已提供同一候选的 Player。随后备份 `/opt/viprpg-netplay-production` 中的香港中继脚本，将同一提交的 `netplay-hk-relay.mjs` 安装为 `relay.mjs`，同步选线、诊断和房间密码模块，再重启 `viprpg-netplay-production`。重启会结束该进程内的现有房间。核对运行脚本及本机 8788、公网 `netplay-hk.viprpg.org/healthz` 返回的空间编号，随后从 `netplay_route.backup` 和 `netplay_ice_pair` 核对双路对局。
+
 ## 本地准备与执行
 
 Wrangler 顶层仍对应原正式 Worker，`env.staging` 对应预生产；没有为命名统一创建 `-production` Worker。`--env production` 是项目脚本的显式选择，不会再传给 Wrangler 追加名称。
