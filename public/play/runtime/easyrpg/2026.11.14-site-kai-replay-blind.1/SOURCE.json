@@ -1,17 +1,17 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "a6af2703b92be3f52b13351e77a14a764c6ca8c3",
-  "version": "2026.11.14-site-kai-departure.1",
-  "build": "kai-web-departure",
-  "artifact": "Kai-Web-2026.11.14-departure.1.zip",
-  "archiveSha256": "ce50d727ecaf79b58c5fc3f42c87e10004489e5bbc74d149137f656883560e63",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/a6af2703b92be3f52b13351e77a14a764c6ca8c3",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/a6af2703b92be3f52b13351e77a14a764c6ca8c3/COPYING",
+  "revision": "9193fd2a0d210d58ced84faf9f6c719c96e996da",
+  "version": "2026.11.14-site-kai-replay-blind.1",
+  "build": "kai-web-replay-blind",
+  "artifact": "Kai-Web-2026.11.14-replay-blind.1.zip",
+  "archiveSha256": "40e2cfadb1d65a6734284c4f88ba9424c6e2df57edf17b44b5f1227a10b35c00",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/9193fd2a0d210d58ced84faf9f6c719c96e996da",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/9193fd2a0d210d58ced84faf9f6c719c96e996da/COPYING",
   "sourceState": "patched-commit",
   "sourcePatches": [
     {
-      "path": "scripts/runtime-patches/netplay-room-departure.patch",
-      "sha256": "d97cc9dafac8155c4d2d529f84de5ecd39994b189dd80364d8e9ac1b7f4da54c"
+      "path": "scripts/runtime-patches/netplay-replay-blind.patch",
+      "sha256": "e8702a7eb1c37c87431b400a0998dcb687e835259c739ea8101af9b0f4f09c69"
     }
   ],
   "sourceSnapshot": null,
@@ -47,28 +47,28 @@
       "sha256": "3995b3d2c87b7fb4dad420eab6fa71d59fadb4be0bba592c67dd9d16b30701a6"
     },
     "easyrpg-player.js": {
-      "size": 131260,
-      "sha256": "18324203d57b62a5b237123a3d56eb0ffa2a38719419d3816abe8fd260703ab0"
+      "size": 131290,
+      "sha256": "8a902dffd2fa8e84f31aa372632a886ef6701fd2efa201d59c2586806a62ad97"
     },
     "easyrpg-player.wasm": {
-      "size": 13179027,
-      "sha256": "5bfb6a2a463eb928951b75669741f4625704dee7379b758ebdeeb5360a277cdb"
+      "size": 13179228,
+      "sha256": "acd2d63d88acd82726305aa3f6a95d12bf14e1915f9d455ee0e667a8c69b7e8a"
     },
     "easyrpg-player.data": {
       "size": 7557598,
       "sha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6"
     },
     "easyrpg-player-asyncify.js": {
-      "size": 137328,
-      "sha256": "d6d55d9f266abd8d2a1d2720b32cb1e97c5604e6914a7fef481741b4f92f4966"
+      "size": 137358,
+      "sha256": "95fa7f919a91747c9b15b4aa1cbdb300f8ba0f9cc512ddca1a3c0f0f8e7cb88b"
     },
     "easyrpg-player-asyncify.wasm": {
-      "size": 17375418,
-      "sha256": "57f0000b67c84646e5e8b138fcee79de191dc658f08b3e96bfe30fb73fac2803"
+      "size": 17375696,
+      "sha256": "84544479c1b4093ad52ecd6e570ba6a12f74a3290df8a5f8b3169f24f24a543a"
     },
     "player-worker.js": {
-      "size": 75272,
-      "sha256": "07a2619978f331b284342833b28dc4ba4eb3c06fdc5a3e5521630fff419d2e7c"
+      "size": 75286,
+      "sha256": "0b3535f8f506c3238b9fae151c3f583d13bbcf2e8d9fa362b43e7c2cfc1e55a4"
     },
     "player-audio.js": {
       "size": 1910,
@@ -127,20 +127,20 @@
       "sha256": "eca83f8e01f24a146182ad93e08288da270441b7018b8ed2909f57440d3ff2ae"
     },
     "easyrpg-player.wasm.br": {
-      "size": 4059326,
-      "sha256": "663d675600da291b73dfec3630b813600891927aa38936c845f2c3a83602db74"
+      "size": 4061092,
+      "sha256": "75d52f7ecd008aeb02b3261bb923467d5fcfcf3c8518679e9598cfd1dc338000"
     },
     "easyrpg-player.data.br": {
       "size": 6311434,
       "sha256": "dfeef2a7cca1aee072450b553c6e372c90c4f4c8b2149e95899b6b4bb634f702"
     },
     "easyrpg-player-asyncify.wasm.br": {
-      "size": 4661616,
-      "sha256": "275afcf0643acbdaa0d873ad66deb5bdf6955b5372056f34a30f550d1533a24c"
+      "size": 4660033,
+      "sha256": "b6505807c1bd31d478661523a2082ed0d23d73097ff89bb86d3ac0b7cd4d4244"
     },
-    "netplay-room-departure.patch": {
-      "size": 5182,
-      "sha256": "d97cc9dafac8155c4d2d529f84de5ecd39994b189dd80364d8e9ac1b7f4da54c"
+    "netplay-replay-blind.patch": {
+      "size": 2526,
+      "sha256": "e8702a7eb1c37c87431b400a0998dcb687e835259c739ea8101af9b0f4f09c69"
     }
   }
 }

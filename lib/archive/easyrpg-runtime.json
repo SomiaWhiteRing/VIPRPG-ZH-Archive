@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.14-site-kai-departure.1",
-  "revision": "a6af2703b92be3f52b13351e77a14a764c6ca8c3",
-  "build": "kai-web-departure",
+  "version": "2026.11.14-site-kai-replay-blind.1",
+  "revision": "9193fd2a0d210d58ced84faf9f6c719c96e996da",
+  "build": "kai-web-replay-blind",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "ce50d727ecaf79b58c5fc3f42c87e10004489e5bbc74d149137f656883560e63",
+  "archiveSha256": "40e2cfadb1d65a6734284c4f88ba9424c6e2df57edf17b44b5f1227a10b35c00",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -24,8 +24,8 @@
   },
   "sourcePatches": [
     {
-      "path": "scripts/runtime-patches/netplay-room-departure.patch",
-      "sha256": "d97cc9dafac8155c4d2d529f84de5ecd39994b189dd80364d8e9ac1b7f4da54c"
+      "path": "scripts/runtime-patches/netplay-replay-blind.patch",
+      "sha256": "e8702a7eb1c37c87431b400a0998dcb687e835259c739ea8101af9b0f4f09c69"
     }
   ]
 }

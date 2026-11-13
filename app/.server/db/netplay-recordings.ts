@@ -6,13 +6,13 @@ export function netplayRecordingKey(id: string, seat: number, seq: number) {
 
 export function getRecordedReplayStart(events: RecordingBatch["events"]) {
   const start = events.find(event => event[0] === "start")?.[1] as {
-    seed: number; map: number; fighters: [number, number]; rounds: number; maniacSeed: number; rng: string;
+    seed: number; map: number; fighters: [number, number]; rounds: number; maniacSeed: number; rng: string; blind?: unknown;
   } | undefined;
   if (!start || !Number.isInteger(start.seed) || !Number.isInteger(start.map) ||
       !Array.isArray(start.fighters) || start.fighters.length !== 2 || !start.fighters.every(Number.isInteger) ||
       !Number.isInteger(start.rounds) || !Number.isInteger(start.maniacSeed) || typeof start.rng !== "string") return;
   const { seed, map, fighters, rounds, maniacSeed, rng } = start;
-  return { seed, map, fighters, rounds, maniacSeed, rng };
+  return { seed, map, fighters, rounds, maniacSeed, rng, blind: typeof start.blind === "boolean" ? start.blind : undefined };
 }
 
 export async function saveNetplayRecording(env: CloudflareEnv, batch: RecordingBatch, initialize = true) {

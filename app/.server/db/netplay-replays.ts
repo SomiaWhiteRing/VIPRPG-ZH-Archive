@@ -28,7 +28,7 @@ const SELECT = `
         SELECT 1 FROM netplay_replay_recording_start a LEFT JOIN netplay_replay_recording_start b
           ON b.match_id=a.match_id AND b.seat=3-a.seat
         WHERE a.match_id=m.id AND (
-          a.start_json='null' OR a.start_json<>b.start_json
+          a.start_json='null' OR json_remove(a.start_json,'$.blind')<>json_remove(b.start_json,'$.blind')
         )
       )
       AND EXISTS (SELECT 1 FROM netplay_match_chunks c WHERE c.match_id=m.id
@@ -109,6 +109,8 @@ export async function readNetplayReplay(runtime: AppRuntime, id: string, termina
     .bind(id).all<{ seat: number; seq: number }>();
   const tracks = [new Map<number, number>(), new Map<number, number>()];
   let start: Start | undefined;
+  let blind: boolean | undefined;
+  let blindConflict = false;
   const chunks = includeFrames ? results : results.filter(chunk => chunk.seq === 0);
   for (let offset = 0; offset < chunks.length; offset += 6) {
     const batch = chunks.slice(offset, offset + 6);
@@ -123,7 +125,11 @@ export async function readNetplayReplay(runtime: AppRuntime, id: string, termina
         const { seed, map, fighters, rounds, maniacSeed, rng } = value;
         if (start && (start.seed !== seed || start.map !== map || start.rounds !== rounds ||
             start.maniacSeed !== maniacSeed || start.rng !== rng || fighters.some((fighter, i) => fighter !== start!.fighters[i]))) return;
-        start ??= { seed, map, fighters, rounds, maniacSeed, rng };
+        start ??= { seed, map, fighters, rounds, maniacSeed, rng, blind: undefined };
+        if (value.blind !== undefined) {
+          blindConflict ||= blind !== undefined && blind !== value.blind;
+          blind = value.blind;
+        }
       }
       if (!includeFrames) continue;
       for (const [type, frame, mask] of events) {
@@ -139,6 +145,7 @@ export async function readNetplayReplay(runtime: AppRuntime, id: string, termina
     }
   }
   if (!start) return;
+  if (!blindConflict) start.blind = blind;
   const frames = [0];
   if (includeFrames) {
     for (let i = 1; i <= terminal[0]; ++i) {
