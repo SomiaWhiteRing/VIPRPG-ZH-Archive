@@ -9,6 +9,8 @@ type ReplayRow = {
   id: string; started_at: number; favorite: number;
   first_name: string; first_avatar: string | null; first_archive: number | null;
   second_name: string; second_avatar: string | null; second_archive: number | null;
+  viewer_seat: 1 | 2 | null;
+  first_fighter: number | null; second_fighter: number | null;
   terminal: string;
 };
 
@@ -37,12 +39,16 @@ const SELECT = `
   )
   SELECT m.id,m.started_at,m.terminal,(f.match_id IS NOT NULL) AS favorite,
     a.display_name AS first_name,ua.avatar_blob_sha256 AS first_avatar,a.archive_version_id AS first_archive,
-    b.display_name AS second_name,ub.avatar_blob_sha256 AS second_avatar,b.archive_version_id AS second_archive
+    b.display_name AS second_name,ub.avatar_blob_sha256 AS second_avatar,b.archive_version_id AS second_archive,
+    CASE WHEN a.user_id=?1 THEN 1 WHEN b.user_id=?1 THEN 2 END AS viewer_seat,
+    json_extract(s.start_json,'$.fighters[0]') AS first_fighter,
+    json_extract(s.start_json,'$.fighters[1]') AS second_fighter
   FROM candidates m
   JOIN netplay_match_seats a ON a.match_id=m.id AND a.seat=1
   JOIN netplay_match_seats b ON b.match_id=m.id AND b.seat=2
   LEFT JOIN users ua ON ua.id=a.user_id
   LEFT JOIN users ub ON ub.id=b.user_id
+  LEFT JOIN netplay_replay_recording_start s ON s.match_id=m.id AND s.seat=1
   LEFT JOIN netplay_replay_favorites f ON f.user_id=?1 AND f.match_id=m.id
   WHERE m.terminal=m.other_terminal
 `;
@@ -58,6 +64,9 @@ function replaySummary(row: ReplayRow) {
       { name: row.second_name, avatar: getUserAvatarSrc(row.second_avatar) },
     ],
     terminal: terminal as [number, number, number],
+    viewerSeat: row.viewer_seat,
+    fighters: row.first_fighter === null || row.second_fighter === null
+      ? null : [row.first_fighter, row.second_fighter] as [number, number],
     archives: [row.first_archive, row.second_archive],
   };
 }
@@ -68,7 +77,15 @@ export async function listNetplayReplays(runtime: AppRuntime, userId: number, sp
     ORDER BY started_at DESC,id DESC LIMIT ?4 OFFSET ?5`)
     .bind(userId, space, Number(favorites), REPLAY_PAGE_SIZE, page * REPLAY_PAGE_SIZE).all<ReplayRow & { total: number }>();
   const pages = Math.ceil((results[0]?.total ?? 0) / REPLAY_PAGE_SIZE);
-  return { entries: results.map(replaySummary).filter(Boolean), more: page + 1 < pages, pages };
+  const entries = await Promise.all(results.map(async row => {
+    const entry = replaySummary(row);
+    if (entry && !entry.fighters) {
+      const replay = await readNetplayReplay(runtime, entry.id, entry.terminal, false);
+      entry.fighters = replay?.start.fighters ?? null;
+    }
+    return entry;
+  }));
+  return { entries: entries.filter(Boolean), more: page + 1 < pages, pages };
 }
 
 export async function getNetplayReplay(runtime: AppRuntime, userId: number, space: number | null, id: string) {
