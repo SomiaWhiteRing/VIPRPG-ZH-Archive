@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.13-site-kai-replay.8",
-  "revision": "a3a52fc0b91a656a54aae81d3b80e18a29d67897",
-  "build": "kai-web-replay",
+  "version": "2026.11.14-site-kai-terminal.1",
+  "revision": "ef183b211285237ea30c686d40f0c7bbc2fee9c1",
+  "build": "kai-web-terminal",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "1eeae9e5e464ac83b8d8528e65a70660e5c9defe6ba53d3fa40496fc871547f6",
+  "archiveSha256": "0491a921750b9d1e2a9a352aeba8bd332ff9ee2f7abd048f1ba14eea1daa4f1d",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -24,8 +24,8 @@
   },
   "sourcePatches": [
     {
-      "path": "scripts/runtime-patches/replay-recording-recovery.patch",
-      "sha256": "2fe80addfbeb20e8d46c24487144a0f82045a82e041b93ddf455ce780422f9f8"
+      "path": "scripts/runtime-patches/netplay-terminal-frame.patch",
+      "sha256": "0f4b4759c7f734b10fb90c405dfe72dc6111d83d6bf3effa57debb3b0af80741"
     }
   ]
 }
