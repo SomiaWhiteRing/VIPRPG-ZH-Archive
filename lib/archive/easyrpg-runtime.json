@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.14-site-kai-terminal.1",
-  "revision": "ef183b211285237ea30c686d40f0c7bbc2fee9c1",
-  "build": "kai-web-terminal",
+  "version": "2026.11.14-site-kai-departure.1",
+  "revision": "a6af2703b92be3f52b13351e77a14a764c6ca8c3",
+  "build": "kai-web-departure",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "0491a921750b9d1e2a9a352aeba8bd332ff9ee2f7abd048f1ba14eea1daa4f1d",
+  "archiveSha256": "ce50d727ecaf79b58c5fc3f42c87e10004489e5bbc74d149137f656883560e63",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -24,8 +24,8 @@
   },
   "sourcePatches": [
     {
-      "path": "scripts/runtime-patches/netplay-terminal-frame.patch",
-      "sha256": "0f4b4759c7f734b10fb90c405dfe72dc6111d83d6bf3effa57debb3b0af80741"
+      "path": "scripts/runtime-patches/netplay-room-departure.patch",
+      "sha256": "d97cc9dafac8155c4d2d529f84de5ecd39994b189dd80364d8e9ac1b7f4da54c"
     }
   ]
 }

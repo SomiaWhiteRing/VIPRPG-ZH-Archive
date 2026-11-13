@@ -1,17 +1,17 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "ef183b211285237ea30c686d40f0c7bbc2fee9c1",
-  "version": "2026.11.14-site-kai-terminal.1",
-  "build": "kai-web-terminal",
-  "artifact": "Kai-Web-2026.11.14-terminal.1.zip",
-  "archiveSha256": "0491a921750b9d1e2a9a352aeba8bd332ff9ee2f7abd048f1ba14eea1daa4f1d",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/ef183b211285237ea30c686d40f0c7bbc2fee9c1",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/ef183b211285237ea30c686d40f0c7bbc2fee9c1/COPYING",
+  "revision": "a6af2703b92be3f52b13351e77a14a764c6ca8c3",
+  "version": "2026.11.14-site-kai-departure.1",
+  "build": "kai-web-departure",
+  "artifact": "Kai-Web-2026.11.14-departure.1.zip",
+  "archiveSha256": "ce50d727ecaf79b58c5fc3f42c87e10004489e5bbc74d149137f656883560e63",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/a6af2703b92be3f52b13351e77a14a764c6ca8c3",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/a6af2703b92be3f52b13351e77a14a764c6ca8c3/COPYING",
   "sourceState": "patched-commit",
   "sourcePatches": [
     {
-      "path": "scripts/runtime-patches/netplay-terminal-frame.patch",
-      "sha256": "0f4b4759c7f734b10fb90c405dfe72dc6111d83d6bf3effa57debb3b0af80741"
+      "path": "scripts/runtime-patches/netplay-room-departure.patch",
+      "sha256": "d97cc9dafac8155c4d2d529f84de5ecd39994b189dd80364d8e9ac1b7f4da54c"
     }
   ],
   "sourceSnapshot": null,
@@ -47,28 +47,28 @@
       "sha256": "3995b3d2c87b7fb4dad420eab6fa71d59fadb4be0bba592c67dd9d16b30701a6"
     },
     "easyrpg-player.js": {
-      "size": 131208,
-      "sha256": "e1fd6a422ad192c07cb7227155bcdfdf6553abcad0658f9a3c5bc48c7e85d105"
+      "size": 131260,
+      "sha256": "18324203d57b62a5b237123a3d56eb0ffa2a38719419d3816abe8fd260703ab0"
     },
     "easyrpg-player.wasm": {
-      "size": 13178969,
-      "sha256": "82f9cc69bcc59b04df6f34c2f79c4fa3bfaf47de4cb28fcce0283d81ee4acb58"
+      "size": 13179027,
+      "sha256": "5bfb6a2a463eb928951b75669741f4625704dee7379b758ebdeeb5360a277cdb"
     },
     "easyrpg-player.data": {
       "size": 7557598,
       "sha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6"
     },
     "easyrpg-player-asyncify.js": {
-      "size": 137276,
-      "sha256": "53c04085ed433b43347b923851839798998d084b60acd3a67a9b012daa46b1a3"
+      "size": 137328,
+      "sha256": "d6d55d9f266abd8d2a1d2720b32cb1e97c5604e6914a7fef481741b4f92f4966"
     },
     "easyrpg-player-asyncify.wasm": {
-      "size": 17375276,
-      "sha256": "3f567059c3b83a3f11fb899dd486457547e1fdbf26dfbb27e12e0987efdcf64f"
+      "size": 17375418,
+      "sha256": "57f0000b67c84646e5e8b138fcee79de191dc658f08b3e96bfe30fb73fac2803"
     },
     "player-worker.js": {
-      "size": 74589,
-      "sha256": "d21b909ec888facdf101552ad99249703815cff0b081da0b7c2e2a1ba900efe3"
+      "size": 75272,
+      "sha256": "07a2619978f331b284342833b28dc4ba4eb3c06fdc5a3e5521630fff419d2e7c"
     },
     "player-audio.js": {
       "size": 1910,
@@ -127,20 +127,20 @@
       "sha256": "eca83f8e01f24a146182ad93e08288da270441b7018b8ed2909f57440d3ff2ae"
     },
     "easyrpg-player.wasm.br": {
-      "size": 4050981,
-      "sha256": "63d36f37986967fdf1793422c1036404f38effc9d2959ddeba21aa2e94e0cda3"
+      "size": 4059326,
+      "sha256": "663d675600da291b73dfec3630b813600891927aa38936c845f2c3a83602db74"
     },
     "easyrpg-player.data.br": {
       "size": 6311434,
       "sha256": "dfeef2a7cca1aee072450b553c6e372c90c4f4c8b2149e95899b6b4bb634f702"
     },
     "easyrpg-player-asyncify.wasm.br": {
-      "size": 4659607,
-      "sha256": "db7f31ad5cb5c2155e7579f18ecc61d95c5da564b5001f4c0e5035e8b0190fd8"
+      "size": 4661616,
+      "sha256": "275afcf0643acbdaa0d873ad66deb5bdf6955b5372056f34a30f550d1533a24c"
     },
-    "netplay-terminal-frame.patch": {
-      "size": 6723,
-      "sha256": "0f4b4759c7f734b10fb90c405dfe72dc6111d83d6bf3effa57debb3b0af80741"
+    "netplay-room-departure.patch": {
+      "size": 5182,
+      "sha256": "d97cc9dafac8155c4d2d529f84de5ecd39994b189dd80364d8e9ac1b7f4da54c"
     }
   }
 }

@@ -191,30 +191,49 @@ function forwardMatchReady(room) {
   send(second.socket, ready.get(first));
 }
 
-function leave(room, seat, reason, closeCode) {
-  if (!room.seats.has(seat)) return;
-  const heartbeat = [...room.seats].map(({ rttMs, peakRttMs }) => ({ rttMs, peakRttMs }));
-  const input = [...room.seats].map(player => player.input);
-  const route = room.route;
-  const turnPort = room.turnPort ?? room.pool.turnPort;
-  const leaving = reason === "rtc_failed" ? [...room.seats] : [seat];
-  for (const player of leaving) {
-    clearInterval(player.ping);
-    clearTimeout(player.hide);
-    clearTimeout(player.expire);
-    room.seats.delete(player);
-    player.socket?.close(1000);
-  }
+function resetRoomRoute(room) {
   clearTimeout(room.negotiation?.timer);
   room.selection?.stop();
   room.selection = room.activeSelection = undefined;
   room.turnPort = undefined;
   room.ready = room.negotiation = room.route = undefined;
   room.finish.reset();
+}
+
+function rtcFailed(room, reporter) {
+  const peer = [...room.seats].find(seat => seat !== reporter);
+  if (!peer) return;
+  if (!peer.socket) {
+    leave(room, peer, "rtc_peer_disconnected");
+    return;
+  }
+  // A data-channel error identifies a failed path, not which player left.
+  resetRoomRoute(room);
+  room.route = "hong_kong_websocket";
+  for (const seat of room.seats) {
+    seat.resumeToken = undefined;
+    renewHeartbeat(room, seat);
+    send(seat.socket, "room:route-ended");
+    if (peer.finishSync && reporter.finishSync) send(seat.socket, "room:finish:1");
+  }
+}
+
+function leave(room, seat, reason, closeCode) {
+  if (!room.seats.has(seat)) return;
+  const heartbeat = [...room.seats].map(({ rttMs, peakRttMs }) => ({ rttMs, peakRttMs }));
+  const input = [...room.seats].map(player => player.input);
+  const route = room.route;
+  const turnPort = room.turnPort ?? room.pool.turnPort;
+  clearInterval(seat.ping);
+  clearTimeout(seat.hide);
+  clearTimeout(seat.expire);
+  room.seats.delete(seat);
+  seat.socket?.close(1000);
+  resetRoomRoute(room);
   const remaining = room.seats.values().next().value;
   if (remaining?.socket) {
     remaining.resumeToken = undefined;
-    if (route === "webrtc") renewHeartbeat(room, remaining);
+    renewHeartbeat(room, remaining);
     send(remaining.socket, "2");
   } else {
     clearTimeout(remaining?.expire);
@@ -326,7 +345,7 @@ function receiveText(room, seat, data) {
     else if (active && message?.round === active.round &&
       (message.path === active.path || active.backup && message.path === active.backup)) {
       if (message.type === "failed") {
-        if (message.path === active.path) leave(room, seat, "rtc_failed");
+        if (message.path === active.path) rtcFailed(room, seat);
         else {
           seat.backupClosed = true;
           console.log(JSON.stringify({ event: "netplay_backup_closed", archiveVersionId: room.pool.id, roomId: room.id,
@@ -389,7 +408,7 @@ function receiveText(room, seat, data) {
   const message = data.slice(prefix.length);
   if (message === "fail") {
     if (room.route === "pending") selectRoute(room, "hong_kong_websocket", "client_failure");
-    else if (room.route === "webrtc") leave(room, seat, "rtc_failed");
+    else if (room.route === "webrtc") rtcFailed(room, seat);
     return;
   }
   const icePair = /^ice-pair:webrtc:(host|srflx|prflx|relay):(host|srflx|prflx|relay):(udp|tcp)$/.exec(message);
@@ -425,7 +444,7 @@ function attachRoomSocket(socket, room, seat) {
 
   socket.on("close", code => {
     if (!room.seats.has(seat) || seat.socket !== socket) return;
-    if (!canResumeControl(room) || (room.route !== "webrtc" && (code === 1000 || code === 1001))) {
+    if (!canResumeControl(room) || code === 1000 || code === 1001) {
       leave(room, seat, "socket_close", code);
       return;
     }
