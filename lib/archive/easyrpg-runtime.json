@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.13-site-kai-replay.7",
-  "revision": "31e5f40f265f1fe3230f0985d719380a7362fae6",
+  "version": "2026.11.13-site-kai-replay.8",
+  "revision": "a3a52fc0b91a656a54aae81d3b80e18a29d67897",
   "build": "kai-web-replay",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "patched-commit",
-  "archiveSha256": "ff487a6a3708f9f5e6744e380b98761c5c57dcb115ad4abebe606e26aa0a92cc",
+  "archiveSha256": "1eeae9e5e464ac83b8d8528e65a70660e5c9defe6ba53d3fa40496fc871547f6",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -24,8 +24,8 @@
   },
   "sourcePatches": [
     {
-      "path": "scripts/runtime-patches/replay-seek-checkpoints.patch",
-      "sha256": "8f6940644121479a0cbbf8f518b07a81f10f52d8f4aeda29c72ac23b65e9e260"
+      "path": "scripts/runtime-patches/replay-recording-recovery.patch",
+      "sha256": "2fe80addfbeb20e8d46c24487144a0f82045a82e041b93ddf455ce780422f9f8"
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { netplayRecordingKey } from "@/app/.server/db/netplay-recordings";
+import { getRecordedReplayStart, netplayRecordingKey } from "@/app/.server/db/netplay-recordings";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { getUserAvatarSrc } from "@/lib/user-profile";
 import type { RecordingBatch } from "../../../scripts/netplay-recording.mjs";
@@ -21,6 +21,14 @@ const SELECT = `
     JOIN netplay_matches m ON m.id=mine.match_id
     LEFT JOIN works w ON w.id=mine.work_id
     WHERE (?2 IS NULL OR (mine.user_id=?1 AND w.netplay_space_id=?2))
+      AND NOT EXISTS (SELECT 1 FROM netplay_replay_recovery r WHERE r.match_id=m.id AND r.variables_json IS NULL)
+      AND NOT EXISTS (
+        SELECT 1 FROM netplay_replay_recording_start a LEFT JOIN netplay_replay_recording_start b
+          ON b.match_id=a.match_id AND b.seat=3-a.seat
+        WHERE a.match_id=m.id AND (
+          a.start_json='null' OR a.start_json<>b.start_json
+        )
+      )
       AND EXISTS (SELECT 1 FROM netplay_match_chunks c WHERE c.match_id=m.id
         GROUP BY c.seat HAVING c.seat=1 AND MAX(c.end_reason)='settled' AND COUNT(*)=MAX(c.seq)+1)
       AND EXISTS (SELECT 1 FROM netplay_match_chunks c WHERE c.match_id=m.id
@@ -74,15 +82,9 @@ export async function setNetplayReplayFavorite(runtime: AppRuntime, userId: numb
     : "DELETE FROM netplay_replay_favorites WHERE user_id=? AND match_id=?").bind(userId, id).run();
 }
 
-type Start = { seed: number; map: number; fighters: [number, number]; rounds: number; maniacSeed: number; rng: string };
-
-function recordedStart(events: RecordingBatch["events"]) {
-  const start = events.find(event => event[0] === "start")?.[1] as Partial<Start> | undefined;
-  if (!start || !Number.isInteger(start.seed) || !Number.isInteger(start.map) ||
-    !Array.isArray(start.fighters) || start.fighters.length !== 2 || !start.fighters.every(Number.isInteger) ||
-    !Number.isInteger(start.rounds) || !Number.isInteger(start.maniacSeed) || typeof start.rng !== "string") return;
-  return start as Start;
-}
+type Start = NonNullable<ReturnType<typeof getRecordedReplayStart>> & {
+  variables?: [number, number][];
+};
 
 export async function readNetplayReplay(runtime: AppRuntime, id: string, terminal: [number, number, number], includeFrames: boolean) {
   const bucket = runtime.env.ARCHIVE_BUCKET;
@@ -99,7 +101,7 @@ export async function readNetplayReplay(runtime: AppRuntime, id: string, termina
       if (!events) return;
       const chunk = batch[index];
       if (chunk.seq === 0) {
-        const value = recordedStart(events);
+        const value = getRecordedReplayStart(events);
         if (!value) return;
         const { seed, map, fighters, rounds, maniacSeed, rng } = value;
         if (start && (start.seed !== seed || start.map !== map || start.rounds !== rounds ||
@@ -127,6 +129,10 @@ export async function readNetplayReplay(runtime: AppRuntime, id: string, termina
       if (a === undefined || b === undefined) return;
       frames.push(a | (b << 8));
     }
+    const restored = await runtime.db.prepare(
+      "SELECT variables_json FROM netplay_replay_recovery WHERE match_id=?",
+    ).bind(id).first<string>("variables_json");
+    if (restored) start.variables = JSON.parse(restored) as NonNullable<Start["variables"]>;
   }
   return { version: 1, start, frames: includeFrames ? frames : undefined };
 }

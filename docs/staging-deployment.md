@@ -22,6 +22,8 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 同一联机空间只绑定使用相同对战规则、输入含义和同步事件的版本。翻译、素材和界面调整可沿用原空间；影响对战同步的更新使用新空间，避免已打开的旧版与新版进入同一场对局。
 
+香港中继可用 `NETPLAY_NEXT_SPACE_PATH` 同时提供第二个数字路径。两个路径各自维护房间和大厅，`/healthz` 的 `spacePathIds` 列出已启用的路径。在两种语言的新归档准备好后，将两件作品一起换绑到新空间，并分别核对旧路径的房间与新路径的中日版大厅。安装中继脚本时的服务重启会结束当时仍在该进程中的房间。
+
 联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Cloudflare 托管的作品可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
 
 预生产玉露弹（作品 18）的联机空间使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 以 Debian 的 Node.js 和 `node-ws` 运行。沿用的 `NETPLAY_ARCHIVE_VERSION` 表示该中继地址的固定数字路径，随空间配置管理。Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
