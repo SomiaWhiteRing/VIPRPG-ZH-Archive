@@ -153,6 +153,7 @@ export function WebPlayClient({
   const installed = installation?.status === "ready";
   const installing = installation?.status === "installing";
   const activeInstalling = installing && installSessionActive;
+  const installAction = hasPreviousInstallation ? "更新" : "安装";
   const interruptedInstalling = installing && !installSessionActive;
   const failed = installation?.status === "failed";
   const playerBusy = running || playerStarting;
@@ -798,7 +799,7 @@ export function WebPlayClient({
                         {playerStarting
                           ? "正在启动 EasyRPG…"
                           : activeInstalling
-                            ? "正在安装游戏文件…"
+                            ? `正在${installAction}游戏文件…`
                             : installed
                               ? "游戏已准备好"
                               : "未安装"}
@@ -890,7 +891,7 @@ export function WebPlayClient({
                 ) : null}
 
                 {activeInstalling && installation ? (
-                  <InstallProgress installation={installation} />
+                  <InstallProgress action={installAction} installation={installation} />
                 ) : null}
 
                 {loadingLocalState ? (
@@ -904,7 +905,7 @@ export function WebPlayClient({
                     type="button"
                     variant="outline"
                   >
-                    取消安装
+                    取消{installAction}
                   </Button>
                 ) : failed || interruptedInstalling ? (
                   <Rm2kButton
@@ -1012,7 +1013,7 @@ export function WebPlayClient({
                       </dl>
 
                       {installation && !activeInstalling ? (
-                        <InstallProgress installation={installation} compact />
+                        <InstallProgress action={installAction} installation={installation} compact />
                       ) : null}
 
                       <div className="flex flex-wrap gap-2">
@@ -1145,12 +1146,15 @@ export function WebPlayClient({
 }
 
 function InstallProgress({
+  action,
   installation,
   compact = false,
 }: {
+  action: "安装" | "更新";
   installation: WebPlayInstallation;
   compact?: boolean;
 }) {
+  const progressLabel = `${action}进度`;
   const downloadPercent = percent(
     installation.downloadedBytes,
     installation.downloadBytesTotal,
@@ -1171,13 +1175,13 @@ function InstallProgress({
       </div>
       <Progress aria-label="下载进度" value={downloadPercent} />
       <div className="flex items-center justify-between gap-3">
-        <span>安装进度</span>
+        <span>{progressLabel}</span>
         <strong className="text-right font-medium">
           {installation.installedFiles.toLocaleString("zh-CN")} /{" "}
           {installation.totalFiles.toLocaleString("zh-CN")} 文件
         </strong>
       </div>
-      <Progress aria-label="安装进度" value={extractPercent} />
+      <Progress aria-label={progressLabel} value={extractPercent} />
       {installation.error ? (
         <Notice tone="error" className="m-0 rounded-md border p-3 text-sm">
           {installation.error}
