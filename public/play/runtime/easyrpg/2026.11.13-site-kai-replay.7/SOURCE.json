@@ -1,14 +1,19 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "05a09ebff843ec392a5d18fecd556ab78dfdd88e",
-  "version": "2026.11.13-site-kai-recording-outbox.1",
-  "build": "kai-web-recording-outbox",
-  "artifact": "Kai-Web-2026.11.13-recording-outbox.zip",
-  "archiveSha256": "40d5fbd9f2b797bdabf9810ef792afd71fc1c32e1f094d3665e0ff095cb4a408",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/05a09ebff843ec392a5d18fecd556ab78dfdd88e",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/05a09ebff843ec392a5d18fecd556ab78dfdd88e/COPYING",
-  "sourceState": "commit",
-  "sourcePatches": [],
+  "revision": "31e5f40f265f1fe3230f0985d719380a7362fae6",
+  "version": "2026.11.13-site-kai-replay.7",
+  "build": "kai-web-replay",
+  "artifact": "Kai-Web-2026.11.13-replay.7.zip",
+  "archiveSha256": "ff487a6a3708f9f5e6744e380b98761c5c57dcb115ad4abebe606e26aa0a92cc",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/31e5f40f265f1fe3230f0985d719380a7362fae6",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/31e5f40f265f1fe3230f0985d719380a7362fae6/COPYING",
+  "sourceState": "patched-commit",
+  "sourcePatches": [
+    {
+      "path": "scripts/runtime-patches/replay-seek-checkpoints.patch",
+      "sha256": "8f6940644121479a0cbbf8f518b07a81f10f52d8f4aeda29c72ac23b65e9e260"
+    }
+  ],
   "sourceSnapshot": null,
   "sourceSnapshotSha256": null,
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",
@@ -38,32 +43,32 @@
   "patches": [],
   "files": {
     "index.js": {
-      "size": 66700,
-      "sha256": "bbb2ff6503af4a02a102ad7b8f5489bfc4fb889feb228dc272b9767ae1c95762"
+      "size": 66804,
+      "sha256": "1cf3f1f9f8b38cd8020ba7f2530a2c200a1b3803e185b167b84547ef91552cd8"
     },
     "easyrpg-player.js": {
-      "size": 130041,
-      "sha256": "732b2da53f3790514acff3acf37ac31b75a7d6c88adbf8fed2920f84f627c7fa"
+      "size": 131146,
+      "sha256": "f34d6bf79f9abe27eb8425e9363232f5b91c1b5a27dff4a439f6c539caa7da9d"
     },
     "easyrpg-player.wasm": {
-      "size": 13144863,
-      "sha256": "152676bd31b6b338bb85213bec3e97be0d1312b6feca341653db3a45d2fc80cc"
+      "size": 13177402,
+      "sha256": "2b0fe7fe72a4582f43fc4f42df8824477f824110815a2e50891265bffe646ebb"
     },
     "easyrpg-player.data": {
       "size": 7557598,
       "sha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6"
     },
     "easyrpg-player-asyncify.js": {
-      "size": 136109,
-      "sha256": "8a33f183af86b6a85d658d1158b1444cd994b6c959e72190a95be06e3115d9e0"
+      "size": 137214,
+      "sha256": "a66d2483f5cb3c0898a775a3e67046ee220d6013fb017750140041db9a2f37ab"
     },
     "easyrpg-player-asyncify.wasm": {
-      "size": 17315999,
-      "sha256": "5d7c2781b090774b64e40371db3428a75c80dd7331495528ab36849ff5b07a03"
+      "size": 17372823,
+      "sha256": "cd1e78e3fb60831f7a23edf9e54c035a7bdfcb7ca8159324f2d3377eb6806dde"
     },
     "player-worker.js": {
-      "size": 66118,
-      "sha256": "5ae58079cbe7100db30e5f10d0060e3abe285ff0be57e8ac17aae6f81ccf8703"
+      "size": 73473,
+      "sha256": "e4e262a673a69db93ddf5f44ff71b04118610a93594c7eca83dd58a7cd4512e5"
     },
     "player-audio.js": {
       "size": 1910,
@@ -117,17 +122,25 @@
       "size": 81623,
       "sha256": "22ea534954e6bd50ef05157a9a6c02009815ff9f97769bb25df041385514c956"
     },
+    "game-services.js": {
+      "size": 761,
+      "sha256": "3431c6f9ef244906d51a301b73db373f11a008d548bdb321ad14ab874466c7f4"
+    },
     "easyrpg-player.wasm.br": {
-      "size": 4044146,
-      "sha256": "dfb843e894f6bb27f2f87670b2743cbd01b3c603711af7bf7d4355d4b05c64c3"
+      "size": 4051609,
+      "sha256": "a6a9e4076306b90778b52fdabc5a5c1e9c512e4b055162d13213de3bce93d31f"
     },
     "easyrpg-player.data.br": {
       "size": 6311434,
       "sha256": "dfeef2a7cca1aee072450b553c6e372c90c4f4c8b2149e95899b6b4bb634f702"
     },
     "easyrpg-player-asyncify.wasm.br": {
-      "size": 4645254,
-      "sha256": "e797b07e912e1ad25d5c0c2bded7f3c4aca37a68838ec141ffaa5aebfe5ba50a"
+      "size": 4651368,
+      "sha256": "fad13b11c355cf1753e88c4a6cc384b08c68150bc827ebf7ca7094bc2f0c2e8b"
+    },
+    "replay-seek-checkpoints.patch": {
+      "size": 31292,
+      "sha256": "8f6940644121479a0cbbf8f518b07a81f10f52d8f4aeda29c72ac23b65e9e260"
     }
   }
 }

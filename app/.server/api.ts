@@ -19,6 +19,7 @@ import * as netplaySpacesEndpoint from "@/app/.server/endpoints/api/admin/netpla
 import * as adminNetplayRecordingDownload from "@/app/.server/endpoints/api/admin/netplay-matches/download";
 import * as showcaseEndpoint from "@/app/.server/endpoints/api/account/showcase/route";
 import * as netplayMatchesEndpoint from "@/app/.server/endpoints/api/account/netplay-matches/route";
+import * as netplayReplaysEndpoint from "@/app/.server/endpoints/api/account/netplay-replays/route";
 import * as netplayRecordingIngestEndpoint from "@/app/.server/endpoints/api/netplay-recordings/ingest/route";
 import * as netplayRecordingUploadEndpoint from "@/app/.server/endpoints/api/netplay-recordings/upload/route";
 import * as creatorAvatarEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/avatar/route";
@@ -185,6 +186,7 @@ api.all("/api/works/:workId/media/:sha256", (_c) => jsonResponse({ok:false,error
 api.route("/", resourceApi);
 api.route("/", emojiApi);
 api.get("/api/account/netplay-matches", (c) => netplayMatchesEndpoint.GET(c.get("runtime")));
+api.post("/api/account/netplay-replays", (c) => netplayReplaysEndpoint.POST(c.get("runtime"), c.req.raw));
 api.post("/api/netplay-recordings/ingest", (c) => netplayRecordingIngestEndpoint.POST(c.get("runtime"), c.req.raw));
 api.post("/api/netplay-recordings/upload", (c) => netplayRecordingUploadEndpoint.POST(c.get("runtime"), c.req.raw));
 api.on(["GET", "HEAD"], "/api/account/showcase", (c) =>

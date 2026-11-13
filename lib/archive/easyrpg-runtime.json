@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.13-site-kai-recording-outbox.1",
-  "revision": "05a09ebff843ec392a5d18fecd556ab78dfdd88e",
-  "build": "kai-web-recording-outbox",
+  "version": "2026.11.13-site-kai-replay.7",
+  "revision": "31e5f40f265f1fe3230f0985d719380a7362fae6",
+  "build": "kai-web-replay",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
-  "sourceState": "commit",
-  "archiveSha256": "40d5fbd9f2b797bdabf9810ef792afd71fc1c32e1f094d3665e0ff095cb4a408",
+  "sourceState": "patched-commit",
+  "archiveSha256": "ff487a6a3708f9f5e6744e380b98761c5c57dcb115ad4abebe606e26aa0a92cc",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -21,5 +21,11 @@
     "name": "rime-pinyin-simp",
     "source": "https://github.com/rime/rime-pinyin-simp",
     "licenseSha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"
-  }
+  },
+  "sourcePatches": [
+    {
+      "path": "scripts/runtime-patches/replay-seek-checkpoints.patch",
+      "sha256": "8f6940644121479a0cbbf8f518b07a81f10f52d8f4aeda29c72ac23b65e9e260"
+    }
+  ]
 }

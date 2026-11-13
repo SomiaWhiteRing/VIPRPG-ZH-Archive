@@ -81,6 +81,7 @@ for (const patch of patches) {
 const output = {
   "index.js": files["player-host.js"],
   ...Object.fromEntries(runtimeFiles.map(name => [name, files[name]])),
+  "game-services.js": readFileSync(resolve(root, "scripts/easyrpg-game-services.js")),
 };
 // Serve precompressed representations through the canonical URLs. Keep the
 // original files for Android's local asset server, which serves unencoded bytes.
