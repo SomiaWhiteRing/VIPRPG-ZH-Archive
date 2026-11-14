@@ -32,9 +32,13 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 使用 `?netplayTurn=443` 可单独测试 UDP 443。该房间池使用 coturn 的 IPv4 和 IPv6 辅助监听地址，沿用同一组中继端口和凭据。野草云产品防火墙需放行入站 UDP 443，coturn 的 systemd 服务通过 `CAP_NET_BIND_SERVICE` 绑定该端口。
 
-预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN，房间服务收到双方确认后宣布房间就绪。双方同时声明 `routeInputMirror=1` 和 `inputProtocol=1` 时测试 UDP 3478，其余客户端组合沿用原有选线和 UDP 443。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs`、`netplay-route-selection.mjs`、`netplay-diagnostics.mjs`、`netplay-room-password.mjs`、`netplay-recording.mjs` 与 `netplay-finish.mjs` 放在同一目录。
+预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN，房间服务收到双方确认后宣布房间就绪。双方同时声明 `routeInputMirror=1` 和 `inputProtocol=1` 时测试 UDP 3478，其余客户端组合沿用原有选线和 UDP 443。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs`、`netplay-route-selection.mjs`、`netplay-diagnostics.mjs`、`netplay-ice-stats.mjs`、`netplay-room-password.mjs`、`netplay-recording.mjs` 与 `netplay-finish.mjs` 放在同一目录。
 
 自动选线保留直连。当双方支持双路、选线结果需要中转、WebSocket 和 UDP TURN 均可用时，房间服务在选线确认中保留两条线路。房间消息和开局确认走 WebSocket，局内输入和确认同时走两条线路，由 Player 按帧去重并交给原对战逻辑。WebSocket 即时发送，备用 UDP 合并待发的输入历史与确认，发送间隔至少 250 ms。UDP 通道关闭后，WebSocket 继续传送同一格式的输入。WebSocket 异常断开时，对战可经仍在线的 UDP 通道继续，Player 同时尝试在 15 秒内恢复房间连接。双路协商给探测预留最多 9 秒，再给双方确认预留 3 秒。通过 `netplay_route.backup`、`backupTurnPort` 和 `netplay_ice_pair` 核对实际启用的路径，用 `netplay_backup_closed` 和 `netplay_control_resumed` 识别局内回退及恢复。
+
+Player 通过 `routeIceDiagnostics=1` 声明支持自动选线 ICE 诊断，服务在 `start` 消息中通过 `diagnostics` 启用。`netplay_route.iceDiagnostics` 按席位记录支持情况，统计时据此区分旧客户端与缺失的诊断。新版 Player 在每条 RTC 候选启动后 2 秒、6 秒、被选中、失败或被淘汰时采集摘要，以 `route:` 前缀的 JSON 消息（`type` 为 `ice-stats`）上报。日志事件为 `netplay_ice_stats`，按空间、房间、`round`、`seat`、`path` 关联到同轮 `netplay_route`，每个阶段只记一次。摘要包含 ICE/DTLS/两个 DataChannel 状态、带相对时间的里程碑、候选 IP/端口和关联地址、IPv6 范围、候选交换/应用计数、STUN 节点及错误、候选对检查收发计数；不收集完整 SDP、TURN 凭据或令牌。`netplay_ice_failure` 在候选报错时单独记录原因，便于识别终止后最终摘要未送达的情况。淘汰候选的最终采集最多持续 250 ms，选线和游戏不等待采集完成；中途断开控制连接时摘要可能缺失。
+
+诊断时先分开计算“双方直连就绪”“双方完成测速”和“最终选中直连”，按 `round` 去重。用双方 `localSignals`/`remoteSignals` 检查公网候选是否生成并交换，用 `ipv6Scope=global` 区分公网 IPv6 与链路本地/ULA；远端地址被浏览器隐藏时优先看候选信令摘要。STUN 701 只代表某次地址发现请求不可达，不能独自证明所有 STUN 都失败。候选对已经发出检查但没有响应，说明该路径不通，仍不足以区分 NAT、终端防火墙或运营商丢弃；不同 STUN 映射须比较相同关联地址和端口，不能把不同本地 socket 的端口差异当作对称 NAT。`discarded` 表示选线结束后关闭候选，不等于 ICE 明确失败。只记录了早期阶段、没有最终摘要的轮次保留为未确定，不按推测填充失败原因。
 
 房间建立时生成四位密码，默认关闭。大厅只接收 `locked` 标记，支持 `roomAccess=1` 的成员通过私有 `room:settings` 消息取得开关与密码。新版 Player 在 WebSocket 接通后发送 `room:join`，服务校验当前房间和密码后才占座、协商线路。房主通过 `room:password` 修改设置。香港服务与 Cloudflare 房间服务使用同一口令格式，无密码旧客户端仍可进入未加锁房间。数字输入及第三行“密码”的显示由游戏事件负责。
 

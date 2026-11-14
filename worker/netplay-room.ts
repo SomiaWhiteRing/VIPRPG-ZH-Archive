@@ -8,7 +8,7 @@ import { productionNetplayHongKongOrigin, productionNetplayHongKongWork, product
   productionNetplaySiteOrigin, stagingNetplayEdgeOrigin, stagingNetplaySiteOrigin } from "../lib/archive/netplay-ingress";
 import { json } from "../lib/http";
 import { requestJsonValue } from "../lib/ui/api-response";
-import { iceCandidateTypes, parseIceStats } from "./netplay-ice-stats";
+import { iceCandidateTypes, parseIceStats } from "../scripts/netplay-ice-stats.mjs";
 import { parseNetplayDiagnostic } from "../scripts/netplay-diagnostics.mjs";
 import { createMatchRecording } from "../scripts/netplay-recording.mjs";
 import { createMatchFinish } from "../scripts/netplay-finish.mjs";

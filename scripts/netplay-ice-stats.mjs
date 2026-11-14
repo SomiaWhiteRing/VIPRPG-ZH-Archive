@@ -1,47 +1,60 @@
-export const iceCandidateTypes = ["host", "srflx", "prflx", "relay"] as const;
-const phases = ["2s", "6s", "connected", "fallback", "failure"];
+import { isIP } from "node:net";
+
+export const iceCandidateTypes = ["host", "srflx", "prflx", "relay"];
+const phases = ["2s", "6s", "connected", "fallback", "failure", "discarded"];
 const statuses = ["ok", "timeout", "peer_unavailable", "unsupported", "error"];
 const iceStates = ["new", "checking", "connected", "completed", "failed", "disconnected", "closed"];
 const protocols = ["udp", "tcp"];
 const relayProtocols = [...protocols, "tls"];
 const addressKinds = ["ipv4", "ipv6", "mdns", "unknown"];
 const stunSchemes = ["stun", "stuns", "turn", "turns"];
-const iceServers = ["cloudflare-stun", "nextcloud-stun", "hitv-stun", "cloudflare-turn"];
+const iceServers = ["cloudflare-stun", "nextcloud-stun", "hitv-stun", "cloudflare-turn", "hong-kong-turn"];
 
-type Fields = Record<string, unknown>;
+/** @typedef {Record<string, unknown>} Fields */
 
-function isRecord(value: unknown): value is Fields {
+/** @param {unknown} value @returns {value is Fields} */
+function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function choice(value: unknown, choices: readonly string[]) {
+/** @param {unknown} value @param {readonly string[]} choices */
+function choice(value, choices) {
   return typeof value === "string" && choices.includes(value) ? value : undefined;
 }
 
-function integer(value: unknown, max = Number.MAX_SAFE_INTEGER) {
+/** @param {unknown} value */
+function integer(value, max = Number.MAX_SAFE_INTEGER) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= max ? value : undefined;
 }
 
-function counts(row: Fields, keys: string[]) {
+/** @param {Fields} row @param {string[]} keys */
+function counts(row, keys) {
   return Object.fromEntries(keys.map(key => [key, integer(row[key])]));
 }
 
-function flag(value: unknown) {
+/** @param {unknown} value */
+function flag(value) {
   return typeof value === "boolean" ? value : undefined;
 }
 
-function probeRtt(value: unknown) {
+/** @param {unknown} value */
+function probeRtt(value) {
   return Array.isArray(value) ? value.slice(0, 2).map(ms => integer(ms, 10_000)).filter(ms => ms !== undefined) : undefined;
 }
 
-function rows(value: unknown, limit: number) {
+/** @param {unknown} value @param {number} limit */
+function rows(value, limit) {
   return Array.isArray(value) ? value.slice(0, limit).filter(isRecord) : [];
 }
 
-function candidate(row: Fields) {
+/** @param {Fields} row */
+function candidate(row) {
   return {
     type: choice(row.type, iceCandidateTypes), protocol: choice(row.protocol, protocols),
     addressKind: choice(row.addressKind, addressKinds), port: integer(row.port, 65535),
+    address: typeof row.address === "string" && isIP(row.address) ? row.address : undefined,
+    relatedAddress: typeof row.relatedAddress === "string" && isIP(row.relatedAddress) ? row.relatedAddress : undefined,
+    ipv6Scope: choice(row.ipv6Scope, ["global", "link_local", "unique_local", "loopback", "other"]),
     relatedAddressKind: choice(row.relatedAddressKind, addressKinds), relatedPort: integer(row.relatedPort, 65535),
     tcpType: choice(row.tcpType, ["active", "passive", "so"]),
     relayProtocol: choice(row.relayProtocol, relayProtocols),
@@ -50,7 +63,8 @@ function candidate(row: Fields) {
   };
 }
 
-function signals(value: unknown) {
+/** @param {unknown} value */
+function signals(value) {
   return rows(value, 32).map(row => ({
     ...candidate(row),
     elapsedMs: integer(row.elapsedMs),
@@ -59,7 +73,8 @@ function signals(value: unknown) {
   }));
 }
 
-function description(value: unknown) {
+/** @param {unknown} value */
+function description(value) {
   if (!isRecord(value)) return;
   return {
     type: choice(value.type, ["offer", "answer", "pranswer", "rollback"]),
@@ -78,14 +93,18 @@ function description(value: unknown) {
   };
 }
 
-// Rebuild the log from allowed fields. Browser-supplied addresses, SDP and error strings stay out of telemetry.
-export function parseIceStats(payload: string) {
-  if (payload.length > 49_152) return;
-  let value: unknown;
-  try {
-    value = JSON.parse(payload);
-  } catch {
-    return;
+// Keep candidate IPs for NAT/IPv6 diagnosis; exclude SDP, credentials and free-form error strings.
+/** @param {unknown} payload */
+export function parseIceStats(payload) {
+  /** @type {unknown} */
+  let value = payload;
+  if (typeof payload === "string") {
+    if (payload.length > 49_152) return;
+    try {
+      value = JSON.parse(payload);
+    } catch {
+      return;
+    }
   }
   if (!isRecord(value)) return;
   const phase = choice(value.phase, phases);
@@ -95,11 +114,17 @@ export function parseIceStats(payload: string) {
   if (!phase || !status || negotiationStartedAt === undefined || elapsedMs === undefined) return;
   return {
     phase, status, negotiationStartedAt, elapsedMs,
+    reason: typeof value.reason === "string" && /^[a-z_]{1,40}$/.test(value.reason) ? value.reason : undefined,
+    milestones: rows(value.milestones, 32).filter(row =>
+      typeof row.name === "string" && /^[a-z_]{1,40}$/.test(row.name)).map(row => ({
+      name: row.name, elapsedMs: integer(row.elapsedMs),
+    })),
     iceState: choice(value.iceState, iceStates),
     gatheringState: choice(value.gatheringState, ["new", "gathering", "complete"]),
     connectionState: choice(value.connectionState, ["new", "connecting", "connected", "disconnected", "failed", "closed"]),
     signalingState: choice(value.signalingState, ["stable", "have-local-offer", "have-remote-offer", "have-local-pranswer", "have-remote-pranswer", "closed"]),
     channelState: choice(value.channelState, ["connecting", "open", "closing", "closed"]),
+    inputChannelState: choice(value.inputChannelState, ["connecting", "open", "closing", "closed"]),
     dtlsState: choice(value.dtlsState, ["new", "connecting", "connected", "closed", "failed"]),
     iceRole: choice(value.iceRole, ["unknown", "controlling", "controlled"]),
     localSdp: description(value.localSdp),
@@ -110,6 +135,7 @@ export function parseIceStats(payload: string) {
     stunErrors: rows(value.stunErrors, 32).map(row => ({
       code: integer(row.code, 999), count: integer(row.count), scheme: choice(row.scheme, stunSchemes),
       addressKind: choice(row.addressKind, addressKinds), port: integer(row.port, 65535),
+      address: typeof row.address === "string" && isIP(row.address) ? row.address : undefined,
       iceServer: choice(row.iceServer, iceServers),
     })),
     localSignals: signals(value.localSignals),

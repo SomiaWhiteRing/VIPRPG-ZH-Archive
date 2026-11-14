@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { startRouteSelection } from "./netplay-route-selection.mjs";
 import { parseNetplayDiagnostic } from "./netplay-diagnostics.mjs";
+import { parseIceStats } from "./netplay-ice-stats.mjs";
 import { createMatchRecording } from "./netplay-recording.mjs";
 import { createMatchFinish } from "./netplay-finish.mjs";
 import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "./netplay-room-password.mjs";
@@ -75,6 +76,7 @@ function route(request) {
     inputStats: url.searchParams.get("inputStats") === "1",
     inputProtocol: url.searchParams.get("inputProtocol") === "1" ? 1 : 0,
     diagnostics: url.searchParams.get("diagnostics") === "1",
+    routeIceDiagnostics: url.searchParams.get("routeIceDiagnostics") === "1",
     platform: /Android/i.test(agent) ? "android" : /Windows/i.test(agent) ? "windows" : /iPhone|iPad/i.test(agent) ? "ios" : "other",
     resume: url.searchParams.get("resume"),
     identity: payload && account?.userId !== null ? identity : { ...identity, guest: guestId },
@@ -156,6 +158,7 @@ function selectRoute(room, route, reason, choice) {
   const loggedRoute = turnPort ? "hong_kong_turn_udp" : route;
   console.log(JSON.stringify({ event: "netplay_route", archiveVersionId: room.pool.id, roomId: room.id,
     route: loggedRoute, reason, inputProtocol: connected || choice?.backup ? room.inputProtocol : 0,
+    iceDiagnostics: seats.map(seat => seat.diagnostics && seat.routeIceDiagnostics),
     ...(turnPort && { connected, turnPort }), ...details, ...choice }));
   if (room.pool.turnPort && !connected) {
     leave(room, seats[1], "turn_unavailable");
@@ -334,13 +337,34 @@ function receiveText(room, seat, data) {
   }
 
   if (room.selection && data.startsWith("route:")) {
+    if (Buffer.byteLength(data) > 49_152) return;
     let message;
     try {
       message = JSON.parse(data.slice(6));
     } catch {
       return;
     }
+    if (message?.type === "ice-stats" && seat.diagnostics && message.round === room.selection.round &&
+        (message.path === "direct" || message.path === "turn")) {
+      const snapshot = parseIceStats(message.snapshot);
+      if (!snapshot || snapshot.negotiationStartedAt !== message.round) return;
+      const phases = seat.routeIceStats ??= new Set();
+      const key = message.path + ":" + snapshot.phase;
+      if (phases.has(key)) return;
+      phases.add(key);
+      console.log(JSON.stringify({ ...snapshot, event: "netplay_ice_stats", archiveVersionId: room.pool.id,
+        roomId: room.id, seat: seat.seatNumber, platform: seat.platform,
+        round: message.round, path: message.path, route: room.route }));
+      return;
+    }
     const active = room.activeSelection;
+    if (message?.type === "failed" && message.round === room.selection.round &&
+        (message.path === "direct" || message.path === "turn") &&
+        typeof message.reason === "string" && /^[a-z_]{1,40}$/.test(message.reason)) {
+      console.log(JSON.stringify({ event: "netplay_ice_failure", archiveVersionId: room.pool.id,
+        roomId: room.id, seat: seat.seatNumber, platform: seat.platform,
+        round: message.round, path: message.path, reason: message.reason }));
+    }
     if (room.route === "pending" && Buffer.byteLength(data) <= 24_576) room.selection.receive(seat, message);
     else if (active && message?.round === active.round &&
       (message.path === active.path || active.backup && message.path === active.backup)) {
@@ -483,10 +507,10 @@ function attachRoomSocket(socket, room, seat) {
   });
 }
 
-function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, inputProtocol, platform, routeSelection, routeInputMirror, diagnostics, roomAccess, recording, finishSync }) {
+function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, inputProtocol, platform, routeSelection, routeInputMirror, diagnostics, routeIceDiagnostics, roomAccess, recording, finishSync }) {
   const room = pool.rooms.get(roomId) ?? { id: roomId, pool, seats: new Set(), forwarded: 0,
     password: createRoomPassword(), record: createMatchRecording(), finish: createMatchFinish((peer, text) => send(peer.socket, text)) };
-  const seat = { identity, account, rtc, routeSelection, routeInputMirror, inputStats, inputProtocol, platform, diagnostics, roomAccess, recording, finishSync,
+  const seat = { identity, account, rtc, routeSelection, routeInputMirror, inputStats, inputProtocol, platform, diagnostics, routeIceDiagnostics, roomAccess, recording, finishSync,
     seatNumber: room.seats.size + 1, rttMs: null, peakRttMs: null, signals: 0, milestones: [] };
   room.seats.add(seat);
   pool.rooms.set(roomId, room);
@@ -502,6 +526,7 @@ function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, in
       player.input = undefined;
       player.backupClosed = false;
       player.iceStatsPhase = undefined;
+      player.routeIceStats = undefined;
       player.signals = 0;
       player.milestones = [];
     }
@@ -527,7 +552,8 @@ function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, in
         },
         fail(measurements) {
           console.log(JSON.stringify({ event: "netplay_route", archiveVersionId: pool.id, roomId, round,
-            reason: "no_usable_route", negotiationMs: Date.now() - round, measurements }));
+            reason: "no_usable_route", negotiationMs: Date.now() - round, measurements,
+            iceDiagnostics: seats.map(seat => seat.diagnostics && seat.routeIceDiagnostics) }));
           sendRoute(seats[1], { type: "rejected", round, reason: "transport" });
           leave(room, seats[1], "route_unavailable");
         },
@@ -535,6 +561,7 @@ function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, in
       for (const [index, player] of seats.entries()) {
         sendRoute(player, {
           type: "start", round, offer: index === 0, inputProtocol: room.inputProtocol,
+          diagnostics: player.diagnostics && player.routeIceDiagnostics,
           paths: paths.map(path => path === "websocket" ? { id: path } : {
             id: path, relayOnly: path === "turn",
             iceServers: path === "turn" ? turnIceServers(roomId, index, turnPort, round) : iceServers,
