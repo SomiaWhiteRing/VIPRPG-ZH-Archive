@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.14-site-kai-replay-export.8",
-  "revision": "ecf1e3f4f0688d6ea40efeed9f01ea1c4a7319fb",
+  "version": "2026.11.14-site-kai-replay-export.9",
+  "revision": "301bbf805e498821051881df0477a97ade008274",
   "build": "kai-web-replay-export",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "commit",
-  "archiveSha256": "ed3ddbd3b2bf7fcc19454dfb100ba057b19a3f46f78cc3ea2da2c572222c7f15",
+  "archiveSha256": "26d1d0cd29df2ce8f066c8539d78978f9f5fabfe48f5e2ad3e4e887c8f7bc695",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
