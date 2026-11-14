@@ -47,14 +47,26 @@ function rows(value, limit) {
   return Array.isArray(value) ? value.slice(0, limit).filter(isRecord) : [];
 }
 
+/** @param {unknown} value */
+function address(value) {
+  if (typeof value !== "string") return;
+  // RTCIceCandidate can expose IPv6 literals with brackets; node:net expects the bare address.
+  const ip = value.startsWith("[") && value.endsWith("]") ? value.slice(1, -1) : value;
+  return isIP(ip) ? ip : undefined;
+}
+
 /** @param {Fields} row */
 function candidate(row) {
+  const ip = address(row.address);
   return {
     type: choice(row.type, iceCandidateTypes), protocol: choice(row.protocol, protocols),
     addressKind: choice(row.addressKind, addressKinds), port: integer(row.port, 65535),
-    address: typeof row.address === "string" && isIP(row.address) ? row.address : undefined,
-    relatedAddress: typeof row.relatedAddress === "string" && isIP(row.relatedAddress) ? row.relatedAddress : undefined,
-    ipv6Scope: choice(row.ipv6Scope, ["global", "link_local", "unique_local", "loopback", "other"]),
+    address: ip,
+    relatedAddress: address(row.relatedAddress),
+    ipv6Scope: ip && isIP(ip) === 6 ? ip === "::1" ? "loopback"
+      : /^fe[89ab]/i.test(ip) ? "link_local" : /^f[cd]/i.test(ip) ? "unique_local"
+      : /^[23][0-9a-f]{3}:/i.test(ip) ? "global" : "other"
+      : choice(row.ipv6Scope, ["global", "link_local", "unique_local", "loopback", "other"]),
     relatedAddressKind: choice(row.relatedAddressKind, addressKinds), relatedPort: integer(row.relatedPort, 65535),
     tcpType: choice(row.tcpType, ["active", "passive", "so"]),
     relayProtocol: choice(row.relayProtocol, relayProtocols),
@@ -135,7 +147,7 @@ export function parseIceStats(payload) {
     stunErrors: rows(value.stunErrors, 32).map(row => ({
       code: integer(row.code, 999), count: integer(row.count), scheme: choice(row.scheme, stunSchemes),
       addressKind: choice(row.addressKind, addressKinds), port: integer(row.port, 65535),
-      address: typeof row.address === "string" && isIP(row.address) ? row.address : undefined,
+      address: address(row.address),
       iceServer: choice(row.iceServer, iceServers),
     })),
     localSignals: signals(value.localSignals),
