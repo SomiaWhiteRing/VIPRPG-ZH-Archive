@@ -44,6 +44,7 @@ const runtimeFiles = [
   "LICENSE-rime-pinyin-simp.txt",
   "NOTICE-Zfull.txt",
   "LICENSE-smallfonts.txt",
+  ...(runtime.videoExport ? ["player-video-export.js", "mp4-muxer.js", "mp4-muxer.LICENSE.txt"] : []),
 ];
 for (const name of [...runtimeFiles, "player-host.js", "COPYING"])
   if (!files[name]?.length) throw new Error(`Missing runtime file: ${name}`);

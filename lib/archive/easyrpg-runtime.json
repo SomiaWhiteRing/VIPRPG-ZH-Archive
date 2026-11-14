@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.14-site-kai-ice-diagnostics.2",
-  "revision": "9193fd2a0d210d58ced84faf9f6c719c96e996da",
-  "build": "kai-web-ice-diagnostics",
+  "version": "2026.11.14-site-kai-replay-export.8",
+  "revision": "ecf1e3f4f0688d6ea40efeed9f01ea1c4a7319fb",
+  "build": "kai-web-replay-export",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
-  "sourceState": "patched-commit",
-  "archiveSha256": "9e19d5bad206aef493de35615d60934108afd9c73c8fc11941c84ca25ef48221",
+  "sourceState": "commit",
+  "archiveSha256": "ed3ddbd3b2bf7fcc19454dfb100ba057b19a3f46f78cc3ea2da2c572222c7f15",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -15,32 +15,12 @@
     "sourceSha256": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f",
     "licenseSha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
   },
-  "patches": [
-    {
-      "file": "player-host.js",
-      "path": "scripts/runtime-patches/kai-netplay-auto-ice-host.patch",
-      "sha256": "592f732df2e0830f09623e1c92361c7eb58a6748ee25b9914cbb88cadd6cdd78",
-      "beforeSha256": "1cf3f1f9f8b38cd8020ba7f2530a2c200a1b3803e185b167b84547ef91552cd8",
-      "afterSha256": "69dd981dc2ccede07fe94e3eed85935ace143c443bc79efb612453a2a3b42bb1"
-    },
-    {
-      "file": "player-worker.js",
-      "path": "scripts/runtime-patches/kai-netplay-auto-ice-worker.patch",
-      "sha256": "997829caf5e9d537f0db9f465c0449e7791a1ee0c91e7f6966c1e68ad8f89a61",
-      "beforeSha256": "65631a45dea8a65e429857d2ca60f7d2838f15271993bba802ddba279c685036",
-      "afterSha256": "201d19993e2047e31783b7354b32b2030e98b97d84fd781cb4a1e6b545144839"
-    }
-  ],
+  "patches": [],
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",
   "pinyinDictionary": {
     "name": "rime-pinyin-simp",
     "source": "https://github.com/rime/rime-pinyin-simp",
     "licenseSha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"
   },
-  "sourcePatches": [
-    {
-      "path": "scripts/runtime-patches/netplay-replay-blind.patch",
-      "sha256": "e8702a7eb1c37c87431b400a0998dcb687e835259c739ea8101af9b0f4f09c69"
-    }
-  ]
+  "videoExport": true
 }

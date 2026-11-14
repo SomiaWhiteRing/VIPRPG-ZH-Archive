@@ -195,6 +195,8 @@ public final class MainActivity extends Activity {
         getSystemService(ConnectivityManager.class).registerDefaultNetworkCallback(gameUpdateNetwork);
         screenshots = new ScreenshotController(this, browser, offlineBrowser);
         FaceImageShare.attach(this, browser);
+        ReplayVideoExport.attach(this, browser);
+        ReplayVideoExport.attach(this, offlineBrowser);
         galleryPanel = new ScreenshotGallery(this, screenshots);
         ((FrameLayout) findViewById(R.id.gallery_panel)).addView(galleryPanel);
         installedVersion.setText("版本 " + BuildConfig.VERSION_NAME);
