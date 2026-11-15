@@ -51,7 +51,7 @@ function replaySummary(row: ReplayRow) {
 }
 
 export async function listNetplayReplays(
-  runtime: AppRuntime, userId: number, space: number | null, page: number, favorites: boolean, scope: "mine" | "all",
+  runtime: AppRuntime, userId: number | null, space: number | null, page: number, favorites: boolean, scope: "mine" | "all",
   pageCount = 1, snapshot: number | null = null,
 ) {
   const filtered = `${SELECT} AND (?3=0 OR f.match_id IS NOT NULL) AND (?4=0 OR a.user_id=?1 OR b.user_id=?1)
@@ -77,7 +77,7 @@ export async function listNetplayReplays(
   return { entries: entries.filter(Boolean), more: page + 1 < pages, pages, snapshot: results[0]?.snapshot ?? snapshot ?? 0 };
 }
 
-export async function getNetplayReplay(runtime: AppRuntime, userId: number, space: number | null, id: string) {
+export async function getNetplayReplay(runtime: AppRuntime, userId: number | null, space: number | null, id: string) {
   const row = await runtime.db.prepare(`${SELECT} AND m.match_id=?3`).bind(userId, space, id).first<ReplayRow>();
   return row ? replaySummary(row) : null;
 }
