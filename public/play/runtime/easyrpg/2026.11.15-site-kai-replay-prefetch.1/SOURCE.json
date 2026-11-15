@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "939c19f9c29c9193847cd548c98af85f0335954a",
-  "version": "2026.11.14-site-kai-replay-export.10",
+  "version": "2026.11.15-site-kai-replay-prefetch.1",
   "build": "kai-web-replay-export",
   "artifact": "Kai-Web-2026.11.14-replay-export.10.zip",
   "archiveSha256": "2e781182ea8fa4cb41140dffd775cd5921485971cdfeb63a0e2eda751aebc8af",
@@ -130,8 +130,8 @@
       "sha256": "75c54aae7ef6ad652f684f9dd3b71e4dcef86ccebd88cf441ceed7f5eec037c5"
     },
     "game-services.js": {
-      "size": 776,
-      "sha256": "eca83f8e01f24a146182ad93e08288da270441b7018b8ed2909f57440d3ff2ae"
+      "size": 7470,
+      "sha256": "94e872d7915d21b3e85142f4141e42e6fdb3af75ba04470a4371a4567f67908b"
     },
     "easyrpg-player.wasm.br": {
       "size": 4061779,

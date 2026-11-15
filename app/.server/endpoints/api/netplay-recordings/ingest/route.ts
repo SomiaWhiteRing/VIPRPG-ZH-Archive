@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { saveNetplayRecording } from "@/app/.server/db/netplay-recordings";
+import { prepareNetplayReplay } from "@/app/.server/db/netplay-replays";
 import { readJsonObject } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
@@ -17,6 +18,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
       if (!timingSafeEqual(actual, expected)) throw new HttpError(403, "Invalid recording signature");
     },
   });
-  await saveNetplayRecording(runtime.env, batch as unknown as RecordingBatch);
+  const ready = await saveNetplayRecording(runtime.env, batch as unknown as RecordingBatch);
+  if (ready) await prepareNetplayReplay(runtime, batch.id as string);
   return new Response(null, { status: 204 });
 }

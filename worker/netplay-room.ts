@@ -14,6 +14,7 @@ import { createMatchRecording } from "../scripts/netplay-recording.mjs";
 import { createMatchFinish } from "../scripts/netplay-finish.mjs";
 import type { RecordingParticipant } from "../scripts/netplay-recording.mjs";
 import { saveNetplayRecording } from "../app/.server/db/netplay-recordings";
+import { prepareNetplayReplay } from "../app/.server/db/netplay-replays";
 import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "../scripts/netplay-room-password.mjs";
 import type { RoomPassword } from "../scripts/netplay-room-password.mjs";
 
@@ -342,7 +343,11 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
             return;
           }
           const write = room.record.receive(data, participant, players, details,
-            batch => saveNetplayRecording(this.env, batch),
+            async batch => {
+              if (await saveNetplayRecording(this.env, batch)) await prepareNetplayReplay(
+                { db: this.env.DB, env: this.env, execution: this.ctx }, batch.id,
+              );
+            },
             message => { if (socket.readyState === WebSocket.OPEN) socket.send(message); });
           if (write) this.ctx.waitUntil(write);
           return;
