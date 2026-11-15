@@ -44,9 +44,12 @@ self.createEasyRpgGameServices = workId => {
   }
   async function list(input, prefetch = false) {
     const group = groupKey(input), page = input.page;
-    if (!lists.has(group)) lists.set(group, { pages: new Map(), selected: page, id: ++listSequence });
+    if (!lists.has(group)) lists.set(group, { pages: new Map(), selected: page, direction: 1, id: ++listSequence });
     const cache = lists.get(group);
-    if (!prefetch) cache.selected = page;
+    if (!prefetch) {
+      cache.direction = Math.sign(page - cache.selected) || cache.direction;
+      cache.selected = page;
+    }
     if (cache.pages.has(page)) return cache.pages.get(page).data;
     const first = Math.floor(page / 3) * 3;
     const result = await once(`list:${group}:${cache.id}:${first}`, async () => {
@@ -64,8 +67,9 @@ self.createEasyRpgGameServices = workId => {
       }
       while (cache.pages.size > 6) {
         const blocks = [...new Set([...cache.pages.keys()].map(page => Math.floor(page / 3)))];
+        const center = Math.floor(cache.selected / 3) + cache.direction / 2;
         const farthest = blocks.sort((a, b) =>
-          Math.abs(b * 3 + 1 - cache.selected) - Math.abs(a * 3 + 1 - cache.selected))[0];
+          Math.abs(b - center) - Math.abs(a - center))[0];
         for (let offset = 0; offset < 3; offset++) cache.pages.delete(farthest * 3 + offset);
       }
       return data;
