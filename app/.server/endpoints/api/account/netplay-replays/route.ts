@@ -21,9 +21,9 @@ export async function POST(runtime: AppRuntime, request: Request) {
   );
   if (typeof workId !== "number" || !Number.isSafeInteger(workId) || workId < 1) return new Response(null, { status: 400 });
   const access = workReadCondition(user);
-  const row = await runtime.db.prepare(`SELECT w.netplay_space_id FROM works w
+  const row = await runtime.db.prepare(`SELECT w.netplay_space_id,w.language FROM works w
     WHERE w.id=? AND w.netplay_space_id IS NOT NULL AND ${access.sql}`)
-    .bind(workId, ...access.binds).first<{ netplay_space_id: number }>();
+    .bind(workId, ...access.binds).first<{ netplay_space_id: number; language: string }>();
   if (!row) return new Response(null, { status: 404 });
   const space = administrator && scope === undefined ? null : row.netplay_space_id;
   if (operation === "available") return json({ available: true, accountId });
@@ -38,12 +38,12 @@ export async function POST(runtime: AppRuntime, request: Request) {
     // Older games retain their administrator/member defaults; guests browse the shared space.
     const listScope = scope ?? (administrator || !user ? "all" : "mine");
     return json({ ...await listNetplayReplays(runtime, accountId, space, page, favorites === true, listScope,
-      pageCount ?? 1, snapshot ?? null),
+      row.language, pageCount ?? 1, snapshot ?? null),
       accountId });
   }
   if (operation === "favorite" && !user) return new Response(null, { status: 401 });
   if (typeof id !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) return new Response(null, { status: 400 });
-  const replay = await getNetplayReplay(runtime, accountId, space, id);
+  const replay = await getNetplayReplay(runtime, accountId, space, id, row.language);
   if (!replay) return new Response(null, { status: 404 });
   if (operation === "favorite" && typeof favorite === "boolean" && user) {
     await setNetplayReplayFavorite(runtime, user.id, id, favorite);

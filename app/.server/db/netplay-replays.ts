@@ -8,6 +8,7 @@ export const REPLAY_PAGE_SIZE = 5;
 
 type ReplayRow = {
   id: string; started_at: number; favorite: number;
+  first_user_id: number | null; second_user_id: number | null;
   first_name: string; first_avatar: string | null; first_archive: number | null;
   second_name: string; second_avatar: string | null; second_archive: number | null;
   viewer_seat: 1 | 2 | null;
@@ -17,6 +18,7 @@ type ReplayRow = {
 const SELECT = `
   SELECT m.match_id AS id,m.started_at,m.terminal_json AS terminal,m.start_json,m.revision,
     (f.match_id IS NOT NULL) AS favorite,
+    a.user_id AS first_user_id,b.user_id AS second_user_id,
     a.display_name AS first_name,ua.avatar_blob_sha256 AS first_avatar,a.archive_version_id AS first_archive,
     b.display_name AS second_name,ub.avatar_blob_sha256 AS second_avatar,b.archive_version_id AS second_archive,
     CASE WHEN a.user_id=?1 THEN 1 WHEN b.user_id=?1 THEN 2 END AS viewer_seat
@@ -31,16 +33,18 @@ const SELECT = `
     AND NOT EXISTS (SELECT 1 FROM netplay_replay_recovery r WHERE r.match_id=m.match_id AND r.variables_json IS NULL)
 `;
 
-function replaySummary(row: ReplayRow) {
+function replaySummary(row: ReplayRow, language: string) {
   const terminal = JSON.parse(row.terminal) as unknown;
   if (!Array.isArray(terminal) || terminal.length !== 3 || !terminal.every(Number.isSafeInteger) ||
       terminal[0] < 1 || terminal[0] > 216000 || terminal[1] < 0 || terminal[2] < 0) return null;
   const start = row.start_json ? JSON.parse(row.start_json) as Start : undefined;
+  const displayName = (name: string, userId: number | null) =>
+    language === "ja" && userId === null ? name.replace(/^访客 ([0-9a-f]{4})$/, "ゲスト $1") : name;
   return {
     id: row.id, startedAt: row.started_at, favorite: !!row.favorite,
     players: [
-      { name: row.first_name, avatar: getUserAvatarSrc(row.first_avatar) },
-      { name: row.second_name, avatar: getUserAvatarSrc(row.second_avatar) },
+      { name: displayName(row.first_name, row.first_user_id), avatar: getUserAvatarSrc(row.first_avatar) },
+      { name: displayName(row.second_name, row.second_user_id), avatar: getUserAvatarSrc(row.second_avatar) },
     ],
     terminal: terminal as [number, number, number],
     viewerSeat: row.viewer_seat,
@@ -52,7 +56,7 @@ function replaySummary(row: ReplayRow) {
 
 export async function listNetplayReplays(
   runtime: AppRuntime, userId: number | null, space: number | null, page: number, favorites: boolean, scope: "mine" | "all",
-  pageCount = 1, snapshot: number | null = null,
+  language: string, pageCount = 1, snapshot: number | null = null,
 ) {
   const filtered = `${SELECT} AND (?3=0 OR f.match_id IS NOT NULL) AND (?4=0 OR a.user_id=?1 OR b.user_id=?1)
     AND m.serial<=COALESCE(?5,(SELECT MAX(serial) FROM netplay_replay_catalog))`;
@@ -64,7 +68,7 @@ export async function listNetplayReplays(
     .all<ReplayRow & { total: number; snapshot: number }>();
   const pages = Math.ceil((results[0]?.total ?? 0) / REPLAY_PAGE_SIZE);
   const entries = await Promise.all(results.map(async row => {
-    const entry = replaySummary(row);
+    const entry = replaySummary(row, language);
     if (entry && !entry.start) {
       const replay = await readNetplayReplay(runtime, entry.id, entry.terminal, false);
       if (replay) {
@@ -77,9 +81,9 @@ export async function listNetplayReplays(
   return { entries: entries.filter(Boolean), more: page + 1 < pages, pages, snapshot: results[0]?.snapshot ?? snapshot ?? 0 };
 }
 
-export async function getNetplayReplay(runtime: AppRuntime, userId: number | null, space: number | null, id: string) {
+export async function getNetplayReplay(runtime: AppRuntime, userId: number | null, space: number | null, id: string, language: string) {
   const row = await runtime.db.prepare(`${SELECT} AND m.match_id=?3`).bind(userId, space, id).first<ReplayRow>();
-  return row ? replaySummary(row) : null;
+  return row ? replaySummary(row, language) : null;
 }
 
 export async function setNetplayReplayFavorite(runtime: AppRuntime, userId: number, id: string, favorite: boolean) {
