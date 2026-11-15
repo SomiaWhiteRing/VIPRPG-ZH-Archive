@@ -308,16 +308,15 @@ async function tryDeltaInstall(input: {
       keys.add(packLookupKey(file.path)); bytes += file.size;
     }
     if (bytes !== metadata.installTotalSizeBytes) throw new Error("游戏压缩包中的文件大小异常。");
-    const local = new Map<string, Blob>();
+    const local = new Map<string, { pack: Blob; start: number; end: number; crc32?: number }>();
     for (const pack of packages) for (const file of pack.metadata.files)
-      local.set(packLookupKey(file.filename.slice(1)), pack.blob.slice(file.start, file.end));
+      local.set(packLookupKey(file.filename.slice(1)), { pack: pack.blob, start: file.start, end: file.end, crc32: file.crc32 });
     const reusable = new Map<string, Blob>();
     for (const file of index.files) {
-      const blob = local.get(packLookupKey(file.path));
-      if (blob?.size !== file.size) continue;
-      const crc = new Crc32();
-      for await (const chunk of blob.stream()) { signal.throwIfAborted(); crc.update(chunk); }
-      if (crc.digest() === file.crc32) reusable.set(file.path, blob);
+      const previous = local.get(packLookupKey(file.path));
+      if (previous && previous.end - previous.start === file.size && previous.crc32 === file.crc32) {
+        reusable.set(file.path, previous.pack.slice(previous.start, previous.end));
+      }
     }
     let installation = await persistAndPost({ ...input.installation, phase: "extracting_zip",
       downloadBytesTotal: index.files.reduce((total, file) => total + (reusable.has(file.path) ? 0 : file.size), 0),
@@ -327,6 +326,7 @@ async function tryDeltaInstall(input: {
     const packIndex: WebPlayPackIndex = { version: 1, archiveVersionId: metadata.archiveVersionId,
       manifestSha256: metadata.manifestSha256, webPlayInstallerVersion: metadata.webPlayInstallerVersion,
       packs: writer.packs, files: {} };
+    let damagedLocalFile = false;
     try {
       for (const file of index.files) {
         signal.throwIfAborted();
@@ -346,7 +346,11 @@ async function tryDeltaInstall(input: {
             }
           } finally { download.close(); }
         }
-        if (crc.digest() !== file.crc32) throw new Error(`游戏文件校验失败：${file.path}`);
+        if (crc.digest() !== file.crc32) {
+          if (!blob) throw new Error(`游戏文件校验失败：${file.path}`);
+          damagedLocalFile = true;
+          break;
+        }
         packIndex.files[packLookupKey(file.path)] = { path: file.path, ...location, length: file.size,
           crc32: file.crc32, contentType: contentTypeForArchivePath(file.path) };
         records.push({ id: `${metadata.playKey}:${file.path}`, playKey: metadata.playKey,
@@ -358,6 +362,11 @@ async function tryDeltaInstall(input: {
         });
       }
     } finally { await writer.close(); }
+    if (damagedLocalFile) {
+      // The partial pack contains corrupt bytes, so restart with a clean ZIP install.
+      await resetGameOpfsDirectory(installation);
+      return null;
+    }
     await saveFileRecordsInBatches(records);
     return { installation: await persistAndPost(installation, true), packIndex };
   } finally { release?.(); }

@@ -110,6 +110,7 @@ export function WebPlayClient({
   );
   const [loadingLocalState, setLoadingLocalState] = useState(true);
   const [installSessionActive, setInstallSessionActive] = useState(false);
+  const installSessionRef = useRef(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [browserStorage, setBrowserStorage] = useState<BrowserStorageStatus | null>(null);
   const [running, setRunning] = useState(false);
@@ -152,8 +153,12 @@ export function WebPlayClient({
 
   const installed = installation?.status === "ready";
   const installing = installation?.status === "installing";
-  const activeInstalling = installing && installSessionActive;
   const installAction = hasPreviousInstallation ? "更新" : "安装";
+  const localStatusLabel = installSessionActive || installing
+    ? `${installAction}中`
+    : hasPreviousInstallation && !installed
+      ? installation?.status === "failed" ? "更新失败" : "待更新"
+      : installStatusLabel(installation?.status ?? "deleted");
   const interruptedInstalling = installing && !installSessionActive;
   const failed = installation?.status === "failed";
   const playerBusy = running || playerStarting;
@@ -269,7 +274,7 @@ export function WebPlayClient({
     ({ currentLocation, nextLocation }) => (installSessionActive || running || playerStarting) &&
       currentLocation.pathname !== nextLocation.pathname,
     async () => {
-      if (installSessionActive) return confirm("游戏安装尚未完成，确定离开并中断安装吗？");
+      if (installSessionActive) return confirm(`游戏${installAction}尚未完成，确定离开并中断${installAction}吗？`);
       await exitImmersive();
       if (!(await confirm("在线游玩尚未结束，确定离开并停止游戏吗？"))) {
         focusPlayerCanvas();
@@ -310,7 +315,7 @@ export function WebPlayClient({
         );
         if (!mounted) return;
         setInstallation(value);
-        setHasPreviousInstallation(previous);
+        if (value?.status !== "ready") setHasPreviousInstallation(previous);
         if (value?.status === "installing") {
           addLog("warning", "检测到安装尚未完成。如果其他页面仍在安装，请等待完成后刷新。");
         }
@@ -424,10 +429,12 @@ export function WebPlayClient({
       }
 
       if (message.type === "install-finished") {
+        installSessionRef.current = false;
         setInstallSessionActive(false);
         return;
       }
       if (message.type === "install-rejected") {
+        installSessionRef.current = false;
         setInstallSessionActive(false);
         setOperationError(message.message);
         addLog("error", message.message);
@@ -448,6 +455,8 @@ export function WebPlayClient({
   }, [addLog, metadata]);
 
   const startInstall = useCallback(async () => {
+    if (installSessionRef.current) return;
+    installSessionRef.current = true;
     const signal = lifetimeRef.current!.signal;
     setOperationError(null);
     automaticInstallAttempts.current.add(metadata.playKey);
@@ -488,7 +497,7 @@ export function WebPlayClient({
         storageSnapshot,
         analyticsEnabled: analyticsInstallStarted.current !== null,
       } satisfies WebPlayInstallWorkerInput);
-      addLog("info", "开始下载并安装到浏览器本地。");
+      addLog("info", `开始下载并${installAction}浏览器本地的游戏文件。`);
     } catch (error) {
       if (signal.aborted) return;
       const start = analyticsInstallStarted.current;
@@ -497,12 +506,13 @@ export function WebPlayClient({
         install_outcome: "error", duration_ms: Math.round(performance.now() - start),
         size_bucket: analyticsSizeBucket(metadata.installTotalSizeBytes),
         work_id: metadata.workId, archive_version_id: metadata.archiveVersionId });
+      installSessionRef.current = false;
       setInstallSessionActive(false);
-      const message = error instanceof Error ? error.message : "启动安装失败。";
+      const message = error instanceof Error ? error.message : `启动${installAction}失败。`;
       setOperationError(message);
       addLog("error", message);
     }
-  }, [addLog, ensureWorker, metadata, playerBusy]);
+  }, [addLog, ensureWorker, installAction, metadata, playerBusy]);
 
   useEffect(() => {
     if (loadingLocalState || !hasPreviousInstallation || installed || installing || playerBusy || installSessionActive ||
@@ -515,8 +525,8 @@ export function WebPlayClient({
       type: "cancel",
       playKey: metadata.playKey,
     } satisfies WebPlayInstallWorkerInput);
-    addLog("warning", "已请求取消安装。");
-  }, [addLog, metadata.playKey]);
+    addLog("warning", `已请求取消${installAction}。`);
+  }, [addLog, installAction, metadata.playKey]);
 
   const deleteLocalInstall = useCallback(async () => {
     setOperationError(null);
@@ -724,7 +734,7 @@ export function WebPlayClient({
 
   const storageSummary = useMemo(() => {
     return [
-      { label: "本地状态", value: installation ? installStatusLabel(installation.status) : "未安装" },
+      { label: "本地状态", value: localStatusLabel },
       {
         label: "存档保护",
         info: "防止存档被浏览器自动清理的功能，浏览器会对常访问的网站自动分配。",
@@ -739,7 +749,7 @@ export function WebPlayClient({
         value: browserStorage?.storageQuotaBytes == null ? "未知" : formatBytes(browserStorage.storageQuotaBytes),
       },
     ];
-  }, [installation, browserStorage]);
+  }, [localStatusLabel, browserStorage]);
 
   const rotation =
     immersive && mobileControls && !orientationLockActive
@@ -768,7 +778,7 @@ export function WebPlayClient({
                   游戏画面
                 </h2>
                 <span className="font-mono text-xs text-muted">
-                  {running ? "运行中" : playerStarting ? "启动中" : "待机"}
+                  {running ? "运行中" : playerStarting ? "启动中" : installSessionActive ? `${installAction}中` : "待机"}
                 </span>
               </div>
               <div className="aspect-4/3 w-full">
@@ -798,11 +808,11 @@ export function WebPlayClient({
                       <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/55 p-6 text-center text-sm text-white/75">
                         {playerStarting
                           ? "正在启动 EasyRPG…"
-                          : activeInstalling
+                          : installSessionActive
                             ? `正在${installAction}游戏文件…`
                             : installed
                               ? "游戏已准备好"
-                              : "未安装"}
+                              : hasPreviousInstallation ? "待更新" : "未安装"}
                       </div>
                     ) : null}
                     toolbar={immersive ? (
@@ -868,7 +878,7 @@ export function WebPlayClient({
                   <span className="font-mono text-xs text-muted">
                     {loadingLocalState
                       ? "读取中"
-                      : installStatusLabel(installation?.status ?? "deleted")}
+                      : localStatusLabel}
                   </span>
                 </div>
 
@@ -877,7 +887,7 @@ export function WebPlayClient({
                     tone="error"
                     className="m-0 rounded-md border p-3 text-sm"
                   >
-                    上次安装没有正常结束。请清理并重新安装。
+                    {hasPreviousInstallation ? "上次更新没有正常结束。请重试更新。" : "上次安装没有正常结束。请清理并重新安装。"}
                   </Notice>
                 ) : null}
                 {operationError ? (
@@ -890,7 +900,7 @@ export function WebPlayClient({
                   </Notice>
                 ) : null}
 
-                {activeInstalling && installation ? (
+                {installSessionActive && installing && installation ? (
                   <InstallProgress action={installAction} installation={installation} />
                 ) : null}
 
@@ -898,14 +908,15 @@ export function WebPlayClient({
                   <Button className="w-full" disabled type="button">
                     读取本地状态…
                   </Button>
-                ) : activeInstalling ? (
+                ) : installSessionActive ? (
                   <Button
                     className="w-full"
+                    disabled={!installing}
                     onClick={cancelInstall}
                     type="button"
                     variant="outline"
                   >
-                    取消{installAction}
+                    {installing ? `取消${installAction}` : `${installAction}中…`}
                   </Button>
                 ) : failed || interruptedInstalling ? (
                   <Rm2kButton
@@ -914,7 +925,7 @@ export function WebPlayClient({
                     onClick={startInstall}
                     type="button"
                   >
-                    清理并重装
+                    {hasPreviousInstallation ? "重试更新" : "清理并重装"}
                   </Rm2kButton>
                 ) : installed ? (
                   !running ? (
@@ -974,7 +985,7 @@ export function WebPlayClient({
                     onClick={startInstall}
                     type="button"
                   >
-                    安装到浏览器 · {formatBytes(metadata.installTotalSizeBytes)}
+                    {hasPreviousInstallation ? "更新游戏" : "安装到浏览器"} · {formatBytes(metadata.installTotalSizeBytes)}
                   </Rm2kButton>
                 )}
 
@@ -999,7 +1010,7 @@ export function WebPlayClient({
                           value={`${formatBytes(metadata.totalSizeBytes)} / ${metadata.totalFiles.toLocaleString("zh-CN")} 文件`}
                         />
                         <DiagnosticRow
-                          label="安装内容"
+                          label={`${installAction}内容`}
                           value={`${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`}
                         />
                         {storageSummary?.map((item) => (
@@ -1012,7 +1023,7 @@ export function WebPlayClient({
                         ))}
                       </dl>
 
-                      {installation && !activeInstalling ? (
+                      {installation && !installSessionActive ? (
                         <InstallProgress action={installAction} installation={installation} compact />
                       ) : null}
 

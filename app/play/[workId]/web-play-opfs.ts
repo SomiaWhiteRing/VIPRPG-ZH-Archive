@@ -7,7 +7,7 @@ const GAMES_ROOT = "games";
 
 export type WebPlayPackage = {
   blob: File;
-  metadata: { files: { filename: string; start: number; end: number }[] };
+  metadata: { files: { filename: string; start: number; end: number; crc32?: number }[] };
 };
 
 /** Mount installed bytes directly in the player's Worker, without resource HTTP requests. */
@@ -60,7 +60,9 @@ export async function readGamePackages(
     if (!pack || !Number.isSafeInteger(end) || end > pack.blob.size)
       throw new Error(`本地游戏文件范围无效：${record.path}`);
     paths.add(record.path);
-    pack.metadata.files.push({ filename: `/${record.path}`, start: record.offset, end });
+    const crc32 = typeof record.crc32 === "number" && Number.isInteger(record.crc32) &&
+      record.crc32 >= 0 && record.crc32 <= 0xffffffff ? record.crc32 : undefined;
+    pack.metadata.files.push({ filename: `/${record.path}`, start: record.offset, end, crc32 });
   }
   signal.throwIfAborted();
   return [...packages.values()];
