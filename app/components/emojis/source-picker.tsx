@@ -26,6 +26,7 @@ export function EmojiSourcePicker({
   onSelect,
   onHot,
   mode = "emojis",
+  sourceEndpoint,
   disabled = false,
   id,
 }: {
@@ -35,11 +36,12 @@ export function EmojiSourcePicker({
   onSelect: (character: EmojiCharacter) => void;
   onHot?: () => void;
   mode?: "emojis" | "showcase";
+  sourceEndpoint?: string;
   disabled?: boolean;
   id?: string;
 }) {
-  const endpoint =
-    mode === "showcase" ? "/api/account/showcase" : "/api/emojis";
+  const endpoint = sourceEndpoint ??
+    (mode === "showcase" ? "/api/account/showcase" : "/api/emojis");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const searchQuery = query.trim();

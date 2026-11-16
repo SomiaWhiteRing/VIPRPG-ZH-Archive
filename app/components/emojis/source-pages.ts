@@ -17,12 +17,12 @@ type PageState = {
   error: string;
 };
 
-export function useSourceFacePages(source: EmojiSource | null, enabled = true) {
+export function useSourceFacePages(source: EmojiSource | null, enabled = true, endpoint = "/api/emojis") {
   const requestUrl =
     source?.kind === "hot"
-      ? "/api/emojis?op=hot"
+      ? `${endpoint}?op=hot`
       : source?.kind === "character"
-        ? `/api/emojis?op=sheets&characterId=${source.character.id}`
+        ? `${endpoint}?op=sheets&characterId=${source.character.id}`
         : "";
   const initialUrl = requestUrl +
     (source?.kind === "character" && source.focus ? `&focus=${source.focus}` : "");

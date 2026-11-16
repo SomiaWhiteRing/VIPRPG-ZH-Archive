@@ -6,8 +6,47 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError, json } from "@/lib/http";
 import { prepareSeaActor, seaIpKey } from "./identity";
 import { seaRoom, seaSubmission } from "./service";
+import { readCharacterPickerCategories, readCharacterPickerPage } from "@/app/.server/db/character-picker";
+import { readShowcasePortraitSheets } from "@/app/.server/db/showcase-portraits";
+import { PUBLIC_CHARACTER_PORTRAIT_CONDITION } from "@/app/.server/db/character-portrait-library";
+import type { EmojiCharacter } from "@/lib/face-emojis";
 
 export const seaApi = new Hono<{ Bindings: CloudflareEnv; Variables: { runtime: AppRuntime } }>();
+seaApi.get("/api/sea/portraits", async c => {
+  const { DB } = c.get("runtime").env;
+  const params = new URL(c.req.url).searchParams;
+  const offset = Number(params.get("offset") ?? 0);
+  if (!Number.isSafeInteger(offset) || offset < 0) throw new HttpError(400, "分页位置无效");
+  switch (params.get("op")) {
+    case "categories":
+      return json({ items: await readCharacterPickerCategories(DB, true) });
+    case "characters":
+      return json(await readCharacterPickerPage(DB, params.get("q") ?? "", offset, params.get("categoryId"), true));
+    case "character": {
+      const sheetId = parsePositiveId(params.get("faceSheetId") ?? "", "脸图");
+      const row = Number(params.get("row") ?? -1);
+      const column = Number(params.get("column") ?? -1);
+      if (!Number.isSafeInteger(row) || row < 0 || !Number.isSafeInteger(column) || column < 0)
+        throw new HttpError(400, "头像选择无效");
+      const character = await DB.prepare(`SELECT ch.id,ch.primary_name AS name,ch.original_name AS originalName
+        FROM character_face_sheet_bindings binding
+        JOIN characters ch ON ch.id=binding.character_id
+        JOIN face_sheets portrait_sheet ON portrait_sheet.id=binding.face_sheet_id
+        LEFT JOIN character_default_portraits cdp ON cdp.character_id=ch.id
+        LEFT JOIN character_portrait_refs ref ON ref.id=cdp.portrait_ref_id
+        WHERE binding.face_sheet_id=? AND ?<portrait_sheet.height_px/48 AND ?<portrait_sheet.width_px/48
+          AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION}
+        ORDER BY CASE WHEN ref.face_sheet_id=binding.face_sheet_id
+          THEN CASE WHEN ref.cell_row=? AND ref.cell_column=? THEN 0 ELSE 1 END ELSE 2 END,ch.id LIMIT 1`)
+        .bind(sheetId, row, column, row, column).first<Pick<EmojiCharacter, "id" | "name" | "originalName">>();
+      return json({ character });
+    }
+    case "sheets":
+      return json(await readShowcasePortraitSheets(DB, parsePositiveId(params.get("characterId") ?? "", "角色"), offset));
+    default:
+      throw new HttpError(400, "头像查询无效");
+  }
+});
 seaApi.get("/api/sea/fonts/:id", async c => {
   const bytes = await seaRoom(c.get("runtime")).font(c.req.param("id"));
   if (!bytes) throw new HttpError(404, "资源不存在");
@@ -22,7 +61,7 @@ seaApi.post("/api/sea/messages", async c => {
     throw error;
   }
   const { actor, cookie } = await prepareSeaActor(runtime);
-  const input = seaSubmission(await readJsonObject(c.req.raw, "发言格式无效", { maximumBytes: 4096, requireJsonContentType: true, fatalUtf8: true }), actor);
+  const input = await seaSubmission(await readJsonObject(c.req.raw, "发言格式无效", { maximumBytes: 4096, requireJsonContentType: true, fatalUtf8: true }), actor, runtime.env.DB);
   const result = await seaRoom(runtime).publish(actor, input);
   if (!result.ok) throw new HttpError(result.status, result.detail, result.code);
   return json(result, { status: result.repeated ? 200 : 201, headers: cookie ? { "Set-Cookie": cookie } : undefined });

@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useSourceFacePages } from "@/app/components/emojis/source-pages";
+import { emojiRequest } from "@/app/components/emojis/client";
 import { EmojiSourcePicker } from "@/app/components/emojis/source-picker";
 import type { CharacterPortrait as Portrait } from "@/lib/character-names";
 import type { EmojiCharacter } from "@/lib/face-emojis";
@@ -10,14 +11,20 @@ import { CharacterPortrait } from "./character-portrait";
 import * as Dialog from "./dialog";
 import { FaceSheetGrid } from "./face-sheet-grid";
 
+export type CharacterAvatarSelection = Portrait & { character?: Pick<EmojiCharacter, "id" | "name" | "originalName"> };
+
 export function CharacterAvatarPicker({
   disabled,
   shape,
+  sourceEndpoint,
+  initialPortrait,
   onSave,
 }: {
   disabled: boolean;
   shape: "round" | "square";
-  onSave: (portrait: Portrait) => Promise<boolean>;
+  sourceEndpoint?: string;
+  initialPortrait?: CharacterAvatarSelection | null;
+  onSave: (portrait: CharacterAvatarSelection) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [character, setCharacter] = useState<EmojiCharacter>();
@@ -27,7 +34,24 @@ export function CharacterAvatarPicker({
   const { items, more, loading, error, loadPage, retryPage } = useSourceFacePages(
     character ? { kind: "character", character } : null,
     open,
+    sourceEndpoint,
   );
+
+  useEffect(() => {
+    if (!open || character || !initialPortrait || !sourceEndpoint) return;
+    const request = new AbortController();
+    const { faceSheetId, row, column } = initialPortrait;
+    void emojiRequest<{ character: EmojiCharacter | null }>(
+      `${sourceEndpoint}?op=character&faceSheetId=${faceSheetId}&row=${row}&column=${column}`,
+      undefined,
+      request.signal,
+    ).then(result => {
+      if (!request.signal.aborted && result.character) {
+        setCharacter(current => current ?? result.character ?? undefined);
+      }
+    }).catch(() => { /* Manual character selection remains available. */ });
+    return () => request.abort();
+  }, [open, character, initialPortrait, sourceEndpoint]);
 
   function resetScroll() {
     scrollTop.current = 0;
@@ -43,13 +67,21 @@ export function CharacterAvatarPicker({
 
   function changeOpen(next: boolean) {
     if (disabled) return;
+    if (next && initialPortrait !== undefined) {
+      setCharacter(initialPortrait?.character);
+      setSelected(initialPortrait);
+      resetScroll();
+    }
     setOpen(next);
     if (!next) setSelected(null);
   }
 
   async function save() {
     if (!selected || disabled) return;
-    if (await onSave(selected)) {
+    if (await onSave({
+      ...selected,
+      character: character && { id: character.id, name: character.name, originalName: character.originalName },
+    })) {
       setOpen(false);
       setSelected(null);
     }
@@ -88,6 +120,7 @@ export function CharacterAvatarPicker({
           </header>
           <div className="shrink-0 border-b border-border p-4">
             <EmojiSourcePicker
+              sourceEndpoint={sourceEndpoint}
               character={character}
               label={character?.name ?? "选择角色"}
               disabled={disabled}

@@ -1,7 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { data, useLoaderData, useRouteLoaderData, type HeadersFunction, type LinksFunction, type LoaderFunctionArgs } from "react-router";
+import { Settings } from "lucide-react";
 import type { loader as rootLoader } from "@/app/root";
 import { Button } from "@/app/components/ui/button";
+import * as Dialog from "@/app/components/ui/dialog";
+import { CharacterAvatarPicker, type CharacterAvatarSelection } from "@/app/components/ui/character-avatar-picker";
+import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { RpgDialogue, RpgFace } from "@/app/components/ui/rpg-dialogue";
@@ -15,11 +19,15 @@ import { useSeaRoom } from "@/app/components/sea/use-sea-room";
 import { loadSeaFont } from "@/app/components/sea/font";
 import { useToast } from "@/app/components/ui/toast";
 import { HttpError } from "@/lib/http";
-import type { SeaSubmission } from "@/lib/dto/sea";
+import { SEA_ANONYMOUS_NAME, SEA_ANONYMOUS_NAME_LIMIT, SEA_FACE_COUNT, type SeaSubmission } from "@/lib/dto/sea";
 import { requestJson } from "@/lib/ui/api-response";
 import { useClientEnvironment } from "@/app/components/use-client-environment";
 import type { PageLayoutHandle } from "@/app/components/use-page-layout";
 import "./sea.css";
+
+const SEA_NAME_KEY = "viprpg:sea:anonymous-name";
+const SEA_FACE_KEY = "viprpg:sea:anonymous-face";
+const SEA_PORTRAIT_KEY = "viprpg:sea:anonymous-portrait";
 
 export const handle = {
   layout: { hideBackToTop: true, hideSiteHeader: true, hideSiteFooter: true },
@@ -49,8 +57,12 @@ export default function EternalSeaPage() {
   const session = useRouteLoaderData<typeof rootLoader>("root")?.session;
   const accountAvatar = session ? getUserAvatarSrc(session.avatarBlobSha256) : undefined;
   const [useOwnAvatar, setUseOwnAvatar] = useState(true);
-  const name = useOwnAvatar && session ? session.displayName : "无名的VIPPER";
-  const avatarUrl = useOwnAvatar ? accountAvatar : undefined;
+  const [anonymousName, setAnonymousName] = useState("");
+  const [anonymousFace, setAnonymousFace] = useState(0);
+  const [anonymousPortrait, setAnonymousPortrait] = useState<CharacterAvatarSelection>();
+  const [settings, setSettings] = useState<{ open: boolean; name: string; face: number; portrait?: CharacterAvatarSelection }>({ open: false, name: "", face: 0 });
+  const avatarMode = session && useOwnAvatar ? "own" : "alex";
+  const name = avatarMode === "own" && session ? session.displayName : anonymousName || SEA_ANONYMOUS_NAME;
   const { messages, font, refresh } = useSeaRoom(useLoaderData<typeof loader>());
   const toast = useToast();
   const [sending, setSending] = useState(false);
@@ -70,6 +82,16 @@ export default function EternalSeaPage() {
   const canSend = draft.trim().length > 0 && layout.fits;
 
   useEffect(() => {
+    try {
+      const name = localStorage.getItem(SEA_NAME_KEY);
+      if (name) setAnonymousName(name.slice(0, SEA_ANONYMOUS_NAME_LIMIT));
+      const face = Number(localStorage.getItem(SEA_FACE_KEY));
+      if (Number.isInteger(face) && face >= 0 && face < SEA_FACE_COUNT) setAnonymousFace(face);
+      const portrait = localStorage.getItem(SEA_PORTRAIT_KEY);
+      if (portrait) setAnonymousPortrait(JSON.parse(portrait) as CharacterAvatarSelection);
+    } catch {
+      // The settings still work for this page when browser storage is unavailable.
+    }
     let active = true;
     let frame = 0;
     const ocean = matchMedia("(prefers-reduced-motion: reduce)").matches ? "ocean.png" : "ocean.gif";
@@ -112,7 +134,8 @@ export default function EternalSeaPage() {
     let frame = 0;
     const images = new Set([
       ...["window.png", "faces.png"].map(file => `${SEA_ASSETS}/${file}`),
-      ...messages.flatMap(message => message.avatarUrl ? [message.avatarUrl] : []),
+      ...messages.flatMap(message => message.portrait ? [`/api/media/blobs/${message.portrait.blobSha256}`]
+        : message.avatarUrl ? [message.avatarUrl] : []),
       ...(accountAvatar ? [accountAvatar] : []),
     ]);
     void Promise.all([
@@ -158,10 +181,16 @@ export default function EternalSeaPage() {
   async function send(event: FormEvent) {
     event.preventDefault();
     if (!canSend || composingRef.current || sendingRef.current) return;
-    const avatarMode = accountAvatar && useOwnAvatar ? "own" : "alex";
+    const savedName = avatarMode === "alex" ? anonymousName || undefined : undefined;
+    const faceIndex = avatarMode === "alex" ? anonymousFace || undefined : undefined;
+    const portrait = avatarMode === "alex" && anonymousPortrait
+      ? { faceSheetId: anonymousPortrait.faceSheetId, row: anonymousPortrait.row, column: anonymousPortrait.column }
+      : undefined;
     const old = submissionRef.current;
     const submission: SeaSubmission = old?.body === draft && old.avatarMode === avatarMode
-      ? old : { clientMessageId: crypto.randomUUID(), body: draft, avatarMode };
+      && old.anonymousName === savedName && old.faceIndex === faceIndex
+      && old.portrait?.faceSheetId === portrait?.faceSheetId && old.portrait?.row === portrait?.row && old.portrait?.column === portrait?.column
+      ? old : { clientMessageId: crypto.randomUUID(), body: draft, avatarMode, anonymousName: savedName, faceIndex, portrait };
     submissionRef.current = submission;
     sendingRef.current = true;
     setSending(true);
@@ -187,14 +216,16 @@ export default function EternalSeaPage() {
         <div className="sea-composer-dock" inert={!composerReady}>
           <form className="sea-composer" onSubmit={send}>
             <div className="sea-compose-fields">
-              {accountAvatar ? (
+              {session ? (
                 <Button type="button" variant="ghost" className="sea-face-button"
-                  aria-label={useOwnAvatar ? "使用亚历克斯头像" : "使用自己的头像"}
+                  aria-label={useOwnAvatar ? "以匿名身份发言" : "以账号身份发言"}
                   onClick={() => setUseOwnAvatar((current) => !current)}>
-                  <RpgFace index={0} avatarUrl={avatarUrl} />
+                  <RpgFace index={useOwnAvatar ? 0 : anonymousFace}
+                    avatarUrl={useOwnAvatar ? accountAvatar : undefined}
+                    portrait={useOwnAvatar ? undefined : anonymousPortrait} />
                 </Button>
               ) : (
-                <span className="sea-face-button"><RpgFace index={0} /></span>
+                <span className="sea-face-button"><RpgFace index={anonymousFace} portrait={anonymousPortrait} /></span>
               )}
               <div className="sea-input-area">
                 <Label htmlFor="sea-input" className="sr-only">发言内容</Label>
@@ -206,6 +237,64 @@ export default function EternalSeaPage() {
                     setDraft(limitSeaBodyInput(event.currentTarget.value));
                   }} />
                 <div className="sea-submit-row">
+                  {avatarMode === "alex" && <Dialog.Root open={settings.open} onOpenChange={(open) => setSettings({ open, name: anonymousName, face: anonymousFace, portrait: anonymousPortrait })}>
+                    <Dialog.Trigger asChild>
+                      <Button type="button" variant="rm2k" size="sm" className="sea-settings-trigger" aria-label="发言设置">
+                        <Settings aria-hidden="true" />
+                      </Button>
+                    </Dialog.Trigger>
+                    <Dialog.Portal>
+                      <Dialog.Overlay />
+                      <Dialog.Content
+                        className="left-1/2 top-1/2 max-h-[calc(100dvh-2rem)] w-[min(23rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl"
+                        aria-describedby={undefined}>
+                        <header className="border-b border-border px-5 py-4">
+                          <Dialog.Title>匿名发言设置</Dialog.Title>
+                        </header>
+                        <div className="grid gap-4 px-5 py-5">
+                          <div className="flex items-center gap-3">
+                            <span className="size-12 shrink-0 overflow-hidden rounded-md">
+                              <RpgFace index={settings.face} portrait={settings.portrait} />
+                            </span>
+                            <CharacterAvatarPicker disabled={false} shape="square" sourceEndpoint="/api/sea/portraits" initialPortrait={settings.portrait ?? null} onSave={async portrait => {
+                              setSettings(current => ({ ...current, portrait }));
+                              return true;
+                            }} />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="sea-anonymous-name">匿名名称</Label>
+                            <Input id="sea-anonymous-name" className="text-base" maxLength={SEA_ANONYMOUS_NAME_LIMIT} value={settings.name}
+                              placeholder={SEA_ANONYMOUS_NAME} onChange={event => {
+                                const name = event.target.value;
+                                setSettings(current => ({ ...current, name }));
+                              }} />
+                          </div>
+                        </div>
+                        <footer className="flex justify-end gap-2 border-t border-border px-5 py-3">
+                          <Button type="button" variant="ghost" className="mr-auto" onClick={() => {
+                            setSettings({ open: true, name: "", face: 0 });
+                          }}>重置</Button>
+                          <Dialog.Close asChild><Button type="button" variant="ghost">取消</Button></Dialog.Close>
+                          <Button type="button" onClick={() => {
+                            const name = settings.name.trim();
+                            setAnonymousName(name);
+                            setAnonymousFace(settings.face);
+                            setAnonymousPortrait(settings.portrait);
+                            setSettings({ ...settings, open: false });
+                            try {
+                              if (name) localStorage.setItem(SEA_NAME_KEY, name);
+                              else localStorage.removeItem(SEA_NAME_KEY);
+                              if (!settings.face) localStorage.removeItem(SEA_FACE_KEY);
+                              if (settings.portrait) localStorage.setItem(SEA_PORTRAIT_KEY, JSON.stringify(settings.portrait));
+                              else localStorage.removeItem(SEA_PORTRAIT_KEY);
+                            } catch {
+                              // Keep the in-memory selection when browser storage is unavailable.
+                            }
+                          }}>保存</Button>
+                        </footer>
+                      </Dialog.Content>
+                    </Dialog.Portal>
+                  </Dialog.Root>}
                   <Button type="submit" variant="rm2k" size="sm" className="sea-submit" disabled={!canSend || sending}>发言</Button>
                 </div>
               </div>

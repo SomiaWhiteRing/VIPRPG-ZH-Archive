@@ -1,11 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
-import { SEA_ROOM_LIMIT, type SeaAvatarMode, type SeaEvent, type SeaMessage, type SeaModeration, type SeaMuteScope, type SeaSubmission, type SeaWindow } from "@/lib/dto/sea";
+import { SEA_ANONYMOUS_NAME, SEA_ROOM_LIMIT, type SeaAvatarMode, type SeaEvent, type SeaMessage, type SeaModeration, type SeaMuteScope, type SeaSubmission, type SeaWindow } from "@/lib/dto/sea";
 import { getUserAvatarSrc } from "@/lib/user-profile";
-import { layoutSeaDialogue } from "@/lib/ui/eternal-sea";
+import type { CharacterPortrait } from "@/lib/character-names";
 import type { SeaActor } from "./identity";
 import { createSeaFontState, seaFontCodec, seaFontDay, seaFontDeadline, SEA_FONT_GLYPH_COUNT, type SeaFontState, type SeaOriginalMessage } from "./font";
 
-type Row = { id: number; actor_key: string; ip_key: string | null; user_id: number | null; name: string; body: string; avatar_mode: SeaAvatarMode; avatar_blob_sha256: string | null; created_at: number; hidden_at: number | null };
+type Row = { id: number; actor_key: string; ip_key: string | null; user_id: number | null; name: string; body: string; avatar_mode: SeaAvatarMode; avatar_blob_sha256: string | null; anonymous_name: string | null; face_index: number; portrait: string | null; created_at: number; hidden_at: number | null };
 type Profile = { id: number; display_name: string; avatar_blob_sha256: string | null; status: string };
 type Fault = { ok: false; status: number; detail: string; code: string };
 type Published = { ok: true; revision: number; font: SeaWindow["font"]; message: SeaMessage; repeated: boolean };
@@ -32,7 +32,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     `);
     // Existing rooms retain their messages and identity mutes during this additive upgrade.
     for (const [table, columns] of [
-      ["messages", [["ip_key", "TEXT"], ["avatar_blob_sha256", "TEXT"]]],
+      ["messages", [["ip_key", "TEXT"], ["avatar_blob_sha256", "TEXT"], ["anonymous_name", "TEXT"], ["face_index", "INTEGER NOT NULL DEFAULT 0"], ["portrait", "TEXT"]]],
       ["moderation_log", [["scope", "TEXT NOT NULL DEFAULT 'identity'"], ["reason", "TEXT NOT NULL DEFAULT ''"]]],
     ] as const) {
       const existing = new Set(ctx.storage.sql.exec<{ name: string }>(`PRAGMA table_info(${table})`).toArray().map(column => column.name));
@@ -107,8 +107,10 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
   private decorate(rows: Row[]): SeaOriginalMessage[] {
     return rows.map(row => {
       return {
-        id: row.id, name: row.avatar_mode === "alex" ? "无名的VIPPER" : row.name,
-        body: row.body, faceIndex: 0,
+        id: row.id, name: row.avatar_mode === "alex" ? row.anonymous_name ?? SEA_ANONYMOUS_NAME : row.name,
+        body: row.body, faceIndex: row.face_index,
+        anonymous: row.avatar_mode === "alex" || undefined,
+        portrait: row.portrait ? JSON.parse(row.portrait) as CharacterPortrait : undefined,
         avatarUrl: row.avatar_mode === "own" && row.avatar_blob_sha256 ? getUserAvatarSrc(row.avatar_blob_sha256) : undefined,
         side: row.id % 2 ? "left" : "right", createdAt: new Date(row.created_at).toISOString(),
       };
@@ -152,15 +154,17 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
         .map(row => ({ messageId: row.message_id, name: row.name, until: row.until, scope: row.actor_key.startsWith("ip:") ? "ip" : "identity", reason: row.reason })),
     };
   }
-  async publish(actor: SeaActor, input: SeaSubmission): Promise<Published | Fault> {
-    if (!input.body.trim() || !layoutSeaDialogue(actor.name, input.body).fits)
-      return fault(400, "发言超出对话框容量", "sea_body_invalid");
+  async publish(actor: SeaActor, input: SeaSubmission & { portrait?: CharacterPortrait }): Promise<Published | Fault> {
     const { current } = await this.fonts();
     const now = Date.now();
+    const portrait = input.portrait ? JSON.stringify(input.portrait) : null;
     const result = this.ctx.storage.transactionSync(() => {
       const old = this.ctx.storage.sql.exec<Row>("SELECT * FROM messages WHERE actor_key=? AND client_message_id=?", actor.key, input.clientMessageId).toArray()[0];
       if (old) {
-        if (old.body !== input.body || old.avatar_mode !== input.avatarMode) return fault(409, "同一次提交的内容发生变化", "sea_request_conflict");
+        if (old.body !== input.body || old.avatar_mode !== input.avatarMode
+          || old.anonymous_name !== (input.anonymousName ?? null) || old.face_index !== (input.faceIndex ?? 0)
+          || old.portrait !== portrait)
+          return fault(409, "同一次提交的内容发生变化", "sea_request_conflict");
         return { row: old, revision: this.revision(), repeated: true };
       }
       if (this.ctx.storage.sql.exec("SELECT 1 FROM mutes WHERE actor_key IN (?,?) AND (until=0 OR until>?)", actor.key, `ip:${actor.ipKey}`, now).toArray().length)
@@ -177,8 +181,10 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
         this.ctx.storage.sql.exec(`INSERT INTO rates VALUES(?,?,1,?)
           ON CONFLICT(key) DO UPDATE SET count=CASE WHEN window=excluded.window THEN count+1 ELSE 1 END,window=excluded.window,last_sent=excluded.last_sent`, key, window, now);
       }
-      const id = this.ctx.storage.sql.exec<{ id: number }>("INSERT INTO messages(actor_key,ip_key,user_id,name,body,avatar_mode,avatar_blob_sha256,client_message_id,created_at) VALUES(?,?,?,?,?,?,?,?,?) RETURNING id",
-        actor.key, actor.ipKey, actor.userId, actor.name, input.body, input.avatarMode, input.avatarMode === "own" ? actor.avatarBlobSha256 : null, input.clientMessageId, now).one().id;
+      const id = this.ctx.storage.sql.exec<{ id: number }>(`INSERT INTO messages(
+        actor_key,ip_key,user_id,name,body,avatar_mode,avatar_blob_sha256,anonymous_name,face_index,portrait,client_message_id,created_at
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`, actor.key, actor.ipKey, actor.userId, actor.name, input.body, input.avatarMode,
+        input.avatarMode === "own" ? actor.avatarBlobSha256 : null, input.anonymousName ?? null, input.faceIndex ?? 0, portrait, input.clientMessageId, now).one().id;
       return { row: this.row(id)!, revision: this.advance(), repeated: false };
     });
     if ("ok" in result) return result;

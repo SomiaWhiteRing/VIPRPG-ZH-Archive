@@ -85,6 +85,31 @@ body:has(.eternal-sea-page) {
   transform: scaleX(-1);
 }
 
+.sea-character-face.sea-character-face {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+
+.sea-dialogue-mark {
+  --sea-mark-inset: max(7px, 2cqw);
+  position: absolute;
+  right: var(--sea-mark-inset);
+  bottom: var(--sea-mark-inset);
+  width: clamp(11px, 2.8cqw, 17px);
+  aspect-ratio: 1;
+  color: #bbc3bd;
+  pointer-events: none;
+}
+
+.sea-dialogue-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .sea-dialogue-fallback {
   position: absolute;
   inset: 0;
@@ -122,7 +147,7 @@ body:has(.eternal-sea-page) {
   border-radius: 0;
 }
 
-.sea-face-button:hover { background: transparent; filter: brightness(1.1); }
+button.sea-face-button:hover { background: transparent; filter: brightness(1.1); }
 
 .sea-face {
   display: block;
@@ -137,7 +162,13 @@ body:has(.eternal-sea-page) {
 
 .sea-input-area { min-width: 0; }
 
-.sea-submit-row { display: flex; justify-content: flex-end; margin-top: 8px; }
+.sea-submit-row { display: flex; justify-content: flex-end; align-items: center; gap: 4px; margin-top: 8px; }
+.sea-submit-row .sea-settings-trigger {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 0;
+}
 .sea-submit { border-radius: 0; padding-inline: 20px; }
 
 .sea-input {
