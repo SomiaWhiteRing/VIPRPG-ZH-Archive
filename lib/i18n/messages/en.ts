@@ -4316,7 +4316,7 @@ export const en = {
   "library.source": "Source",
   "library.duration": "Playtime",
   "library.language": "Language",
-  "library.language.simplified": "简中",
+  "library.language.simplified": "Chinese",
   "library.tags": "Tags",
   "tags.ui.selected": "Tag: {name}",
   "tags.ui.empty": "No tags yet.",
