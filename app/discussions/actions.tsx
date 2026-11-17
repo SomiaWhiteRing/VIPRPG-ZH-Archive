@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -11,17 +12,19 @@ import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
 import type { ForumAction, ForumTarget } from "@/lib/forum";
-import { FORUM_REPORT_REASONS } from "@/lib/forum";
+import { FORUM_REPORT_REASONS, reportReasonKeys } from "@/lib/forum";
 import { Ellipsis } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useState } from "react";
 import { ForumTagEditor, forumRequest } from "./shared";
+
 export type ForumMenuItem = {
   label: string;
   run: () => void;
   danger?: boolean;
 };
 export function ForumMenu({ items }: { items: ForumMenuItem[] }) {
+  const t = useMessages();
   if (!items.length) return null;
   return (
     <DropdownMenu.Root>
@@ -31,8 +34,8 @@ export function ForumMenu({ items }: { items: ForumMenuItem[] }) {
           type="button"
           size="icon"
           variant="ghost"
-          aria-label="更多操作"
-          title="更多操作"
+          aria-label={t("forum.menu.more")}
+          title={t("forum.menu.more")}
         >
           <Ellipsis className="size-4" />
         </Button>
@@ -74,6 +77,7 @@ export function ForumActionDialog({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const t = useMessages();
   const toast = useToast();
   const [reason, setReason] = useState(
       action.request ? "其他" : (FORUM_REPORT_REASONS[0] as string),
@@ -84,23 +88,23 @@ export function ForumActionDialog({
   const title =
     action.kind === "report"
       ? action.request
-        ? "请求处理"
-        : "举报"
+        ? t("forum.requestReview")
+        : t("forum.report")
       : action.kind === "delete"
-        ? "删除内容"
+        ? t("forum.action.delete")
         : ({
-            hide: "隐藏内容",
-            restore: "恢复内容",
-            lock: "锁定主题",
-            unlock: "解锁主题",
-            sage: "SAGE 主题",
-            unsage: "取消 SAGE",
-            feature: "加精主题",
-            unfeature: "取消加精",
-            pin: "置顶主题",
-            unpin: "取消置顶",
-            tags: "调整主题 TAG",
-          }[action.action!] ?? "确认管理操作");
+            hide: t("forum.action.hide"),
+            restore: t("forum.action.restore"),
+            lock: t("forum.action.lock"),
+            unlock: t("forum.action.unlock"),
+            sage: t("forum.action.sage"),
+            unsage: t("forum.unsage"),
+            feature: t("forum.action.feature"),
+            unfeature: t("forum.unfeature"),
+            pin: t("forum.action.pin"),
+            unpin: t("comment.unpin"),
+            tags: t("forum.action.tags"),
+          }[action.action!] ?? t("forum.action.confirm"));
   async function submit() {
     setBusy(true);
     try {
@@ -115,7 +119,7 @@ export function ForumActionDialog({
       onSuccess();
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "操作失败。");
+      toast.error(e instanceof Error ? e : t("forum.action.failed"));
     } finally {
       setBusy(false);
     }
@@ -143,7 +147,7 @@ export function ForumActionDialog({
         >
           {action.kind === "report" ? (
             <div>
-              <Label htmlFor="forum-report-reason">原因</Label>
+              <Label htmlFor="forum-report-reason">{t("forum.action.reason")}</Label>
               <SelectField
                 id="forum-report-reason"
                 value={reason}
@@ -151,7 +155,7 @@ export function ForumActionDialog({
                 onValueChange={setReason}
                 options={FORUM_REPORT_REASONS.map((value) => ({
                   value,
-                  label: value,
+                  label: t(reportReasonKeys[value]),
                 }))}
               />
             </div>
@@ -167,7 +171,7 @@ export function ForumActionDialog({
           {action.kind !== "delete" ? (
             <div>
               <Label htmlFor="forum-action-reason">
-                {action.kind === "report" ? "说明" : "管理原因"}
+                {action.kind === "report" ? t("forum.action.explain") : t("forum.action.moderationReason")}
               </Label>
               <Textarea
                 id="forum-action-reason"
@@ -179,12 +183,12 @@ export function ForumActionDialog({
               />
             </div>
           ) : (
-            <p className="text-sm">删除后不能恢复。</p>
+            <p className="text-sm">{t("forum.action.deleteWarning")}</p>
           )}
           <div className="flex justify-end gap-2">
             <AlertDialogCancel asChild>
               <Button type="button" variant="outline" disabled={busy}>
-                取消
+                {t("relation.edit.cancel")}
               </Button>
             </AlertDialogCancel>
             <Button
@@ -196,7 +200,7 @@ export function ForumActionDialog({
                   : "default"
               }
             >
-              {busy ? "正在提交…" : "确认"}
+              {busy ? t("forum.action.submitting") : t("forum.action.accept")}
             </Button>
           </div>
         </form>

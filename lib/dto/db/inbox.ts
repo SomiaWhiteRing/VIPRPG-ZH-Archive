@@ -1,4 +1,5 @@
 import type { PermissionKey } from "@/lib/authz/permissions";
+import type { MessageKey } from "@/lib/i18n/core";
 import type { RoleId, RoleKey } from "@/lib/authz/roles";
 import type { MaintainerRequestStatus, MaintainerUser } from "@/lib/work-maintainers";
 
@@ -19,6 +20,7 @@ export type InboxItemStatus =
 export type InboxItem = {
   id: number;
   type: InboxItemType;
+  roleRequestClosed?: true;
   status: InboxItemStatus;
   senderUserId: number | null;
   senderDisplayName: string | null;
@@ -50,6 +52,7 @@ export type InboxItem = {
   } | null;
   interaction: InboxInteraction | null;
   friendNotification: InboxFriendNotification | null;
+  maintainerOutcome?: { decision: "approve" | "reject"; workTitle: string };
   report: { kind: "forum" | "message"; id: number; targetId: number | null } | null;
   timelineNotification: {
     eventId: number;
@@ -58,10 +61,12 @@ export type InboxItem = {
     targetTitle: string;
     href: string;
     excerpt: string;
+    imageExcerpt?: { text: string; count: number };
     actorName: string;
     actorHref: string | null;
     actorAvatar: string | null;
     action: string;
+    actionKey?: InboxEventActionKey;
   } | null;
   commentNotification: {
     commentId: number;
@@ -70,10 +75,12 @@ export type InboxItem = {
     targetTitle: string;
     href: string;
     excerpt: string;
+    imageExcerpt?: { text: string; count: number };
     actorName: string;
     actorHref: string | null;
     actorAvatar: string | null;
     action: string;
+    actionKey?: InboxEventActionKey;
   } | null;
 };
 
@@ -88,6 +95,7 @@ export type InboxFriendNotification = {
   actorHref: string | null;
   actorAvatar: string | null;
   action: string;
+  actionKey?: InboxEventActionKey;
   isFollowing: boolean;
   canFollow: boolean;
 };
@@ -103,6 +111,9 @@ export type InboxInteraction = {
   actorHref: string | null;
   actorAvatar: string | null;
   action: string;
+  actionKey?: InboxEventActionKey;
 };
+
+type InboxEventActionKey = Exclude<Extract<MessageKey, `inbox.event.${string}`>, "inbox.event.timelineTarget">;
 
 export type RoleSnapshot = { id: RoleId | null; key: RoleKey; name: string };

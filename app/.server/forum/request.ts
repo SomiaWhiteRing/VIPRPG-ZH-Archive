@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 import { readJsonObject, readRequestBody } from "@/app/.server/http/request";
 import { type PermissionKey, hasPermission } from "@/lib/authz/permissions";
 
@@ -25,12 +27,13 @@ export async function requireForumUser(
   ctx: ForumRequestRuntime,
   request: Request,
   permissions: readonly PermissionKey[] = ["forum.use"],
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ) {
   assertForumOrigin(ctx, request);
   const auth = await loadRequestSession(ctx.db, request.headers.get("cookie"));
-  if (!auth) throw new HttpError(401, "请登录后继续。");
+  if (!auth) throw new HttpError(401, translate(locale, "forum.write.login"));
   if (!permissions.some((key) => hasPermission(auth.user, key)))
-    throw new HttpError(403, "没有此操作权限。");
+    throw new HttpError(403, translate(locale, "admin.discussions.permissionDenied"));
   return auth;
 }
 
@@ -43,10 +46,11 @@ export async function readForumBody(
 
 export async function readForumJson(
   request: Request,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ): Promise<Record<string, unknown>> {
-  return readJsonObject(request, "请求无效。", {
+  return readJsonObject(request, translate(locale, "forum.write.invalidRequest"), {
     maximumBytes: 128 * 1024,
     fatalUtf8: true,
-    invalidJsonMessage: "请求无效。",
+    invalidJsonMessage: translate(locale, "forum.write.invalidRequest"),
   });
 }

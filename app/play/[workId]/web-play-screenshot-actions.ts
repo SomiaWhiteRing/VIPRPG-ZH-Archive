@@ -1,3 +1,5 @@
+import { useMessages } from "@/lib/i18n/react";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 import { useEffect, useRef, useState } from "react";
 import { zipSync, type Zippable } from "fflate";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
@@ -5,6 +7,7 @@ import { useToast } from "@/app/components/ui/toast";
 import type { ScreenshotPreview } from "./web-play-screenshots";
 
 export function useScreenshotActions(onDelete: (ids: string[]) => Promise<void>) {
+  const t = useMessages();
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const downloadRef = useRef<AbortController | null>(null);
@@ -33,9 +36,9 @@ export function useScreenshotActions(onDelete: (ids: string[]) => Promise<void>)
       document.body.appendChild(link);
       try { link.click(); }
       finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 30_000); }
-      toast.success(`已打包 ${screenshots.length} 张截图。`);
+      toast.success(t("play.screenshot.packed", { count: screenshots.length }));
     } catch {
-      if (!controller.signal.aborted) toast.error("截图打包失败，请重试。");
+      if (!controller.signal.aborted) toast.error(t("play.screenshot.packFailed"));
     } finally {
       downloadRef.current = null;
       if (!controller.signal.aborted) setDownloading(false);
@@ -45,13 +48,13 @@ export function useScreenshotActions(onDelete: (ids: string[]) => Promise<void>)
   async function deleteScreenshots(screenshots: ScreenshotPreview[], description: string) {
     if (busy || !screenshots.length) return false;
     return confirm(description, {
-      title: "删除截图", confirmLabel: "删除", destructive: true,
+      title: t("play.screenshot.delete"), confirmLabel: t("play.screenshot.deleteAction"), destructive: true,
       action: async () => {
         setDeleting(true);
         try {
           await onDelete(screenshots.map(item => item.id));
-          toast.success(`已删除 ${screenshots.length} 张截图。`);
-        } catch { throw new Error("截图删除失败，请重试。"); }
+          toast.success(t("play.screenshot.deleted", { count: screenshots.length }));
+        } catch { throw new UiFeedbackError("play.screenshot.deleteFailed"); }
         finally { setDeleting(false); }
       },
     });

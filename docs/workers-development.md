@@ -18,6 +18,8 @@
 
 XML 响应使用 Cloudflare Cache API 与 `public, max-age=86400`，内容发布、隐藏和删除后最多可能保留 24 小时旧地图；实际详情页仍按当前公开权限读取。缓存键与 XML 中的绝对网址使用 `AppRuntime.origin`，不依赖访客的 Cookie 或查询参数。
 
+`?lang=` 用于切换网站界面。公开作品的各界面语言共用原有的 `/games/:id` canonical，站点地图仍列该地址。作品标题和介绍继续使用原始数据。
+
 允许索引的环境在 `/robots.txt` 声明全站地图入口。`SITE_NOINDEX="true"` 的环境继续禁止抓取，并返回 `X-Robots-Tag: noindex, nofollow`，不声明地图入口。首页输出当前环境 origin 的自引用 canonical。正式发布后，可在 Search Console 的“站点地图”提交 `https://viprpg.org/sitemap.xml`；地图帮助发现内容，不保证抓取或收录。
 
 `lib/crawl-policy.ts` 在创建请求上下文、鉴权、查询数据和 SSR 前执行抓取策略。针对重复抓取的 `meta-externalagent`，按 User-Agent 标识拒绝进入 Worker 的所有方法请求，返回 `403`、`Cache-Control: private, no-store` 和 `X-Robots-Tag: noindex, nofollow`；仅放行 `/robots.txt`，其中以专用分组声明 `Disallow: /`。这项拒绝不要求 Cloudflare 认证，伪装该标识的请求也会被拒绝；其他爬虫仍沿用平台认证类别及现有路径边界。`facebookexternalhit` 分享预览与 `meta-externalfetcher` 不属于这项新增拒绝规则，爬虫标识分类见 [Cloudflare 官方列表](https://developers.cloudflare.com/ai-crawl-control/reference/bots/)。Cloudflare 优先交付的静态资源不经过 Worker 拦截；此策略也不免除已进入 Worker 的调用费用。

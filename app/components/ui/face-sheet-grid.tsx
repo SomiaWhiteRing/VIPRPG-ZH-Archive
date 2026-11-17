@@ -1,4 +1,5 @@
 import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
+import { useMessages } from "@/lib/i18n/react";
 import { cn } from "@/lib/ui/cn";
 import type { ComponentProps, DragEvent, ReactNode, ReactElement } from "react";
 
@@ -44,6 +45,7 @@ export function FaceSheetGrid<T extends GridSheet>({
   renderCell?: (sheet: T, row: number, column: number, button: ReactElement) => ReactElement;
   renderFooter?: (sheet: T) => ReactNode;
 }) {
+  const t = useMessages();
   return (
     <div className={cn("grid grid-cols-2 content-start items-start gap-2 sm:grid-cols-3 sm:gap-3", className)}>
       {sheets.map((sheet) => (
@@ -61,7 +63,7 @@ export function FaceSheetGrid<T extends GridSheet>({
             scale={1}
             fit
             fillWidth={fillWidth}
-            label={sheet.label ?? "角色脸图选格"}
+            label={sheet.label ?? t("upload.faces.grid")}
             disabled={disabled}
             onSelectCell={(row, column) => onSelectCell(sheet, row, column)}
             onDragCell={

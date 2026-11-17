@@ -1,5 +1,6 @@
 import { Button } from "@/app/components/ui/button";
 import type { CharacterBrowseNode } from "@/lib/character-index";
+import { useMessages } from "@/lib/i18n/react";
 import { cn } from "@/lib/ui/cn";
 import { Folder, GripVertical } from "lucide-react";
 import type { DragEvent } from "react";
@@ -30,6 +31,7 @@ export function SortableCategoryMembers({
   onSelect: (node: CharacterBrowseNode) => void;
   onReorder: (nodes: CharacterBrowseNode[], move: MemberMove) => void;
 }) {
+  const t = useMessages();
   const [preview, setPreview] = useState<DragPreview | null>(null);
   const drag = useRef<DragPreview | null>(null);
   const elements = useRef(new Map<string, HTMLDivElement>());
@@ -175,7 +177,7 @@ export function SortableCategoryMembers({
                 moving &&
                   "border-dashed border-primary bg-primary/10 opacity-40",
               )}
-              title={movable ? `拖动排序：${node.label}` : undefined}
+              title={movable ? t("admin.portraits.dragOrder", { title: node.label }) : undefined}
               onClick={() => {
                 if (!drag.current) onSelect(node);
               }}

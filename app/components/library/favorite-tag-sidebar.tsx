@@ -1,7 +1,8 @@
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/ui/cn";
 import { tagNameKey, type UserTagSummary } from "@/lib/user-tags";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 
 export function FavoriteTagSidebar({
   tags,
@@ -12,16 +13,18 @@ export function FavoriteTagSidebar({
   selectedTag: string;
   basePath: string;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const selectedKey = tagNameKey(selectedTag);
   const items = [
-    { name: "全部", tag: "", count: undefined },
+    { name: t("library.all"), tag: "", count: undefined },
     ...tags.map(({ name, workCount }) => ({ name, tag: name, count: workCount })),
   ];
 
   return (
     <aside className="w-full min-w-0 shrink-0 self-start pt-2.5 @min-[681px]/library:w-[190px]" aria-labelledby="favorite-tags-title">
       <h2 id="favorite-tags-title" className="m-0 border-b border-border py-1.5 text-[15px] font-normal">
-        收藏标签
+        {t("library.favoriteTagsHeading")}
       </h2>
       <nav aria-labelledby="favorite-tags-title">
         <ul className="m-0 list-none p-0">
@@ -38,7 +41,7 @@ export function FavoriteTagSidebar({
                   to={tag ? `${basePath}?${new URLSearchParams({ tag })}` : basePath}
                 >
                   <span className="min-w-0 break-words [overflow-wrap:anywhere]">{name}</span>
-                  {count !== undefined ? <small className="shrink-0 text-xs tabular-nums text-muted">{formatNumber(count)}</small> : null}
+                  {count !== undefined ? <small className="shrink-0 text-xs tabular-nums text-muted">{formatNumber(count, locale)}</small> : null}
                 </Link>
               </li>
             );

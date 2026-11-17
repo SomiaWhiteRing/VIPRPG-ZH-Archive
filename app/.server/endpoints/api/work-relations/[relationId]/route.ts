@@ -54,6 +54,6 @@ export async function PATCH(
 async function readBody(request: Request): Promise<{ relationType: string }> {
   const body = await readJsonObject(request, "Invalid relation body");
   if (typeof body.relationType !== "string")
-    throw new HttpError(400, "Relation type must be a string");
+    throw new HttpError(400, "Relation type must be a string", undefined, "relation.error.relationTypeValue");
   return { relationType: body.relationType };
 }

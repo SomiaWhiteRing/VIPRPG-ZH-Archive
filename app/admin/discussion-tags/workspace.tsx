@@ -1,3 +1,6 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
+
 import { AdminListMeta } from "@/app/admin/admin-list-controls";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { Timestamp } from "@/app/components/ui/timestamp";
@@ -16,6 +19,13 @@ import { type ForumPage, forumHref } from "@/lib/forum";
 
 import { useEffect, useState } from "react";
 import { useRevalidator } from "react-router";
+
+const tagStateKeys = {
+  active: "admin.discussionTags.active",
+  disabled: "admin.discussionTags.disabled",
+  hidden: "admin.discussionTags.hidden",
+} as const;
+
 export function AdminDiscussionTags({
   data,
   query,
@@ -25,45 +35,48 @@ export function AdminDiscussionTags({
   query: string;
   state: string;
 }) {
+  const t = useMessages();
+  const navigationLocale = useNavigationLocale();
   const [selected, setSelected] = useState<AdminForumTag | null>(null),
     revalidator = useRevalidator();
   return (
     <main>
-      <PageHeader compact title="讨论 TAG" />
+      <PageHeader compact title={t("admin.discussionTags.title")} />
       <form
         action="/admin/discussion-tags"
         className="admin-filter-row"
       >
+        {navigationLocale ? <input type="hidden" name={UI_LOCALE_PARAM} value={navigationLocale} /> : null}
         <div className="admin-field admin-field-search">
-          <Label htmlFor="tag-admin-query">名称或 ID</Label>
+          <Label htmlFor="tag-admin-query">{t("admin.discussionTags.query")}</Label>
           <Input id="tag-admin-query" name="q" defaultValue={query} />
         </div>
         <div className="admin-field">
-          <Label htmlFor="tag-admin-state">状态</Label>
+          <Label htmlFor="tag-admin-state">{t("admin.list.status")}</Label>
           <SelectField
             id="tag-admin-state"
             name="state"
             defaultValue={state}
             options={[
-              { value: "", label: "全部" },
-              { value: "active", label: "启用" },
-              { value: "disabled", label: "停用" },
-              { value: "hidden", label: "隐藏" },
+              { value: "", label: t("admin.discussionTags.all") },
+              { value: "active", label: t("admin.discussionTags.active") },
+              { value: "disabled", label: t("admin.discussionTags.disabled") },
+              { value: "hidden", label: t("admin.discussionTags.hidden") },
             ]}
           />
         </div>
-        <Button type="submit">查询</Button>
+        <Button type="submit">{t("admin.list.search")}</Button>
       </form>
       <AdminListMeta total={data.total} noun="TAG" pageSize={data.pageSize} />
-      {data.items.length ? <TableWrap compact label="讨论 TAG" minWidth={0}>
+      {data.items.length ? <TableWrap compact label={t("admin.discussionTags.title")} minWidth={0}>
           <thead>
             <tr>
-              <th>ID／名称</th>
-              <th className="hidden md:table-cell">公开主题数</th>
-              <th className="hidden md:table-cell">状态</th>
-              <th className="hidden md:table-cell">创建者</th>
-              <th className="hidden md:table-cell">更新时间</th>
-              <th className="admin-action-column">操作</th>
+              <th>{t("admin.discussionTags.idName")}</th>
+              <th className="hidden md:table-cell">{t("admin.discussionTags.topics")}</th>
+              <th className="hidden md:table-cell">{t("admin.list.status")}</th>
+              <th className="hidden md:table-cell">{t("admin.discussionTags.creator")}</th>
+              <th className="hidden md:table-cell">{t("admin.characterList.updated")}</th>
+              <th className="admin-action-column">{t("admin.characterList.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -74,11 +87,9 @@ export function AdminDiscussionTags({
                   <span className="admin-cell-meta font-mono">#{tag.id}</span>
                   <p className="mt-1 text-xs text-muted md:hidden">
                     {
-                      { active: "启用", disabled: "停用", hidden: "隐藏" }[
-                        tag.state
-                      ]
+                      t(tagStateKeys[tag.state])
                     }{" "}
-                    · {tag.count} 个公开主题
+                    · {t("admin.discussionTags.count", { count: tag.count })}
                   </p>
                 </td>
                 <td className="hidden font-mono md:table-cell">
@@ -86,9 +97,7 @@ export function AdminDiscussionTags({
                 </td>
                 <td className="hidden md:table-cell">
                   {
-                    { active: "启用", disabled: "停用", hidden: "隐藏" }[
-                      tag.state
-                    ]
+                    t(tagStateKeys[tag.state])
                   }
                 </td>
                 <td className="hidden md:table-cell">{tag.creator}</td>
@@ -102,13 +111,13 @@ export function AdminDiscussionTags({
                     size="sm"
                     onClick={() => setSelected(tag)}
                   >
-                    管理
+                    {t("admin.discussionTags.manage")}
                   </Button>
                 </td>
               </tr>
             ))}
           </tbody>
-        </TableWrap> : <EmptyState title="没有匹配的 TAG。" />}
+        </TableWrap> : <EmptyState title={t("admin.discussionTags.empty")} />}
       <PaginationLinks
         basePath="/admin/discussion-tags"
         page={data.page}
@@ -139,6 +148,8 @@ function ManageTag({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useMessages();
+  const navigationLocale = useNavigationLocale();
   const toast = useToast();
   const [action, setAction] = useState("rename"),
     [name, setName] = useState(tag.name),
@@ -153,6 +164,7 @@ function ManageTag({
     const controller = new AbortController();
     void forumRequest<{ page: ForumPage<AdminForumTag> }>(
       forumHref("/api/admin/discussions", {
+        [UI_LOCALE_PARAM]: navigationLocale ?? undefined,
         op: "tags",
         state: "active",
         q: query,
@@ -167,13 +179,13 @@ function ManageTag({
         if (e.name !== "AbortError") setError(e.message);
       });
     return () => controller.abort();
-  }, [action, query, tag.id]);
+  }, [action, navigationLocale, query, tag.id]);
   async function submit() {
     const target = targets.find((t) => String(t.id) === targetId);
     setBusy(true);
     setError("");
     try {
-      await forumRequest("/api/admin/discussions", {
+      await forumRequest(forumHref("/api/admin/discussions", { [UI_LOCALE_PARAM]: navigationLocale ?? undefined }), {
         op: "tag",
         id: tag.id,
         revision: tag.revision,
@@ -183,10 +195,10 @@ function ManageTag({
         targetId: target?.id,
         targetRevision: target?.revision,
       });
-      toast.success("TAG 管理操作已保存。");
+      toast.success(t("admin.discussionTags.saved"));
       onSaved();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "保存失败。");
+      toast.error(e instanceof Error ? e.message : t("admin.discussionTags.failed"));
     } finally {
       setBusy(false);
     }
@@ -198,7 +210,7 @@ function ManageTag({
       onOpenChange={(value) => {
         if (!value && !busy) onClose();
       }}
-      title={`管理 TAG：${tag.name}`}
+      title={t("admin.discussionTags.manageName", { name: tag.name })}
     >
       <form
         className="grid gap-3"
@@ -208,32 +220,32 @@ function ManageTag({
         }}
       >
         <p className="text-sm">
-          ID {tag.id} · {tag.count} 个公开主题
+          ID {tag.id} · {t("admin.discussionTags.count", { count: tag.count })}
         </p>
-        <p className="wrap-anywhere text-sm">创建者：{tag.creator}</p>
+        <p className="wrap-anywhere text-sm">{t("admin.discussionTags.creatorName", { name: tag.creator })}</p>
         <p className="text-xs text-muted">
-          更新时间：
+          {t("admin.discussionTags.updated")}
           <Timestamp value={tag.updatedAt} />
         </p>
         <div>
-          <Label htmlFor="tag-action">操作</Label>
+          <Label htmlFor="tag-action">{t("admin.characterList.actions")}</Label>
           <SelectField
             id="tag-action"
             value={action}
             onValueChange={setAction}
             options={[
-              { value: "rename", label: "改名" },
-              { value: "merge", label: "合并" },
-              { value: "disable", label: "停用" },
-              { value: "hide", label: "隐藏" },
-              { value: "restore", label: "恢复启用" },
+              { value: "rename", label: t("admin.discussionTags.rename") },
+              { value: "merge", label: t("admin.discussionTags.merge") },
+              { value: "disable", label: t("admin.discussionTags.disable") },
+              { value: "hide", label: t("admin.discussionTags.hide") },
+              { value: "restore", label: t("admin.discussionTags.restore") },
             ]}
             disabled={busy}
           />
         </div>
         {action === "rename" ? (
           <div>
-            <Label htmlFor="tag-new-name">新名称</Label>
+            <Label htmlFor="tag-new-name">{t("admin.discussionTags.newName")}</Label>
             <Input
               id="tag-new-name"
               value={name}
@@ -246,7 +258,7 @@ function ManageTag({
         {action === "merge" ? (
           <>
             <div>
-              <Label htmlFor="tag-target-query">查找目标 TAG</Label>
+              <Label htmlFor="tag-target-query">{t("admin.discussionTags.find")}</Label>
               <Input
                 id="tag-target-query"
                 value={query}
@@ -255,31 +267,29 @@ function ManageTag({
               />
             </div>
             <div>
-              <Label htmlFor="tag-target">合并到</Label>
+              <Label htmlFor="tag-target">{t("admin.discussionTags.target")}</Label>
               <SelectField
                 id="tag-target"
                 value={targetId}
                 onValueChange={setTargetId}
-                options={targets.map((t) => ({
-                  value: String(t.id),
-                  label: `${t.name} · ${t.count} 个公开主题`,
+                options={targets.map((target) => ({
+                  value: String(target.id),
+                  label: `${target.name} · ${t("admin.discussionTags.count", { count: target.count })}`,
                 }))}
                 required
                 disabled={busy}
               />
             </div>
             <p className="text-sm text-muted">
-              此次合并将影响 {tag.affectedCount}{" "}
-              个主题。全部源关系将迁移到目标；重复关系保留目标原位置，其余保留源位置。源
-              ID 删除，旧筛选链接失效。
+              {t("admin.discussionTags.mergeNotice", { count: tag.affectedCount })}
             </p>
           </>
         ) : null}
         {action === "restore" ? (
-          <p className="text-sm">恢复后将重新公开，并允许新主题选用。</p>
+          <p className="text-sm">{t("admin.discussionTags.restoreNotice")}</p>
         ) : null}
         <div>
-          <Label htmlFor="tag-action-reason">管理原因</Label>
+          <Label htmlFor="tag-action-reason">{t("admin.discussionTags.reason")}</Label>
           <Textarea
             id="tag-action-reason"
             value={reason}
@@ -302,7 +312,7 @@ function ManageTag({
             data-forum-cancel
             onClick={onClose}
           >
-            取消
+            {t("play.save.cancel")}
           </Button>
           <Button
             type="submit"
@@ -313,7 +323,7 @@ function ManageTag({
                 : "default"
             }
           >
-            {busy ? "正在保存…" : "确认"}
+            {busy ? t("admin.discussionTags.saving") : t("admin.discussionTags.confirm")}
           </Button>
         </div>
       </form>

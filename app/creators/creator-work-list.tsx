@@ -2,6 +2,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { WorkListRow } from "@/app/components/work/work-list-row";
 import { useVisibleWorkItems } from "@/app/components/work/use-visible-work-items";
 import type { CreatorWorkCredit } from "@/lib/dto/db/creator-library";
+import { useUiLocale } from "@/lib/i18n/react";
 import { creatorRoleLabel } from "@/lib/labels";
 
 export function CreatorWorkList({ works, creatorName, standalone = false }: {
@@ -9,6 +10,7 @@ export function CreatorWorkList({ works, creatorName, standalone = false }: {
   creatorName: string;
   standalone?: boolean;
 }) {
+  const locale = useUiLocale();
   const visibleWorks = useVisibleWorkItems(works);
   return (
     <ul className={`m-0 divide-y divide-border border-border p-0 ${standalone ? "border-b" : "border-t"}`}>
@@ -31,7 +33,7 @@ export function CreatorWorkList({ works, creatorName, standalone = false }: {
                   key={`${credit.roleKey}-${credit.displayName}`}
                 >
                   <Badge className="shrink-0" variant="credit">
-                    {credit.roleLabel || creatorRoleLabel(credit.roleKey)}
+                    {credit.roleLabel || creatorRoleLabel(credit.roleKey, locale)}
                   </Badge>
                   {credit.displayName !== creatorName ? (
                     <span className="min-w-0 text-muted">{credit.displayName}</span>

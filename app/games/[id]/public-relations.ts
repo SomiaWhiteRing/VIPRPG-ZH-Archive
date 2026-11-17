@@ -1,13 +1,13 @@
 import type { GameWorkDetail, GameTranslationRelation, GameWorkRelation } from "@/lib/dto/db/game-library";
 import { WORK_RELATION_TYPES, relationLabel } from "@/lib/labels";
+import { translate } from "@/lib/i18n/core";
+import type { UiLocale } from "@/lib/i18n/locale";
 
-export const CHARACTER_ROLE_LABELS: Record<string, string> = {
-  main: "主角",
-  supporting: "配角",
-  cameo: "客串",
-  mentioned: "提及",
-  other: "其他",
-};
+export function publicRelationLabel(type: string, locale: UiLocale) {
+  if (type === "original") return translate(locale, "relation.original");
+  if (type === "parallel_translation") return translate(locale, "relation.parallelTranslation");
+  return relationLabel(type, locale);
+}
 
 export function getPublicRelationCards(work: GameWorkDetail) {
   const relatedTranslations = dedupeTranslations([
@@ -27,8 +27,8 @@ export function getPublicRelationCards(work: GameWorkDetail) {
       workId: item.workId,
       href: `/games/${item.workId}`,
       type: item.role === "original"
-        ? "原版"
-        : "其他译版",
+        ? "original"
+        : "parallel_translation",
       title: item.title,
       coverBlobSha256: item.coverBlobSha256 ?? null,
     })),
@@ -36,7 +36,7 @@ export function getPublicRelationCards(work: GameWorkDetail) {
       key: `relation-${item.id}`,
       workId: item.workId,
       href: `/games/${item.workId}`,
-      type: relationLabel(item.relationType),
+      type: item.relationType,
       title: item.title,
       coverBlobSha256: item.coverBlobSha256 ?? null,
     })),

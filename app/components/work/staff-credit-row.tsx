@@ -3,6 +3,9 @@ import { CustomSelect } from "@/app/components/ui/custom-select";
 import { InformationRow } from "@/app/components/ui/information-editor";
 import { Label } from "@/app/components/ui/label";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
+import type { MessageKey } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { creatorRoleLabel } from "@/lib/labels";
 import type { StaffCredit } from "@/lib/staff-credits";
 
 type Role = StaffCredit["roleKey"];
@@ -14,7 +17,7 @@ export type EditableStaffCredit = {
 };
 export type StaffRowError = {
   field: "role" | "person" | "label";
-  message: string;
+  messageKey: MessageKey;
 };
 
 export function StaffCreditRow({
@@ -42,24 +45,26 @@ export function StaffCreditRow({
   onRemove: () => void;
   removeFocusId?: string;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   return (
     <InformationRow
       disabled={disabled}
-      removeLabel={`移除第 ${index + 1} 条制作署名`}
+      removeLabel={t("upload.staff.removeRow", { index: index + 1 })}
       onRemove={onRemove}
       removeFocusId={removeFocusId}
-      error={error ? { id: `${id}-error`, message: error.message } : undefined}
+      error={error ? { id: `${id}-error`, message: t(error.messageKey) } : undefined}
       label={
         <CustomSelect
           id={`${id}-role`}
           customInputId={`${id}-label`}
-          label="职务"
+          label={t("upload.staff.role")}
           disabled={disabled}
           value={value.roleKey}
           customOption="other"
           customValue={value.roleLabel ?? ""}
-          options={roles}
-          placeholder="选择职务"
+          options={roles.map(({ value }) => ({ value, label: creatorRoleLabel(value, locale) }))}
+          placeholder={t("upload.staff.chooseRole")}
           required={requireRoleLabel}
           invalid={error?.field === "role" || error?.field === "label"}
           descriptionId={error?.field === "role" || error?.field === "label" ? `${id}-error` : undefined}
@@ -71,14 +76,14 @@ export function StaffCreditRow({
       }
     >
       <div className="grid min-w-0 gap-1">
-        <Label className="sr-only" htmlFor={`${id}-person`}>人物</Label>
+        <Label className="sr-only" htmlFor={`${id}-person`}>{t("upload.staff.person")}</Label>
         <CreatorPicker
           compact
           id={`${id}-person`}
           disabled={disabled}
           value={value.selection}
           suggestions={suggestions}
-          placeholder="搜索或新建人物"
+          placeholder={t("upload.staff.findPerson")}
           invalid={error?.field === "person"}
           errorId={error?.field === "person" ? `${id}-error` : undefined}
           onChange={(selection) => onChange({ selection })}

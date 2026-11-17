@@ -2,6 +2,7 @@ import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { useMessages } from "@/lib/i18n/react";
 import { normalizeEntityName } from "@/lib/entity-name";
 import * as Dialog from "@/app/components/ui/dialog";
 import { type FormEvent, type ReactNode, useId, useState } from "react";
@@ -82,11 +83,12 @@ function CharacterCreateForm({
   submitLabel: string;
   submittingLabel: string;
 }) {
+  const t = useMessages();
   const fieldId = useId();
   const toast = useToast();
   const [originalName, setOriginalName] = useState(initialOriginalName);
   const [displayName, setDisplayName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -95,12 +97,12 @@ function CharacterCreateForm({
     const normalizedOriginalName = normalizeEntityName(originalName);
     const normalizedDisplayName = normalizeEntityName(displayName);
     if (!normalizedOriginalName || !normalizedDisplayName) {
-      setError("请填写日语名和中文名。");
+      setError(true);
       return;
     }
 
     setSubmitting(true);
-    setError(null);
+    setError(false);
     try {
       await onCreate({
         originalName: normalizedOriginalName,
@@ -110,8 +112,8 @@ function CharacterCreateForm({
     } catch (submitError) {
       toast.error(
         submitError instanceof Error
-          ? submitError.message
-          : "角色创建失败，请稍后重试。",
+          ? submitError
+          : t("upload.portrait.createFailed"),
       );
       setSubmitting(false);
     }
@@ -120,27 +122,27 @@ function CharacterCreateForm({
   return (
     <form className="grid gap-4" onSubmit={submit}>
       <div className="grid gap-2">
-        <Label htmlFor={`${fieldId}-original-name`}>日语名</Label>
+        <Label htmlFor={`${fieldId}-original-name`}>{t("character.nameJa")}</Label>
         <Input
           autoFocus
           disabled={submitting}
           id={`${fieldId}-original-name`}
           onChange={(event) => {
             setOriginalName(event.target.value);
-            setError(null);
+            setError(false);
           }}
           required
           value={originalName}
         />
       </div>
       <div className="grid gap-2">
-        <Label htmlFor={`${fieldId}-display-name`}>中文名</Label>
+        <Label htmlFor={`${fieldId}-display-name`}>{t("upload.portrait.chineseName")}</Label>
         <Input
           disabled={submitting}
           id={`${fieldId}-display-name`}
           onChange={(event) => {
             setDisplayName(event.target.value);
-            setError(null);
+            setError(false);
           }}
           required
           value={displayName}
@@ -148,7 +150,7 @@ function CharacterCreateForm({
       </div>
       {error ? (
         <p className="m-0 text-sm text-red-700 dark:text-red-300" role="alert">
-          {error}
+          {t("upload.portrait.namesRequired")}
         </p>
       ) : null}
       <div className="flex justify-end gap-2">
@@ -158,7 +160,7 @@ function CharacterCreateForm({
           type="button"
           variant="outline"
         >
-          取消
+          {t("play.save.cancel")}
         </Button>
         <Button disabled={submitting} type="submit">
           {submitting ? submittingLabel : submitLabel}

@@ -4,10 +4,10 @@ export const MAX_REJECTION_REASON_LENGTH = 1000;
 
 export function normalizeRejectionReason(value: unknown): string {
   if (value == null) return '';
-  if (typeof value !== 'string') throw new HttpError(400, '驳回理由必须为纯文本。');
+  if (typeof value !== 'string') throw new HttpError(400, '驳回理由必须为纯文本。', undefined, "inbox.action.error.reasonType");
   const reason = value.replace(/\r\n?/g, '\n').trim();
   if (reason.length > MAX_REJECTION_REASON_LENGTH)
-    throw new HttpError(400, `驳回理由不能超过 ${MAX_REJECTION_REASON_LENGTH} 字。`);
+    throw new HttpError(400, `驳回理由不能超过 ${MAX_REJECTION_REASON_LENGTH} 字。`, undefined, "inbox.action.error.reasonLength", { max: MAX_REJECTION_REASON_LENGTH });
   return reason;
 }
 

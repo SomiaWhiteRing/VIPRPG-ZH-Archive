@@ -1,4 +1,7 @@
 import { requestJson } from "@/lib/ui/api-response";
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 
 import { useToast } from "@/app/components/ui/toast";
 import { Button } from "@/app/components/ui/button";
@@ -24,6 +27,8 @@ export function RoleAssignmentControl({
   disabled?: boolean;
   onBusyChange: (busy: boolean) => void;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const toast = useToast();
   const roleIds = initialRoleIds;
 
@@ -54,7 +59,7 @@ export function RoleAssignmentControl({
 
       await onSaved(payload.access);
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "操作失败");
+      toast.error(cause instanceof Error ? cause : t("core.confirm.failed"));
       throw cause;
     } finally {
       setSaving(false);
@@ -72,7 +77,7 @@ export function RoleAssignmentControl({
         body: JSON.stringify({ roleId: effectiveSelectedRoleId }),
       });
       setSelectedRoleId(0);
-      toast.success("角色已分配。");
+      toast.success(t("admin.userAccess.assigned"));
     } catch {
       return;
     }
@@ -84,7 +89,7 @@ export function RoleAssignmentControl({
       await request(`/api/admin/users/${userId}/roles/${roleId}`, {
         method: "DELETE",
       });
-      toast.success("角色已移除。");
+      toast.success(t("admin.userAccess.removed"));
     } catch {
       return;
     }
@@ -96,8 +101,8 @@ export function RoleAssignmentControl({
         <div className="flex items-center justify-between gap-3 border-b border-border py-1.5" key={role.id}>
           <span className="min-w-0 text-sm">
             {role.name}
-            {role.status === "disabled" ? "（已停用）" : ""}
-            <span className="mt-0.5 block text-xs text-muted">{roleSourceLabel(role, roleIds.includes(role.id), true)}</span>
+            {role.status === "disabled" ? t("admin.users.inactiveRole") : ""}
+            <span className="mt-0.5 block text-xs text-muted">{roleSourceLabel(role, roleIds.includes(role.id), true, locale)}</span>
           </span>
           {assigned.some((item) => item.id === role.id) ? <Button
             className="shrink-0"
@@ -107,19 +112,19 @@ export function RoleAssignmentControl({
             type="button"
             variant="ghost"
           >
-            移除
+            {t("character.manager.remove")}
           </Button> : null}
         </div>
       ))}
       {available.length > 0 ? (
         <div className="mt-1 flex items-center gap-2">
           <SelectField
-            aria-label="要分配的角色"
+            aria-label={t("admin.userAccess.assignRole")}
             className="min-w-0 flex-1"
             onValueChange={(value) => setSelectedRoleId(Number(value))}
             options={available.map((role) => ({
               value: String(role.id),
-              label: role.name + (role.availableToAll ? "（另行单独授权）" : ""),
+              label: role.name + (role.availableToAll ? t("admin.userAccess.anotherGrant") : ""),
             }))}
             value={String(effectiveSelectedRoleId)}
           />
@@ -129,7 +134,7 @@ export function RoleAssignmentControl({
             size="sm"
             type="button"
           >
-            分配
+            {t("admin.userAccess.assign")}
           </Button>
         </div>
       ) : null}
@@ -137,8 +142,9 @@ export function RoleAssignmentControl({
   );
 }
 
-export function roleSourceLabel(role: RoleSummary, individuallyAssigned: boolean, accountActive: boolean): string {
-  return accountActive && role.status === "active" && role.availableToAll
-    ? (individuallyAssigned ? "单独授权及全员开放" : "全员开放")
-    : "单独授权";
+export function roleSourceLabel(role: RoleSummary, individuallyAssigned: boolean, accountActive: boolean, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const key = accountActive && role.status === "active" && role.availableToAll
+    ? (individuallyAssigned ? "admin.userAccess.both" : "admin.userAccess.all")
+    : "admin.userAccess.individual";
+  return translate(locale, key);
 }

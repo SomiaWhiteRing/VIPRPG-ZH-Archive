@@ -1,5 +1,6 @@
 import { Input } from "@/app/components/ui/input";
 import { TokenInput } from "@/app/components/ui/token-input";
+import { useMessages } from "@/lib/i18n/react";
 import { cn } from "@/lib/ui/cn";
 import { Check, ChevronDown, X } from "lucide-react";
 import { useContext, useRef, useState, type ReactNode } from "react";
@@ -89,6 +90,7 @@ export function SearchComboBox<T>(props: SearchComboBoxProps<T>) {
 }
 
 function SearchComboBoxBody<T>(props: SearchComboBoxProps<T>) {
+  const t = useMessages();
   const state = useContext(ComboBoxStateContext)!;
   const container = useRef<HTMLDivElement>(null);
   const showClear = Boolean(
@@ -169,7 +171,7 @@ function SearchComboBoxBody<T>(props: SearchComboBoxProps<T>) {
               {showClear ? (
                 <Button
                   slot={null}
-                  aria-label={`清除${props.label}`}
+                  aria-label={t("core.searchBox.clear", { label: props.label })}
                   isDisabled={props.disabled}
                   onPress={() => {
                     props.onClear?.();
@@ -181,7 +183,7 @@ function SearchComboBoxBody<T>(props: SearchComboBoxProps<T>) {
                 </Button>
               ) : null}
               <Button
-                aria-label={`展开${props.label}搜索结果`}
+                aria-label={t("core.searchBox.expand", { label: props.label })}
                 className="absolute inset-y-0 right-0 flex w-10 cursor-pointer items-center justify-center rounded-r-md text-muted outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ChevronDown className="size-4" aria-hidden="true" />
@@ -199,7 +201,7 @@ function SearchComboBoxBody<T>(props: SearchComboBoxProps<T>) {
         className="z-50 flex w-[var(--trigger-width)] flex-col overflow-hidden rounded-md border border-border bg-card p-1 shadow-surface"
       >
         <ListBox<T>
-          aria-label={`${props.label}搜索结果`}
+          aria-label={t("core.searchBox.results", { label: props.label })}
           aria-busy={props.loading}
           className="min-h-0 overflow-y-auto outline-none"
           renderEmptyState={() => props.emptyState}

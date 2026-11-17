@@ -10,7 +10,8 @@ import {
   readWorkImage,
   storeWorkImages,
 } from "@/app/.server/storage/work-images";
-import { HttpError, json, jsonError } from "@/lib/http";
+import { json, jsonError } from "@/lib/http";
+import { UiHttpError } from "@/lib/i18n/feedback";
 
 export async function PATCH(
   runtime: AppRuntime,
@@ -41,8 +42,8 @@ export async function PATCH(
         runtime,
         id,
         {
-          title: optionalFormString(form.get("title"), "目录标题"),
-          description: optionalFormString(form.get("description"), "目录说明"),
+          title: optionalFormString(form.get("title"), "catalog.error.titleType"),
+          description: optionalFormString(form.get("description"), "catalog.error.descriptionType"),
           coverBlobSha256,
         },
         auth.user,
@@ -55,11 +56,11 @@ export async function PATCH(
 
 function optionalFormString(
   value: FormDataEntryValue | null,
-  field: string,
+  messageKey: "catalog.error.titleType" | "catalog.error.descriptionType",
 ): string | undefined {
   if (value === null) return undefined;
   if (typeof value !== "string")
-    throw new HttpError(400, `${field}必须是字符串`);
+    throw new UiHttpError(400, messageKey);
   return value;
 }
 export async function DELETE(

@@ -1,3 +1,6 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate, isMessageKey } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { searchTagsForAdmin } from "@/app/.server/db/taxonomy-library";
 import { pickPageFields } from "@/app/.server/page-data";
@@ -14,11 +17,10 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatNumber } from "@/lib/format";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { namespaceLabel } from "@/lib/labels";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
@@ -53,6 +55,7 @@ export async function loader(args: LoaderFunctionArgs) {
   });
 
   return {
+    locale: runtime.uiLocale,
     adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
     query,
     namespace,
@@ -62,56 +65,61 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["公共标签维护", "控制台"], page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "admin.tags.title");
+  const consoleTitle = translate(locale, "admin.characterIndex.console");
+  return pageMetaDescriptors({ title: [title, consoleTitle], page: loaderData?.page }, error, locale);
+};
 
 export default function AdminTagsPage() {
+  const t = useMessages();
   const { adminUser, query, namespace, sort, page, result } =
     useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
         compact
-        title="公共标签维护"
-        subtitle="维护标签命名空间、说明和作品关联。"
+        title={t("admin.tags.title")}
+        subtitle={t("admin.tags.subtitle")}
         actions={
           <Link className={buttonVariants({ variant: "outline" })} to="/tags">
-            查看公开列表
+            {t("admin.creators.publicList")}
           </Link>
         }
       />
       <AdminListControls
         action="/admin/tags"
-        noun="标签"
+        noun={t("admin.tags.tag")}
         query={query}
         status={namespace}
-        statusLabel="命名空间"
+        statusLabel={t("admin.tags.namespace")}
         statusOptions={[
-          { value: "all", label: "全部命名空间" },
-          { value: "genre", label: "类型" },
-          { value: "theme", label: "主题" },
-          { value: "character", label: "角色相关" },
-          { value: "technical", label: "技术" },
-          { value: "content", label: "内容" },
-          { value: "other", label: "其他" },
+          { value: "all", label: t("admin.tags.all") },
+          { value: "genre", label: t("admin.tags.genre") },
+          { value: "theme", label: t("admin.tags.theme") },
+          { value: "character", label: t("admin.tags.character") },
+          { value: "technical", label: t("admin.tags.technical") },
+          { value: "content", label: t("admin.tags.content") },
+          { value: "other", label: t("admin.tags.other") },
         ]}
         sort={sort}
         sortOptions={[
-          { value: "default", label: "最近更新" },
-          { value: "name", label: "名称" },
-          { value: "works", label: "关联作品数" },
+          { value: "default", label: t("admin.creators.updated") },
+          { value: "name", label: t("creator.name") },
+          { value: "works", label: t("admin.creators.workCount") },
         ]}
         pageSize={PAGE_SIZE}
         total={result.total}
       />
       {result.items.length > 0 ? (
-        <TableWrap compact label="标签列表" minWidth={900}>
+        <TableWrap compact label={t("admin.tags.list")} minWidth={900}>
           <thead>
             <tr>
-              <th>标签</th>
-              <th>命名空间</th>
-              <th>关联</th>
-              <th className="admin-action-column">操作</th>
+              <th>{t("admin.tags.tag")}</th>
+              <th>{t("admin.tags.namespace")}</th>
+              <th>{t("admin.creators.credits")}</th>
+              <th className="admin-action-column">{t("admin.characterList.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -120,18 +128,21 @@ export default function AdminTagsPage() {
                 <td>
                   <strong className="admin-cell-title">{tag.name}</strong>
                 </td>
-                <td>{namespaceLabel(tag.namespace)}</td>
-                <td>{formatNumber(tag.workCount)} 部作品</td>
+                <td>{(() => {
+                  const key = `admin.tags.${tag.namespace}`;
+                  return isMessageKey(key) ? t(key) : namespaceLabel(tag.namespace);
+                })()}</td>
+                <td>{t("admin.creators.count", { count: tag.workCount })}</td>
                 <td className="admin-action-column">
                   {hasPermission(adminUser, "tag.metadata.update_any") ? (
                     <Link
                       className={buttonVariants({ variant: "ghost", size: "sm" })}
                       to={`/admin/tags/edit?name=${encodeURIComponent(tag.name)}`}
                     >
-                      编辑
+                      {t("core.action.edit")}
                     </Link>
                   ) : (
-                    <span className="admin-cell-meta">只读</span>
+                    <span className="admin-cell-meta">{t("admin.characterList.readOnly")}</span>
                   )}
                 </td>
               </tr>
@@ -139,7 +150,7 @@ export default function AdminTagsPage() {
           </tbody>
         </TableWrap>
       ) : (
-        <EmptyState title="没有找到匹配的标签。" />
+        <EmptyState title={t("admin.tags.empty")} />
       )}
       <PaginationLinks
         basePath="/admin/tags"

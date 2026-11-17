@@ -4,7 +4,7 @@ import {
   createClearSessionCookie,
   revokeSessionFromCookieHeader,
 } from "@/app/.server/auth/session";
-import { redirectResponse } from "@/app/.server/http/form";
+import { redirectWithParams } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json } from "@/lib/http";
 
@@ -17,7 +17,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
   }
   const formData = await request.formData();
   const nextPath = sanitizeRedirectPath(formData.get("next"));
-  const response = redirectResponse(new URL(nextPath, request.url));
+  const response = redirectWithParams(request, nextPath, {});
 
   await revokeSessionFromCookieHeader(runtime, request.headers.get("cookie"));
   response.headers.append("Set-Cookie", createClearSessionCookie(request.url));

@@ -14,7 +14,7 @@ export async function GET(runtime: AppRuntime, request: Request, context: { para
   try {
     const workId = parsePositiveId(context.params.workId, "work id");
     const work = await getGameWorkRelations(runtime, workId, hasPermission(auth.user, "work.metadata.update_any"));
-    if (!work) throw new HttpError(404, "作品不存在");
+    if (!work) throw new HttpError(404, "作品不存在", undefined, "comment.error.workMissing");
     return json({ ok: true, work, capabilities: await getWorkRelationEditorCapabilities(runtime, workId, auth.user) });
   } catch (error) {
     return jsonError("作品关联加载失败", error);
@@ -55,9 +55,9 @@ async function readBody(request: Request): Promise<{
 }> {
   const body = await readJsonObject(request, "Invalid relation body");
   if (body.targetWorkId !== undefined && typeof body.targetWorkId !== "number")
-    throw new HttpError(400, "Target work id must be a number");
+    throw new HttpError(400, "Target work id must be a number", undefined, "relation.error.targetIdType");
   if (body.relationType !== undefined && typeof body.relationType !== "string")
-    throw new HttpError(400, "Relation type must be a string");
+    throw new HttpError(400, "Relation type must be a string", undefined, "relation.error.relationTypeValue");
   return body as {
     targetWorkId?: number;
     relationType?: string;

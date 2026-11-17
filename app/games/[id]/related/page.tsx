@@ -7,10 +7,12 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { WorkRelationGuide } from "@/app/components/work/work-relation-guide";
 import { GameLibraryListRow } from "@/app/games/game-library-list-row";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
-import { getPublicRelationCards } from "../public-relations";
+import { getPublicRelationCards, publicRelationLabel } from "../public-relations";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -24,6 +26,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return {
     workId,
+    locale: runtime.uiLocale,
     title: work.chineseTitle || work.originalTitle,
     relations: relations.flatMap((item) => {
       const summary = byId.get(item.workId);
@@ -32,12 +35,16 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({
-    title: [loaderData?.title || "游戏", "关联作品"],
-  }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({
+    title: [loaderData?.title || translate(locale, "work.detail"), translate(locale, "work.related")],
+  }, error, locale);
+};
 
 export default function WorkRelatedPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { workId, title, relations } = useLoaderData<typeof loader>();
   const groups = new Map<string, typeof relations>();
   for (const relation of relations) {
@@ -52,11 +59,11 @@ export default function WorkRelatedPage() {
         actions={
           <>
             <WorkRelationGuide />
-            <BackLink href={`/games/${workId}#sec-relations`} label="返回作品" />
+            <BackLink href={`/games/${workId}#sec-relations`} label={t("relation.backToWork")} />
           </>
         }
         subtitle={title}
-        title="关联作品"
+        title={t("work.related")}
       />
       {
         relations.length ? (
@@ -64,7 +71,7 @@ export default function WorkRelatedPage() {
             {Array.from(groups, ([type, items], index) => (
               <section key={type} aria-labelledby={`relation-group-${index}`}>
                 <header className="flex items-baseline gap-3 border-b border-border pb-3">
-                  <h2 className="m-0 font-display text-xl font-bold" id={`relation-group-${index}`}>{type}</h2>
+                  <h2 className="m-0 font-display text-xl font-bold" id={`relation-group-${index}`}>{publicRelationLabel(type, locale)}</h2>
                 </header>
                 <ol className="divide-y divide-border border-b border-border">
                   {items.map((item) => (
@@ -76,7 +83,7 @@ export default function WorkRelatedPage() {
               </section>
             ))}
           </div>
-        ) : <EmptyState title="暂无公开关联作品。" />
+        ) : <EmptyState title={t("work.noRelated")} />
       }
     </main>
   );

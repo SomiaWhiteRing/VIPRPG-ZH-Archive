@@ -1,8 +1,11 @@
 import { parsePageId, throwNotFound } from "@/app/.server/http/page-response";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { type LoaderFunctionArgs, type MetaFunction, useLoaderData, Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { type LoaderFunctionArgs, type MetaFunction, useLoaderData } from "react-router";
 
 
 import { requirePagePermission } from "@/app/.server/auth/authorize";
@@ -32,33 +35,33 @@ export async function loader(args: LoaderFunctionArgs) {
   const job = await getAdminImportJob(runtime, id);
   if (!job) throwNotFound();
 
-  return { job };
+  return { job, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    {
-      title: [loaderData ? `上传任务 #${loaderData.job.id}` : "上传任务", "控制台"],
-    },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = loaderData ? translate(locale, "admin.imports.numbered", { id: loaderData.job.id }) : translate(locale, "admin.imports.title");
+  return pageMetaDescriptors({ title: [title, translate(locale, "admin.characterIndex.console")] }, error, locale);
+};
 
 export default function AdminImportJobPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { job } = useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
-        actions={<BackLink href="/admin/import-jobs" label="返回上传任务" />}
+        actions={<BackLink href="/admin/import-jobs" label={t("admin.imports.back")} />}
         compact
-        subtitle={job.sourceName || "未知来源"}
-        title={`上传任务 #${job.id}`}
+        subtitle={job.sourceName || t("admin.imports.unknown")}
+        title={t("admin.imports.numbered", { id: job.id })}
       />
-      <Pane heading="当前状态">
+      <Pane heading={t("admin.imports.current")}>
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge kind="import-task" value={job.status} />
           {job.failedStage ? (
             <span className="text-sm text-muted">
-              {importTaskStageLabel(job.failedStage)}
+              {importTaskStageLabel(job.failedStage, locale)}
             </span>
           ) : null}
         </div>
@@ -70,21 +73,21 @@ export default function AdminImportJobPage() {
         <StatList
           columns={3}
           items={[
-            { label: "创建", value: formatDate(job.createdAt) },
-            { label: "更新", value: formatDate(job.updatedAt) },
+            { label: t("admin.imports.created"), value: formatDate(job.createdAt, { locale }) },
+            { label: t("admin.imports.updated"), value: formatDate(job.updatedAt, { locale }) },
             {
-              label: "完成",
-              value: job.completedAt ? formatDate(job.completedAt) : "—",
+              label: t("admin.imports.complete"),
+              value: job.completedAt ? formatDate(job.completedAt, { locale }) : "—",
             },
-            { label: "上传者", value: job.uploaderName || "未知" },
+            { label: t("work.sidebar.uploader"), value: job.uploaderName || t("play.diagnostic.unknown") },
             {
-              label: "作品",
+              label: t("admin.works.game"),
               value: job.workId
                 ? job.workTitle || `#${job.workId}`
-                : "尚未关联",
+                : t("admin.imports.unlinked"),
             },
             {
-              label: "归档版本",
+              label: t("admin.imports.archive"),
               value: job.archiveVersionId ? `#${job.archiveVersionId}` : "—",
             },
           ]}
@@ -92,63 +95,63 @@ export default function AdminImportJobPage() {
         />
         <div className="flex flex-wrap gap-3 text-sm">
           {job.workId ? (
-            <Link to={`/admin/works/${job.workId}`}>查看作品</Link>
+            <Link to={`/admin/works/${job.workId}`}>{t("upload.view")}</Link>
           ) : null}
           {job.archiveVersionId ? (
             <Link to={`/admin/archive-versions/${job.archiveVersionId}`}>
-              查看归档版本
+              {t("admin.imports.viewArchive")}
             </Link>
           ) : null}
         </div>
       </Pane>
-      <Pane heading="文件与存储">
+      <Pane heading={t("admin.imports.storage")}>
         <StatList
           columns={3}
           items={[
-            { label: "源文件", value: job.fileCount.toLocaleString("zh-CN") },
-            { label: "源大小", value: formatBytes(job.sourceSizeBytes || 0) },
+            { label: t("admin.imports.sourceFiles"), value: job.fileCount.toLocaleString(locale) },
+            { label: t("admin.imports.sourceSize"), value: formatBytes(job.sourceSizeBytes || 0) },
             {
-              label: "排除",
-              value: `${job.excludedFileCount.toLocaleString("zh-CN")} · ${formatBytes(job.excludedSizeBytes)}`,
+              label: t("admin.imports.excluded"),
+              value: `${job.excludedFileCount.toLocaleString(locale)} · ${formatBytes(job.excludedSizeBytes)}`,
             },
             {
-              label: "缺少文件对象",
-              value: job.missingBlobCount.toLocaleString("zh-CN"),
+              label: t("admin.imports.missingBlob"),
+              value: job.missingBlobCount.toLocaleString(locale),
             },
             {
-              label: "缺少公共包",
-              value: job.missingCorePackCount.toLocaleString("zh-CN"),
+              label: t("admin.imports.missingPack"),
+              value: job.missingCorePackCount.toLocaleString(locale),
             },
             {
-              label: "对象写入",
-              value: job.r2PutCount.toLocaleString("zh-CN"),
+              label: t("admin.imports.writes"),
+              value: job.r2PutCount.toLocaleString(locale),
             },
             {
-              label: "已上传文件对象",
-              value: `${job.uploadedBlobCount.toLocaleString("zh-CN")} · ${formatBytes(job.uploadedBlobSizeBytes)}`,
+              label: t("admin.imports.uploadedBlobs"),
+              value: `${job.uploadedBlobCount.toLocaleString(locale)} · ${formatBytes(job.uploadedBlobSizeBytes)}`,
             },
             {
-              label: "已上传公共包",
-              value: `${job.uploadedCorePackCount.toLocaleString("zh-CN")} · ${formatBytes(job.uploadedCorePackSizeBytes)}`,
+              label: t("admin.imports.uploadedPacks"),
+              value: `${job.uploadedCorePackCount.toLocaleString(locale)} · ${formatBytes(job.uploadedCorePackSizeBytes)}`,
             },
           ]}
           variant="tiles"
         />
       </Pane>
-      <Pane heading="阶段耗时">
+      <Pane heading={t("admin.imports.durations")}>
         <StatList
           columns={3}
           items={[
             {
-              label: "预检",
+              label: t("admin.imports.preflight"),
               value: formatNullableDuration(job.preflightDurationMs),
             },
             {
-              label: "上传",
+              label: t("core.nav.upload"),
               value: formatNullableDuration(job.uploadDurationMs),
             },
             {
-              label: "提交",
+              label: t("admin.imports.commit"),
               value: formatNullableDuration(job.commitDurationMs),
             },
           ]}
@@ -156,21 +159,21 @@ export default function AdminImportJobPage() {
         />
       </Pane>
       {job.excludedFileTypes.length ? (
-        <Pane heading="排除文件">
-          <TableWrap compact label="排除文件类型" minWidth={680}>
+        <Pane heading={t("admin.imports.excludedFiles")}>
+          <TableWrap compact label={t("admin.imports.excludedTypes")} minWidth={680}>
             <thead>
               <tr>
-                <th>类型</th>
-                <th>数量</th>
-                <th>大小</th>
-                <th>示例路径</th>
+                <th>{t("upload.metadata.genre")}</th>
+                <th>{t("admin.imports.count")}</th>
+                <th>{t("admin.works.size")}</th>
+                <th>{t("admin.imports.example")}</th>
               </tr>
             </thead>
             <tbody>
               {job.excludedFileTypes.map((item) => (
                 <tr key={item.fileType}>
                   <td>{item.fileType}</td>
-                  <td>{item.fileCount}</td>
+                  <td>{item.fileCount.toLocaleString(locale)}</td>
                   <td>{formatBytes(item.totalSizeBytes)}</td>
                   <td className="font-mono text-xs">
                     {item.examplePath || "—"}

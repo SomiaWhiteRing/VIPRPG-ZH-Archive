@@ -1,4 +1,5 @@
 import { requestJson } from "@/lib/ui/api-response";
+import { useMessages } from "@/lib/i18n/react";
 
 import { FinalCleanupPanel } from "@/app/admin/final-cleanup-panel";
 import { Button } from "@/app/components/ui/button";
@@ -28,6 +29,7 @@ export function AdminOperationPanel({
 }: {
   canRunFinalCleanup: boolean;
 }) {
+  const t = useMessages();
   const toast = useToast();
   const requestPendingRef = useRef(false);
   const [state, setState] = useState<OperationState>({
@@ -58,7 +60,7 @@ export function AdminOperationPanel({
         result: summarize(kind, payload.report),
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "操作失败");
+      toast.error(error instanceof Error ? error : t("core.confirm.failed"));
       setState({
         kind,
         loading: false,
@@ -71,14 +73,14 @@ export function AdminOperationPanel({
 
   return (
     <div className="mt-5">
-      <SectionHeading level={3} title="运维检查" />
+      <SectionHeading level={3} title={t("admin.maintenance.checks")} />
       <div className="flex flex-wrap items-center gap-3">
         <Button
           disabled={state.loading}
           onClick={() => run("consistency")}
           type="button"
         >
-          运行一致性检查
+          {t("admin.maintenance.consistency")}
         </Button>
         <Button
           variant="outline"
@@ -86,18 +88,17 @@ export function AdminOperationPanel({
           onClick={() => run("gc")}
           type="button"
         >
-          运行清理预演
+          {t("admin.maintenance.dryRun")}
         </Button>
       </div>
       {canRunFinalCleanup ? (
         <FinalCleanupPanel />
       ) : (
         <p className="text-sm text-muted">
-          最终清理会永久删除回收站版本的文件引用和零引用 R2
-          对象，只有超级管理员可手动执行。
+          {t("admin.maintenance.cleanupPermission")}
         </p>
       )}
-      {state.loading ? <p className="text-sm text-muted">检查运行中</p> : null}
+      {state.loading ? <p className="text-sm text-muted">{t("admin.maintenance.checkRunning")}</p> : null}
       {state.result ? (
         <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-muted/10 p-3 font-mono text-sm text-xs">
           {JSON.stringify(state.result, null, 2)}

@@ -4,7 +4,8 @@ import { commentTargetHref } from "@/lib/comment-target";
 import type { UserCommentSummary } from "@/lib/dto/db/work-community";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import { ThumbsUp } from "lucide-react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages } from "@/lib/i18n/react";
 
 // Public filtering is deliberately performed by the server query, before rendering.
 export function CommentSummaryList({
@@ -14,6 +15,7 @@ export function CommentSummaryList({
   items: UserCommentSummary[];
   showStatus?: boolean;
 }) {
+  const t = useMessages();
   return (
     <ul className="divide-y divide-border border-b border-border">
       {items.map((comment) => (
@@ -32,14 +34,14 @@ export function CommentSummaryList({
               ) : null}
             </div>
             <p className="m-0 whitespace-pre-wrap text-[15px]">
-              {comment.body}{comment.imageCount > 0 ? ` ［${comment.imageCount} 张图片］` : ""}
+              {comment.body}{comment.imageCount > 0 ? ` ${t("publicProfile.imageCount", { count: comment.imageCount })}` : ""}
             </p>
             <div className="flex items-center gap-2 text-xs text-muted">
               <Timestamp value={comment.updatedAt} />
               <span aria-hidden>·</span>
               <span className="inline-flex items-center gap-1">
                 <ThumbsUp aria-hidden className="size-3.5" />
-                <span className="sr-only">点赞数：</span>
+                <span className="sr-only">{t("publicProfile.likes")}</span>
                 {comment.likeCount}
               </span>
             </div>

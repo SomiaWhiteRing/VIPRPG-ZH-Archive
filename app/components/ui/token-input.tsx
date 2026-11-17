@@ -1,5 +1,6 @@
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
+import { useMessages } from "@/lib/i18n/react";
 import { cn } from "@/lib/ui/cn";
 import { X } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -175,11 +176,12 @@ export function TokenChip({
   label: string;
   onRemove: () => void;
 }) {
+  const t = useMessages();
   return (
     <span {...props} className={cn(tokenChipClassName, className)}>
       {children}
       <Button
-        aria-label={`移除 ${label}`}
+        aria-label={t("core.token.remove", { label })}
         className="size-4 min-h-0 shrink-0 rounded-full p-0 text-current hover:bg-primary/15"
         disabled={disabled}
         onClick={(event) => {

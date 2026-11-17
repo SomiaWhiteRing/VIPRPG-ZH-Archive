@@ -1,3 +1,6 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { searchCreatorsForAdmin } from "@/app/.server/db/creator-library";
 import { pickPageFields } from "@/app/.server/page-data";
@@ -14,10 +17,10 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatDate, formatNumber } from "@/lib/format";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { formatDate } from "@/lib/format";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
@@ -51,51 +54,56 @@ export async function loader(args: LoaderFunctionArgs) {
     sort,
     page,
     result,
+    locale: runtime.uiLocale,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["作者与制作人员维护", "控制台"], page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.creators.title"), translate(locale, "admin.characterIndex.console")], page: loaderData?.page }, error, locale);
+};
 
 export default function AdminCreatorsPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { adminUser, query, sort, page, result } =
     useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
         compact
-        title="作者与制作人员维护"
-        subtitle="维护作者身份、公开资料和作品关联。"
+        title={t("admin.creators.title")}
+        subtitle={t("admin.creators.subtitle")}
         actions={
           <Link
             className={buttonVariants({ variant: "outline" })}
             to="/creators"
           >
-            查看公开列表
+            {t("admin.creators.publicList")}
           </Link>
         }
       />
       <AdminListControls
         action="/admin/creators"
-        noun="作者"
+        noun={t("admin.creators.creator")}
         query={query}
         sort={sort}
         sortOptions={[
-          { value: "default", label: "最近更新" },
-          { value: "name", label: "名称" },
-          { value: "works", label: "关联作品数" },
+          { value: "default", label: t("admin.creators.updated") },
+          { value: "name", label: t("creator.name") },
+          { value: "works", label: t("admin.creators.workCount") },
         ]}
         pageSize={PAGE_SIZE}
         total={result.total}
       />
       {result.items.length > 0 ? (
-        <TableWrap compact label="作者列表" minWidth={900}>
+        <TableWrap compact label={t("creator.list")} minWidth={900}>
           <thead>
             <tr>
-              <th>作者</th>
-              <th>关联</th>
-              <th>链接</th>
-              <th className="admin-action-column">操作</th>
+              <th>{t("admin.creators.creator")}</th>
+              <th>{t("admin.creators.credits")}</th>
+              <th>{t("admin.creators.links")}</th>
+              <th className="admin-action-column">{t("admin.characterList.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -105,10 +113,10 @@ export default function AdminCreatorsPage() {
                   <strong className="admin-cell-title">{creator.name}</strong>
                 </td>
                 <td>
-                  {formatNumber(creator.workCreditCount)} 部作品
+                  {t("admin.creators.count", { count: creator.workCreditCount })}
                   {creator.latestWorkCreditAt ? (
                     <span className="admin-cell-meta">
-                      最近关联：{formatDate(creator.latestWorkCreditAt)}
+                      {t("admin.creators.latest", { date: formatDate(creator.latestWorkCreditAt, { locale }) })}
                     </span>
                   ) : null}
                 </td>
@@ -124,7 +132,7 @@ export default function AdminCreatorsPage() {
                       {link.label}
                     </a>
                   )) : (
-                    <span className="admin-cell-meta">未填写</span>
+                    <span className="admin-cell-meta">{t("admin.creators.noLinks")}</span>
                   )}
                 </td>
                 <td className="admin-action-column">
@@ -133,10 +141,10 @@ export default function AdminCreatorsPage() {
                       className={buttonVariants({ variant: "ghost", size: "sm" })}
                       to={`/admin/creators/${creator.id}`}
                     >
-                      编辑
+                      {t("core.action.edit")}
                     </Link>
                   ) : (
-                    <span className="admin-cell-meta">只读</span>
+                    <span className="admin-cell-meta">{t("admin.characterList.readOnly")}</span>
                   )}
                 </td>
               </tr>
@@ -144,7 +152,7 @@ export default function AdminCreatorsPage() {
           </tbody>
         </TableWrap>
       ) : (
-        <EmptyState title="没有找到匹配的作者。" />
+        <EmptyState title={t("admin.creators.empty")} />
       )}
       <PaginationLinks
         basePath="/admin/creators"

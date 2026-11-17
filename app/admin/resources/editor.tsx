@@ -1,3 +1,5 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { BackLink } from "@/app/components/ui/back-link";
 import { useState, type FormEvent, type ReactNode } from "react";
@@ -23,14 +25,6 @@ import { ResourceContentEditor } from "./content-editor";
 import { ResourceLinksEditor } from "./links-editor";
 import { DownloadFilenameTemplate } from "./filename-template";
 import { postJson, requestJsonValue as requestJson } from "@/lib/ui/api-response";
-const statusLabels = {
-  pending: "待上传",
-  uploading: "上传中",
-  uncertain: "结果待确认",
-  ready: "校验完成",
-  cleanup: "清理待完成",
-  cleaned: "已清理",
-};
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Label className="grid gap-2">
@@ -40,6 +34,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const confirm = useConfirm();
   const toast = useToast();
   const [data, setData] = useState(initial),
@@ -47,12 +43,13 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
     [formKey, setFormKey] = useState(0);
   const { resource } = data,
     base = `/api/admin/resources/${resource.id}`;
+  const languageQuery = `?${UI_LOCALE_PARAM}=${locale}`;
   const windy = resource.slug === "windy-translator";
   const android = resource.slug === "viprpg-android";
   const automaticPackage = windy || android;
   async function run(
     operation: () => Promise<ResourceEditorData>,
-    success = "已保存",
+    success = t("admin.resources.saved"),
     propagateError = false,
   ) {
     if (busy) return;
@@ -62,13 +59,13 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
       toast.success(success);
     } catch (error) {
       if (propagateError) throw error;
-      toast.error(error instanceof Error ? error.message : String(error));
+      toast.error(error instanceof Error ? error : String(error));
     } finally {
       setBusy(false);
     }
   }
   const action = (values: Record<string, unknown>, propagateError = false) =>
-    run(() => postJson(base, { revision: resource.revision, ...values }), "已保存", propagateError);
+    run(() => postJson(base + languageQuery, { revision: resource.revision, ...values }), t("admin.resources.saved"), propagateError);
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -82,7 +79,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
     if (!file) return;
     await run(
       () =>
-        requestJson(base + "/icon", {
+        requestJson(base + "/icon" + languageQuery, {
           method: "PUT",
           headers: {
             "Content-Type": file.type || "application/octet-stream",
@@ -90,12 +87,12 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
           },
           body: file,
         }),
-      "图标已更新",
+      t("admin.resources.iconUpdated"),
     );
   }
   return (
     <main>
-      <BackLink href="/admin/resources" label="链接管理" variant="text" />
+      <BackLink href="/admin/resources" label={t("admin.resources.title")} variant="text" />
       <PageHeader
         compact
         title={resource.name}
@@ -104,17 +101,17 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
             disabled={busy}
             variant="outline"
             onClick={async () => {
-              await confirm(`重新读取“${resource.name}”会放弃表单中尚未保存的修改。继续吗？`, {
-                title: "重新读取资料", confirmLabel: "放弃修改并读取",
+              await confirm(t("admin.resources.reloadPrompt", { name: resource.name }), {
+                title: t("admin.resources.reloadTitle"), confirmLabel: t("admin.resources.reloadConfirm"),
                 action: () => run(async () => {
-                  const next = await requestJson<ResourceEditorData>(base);
+                  const next = await requestJson<ResourceEditorData>(base + languageQuery);
                   setFormKey((v) => v + 1);
                   return next;
-                }, "已重新读取", true),
+                }, t("admin.resources.reloaded"), true),
               });
             }}
           >
-            重新读取
+            {t("admin.resources.reload")}
           </Button>
         }
       />
@@ -122,12 +119,12 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
         {resource.icon_blob_sha256 ? (
           <img
             src={`${base}/icon?v=${resource.revision}`}
-            alt="链接图标"
+            alt={t("admin.resources.icon")}
             className="size-16 object-contain"
           />
         ) : null}
         <Label className="grid gap-2">
-          图标（PNG／GIF／JPG，最多 512 KiB、边长最多 512px）
+          {t("admin.resources.iconHelp")}
           <input
             type="file"
             accept="image/png,image/gif,image/jpeg,.png,.gif,.jpg,.jpeg"
@@ -144,12 +141,12 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
         onSubmit={save}
         className="admin-panel grid gap-4"
       >
-        <h2 className="admin-section-title">链接资料</h2>
+        <h2 className="admin-section-title">{t("admin.resources.details")}</h2>
         <p className="text-sm text-muted">
-          固定名称：{resource.slug} ·{" "}
-          {resource.kind === "tool" ? "软件" : "站外网站"}
+          {t("admin.resources.slugValue", { slug: resource.slug })} ·{" "}
+          {resource.kind === "tool" ? t("admin.resources.tool") : t("admin.resources.external")}
         </p>
-        <Field label="名称">
+        <Field label={t("creator.name")}>
           <Input
             name="name"
             defaultValue={resource.name}
@@ -162,14 +159,14 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
         <ResourceLinksEditor initial={resourceLinks(resource)} disabled={busy} />
         {resource.kind === "tool" ? (
           <>
-            <Field label="Windows 下载按钮文案">
+            <Field label={t("admin.resources.windowsLabel")}>
               <Input name="windowsButtonLabel" defaultValue={resource.windows_button_label} required disabled={busy} />
             </Field>
-            <Field label="Android 下载按钮文案">
+            <Field label={t("admin.resources.androidLabel")}>
               <Input name="androidButtonLabel" defaultValue={resource.android_button_label} required disabled={busy} />
             </Field>
             <DownloadFilenameTemplate data={data} disabled={busy} />
-            <Field label="项目网站（可选）">
+            <Field label={t("admin.resources.projectOptional")}>
               <Input
                 type="url"
                 name="sourceUrl"
@@ -181,7 +178,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
           </>
         ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="排序（小的在前）">
+          <Field label={t("admin.resources.sort")}>
             <Input
               name="sortOrder"
               type="number"
@@ -191,27 +188,27 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
               disabled={busy}
             />
           </Field>
-          <Field label="显示状态">
+          <Field label={t("admin.resources.visibility")}>
             <SelectField
               name="visibility"
               defaultValue={resource.visibility}
               disabled={busy}
               options={[
-                { value: "draft", label: "草稿" },
-                { value: "published", label: "公开" },
-                { value: "hidden", label: "隐藏" },
+                { value: "draft", label: t("admin.resources.draft") },
+                { value: "published", label: t("admin.discussions.public") },
+                { value: "hidden", label: t("admin.discussionTags.hidden") },
               ]}
             />
           </Field>
         </div>
         <StickySaveBar><Button disabled={busy}>
-          保存资料
+          {t("admin.resources.saveDetails")}
         </Button></StickySaveBar>
       </form>
       {resource.kind === "tool" ? (
         <>
           <section className="admin-panel grid gap-3">
-            <h2 className="admin-section-title">当前推荐</h2>
+            <h2 className="admin-section-title">{t("admin.resourceRelease.current")}</h2>
             {RESOURCE_TARGETS.filter((target) => !automaticPackage || target === (android ? "android-universal" : "windows-x64")).map((target) => {
               const channel = data.channels.find((c) => c.target === target);
               const artifact = data.artifacts.find(
@@ -228,7 +225,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                   <span>
                     {targetLabel(target)}：
                     {release?.version_label ??
-                      (channel ? "已暂停" : "尚未配置")}
+                      (channel ? t("admin.resourceRelease.paused") : t("admin.resourceRelease.unset"))}
                   </span>
                   {channel?.artifact_id ? (
                     <Button
@@ -236,13 +233,13 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                       size="sm"
                       variant="outline"
                       onClick={async () => {
-                        await confirm(`暂停 ${targetLabel(target)} 的新下载与更新推荐？历史版本仍可下载。`, {
-                          title: "暂停推荐", confirmLabel: "暂停推荐",
+                        await confirm(t("admin.resourceRelease.pausePrompt", { target: targetLabel(target) }), {
+                          title: t("admin.resourceRelease.pause"), confirmLabel: t("admin.resourceRelease.pause"),
                           action: () => action({ action: "recommend", target, artifactId: null }, true),
                         });
                       }}
                     >
-                      暂停推荐
+                      {t("admin.resourceRelease.pause")}
                     </Button>
                   ) : null}
                 </div>
@@ -262,23 +259,22 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
             }}
             className="admin-panel grid gap-3"
           >
-            <h2 className="admin-section-title">新建本站版本</h2>
+            <h2 className="admin-section-title">{t("admin.resourceRelease.new")}</h2>
             <p className="text-sm text-muted">
-              版本名与更新说明由本站维护。发布时自动分配更新序号，与 GitHub
-              无关。
+              {t("admin.resourceRelease.sequenceHelp")}
             </p>
-            <Field label="本站版本名">
+            <Field label={t("admin.resourceRelease.siteVersion")}>
               <Input name="version" required maxLength={100} disabled={busy} />
             </Field>
-            <Field label="更新说明">
+            <Field label={t("admin.resourceRelease.notes")}>
               <Textarea name="notes" maxLength={30000} disabled={busy} />
             </Field>
             <Button disabled={busy} className="justify-self-start">
-              创建版本草稿
+              {t("admin.resourceRelease.draft")}
             </Button>
           </form>}
           <p className="text-sm text-muted">
-            自动清理按平台保留最新已发布安装包和当前推荐包，回收其他旧包；版本说明和更新识别记录会保留。已回收的旧包不能再下载或设为推荐。
+            {t("admin.resourceRelease.cleanupHelp")}
           </p>
           {data.releases.map((release) => (
             <details
@@ -290,12 +286,10 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
               <summary>
                 {release.version_label} ·{" "}
                 {
-                  { draft: "草稿", published: "已发布", withdrawn: "已撤回" }[
-                    release.status
-                  ]
+                  t(release.status === "draft" ? "admin.resources.draft" : release.status === "published" ? "upload.own.status.published" : "inbox.withdrawn")
                 }
                 {!automaticPackage && release.release_sequence
-                  ? ` · 本站序号 ${release.release_sequence}`
+                  ? ` · ${t("admin.resourceRelease.sequence", { count: release.release_sequence })}`
                   : ""}
               </summary>
               <div className="mt-4 grid gap-4">
@@ -304,8 +298,8 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                     e.preventDefault();
                     const values = new FormData(e.currentTarget);
                     if (automaticPackage && release.status === "draft") {
-                      await confirm(`发布更新「${values.get("version")}」？启用启动检查的用户将在下次启动 ${android ? "Android 应用" : "WindyTranslator"} 时收到更新提示。`, {
-                        title: "发布更新", confirmLabel: "发布更新",
+                      await confirm(t("admin.resourceRelease.publishUpdatePrompt", { version: String(values.get("version") ?? ""), app: android ? t("admin.resourceRelease.androidApp") : "WindyTranslator" }), {
+                        title: t("admin.resourceRelease.publishUpdate"), confirmLabel: t("admin.resourceRelease.publishUpdate"),
                         action: () => action({ action: "publish", releaseId: release.id, version: values.get("version"), notes: values.get("notes"), recommend: true, visible: true }, true),
                       });
                       return;
@@ -319,7 +313,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                   }}
                   className="grid gap-3"
                 >
-                  <Field label="版本名">
+                  <Field label={t("admin.resourceRelease.version")}>
                     <Input
                       name="version"
                       required
@@ -328,7 +322,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                       disabled={busy}
                     />
                   </Field>
-                  <Field label="更新说明">
+                  <Field label={t("admin.resourceRelease.notes")}>
                     <Textarea
                       name="notes"
                       maxLength={30000}
@@ -342,7 +336,7 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                     variant="outline"
                     className="justify-self-start"
                   >
-                    {automaticPackage && release.status === "draft" ? "发布更新" : "保存版本说明"}
+                    {automaticPackage && release.status === "draft" ? t("admin.resourceRelease.publishUpdate") : t("admin.resourceRelease.saveNotes")}
                   </Button>
                 </form>
                 {data.artifacts
@@ -359,12 +353,12 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                       <p className="break-all text-sm">
                         {targetLabel(a.target)} · {a.filename} ·{" "}
                         {fileSize(a.size_bytes)} ·{" "}
-                        {statusLabels[a.storage_status]}
+                        {t(`admin.resourceRelease.${a.storage_status}`)}
                       </p>
                       {release.published_at !== null && ["cleanup", "cleaned"].includes(a.storage_status) ? (
                         <p className="break-all text-sm text-muted">
-                          旧安装包已停止下载，保留版本记录。SHA-256：{a.sha256}
-                          {a.application_build_id ? ` · 构建标识：${a.application_build_id}` : ""}
+                          {t("admin.resourceRelease.oldPackage", { hash: a.sha256 })}
+                          {a.application_build_id ? ` · ${t("admin.resourceRelease.build", { id: a.application_build_id })}` : ""}
                         </p>
                       ) : null}
                       <div className="flex flex-wrap gap-2">
@@ -377,13 +371,13 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                               void run(
                                 () =>
                                   requestJson(
-                                    `/api/admin/resource-artifacts/${a.id}`,
+                                    `/api/admin/resource-artifacts/${a.id}${languageQuery}`,
                                   ),
-                                "文件存储校验通过",
+                                t("admin.resourceRelease.verified"),
                               )
                             }
                           >
-                            检查文件
+                            {t("admin.resourceRelease.check")}
                           </Button>
                         ) : null}
                         {release.status === "draft" ? (
@@ -399,17 +393,17 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                                   void run(
                                     () =>
                                       postJson(
-                                        `/api/admin/resource-artifacts/${a.id}`,
+                                        `/api/admin/resource-artifacts/${a.id}${languageQuery}`,
                                         {
                                           action: "confirm",
                                           revision: resource.revision,
                                         },
                                       ),
-                                    "已确认上传状态",
+                                    t("admin.resourceRelease.confirmed"),
                                   )
                                 }
                               >
-                                确认上传结果
+                                {t("admin.resourceRelease.confirmUpload")}
                               </Button>
                             ) : null}
                             <Button
@@ -417,15 +411,15 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                               size="sm"
                               variant="outline"
                               onClick={async () => {
-                                await confirm(`删除草稿安装包“${a.filename}”？此操作会清理已上传的文件。`, {
-                                  title: "移除并清理安装包", confirmLabel: "移除并清理", destructive: true,
-                                  action: () => run(() => postJson(`/api/admin/resource-artifacts/${a.id}`, {
+                                await confirm(t("admin.resourceRelease.removePrompt", { name: a.filename }), {
+                                  title: t("admin.resourceRelease.removeTitle"), confirmLabel: t("admin.resourceRelease.remove"), destructive: true,
+                                  action: () => run(() => postJson(`/api/admin/resource-artifacts/${a.id}${languageQuery}`, {
                                     action: "cleanup", revision: resource.revision,
-                                  }), "草稿安装包已清理", true),
+                                  }), t("admin.resourceRelease.removed"), true),
                                 });
                               }}
                             >
-                              移除并清理
+                              {t("admin.resourceRelease.remove")}
                             </Button>
                           </>
                         ) : release.status === "published" && a.storage_status === "ready" ? (
@@ -436,13 +430,13 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                             }
                             size="sm"
                             onClick={async () => {
-                              await confirm(`将 ${targetLabel(a.target)} 的推荐切换为 ${release.version_label}？`, {
-                                title: "切换推荐版本", confirmLabel: "切换推荐",
+                              await confirm(t("admin.resourceRelease.switchPrompt", { target: targetLabel(a.target), version: release.version_label }), {
+                                title: t("admin.resourceRelease.switchTitle"), confirmLabel: t("admin.resourceRelease.switch"),
                                 action: () => action({ action: "recommend", target: a.target, artifactId: a.id }, true),
                               });
                             }}
                           >
-                            设为该平台推荐
+                            {t("admin.resourceRelease.set")}
                           </Button>
                         ) : null}
                       </div>
@@ -484,23 +478,23 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                       const reason = new FormData(e.currentTarget).get(
                         "reason",
                       );
-                      await confirm(`撤回“${release.version_label}”后停止此版本所有新下载，并暂停引用它的平台推荐。继续吗？`, {
-                        title: "撤回版本", confirmLabel: "撤回版本", destructive: true,
+                      await confirm(t("admin.resourceRelease.withdrawPrompt", { version: release.version_label }), {
+                        title: t("admin.resourceRelease.withdraw"), confirmLabel: t("admin.resourceRelease.withdraw"), destructive: true,
                         action: () => action({ action: "withdraw", releaseId: release.id, reason }, true),
                       });
                     }}
                   >
                     <Input
-                      aria-label="撤回原因"
+                      aria-label={t("admin.resourceRelease.withdrawReason")}
                       name="reason"
-                      placeholder="撤回原因"
+                      placeholder={t("admin.resourceRelease.withdrawReason")}
                       required
                       maxLength={1000}
                       disabled={busy}
                       className="sm:max-w-sm"
                     />
                     <Button disabled={busy} variant="destructive" size="sm">
-                      撤回版本
+                      {t("admin.resourceRelease.withdraw")}
                     </Button>
                   </form>
                 ) : null}
@@ -523,6 +517,7 @@ function PublishRelease({
   busy: boolean;
   action: (values: Record<string, unknown>, propagateError?: boolean) => Promise<void>;
 }) {
+  const t = useMessages();
   const confirm = useConfirm();
   return (
     <form
@@ -530,8 +525,8 @@ function PublishRelease({
       onSubmit={async (e) => {
         e.preventDefault();
         const form = new FormData(e.currentTarget);
-        await confirm(`发布本站版本「${release.version_label}」？发布后不可更换安装包。`, {
-          title: "发布版本", confirmLabel: "发布版本",
+        await confirm(t("admin.resourceRelease.publishPrompt", { version: release.version_label }), {
+          title: t("admin.resourceRelease.publish"), confirmLabel: t("admin.resourceRelease.publish"),
           action: () => action({
             action: "publish", releaseId: release.id,
             recommend: form.get("recommend") === "on", visible: form.get("visible") === "on",
@@ -541,14 +536,14 @@ function PublishRelease({
     >
       <Label className="flex items-center gap-2">
         <Checkbox name="recommend" defaultChecked disabled={busy} />
-        设为所含平台的推荐版本
+        {t("admin.resourceRelease.recommend")}
       </Label>
       <Label className="flex items-center gap-2">
         <Checkbox name="visible" defaultChecked disabled={busy} />
-        同时公开链接
+        {t("admin.resourceRelease.public")}
       </Label>
       <Button disabled={busy || !ready} className="justify-self-start">
-        发布版本
+        {t("admin.resourceRelease.publish")}
       </Button>
     </form>
   );

@@ -8,12 +8,14 @@ import { androidNotificationBridge, androidNotificationRequest } from "@/lib/bro
 import { DEFAULT_COLOR_THEME, type ColorTheme } from "@/lib/account-preferences";
 import {
   isRouteErrorResponse,
-  Link,
   Links,
   Meta,
   Outlet,
   Scripts,
   useLoaderData,
+  useLocation,
+  useNavigate,
+  useRevalidator,
   useRouteError,
   useRouteLoaderData,
 } from "react-router";
@@ -35,14 +37,18 @@ import { PageScrollRestoration } from "./components/ui/anchor-navigation";
 import { ToastProvider } from "./components/ui/toast";
 import { ConfirmProvider } from "./components/ui/confirm-provider";
 import { ColorThemePreviewContext } from "./components/color-theme-preview";
+import { DEFAULT_UI_LOCALE, parseUiLocale, RAKUEN_LOCALE_MESSAGE, UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { UiLocaleContext, useMessages } from "@/lib/i18n/react";
+import { LocaleLink as Link } from "./components/ui/locale-link";
 import "./globals.css";
 export { shouldRevalidatePermissionPanel as shouldRevalidate } from "@/lib/ui/route-revalidation";
 
 const subscribeFrame = () => () => {};
 const frameSnapshot = () => window.self !== window.top;
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors(undefined, error);
+export const meta: MetaFunction<typeof loader> = ({ error, loaderData, location }) =>
+  pageMetaDescriptors(undefined, error,
+    parseUiLocale(new URLSearchParams(location.search).get(UI_LOCALE_PARAM)) ?? loaderData?.uiLocale ?? DEFAULT_UI_LOCALE);
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -53,6 +59,7 @@ export async function loader(args: LoaderFunctionArgs) {
     listHiddenPostAuthorIds(runtime, user.id),
   ]) : [0, 0, []];
   return {
+    uiLocale: runtime.uiLocale,
     serverTime: Date.now(),
     embedded: args.request.headers.get("Sec-Fetch-Dest") === "iframe",
     analytics: getSiteAnalyticsConfig(runtime),
@@ -77,6 +84,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { hideBackToTop } = usePageLayout();
   const { isFocusVisible } = useFocusVisible();
   const root = useRouteLoaderData<typeof loader>("root");
+  const { search } = useLocation();
+  const uiLocale = parseUiLocale(new URLSearchParams(search).get(UI_LOCALE_PARAM)) ?? root?.uiLocale ?? DEFAULT_UI_LOCALE;
   const [themePreview, setThemePreview] = useState<ColorTheme | null>(null);
 
   // Immersive Translate and other extensions can add document-root attributes
@@ -84,7 +93,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // inside the application tree.
   return (
     <html
-      lang="zh-Hans"
+      lang={uiLocale}
       data-focus-visible={isSSR ? undefined : isFocusVisible}
       data-theme={themePreview ?? root?.session?.preferences.colorTheme ?? DEFAULT_COLOR_THEME}
       suppressHydrationWarning
@@ -106,10 +115,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         suppressHydrationWarning
       >
         <ColorThemePreviewContext.Provider value={setThemePreview}>
-          <ToastProvider>
-            <ConfirmProvider>{children}</ConfirmProvider>
-            {!hideBackToTop ? <BackToTop /> : null}
-          </ToastProvider>
+          <UiLocaleContext.Provider value={uiLocale}>
+            <ToastProvider>
+              <ConfirmProvider>{children}</ConfirmProvider>
+              {!hideBackToTop ? <BackToTop /> : null}
+            </ToastProvider>
+          </UiLocaleContext.Provider>
         </ColorThemePreviewContext.Provider>
         <PageScrollRestoration />
         <Scripts />
@@ -119,9 +130,34 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const t = useMessages();
   const { session, embedded, analytics } = useLoaderData<typeof loader>();
   const inFrame = useSyncExternalStore(subscribeFrame, frameSnapshot, () => embedded);
+  const navigate = useNavigate();
+  const revalidator = useRevalidator();
+  const languagePreference = session?.preferences.uiLanguage ?? "auto";
+  useEffect(() => {
+    if (languagePreference !== "auto") return;
+    const updateLanguage = () => { void revalidator.revalidate(); };
+    window.addEventListener("languagechange", updateLanguage);
+    return () => window.removeEventListener("languagechange", updateLanguage);
+  }, [languagePreference, revalidator]);
   const { hideSiteHeader, hideSiteFooter } = usePageLayout();
+  useEffect(() => {
+    if (!inFrame) return;
+    function syncLocale(event: MessageEvent) {
+      if (event.origin !== window.location.origin || event.source !== window.parent ||
+        event.data?.type !== RAKUEN_LOCALE_MESSAGE || typeof event.data.locale !== "string") return;
+      const locale = parseUiLocale(event.data.locale);
+      if (!locale || document.documentElement.lang === locale) return;
+      const { pathname, search, hash } = window.location;
+      const params = new URLSearchParams(search);
+      params.set(UI_LOCALE_PARAM, locale);
+      void navigate({ pathname, search: params.toString(), hash }, { replace: true, preventScrollReset: true });
+    }
+    window.addEventListener("message", syncLocale);
+    return () => window.removeEventListener("message", syncLocale);
+  }, [inFrame, navigate]);
   useEffect(() => {
     if (inFrame || !androidNotificationBridge()) return;
     void androidNotificationRequest("state", { userId: session?.id ?? 0 })
@@ -140,7 +176,7 @@ export default function App() {
               className="inline-flex min-h-8 items-center justify-center rounded-md border-2 border-white bg-linear-to-b from-rm2k-green-1 via-[#3f6c4e] to-rm2k-green-2 px-3 py-1.5 text-xs font-semibold text-white shadow-[3px_3px_0_rgb(23_33_43/30%),inset_0_0_0_2px_rgb(0_0_0/20%)] hover:brightness-110"
               to="/login"
             >
-              登录
+              {t("core.login")}
             </Link>
           ) : null
         }
@@ -156,17 +192,18 @@ export default function App() {
 }
 
 export function ErrorBoundary() {
+  const t = useMessages();
   const error = useRouteError();
   const missing = isRouteErrorResponse(error) && error.status === 404;
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
       <h1 className="text-2xl font-bold">
-        {missing ? "页面不存在" : "暂时无法打开页面"}
+        {t(missing ? "core.notFound.title" : "core.pageError.title")}
       </h1>
       <p className="my-4">
-        {missing ? "内容可能已被移除，或链接有误。" : "请刷新后重试。"}
+        {t(missing ? "core.notFound.description" : "core.pageError.retry")}
       </p>
-      <Link to="/">返回首页</Link>
+      <Link to="/">{t("core.home.back")}</Link>
     </main>
   );
 }

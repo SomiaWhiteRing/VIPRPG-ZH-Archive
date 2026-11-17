@@ -1,3 +1,6 @@
+import { RichMessage } from "@/app/components/ui/rich-message";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { readCharacterIndex } from "@/app/.server/db/character-index";
 import { routeInput } from "@/app/.server/route-input";
@@ -11,19 +14,12 @@ import {
   CHARACTER_INDEX_PERMISSIONS,
   hasPermission,
 } from "@/lib/authz/permissions";
-import { formatNumber } from "@/lib/format";
 import { stringParam } from "@/lib/params";
-import type { PageMetadata } from "@/lib/ui/page-metadata";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { FolderPen } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
-
-const metadata: PageMetadata = {
-  title: "角色索引",
-  description:
-    "按阵营与角色群浏览 VIPRPG 角色，查找中日文名称、别名、Wiki 资料与登场作品。",
-};
+import { useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -42,35 +38,34 @@ export async function loader(args: LoaderFunctionArgs) {
     hasPermission(currentUser, permission),
   );
 
-  return { query, data, canEdit, canEditIndex };
+  return { locale: runtime.uiLocale, query, data, canEdit, canEditIndex };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors(metadata, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "character.index"), description: translate(locale, "character.description") }, error, locale);
+};
 
 export default function CharactersPage() {
+  const t = useMessages();
   const { query, data, canEdit, canEditIndex } = useLoaderData<typeof loader>();
   return (
     <PageContainer>
       <PageHeader
         compact
-        title="角色索引"
+        title={t("character.index")}
         actions={
           <>
             <span className="text-sm text-muted">
-              收录{" "}
-              <strong className="tabular-nums text-foreground">
-                {formatNumber(data.characters.length)}
-              </strong>{" "}
-              位角色
+              <RichMessage id="character.count" values={{ count: data.characters.length }} components={{ emphasis: children => <strong key="count" className="tabular-nums text-foreground">{children}</strong> }} />
             </span>
             {canEditIndex ? (
               <Link
-                aria-label="编辑角色索引"
+                aria-label={t("character.editIndex")}
                 className={buttonVariants({ variant: "ghost", size: "icon" })}
                 to="/admin/characters/index"
                 prefetch="none"
-                title="编辑角色索引"
+                title={t("character.editIndex")}
               >
                 <FolderPen aria-hidden />
               </Link>

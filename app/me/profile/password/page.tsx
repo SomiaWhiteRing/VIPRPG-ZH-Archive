@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { useMessages } from "@/lib/i18n/react";
+import { translate } from "@/lib/i18n/core";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PasswordInput } from "@/app/components/auth/auth-input";
@@ -18,27 +20,30 @@ export async function loader(args: LoaderFunctionArgs) {
   await requireAccountUser(runtime, "/me/profile/password");
   const params = await searchParams;
 
-  return { params };
+  return { locale: runtime.uiLocale, params };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["修改密码", "个人中心"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "profile.changePassword"), translate(locale, "header.me")] }, error, locale);
+};
 
 export default function PasswordPage() {
+  const t = useMessages();
   return (
     <div>
-      <AccountPageHeader parentTitle="个人资料" title="修改密码" />
-      <RedirectFeedback success={{ passwordUpdated: "密码已更新，其他设备已登出。" }} />
+      <AccountPageHeader parentTitle={t("account.nav.profile")} title={t("profile.changePassword")} />
+      <RedirectFeedback success={{ passwordUpdated: t("profile.passwordUpdated") }} />
 
-      <RedirectForm action="/api/account/password" className="grid gap-4" method="post">
-        <AccountField htmlFor="password-current" label="当前密码">
+      <RedirectForm action="/api/account/password" preserveLanguage className="grid gap-4" method="post">
+        <AccountField htmlFor="password-current" label={t("profile.currentPassword")}>
           <PasswordInput
             id="password-current"
             name="currentPassword"
             required
           />
         </AccountField>
-        <AccountField htmlFor="password-new" label="新密码">
+        <AccountField htmlFor="password-new" label={t("auth.password.new")}>
           <PasswordInput
             purpose="new"
             id="password-new"
@@ -46,7 +51,7 @@ export default function PasswordPage() {
             required
           />
         </AccountField>
-        <AccountField htmlFor="password-confirm" label="再次输入新密码">
+        <AccountField htmlFor="password-confirm" label={t("profile.confirmPassword")}>
           <PasswordInput
             purpose="new"
             id="password-confirm"
@@ -55,7 +60,7 @@ export default function PasswordPage() {
           />
         </AccountField>
         <div className="flex justify-end">
-          <Rm2kButton type="submit">修改密码</Rm2kButton>
+          <Rm2kButton type="submit">{t("profile.changePassword")}</Rm2kButton>
         </div>
       </RedirectForm>
     </div>

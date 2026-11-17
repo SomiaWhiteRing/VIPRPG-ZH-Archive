@@ -14,6 +14,7 @@ import type {
 } from "@/lib/dto/db/creator-library";
 import { normalizeEntityName } from "@/lib/entity-name";
 import { HttpError } from "@/lib/http";
+import { translate } from "@/lib/i18n/core";
 import type { WorkAudience } from "@/lib/work-visibility";
 
 type CreatorRow = {
@@ -375,7 +376,7 @@ export async function updateCreatorForAdmin(
     if (isCreatorIdentityConstraintError(error)) {
       throw new HttpError(
         409,
-        "名称或别名已被其他人物使用，请使用不同名称。",
+        translate(runtime.uiLocale, "admin.creators.nameConflict"),
         "creator_name_conflict",
       );
     }

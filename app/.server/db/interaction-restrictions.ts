@@ -1,3 +1,5 @@
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
+import { translate } from "@/lib/i18n/core";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
 import { INTERACTION_RESTRICTIONS, type RestrictedInteraction } from "@/lib/interaction-restrictions";
@@ -17,11 +19,11 @@ export async function readInteractionRestrictions(db: D1Database, recipientId: n
   return results.length ? results.flatMap(row => row.kind === null ? [] : [row.kind]) : null;
 }
 
-export function parseInteractionRestrictions(kinds: unknown): RestrictedInteraction[] {
+export function parseInteractionRestrictions(kinds: unknown, locale: UiLocale = DEFAULT_UI_LOCALE): RestrictedInteraction[] {
   if (!Array.isArray(kinds) || kinds.length > INTERACTION_RESTRICTIONS.length ||
       !kinds.every((kind): kind is RestrictedInteraction => INTERACTION_RESTRICTIONS.some(option => option.kind === kind)) ||
       new Set(kinds).size !== kinds.length)
-    throw new HttpError(400, "屏蔽设置无效");
+    throw new HttpError(400, translate(locale, "block.invalid"), undefined, "block.invalid");
   return kinds;
 }
 
@@ -44,5 +46,5 @@ export function interactionRestrictionStatements(db: D1Database, recipient: Arch
 export async function assertInteractionAllowed(db: D1Database, recipientId: number, senderId: number, kind: RestrictedInteraction) {
   if (recipientId === senderId) return;
   if (await db.prepare(`SELECT 1 WHERE ${interactionRestrictedSql("?", "?", kind)}`).bind(recipientId, senderId).first())
-    throw new HttpError(403, "Permission denied");
+    throw new HttpError(403, "Permission denied", undefined, "core.request.forbidden");
 }

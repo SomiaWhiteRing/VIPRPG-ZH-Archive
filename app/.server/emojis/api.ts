@@ -1,3 +1,5 @@
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
+import { translate } from "@/lib/i18n/core";
 import { readJsonObject } from "@/app/.server/http/request";
 import { json as jsonResponse, HttpError, jsonError } from "@/lib/http";
 import { Hono } from "hono";
@@ -38,10 +40,10 @@ export const emojiJson = (body: object) =>
     { ok: true, ...body },
     { headers: { "Cache-Control": "no-store" } },
   );
-export async function emojiRequestBody(request: Request) {
-  return readJsonObject(request, "请求格式无效。", {
+export async function emojiRequestBody(request: Request, locale: UiLocale = DEFAULT_UI_LOCALE) {
+  return readJsonObject(request, translate(locale, "emoji.error.request"), {
     maximumBytes: 64 * 1024,
-    invalidJsonMessage: "JSON 格式无效。",
+    invalidJsonMessage: translate(locale, "emoji.error.json"),
   });
 }
 emojiApi.all("/api/emojis", async (c) => {
@@ -55,9 +57,9 @@ emojiApi.all("/api/emojis", async (c) => {
       status: 405,
       headers: { Allow: "GET, POST, OPTIONS" },
     });
+  const runtime = c.get("runtime");
   try {
-    const runtime = c.get("runtime"),
-      request = c.req.raw,
+    const request = c.req.raw,
       db = getD1(runtime);
     const params = new URL(request.url).searchParams;
     if (request.method === "GET" && params.get("op") === "resolve") {
@@ -67,9 +69,9 @@ emojiApi.all("/api/emojis", async (c) => {
     }
     if (request.method === "POST") assertSameOrigin(runtime, request);
     const user = await getCurrentUser(runtime);
-    if (!user) throw new HttpError(401, "请登录后使用表情库。");
+    if (!user) throw new HttpError(401, translate(runtime.uiLocale, "emoji.error.signIn"));
     if (request.method === "POST") {
-      const body = await emojiRequestBody(request);
+      const body = await emojiRequestBody(request, runtime.uiLocale);
       let createdGroupId: number | undefined;
       switch (body.op) {
         case "initialize":
@@ -83,16 +85,16 @@ emojiApi.all("/api/emojis", async (c) => {
           break;
         case "group.add": {
           const groupId = parseGroupId(body.groupId);
-          if (groupId == null) throw new HttpError(400, "请选择要加入的分组。");
+          if (groupId == null) throw new HttpError(400, translate(runtime.uiLocale, "emoji.error.pickGroup"));
           const ids = parseIds(body.ids);
-          if (!ids.length) throw new HttpError(400, "请选择要加入的表情。");
+          if (!ids.length) throw new HttpError(400, translate(runtime.uiLocale, "emoji.error.pickAdd"));
           await editEmojiGroupMemberships(db, user.id, ids, [groupId], []);
           break;
         }
         case "groups.update": {
           const ids = parseIds(body.ids);
           const includeGroupIds = parseGroupIds(body.includeGroupIds), excludeGroupIds = parseGroupIds(body.excludeGroupIds);
-          if (!ids.length) throw new HttpError(400, "请选择要编辑的表情。");
+          if (!ids.length) throw new HttpError(400, translate(runtime.uiLocale, "emoji.error.pickEdit"));
           await editEmojiGroupMemberships(db, user.id, ids, includeGroupIds, excludeGroupIds);
           break;
         }
@@ -117,13 +119,13 @@ emojiApi.all("/api/emojis", async (c) => {
           );
           break;
         default:
-          throw new HttpError(400, "未知表情操作。");
+          throw new HttpError(400, translate(runtime.uiLocale, "emoji.error.operation"));
       }
       return emojiJson({ ...await libraryData(db, user.id), ...(createdGroupId === undefined ? {} : { createdGroupId }) });
     }
     const offset = Number(params.get("offset") ?? 0);
     if (!Number.isSafeInteger(offset) || offset < 0)
-      throw new HttpError(400, "分页位置无效。");
+      throw new HttpError(400, translate(runtime.uiLocale, "emoji.error.cursor"));
     switch (params.get("op") ?? "library") {
       case "library":
         return emojiJson(await libraryData(db, user.id));
@@ -145,19 +147,22 @@ emojiApi.all("/api/emojis", async (c) => {
       case "sheets": {
         const id = Number(params.get("characterId"));
         if (!Number.isSafeInteger(id) || id < 1)
-          throw new HttpError(400, "角色无效。");
+          throw new HttpError(400, translate(runtime.uiLocale, "emoji.error.character"));
         return emojiJson(
           await characterSheets(db, id, offset, params.get("focus") ?? ""),
         );
       }
       default:
-        throw new HttpError(400, "未知表情查询。");
+        throw new HttpError(400, translate(runtime.uiLocale, "emoji.error.query"));
     }
   } catch (error) {
     if (String(error).includes("UNIQUE constraint failed: user_emoji_groups.user_id, user_emoji_groups.name"))
-      return jsonError("分组名称重复", new HttpError(409, "这个分组名称已存在。"));
+      return jsonError(translate(runtime.uiLocale, "emoji.error.duplicate"), new HttpError(409, translate(runtime.uiLocale, "emoji.error.duplicate")));
     if (error instanceof SameOriginError)
-      return jsonError("请求来源无效", new HttpError(403, error.message));
-    return jsonError("表情操作失败", error);
+      return jsonError(translate(runtime.uiLocale, "emoji.error.origin"), new HttpError(403, error.message));
+    return jsonError(translate(runtime.uiLocale, "emoji.library.failed"),
+      error instanceof HttpError && error.messageKey
+        ? new HttpError(error.status, translate(runtime.uiLocale, error.messageKey, error.messageValues), error.code, error.messageKey, error.messageValues)
+        : error);
   }
 });

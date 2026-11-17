@@ -8,11 +8,13 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { BackLink } from "@/app/components/ui/back-link";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { RelationCreateForm, RelationManager } from "../relation-editor";
 import { useRouteRefresh } from "@/app/components/use-route-refresh";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -25,7 +27,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const capabilities = await getWorkRelationEditorCapabilities(runtime, workId, user);
   const canManage = Object.values(capabilities).some(Boolean);
-  if (!canManage) redirectPage(`/games/${workId}`);
+  if (!canManage) redirectPage(`/games/${workId}`, args.request);
 
   const title = work.chineseTitle || work.originalTitle;
   const canCreate =
@@ -33,6 +35,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return {
     workId,
+    locale: runtime.uiLocale,
     user: pickPageFields(user, ["id"]),
     work,
     capabilities,
@@ -41,10 +44,15 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: [loaderData?.title || "游戏", "作品关联"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({
+    title: [loaderData?.title || translate(locale, "work.detail"), translate(locale, "relation.edit.title")],
+  }, error, locale);
+};
 
 export default function WorkRelationsPage() {
+  const t = useMessages();
   const { data, refresh } = useRouteRefresh(useLoaderData<typeof loader>());
   const { workId, user, work, capabilities, title, canCreate } =
     data;
@@ -56,7 +64,7 @@ export default function WorkRelationsPage() {
       <PageHeader
         actions={
           <>
-            <BackLink href={`/games/${workId}`} label="返回作品" />
+            <BackLink href={`/games/${workId}`} label={t("relation.backToWork")} />
             {canCreate ? (
               <RelationCreateForm
                 canCreateRelation={capabilities.canCreateRelation}
@@ -74,7 +82,7 @@ export default function WorkRelationsPage() {
           </>
         }
         subtitle={title}
-        title="作品关联"
+        title={t("relation.edit.title")}
       />
       <RelationManager
         {...capabilities}

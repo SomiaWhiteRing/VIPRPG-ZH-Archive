@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useSourceFacePages } from "@/app/components/emojis/source-pages";
@@ -26,6 +27,7 @@ export function CharacterAvatarPicker({
   initialPortrait?: CharacterAvatarSelection | null;
   onSave: (portrait: CharacterAvatarSelection) => Promise<boolean>;
 }) {
+  const t = useMessages();
   const [open, setOpen] = useState(false);
   const [character, setCharacter] = useState<EmojiCharacter>();
   const [selected, setSelected] = useState<Portrait | null>(null);
@@ -91,7 +93,7 @@ export function CharacterAvatarPicker({
     <Dialog.Root open={open} onOpenChange={changeOpen}>
       <Dialog.Trigger asChild>
         <Button type="button" variant="outline" size="sm" disabled={disabled}>
-          选择角色头像
+          {t("sea.avatar.title")}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -107,13 +109,13 @@ export function CharacterAvatarPicker({
         >
           <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div className="min-w-0">
-              <Dialog.Title>选择角色头像</Dialog.Title>
+              <Dialog.Title>{t("sea.avatar.title")}</Dialog.Title>
               <Dialog.Description className="m-0 mt-1 text-sm text-muted">
-                选择角色后，点击脸图中的头像。
+                {t("sea.avatar.instructions")}
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" size="icon" aria-label="关闭角色头像选择" disabled={disabled}>
+              <Button type="button" variant="ghost" size="icon" aria-label={t("sea.avatar.close")} disabled={disabled}>
                 <X aria-hidden />
               </Button>
             </Dialog.Close>
@@ -122,7 +124,7 @@ export function CharacterAvatarPicker({
             <EmojiSourcePicker
               sourceEndpoint={sourceEndpoint}
               character={character}
-              label={character?.name ?? "选择角色"}
+              label={character?.name ?? t("sea.avatar.character")}
               disabled={disabled}
               onSelect={chooseCharacter}
             />
@@ -138,7 +140,7 @@ export function CharacterAvatarPicker({
             className="emoji-scroll-viewport min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"
             aria-busy={loading}
           >
-            {!character ? <p className="m-0 text-sm text-muted">搜索角色名称，或从分类中选择角色。</p> : null}
+            {!character ? <p className="m-0 text-sm text-muted">{t("sea.avatar.search")}</p> : null}
             {items.length ? (
               <FaceSheetGrid
                 sheets={items}
@@ -149,17 +151,17 @@ export function CharacterAvatarPicker({
                 cellState={(sheet, row, column) => ({ selected: selected?.blobSha256 === sheet.blobSha256 && selected.row === row && selected.column === column })}
               />
             ) : null}
-            {character && !loading && !error && !items.length ? <p className="text-sm text-muted">该角色暂无可用脸图。</p> : null}
-            {loading && !items.length ? <p role="status" className="text-sm text-muted">正在加载角色脸图…</p> : null}
+            {character && !loading && !error && !items.length ? <p className="text-sm text-muted">{t("upload.portrait.empty")}</p> : null}
+            {loading && !items.length ? <p role="status" className="text-sm text-muted">{t("sea.avatar.loading")}</p> : null}
             {error ? (
               <div role="alert" className="flex items-center gap-3 text-sm">
                 {error}
-                <Button type="button" size="sm" variant="outline" disabled={disabled || loading} onClick={() => retryPage()}>重试</Button>
+                <Button type="button" size="sm" variant="outline" disabled={disabled || loading} onClick={() => retryPage()}>{t("core.action.retry")}</Button>
               </div>
             ) : null}
             {more && !error ? (
               <Button type="button" size="sm" variant="outline" className="mt-4" disabled={disabled || loading} onClick={() => void loadPage()}>
-                {loading ? "正在加载…" : "加载更多"}
+                {loading ? t("admin.portraits.loading") : t("sea.avatar.more")}
               </Button>
             ) : null}
           </div>
@@ -167,15 +169,15 @@ export function CharacterAvatarPicker({
             <div className="flex min-w-0 items-center gap-3" role="status" aria-live="polite">
               {selected ? (
                 <>
-                  <CharacterPortrait displayName={character?.name ?? "所选角色"} portrait={selected} size={64} className={cn("size-16", shape === "round" && "rounded-full")} />
-                  <span className="text-sm">头像预览</span>
-                  <CharacterPortrait displayName={character?.name ?? "所选角色"} portrait={selected} size={32} className={cn("size-8", shape === "round" && "rounded-full")} />
+                  <CharacterPortrait displayName={character?.name ?? t("sea.avatar.selected")} portrait={selected} size={64} className={cn("size-16", shape === "round" && "rounded-full")} />
+                  <span className="text-sm">{t("sea.avatar.preview")}</span>
+                  <CharacterPortrait displayName={character?.name ?? t("sea.avatar.selected")} portrait={selected} size={32} className={cn("size-8", shape === "round" && "rounded-full")} />
                 </>
-              ) : <span className="text-sm text-muted">请选择一个头像</span>}
+              ) : <span className="text-sm text-muted">{t("sea.avatar.pick")}</span>}
             </div>
             <div className="ml-auto flex gap-2">
-              <Button type="button" variant="outline" disabled={disabled} onClick={() => changeOpen(false)}>取消</Button>
-              <Button type="button" disabled={disabled || !selected} onClick={() => void save()}>{disabled ? "正在处理…" : "使用此头像"}</Button>
+              <Button type="button" variant="outline" disabled={disabled} onClick={() => changeOpen(false)}>{t("play.save.cancel")}</Button>
+              <Button type="button" disabled={disabled || !selected} onClick={() => void save()}>{disabled ? t("upload.cover.processing") : t("sea.avatar.use")}</Button>
             </div>
           </footer>
         </Dialog.Content>

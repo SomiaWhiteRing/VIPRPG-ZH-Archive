@@ -7,7 +7,8 @@ import type { WorkStatus } from "@/lib/work-visibility";
 
 export async function changeWorkLifecycle(runtime: AppRuntime, workId: number, actor: ArchiveUser,
   operation: "delete" | "restore", expectedStatus: WorkStatus) {
-  if (!hasPermission(actor, "work.status.update_any")) throw new HttpError(403, "没有调整作品状态的权限");
+  if (!hasPermission(actor, "work.status.update_any"))
+    throw new HttpError(403, "没有调整作品状态的权限", undefined, "upload.error.statusPermission");
   if ((operation === "restore") !== (expectedStatus === "deleted")) throw new HttpError(400, "作品状态与操作不符");
   const db = runtime.db;
   const result = await auditedEntityBatch(db, [
@@ -24,5 +25,5 @@ export async function changeWorkLifecycle(runtime: AppRuntime, workId: number, a
     snapshot: workAuditSnapshot(workId), permission: "work.status.update_any", source: "admin", operation });
   // D1's change count includes trigger writes; only the returned work proves this transition matched.
   if (result[0].results.length !== 1)
-    throw new HttpError(409, "作品不存在、正在提交或状态已变化，请刷新后重试");
+    throw new HttpError(409, "作品不存在、正在提交或状态已变化，请刷新后重试", undefined, "admin.works.lifecycleConflict");
 }

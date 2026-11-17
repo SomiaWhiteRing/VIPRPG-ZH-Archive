@@ -1,3 +1,5 @@
+import { parseUiLocale, UI_LOCALE_PARAM } from "./i18n/locale";
+
 // Cloudflare supplies this field; never infer verified status from User-Agent.
 const bulkCrawlerCategories = new Set([
   "Search Engine Crawler", "AI Crawler", "AI Search", "Archiver",
@@ -9,7 +11,7 @@ const gameFilterParams = [
 
 export function isFilteredGameList(params: URLSearchParams): boolean {
   return [...params].some(([key, value]) => {
-    if (key === "page" || key === "_routes") return false;
+    if (key === "page" || key === "_routes" || key === UI_LOCALE_PARAM) return false;
     if (key === "engine" && value === "all") return false;
     if (key === "sort" && value === "id") return false;
     return Boolean(value) || !gameFilterParams.includes(key);
@@ -39,7 +41,10 @@ export function crawlerResponse(request: Request): Response | null {
     });
   }
   if (games && !url.pathname.endsWith(".data")) {
-    const canonical = gameListCanonicalPath(url.searchParams);
+    const destination = new URL(gameListCanonicalPath(url.searchParams), url.origin);
+    const locale = parseUiLocale(url.searchParams.get(UI_LOCALE_PARAM));
+    if (locale) destination.searchParams.set(UI_LOCALE_PARAM, locale);
+    const canonical = destination.pathname + destination.search;
     if (url.pathname + url.search !== canonical) return new Response(null, {
       status: 308, headers: { Location: canonical, "Cache-Control": "private, no-store" },
     });

@@ -7,7 +7,7 @@ import {
   type RelationEditorCapabilities,
 } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
-import { HttpError } from "@/lib/http";
+import { UiHttpError } from "@/lib/i18n/feedback";
 import { isLanguageCode, relationInverse } from "@/lib/labels";
 
 export type RelationType =
@@ -65,7 +65,7 @@ export async function createWorkRelation(
   assertPositiveIds(input.fromWorkId, input.toWorkId);
   assertRelationType(input.relationType);
   if (input.fromWorkId === input.toWorkId)
-    throw new HttpError(400, "不能关联自身");
+    throw new UiHttpError(400, "relation.error.self");
   await assertCanEditWorkRelations(
     runtime, input.fromWorkId, actor, "canCreateRelation",
   );
@@ -80,7 +80,7 @@ export async function createWorkRelation(
       inverse as RelationType | null,
     )
   ) {
-    throw new HttpError(409, "该普通关联已存在");
+    throw new UiHttpError(409, "relation.error.duplicate");
   }
   const database = getD1(runtime);
   const statements = [
@@ -114,7 +114,7 @@ export async function createWorkRelation(
       permission: hasPermission(actor, "relation.create_any") ? "relation.create_any" : "relation.create", source: "public",
     });
   } catch (error) {
-    if (isConstraintError(error)) throw new HttpError(409, "该普通关联已存在");
+    if (isConstraintError(error)) throw new UiHttpError(409, "relation.error.duplicate");
     throw error;
   }
   const id = result[0]?.meta.last_row_id;
@@ -129,9 +129,9 @@ export async function updateWorkRelation(
   actor: ArchiveUser,
 ): Promise<void> {
   if (!Number.isSafeInteger(id) || id <= 0)
-    throw new HttpError(400, "关联 ID 不合法");
+    throw new UiHttpError(400, "relation.error.invalidId");
   const row = await relationById(runtime, id);
-  if (!row) throw new HttpError(404, "关联不存在");
+  if (!row) throw new UiHttpError(404, "relation.error.missing");
   await assertCanEditWorkRelations(runtime, row.from_work_id, actor, "canUpdate");
   await assertPublicRelationWorks(runtime, row.from_work_id, row.to_work_id);
   assertRelationType(input.relationType);
@@ -167,7 +167,7 @@ export async function updateWorkRelation(
       ignoredIds,
     )
   ) {
-    throw new HttpError(409, "该普通关联已存在");
+    throw new UiHttpError(409, "relation.error.duplicate");
   }
   const statements = [];
   if (inverseRow) {
@@ -206,7 +206,7 @@ export async function updateWorkRelation(
       permission: hasPermission(actor, "relation.update_any") ? "relation.update_any" : null, source: "public",
     });
   } catch (error) {
-    if (isConstraintError(error)) throw new HttpError(409, "该普通关联已存在");
+    if (isConstraintError(error)) throw new UiHttpError(409, "relation.error.duplicate");
     throw error;
   }
 }
@@ -217,9 +217,9 @@ export async function deleteWorkRelation(
   actor: ArchiveUser,
 ): Promise<void> {
   if (!Number.isSafeInteger(id) || id <= 0)
-    throw new HttpError(400, "关联 ID 不合法");
+    throw new UiHttpError(400, "relation.error.invalidId");
   const row = await relationById(runtime, id);
-  if (!row) throw new HttpError(404, "关联不存在");
+  if (!row) throw new UiHttpError(404, "relation.error.missing");
   await assertCanEditWorkRelations(runtime, row.from_work_id, actor, "canDeleteRelation");
   const database = getD1(runtime);
   const statements = [
@@ -262,9 +262,9 @@ export async function createTranslationRelation(
 ): Promise<{ id: number }> {
   assertPositiveIds(input.sourceWorkId, input.targetWorkId);
   if (input.sourceWorkId === input.targetWorkId)
-    throw new HttpError(400, "不能关联自身");
+    throw new UiHttpError(400, "relation.error.self");
   if (input.targetRole !== "original" && input.targetRole !== "translation")
-    throw new HttpError(400, "翻译角色不合法");
+    throw new UiHttpError(400, "relation.error.translationRole");
   await assertCanEditWorkRelations(
     runtime, input.sourceWorkId, actor, "canCreateTranslation",
   );
@@ -317,13 +317,13 @@ export async function createTranslationRelation(
   }>;
   const source = works.find((work) => work.id === input.sourceWorkId);
   const target = works.find((work) => work.id === input.targetWorkId);
-  if (!source || !target) throw new HttpError(404, "关联只能使用可公开访问的作品");
+  if (!source || !target) throw new UiHttpError(404, "relation.error.publicWorkRequired");
   if (
     !isLanguageCode(source.language) ||
     !isLanguageCode(target.language) ||
     source.language === target.language
   )
-    throw new HttpError(400, "原版和译版语言必须不同");
+    throw new UiHttpError(400, "relation.error.sameLanguage");
 
   const sourceGameRole: TranslationRole =
     input.targetRole === "original" ? "translation" : "original";
@@ -332,19 +332,19 @@ export async function createTranslationRelation(
   const relationRows = (validation[1].results ?? []) as TranslationRoleRow[];
   const currentRole = translationRoleFromRows(input.sourceWorkId, relationRows);
   if (currentRole && currentRole !== sourceGameRole)
-    throw new HttpError(400, "一部作品不能同时作为原版和译版");
+    throw new UiHttpError(400, "relation.error.conflictingRoles");
   const targetExistingRole = translationRoleFromRows(
     input.targetWorkId,
     relationRows,
   );
   if (targetExistingRole && targetExistingRole !== targetGameRole)
-    throw new HttpError(400, "一部作品不能同时作为原版和译版");
+    throw new UiHttpError(400, "relation.error.conflictingRoles");
   const targetRole =
     input.targetRole === "original" ? "translation" : "original";
   if (validation[2].results?.length)
-    throw new HttpError(409, "一个译本最多关联一个原版");
+    throw new UiHttpError(409, "relation.error.oneOriginal");
   if (validation[3].results?.length)
-    throw new HttpError(409, "该翻译关联已存在");
+    throw new UiHttpError(409, "relation.error.translationDuplicate");
 
   let result: Awaited<ReturnType<typeof database.batch>>;
   try {
@@ -373,7 +373,7 @@ export async function createTranslationRelation(
     });
   } catch (error) {
     if (isConstraintError(error))
-      throw new HttpError(409, "该翻译关联已存在或角色冲突");
+      throw new UiHttpError(409, "relation.error.translationConflict");
     throw error;
   }
   const id = result[0]?.meta.last_row_id;
@@ -387,7 +387,7 @@ export async function deleteTranslationRelation(
   actor: ArchiveUser,
 ): Promise<void> {
   if (!Number.isSafeInteger(id) || id <= 0)
-    throw new HttpError(400, "关联 ID 不合法");
+    throw new UiHttpError(400, "relation.error.invalidId");
   const row = await getD1(runtime)
     .prepare(
       `SELECT id,source_work_id,target_role,target_work_id,vice_versa,created_by_user_id FROM translation_relations WHERE id=?`,
@@ -401,7 +401,7 @@ export async function deleteTranslationRelation(
       vice_versa: number;
       created_by_user_id: number | null;
     }>();
-  if (!row) throw new HttpError(404, "翻译关联不存在");
+  if (!row) throw new UiHttpError(404, "relation.error.translationMissing");
   await assertCanEditWorkRelations(
     runtime, row.source_work_id, actor, "canDeleteTranslation",
   );
@@ -471,7 +471,7 @@ export async function assertTranslationLanguageChangeAllowed(
     .bind(workId, workId, workId)
     .all<{ language: string }>();
   if ((rows.results ?? []).some((row) => row.language === language)) {
-    throw new HttpError(400, "更新后的语言会与已有翻译关联相同");
+    throw new UiHttpError(400, "relation.error.languageChange");
   }
 }
 
@@ -513,7 +513,7 @@ async function assertPublicRelationWorks(
     .bind(...ids)
     .all<{ id: number }>();
   if (rows.results.length !== ids.length)
-    throw new HttpError(404, "关联只能使用可公开访问的作品");
+    throw new UiHttpError(404, "relation.error.publicWorkRequired");
 }
 export async function getWorkRelationEditorCapabilities(
   runtime: AppRuntime,
@@ -549,7 +549,7 @@ async function assertCanEditWorkRelations(
     runtime, workId, actor,
   );
   if (!capabilities[capability])
-    throw new HttpError(403, "没有执行此关联操作的权限");
+    throw new UiHttpError(403, "relation.error.forbidden");
 }
 function assertRelationType(value: string): asserts value is RelationType {
   if (
@@ -568,11 +568,11 @@ function assertRelationType(value: string): asserts value is RelationType {
       "in_collection",
     ].includes(value)
   )
-    throw new HttpError(400, "关联类型不合法");
+    throw new UiHttpError(400, "relation.error.invalidType");
 }
 function assertPositiveIds(...values: number[]): void {
   if (values.some((value) => !Number.isSafeInteger(value) || value <= 0))
-    throw new HttpError(400, "游戏 ID 不合法");
+    throw new UiHttpError(400, "relation.error.invalidWork");
 }
 function isConstraintError(error: unknown): boolean {
   return /constraint|unique|already exists/i.test(

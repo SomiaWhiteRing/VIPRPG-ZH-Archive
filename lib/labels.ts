@@ -1,13 +1,17 @@
-const CREATOR_ROLE_LABELS: Record<string, string> = {
-  author: "作者",
-  scenario: "剧本",
-  graphics: "美术",
-  planning: "策划",
-  programming: "程序",
-  translator: "译者",
-  music: "音乐",
-  other: "其他",
-};
+import { isMessageKey, translate, type MessageKey } from "./i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "./i18n/locale";
+
+const CREATOR_ROLE_KEYS = {
+  author: "work.credit.author",
+  scenario: "work.credit.scenario",
+  graphics: "work.credit.graphics",
+  planning: "work.credit.planning",
+  programming: "work.credit.programming",
+  translator: "work.credit.translator",
+  music: "work.credit.music",
+  other: "work.credit.other",
+} as const satisfies Record<string, MessageKey>;
+const languageNames = new Map<UiLocale, Intl.DisplayNames>();
 
 const NAMESPACE_LABELS: Record<string, string> = {
   genre: "类型",
@@ -64,20 +68,20 @@ export function isEngineFamily(value: string): boolean {
   );
 }
 
-const RELATION_LABELS: Record<string, string> = {
-  adaptation: "改编",
-  prequel: "前传",
-  sequel: "续集",
-  same_setting: "相同世界观",
-  alternative_setting: "不同世界观",
-  alternative_version: "不同演绎",
-  character: "角色出演",
-  collaboration: "联动",
-  version: "不同版本",
-  main_version: "主版本",
-  collection: "合集",
-  in_collection: "收录作品",
-};
+const RELATION_LABEL_KEYS = {
+  adaptation: "relation.adaptation",
+  prequel: "relation.prequel",
+  sequel: "relation.sequel",
+  same_setting: "relation.same_setting",
+  alternative_setting: "relation.alternative_setting",
+  alternative_version: "relation.alternative_version",
+  character: "relation.character",
+  collaboration: "relation.collaboration",
+  version: "relation.version",
+  main_version: "relation.main_version",
+  collection: "relation.collection",
+  in_collection: "relation.in_collection",
+} as const satisfies Record<string, MessageKey>;
 
 const RELATION_INVERSE: Record<string, string | null> = {
   adaptation: "adaptation",
@@ -94,7 +98,7 @@ const RELATION_INVERSE: Record<string, string | null> = {
   in_collection: "collection",
 };
 
-export const WORK_RELATION_TYPES = Object.freeze(Object.keys(RELATION_LABELS));
+export const WORK_RELATION_TYPES = Object.freeze(Object.keys(RELATION_LABEL_KEYS));
 export const TRANSLATION_ROLE_LABELS = {
   original: "原版",
   translation: "译版",
@@ -121,56 +125,64 @@ export const IMPORT_TASK_STATUS_OPTIONS = [
   { value: "expired", label: "已过期" },
 ] as const;
 
-const IMPORT_TASK_STATUS_LABELS = Object.fromEntries(
-  IMPORT_TASK_STATUS_OPTIONS.map((option) => [option.value, option.label]),
-) as Record<string, string>;
-
 
 export const VERIFICATION_EMAIL_HINT =
   "验证码已发送至 {email}，未收到时请检查垃圾邮件。";
 
-export function engineLabel(value: string): string {
-  return ENGINE_OPTIONS.find((option) => option.value === value)?.label ?? "其他引擎";
+export function engineLabel(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const option = ENGINE_OPTIONS.find((option) => option.value === value);
+  return !option || option.value === "other" ? translate(locale, "work.otherEngine") : option.label;
 }
 
-export function engineShortLabel(value: string): string {
-  return ENGINE_OPTIONS.find((option) => option.value === value)?.shortLabel ?? "其他引擎";
+export function engineShortLabel(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const option = ENGINE_OPTIONS.find((option) => option.value === value);
+  return !option || option.value === "other" ? translate(locale, "work.otherEngine") : option.shortLabel;
 }
 
-export function creatorRoleLabel(value: string): string {
-  return CREATOR_ROLE_LABELS[value] ?? value;
+export function creatorRoleLabel(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  return Object.hasOwn(CREATOR_ROLE_KEYS, value)
+    ? translate(locale, CREATOR_ROLE_KEYS[value as keyof typeof CREATOR_ROLE_KEYS])
+    : value;
 }
 
 export function namespaceLabel(value: string): string {
   return NAMESPACE_LABELS[value] ?? value;
 }
 
-export function languageLabel(value: string | null | undefined): string {
-  return LANGUAGE_OPTIONS.find((option) => option.value === value)?.label ?? value ?? "未知语言";
+export function languageLabel(value: string | null | undefined, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const option = LANGUAGE_OPTIONS.find((item) => item.value === value);
+  if (!option) return value ?? translate(locale, "work.unknownLanguage");
+  if (locale === DEFAULT_UI_LOCALE) return option.label;
+  let names = languageNames.get(locale);
+  if (!names) {
+    names = new Intl.DisplayNames(locale, { type: "language" });
+    languageNames.set(locale, names);
+  }
+  const displayCode = option.value === "zh-CN" ? "zh-Hans" : option.value === "zh-TW" ? "zh-Hant" : option.value;
+  return names.of(displayCode) ?? option.label;
 }
 
 export function isLanguageCode(value: unknown): value is (typeof LANGUAGE_OPTIONS)[number]["value"] {
   return typeof value === "string" && LANGUAGE_OPTIONS.some((option) => option.value === value);
 }
 
-export function relationLabel(value: string): string {
-  return RELATION_LABELS[value] ?? value;
+export function relationLabel(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  return Object.hasOwn(RELATION_LABEL_KEYS, value)
+    ? translate(locale, RELATION_LABEL_KEYS[value as keyof typeof RELATION_LABEL_KEYS])
+    : value;
 }
 
 export function relationInverse(value: string): string | null {
   return RELATION_INVERSE[value] ?? null;
 }
 
-export function workStatusLabel(value: string): string {
+export function workStatusLabel(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
   switch (value) {
     case "published":
-      return "已发布";
     case "hidden":
-      return "隐藏";
     case "processing":
-      return "归档处理中";
     case "deleted":
-      return "已删除";
+      return translate(locale, `upload.own.status.${value}`);
     default:
       return value;
   }
@@ -179,75 +191,62 @@ export function workStatusLabel(value: string): string {
 export function archiveStatusLabel(
   value: string,
   purgedAt: string | null = null,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ): string {
   if (purgedAt) {
-    return "已最终清理";
+    return translate(locale, "admin.archives.purged");
   }
   switch (value) {
     case "published":
-      return "已发布";
     case "hidden":
-      return "隐藏";
     case "processing":
-      return "归档处理中";
+      return workStatusLabel(value, locale);
     case "deleted":
-      return "回收站";
+      return translate(locale, "admin.archives.trash");
     default:
       return value;
   }
 }
 
-export function inboxStatusLabel(value: string): string {
+export function inboxStatusLabel(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
   switch (value) {
     case "open":
-      return "未处理";
+      return translate(locale, "inbox.status.open");
     case "pending":
-      return "待处理";
+      return translate(locale, "inbox.status.pending");
     case "approved":
-      return "已通过";
+      return translate(locale, "inbox.approved");
     case "rejected":
-      return "已驳回";
+      return translate(locale, "inbox.rejected");
     case "archived":
-      return "已处理";
+      return translate(locale, "inbox.status.archived");
     default:
       return value;
   }
 }
 
-export function importTaskStatusLabel(value: string): string {
-  return IMPORT_TASK_STATUS_LABELS[value] ?? value;
+export function importTaskStatusLabel(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const key = `admin.imports.status.${value}`;
+  return isMessageKey(key) ? translate(locale, key) : value;
 }
 
-export function importTaskStageLabel(value: string): string {
+export function importTaskStageLabel(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
   if (value === "preflight") {
-    return "上传前检查";
+    return translate(locale, "admin.imports.stagePreflight");
   }
   if (value === "commit") {
-    return "提交入库";
+    return translate(locale, "admin.imports.status.committing");
   }
-  return value;
+  const key = `upload.phase.${value === "source_verification" ? "verifying_source" : value}`;
+  return isMessageKey(key) ? translate(locale, key) : value;
 }
 
-export function installStatusLabel(value: string): string {
-  switch (value) {
-    case "loading":
-      return "读取中";
-    case "created":
-      return "已创建";
-    case "installing":
-      return "安装中";
-    case "ready":
-      return "已安装";
-    case "failed":
-      return "安装失败";
-    case "deleted":
-      return "未安装";
-    default:
-      return value;
-  }
+export function installStatusLabel(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const key = `play.install.status.${value}`;
+  return isMessageKey(key) ? translate(locale, key) : value;
 }
 
 
-export function userStatusLabel(value: string): string {
-  return value === "deleted" ? "已注销" : value === "active" ? "启用" : "禁用";
+export function userStatusLabel(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  return translate(locale, value === "deleted" ? "admin.users.deleted" : value === "active" ? "admin.users.activeBadge" : "admin.users.disabledBadge");
 }

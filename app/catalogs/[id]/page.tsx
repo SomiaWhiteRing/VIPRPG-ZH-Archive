@@ -1,3 +1,6 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { listRootComments } from "@/app/.server/db/work-community";
 import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
@@ -13,11 +16,11 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { CatalogItemsSection } from "@/app/catalogs/catalog-items-section";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { hasPermission } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { formatDate, formatNumber } from "@/lib/format";
 import { useEffect, useState, type ReactNode } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData, useRevalidator } from "react-router";
+import { useLoaderData, useRevalidator } from "react-router";
 import { CatalogSummaryEditor } from "../catalog-manager";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -57,6 +60,7 @@ export async function loader(args: LoaderFunctionArgs) {
     Boolean(ownsCatalog && hasPermission(currentUser, "catalog.reorder_own"));
 
   return {
+    locale: runtime.uiLocale,
     catalog,
     currentUser: pickPageFields(currentUser, ["id"]),
     otherCatalogs,
@@ -68,10 +72,14 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: loaderData?.catalog.title || "目录详情" }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: loaderData?.catalog.title || translate(locale, "catalog.detail") }, error, locale);
+};
 
 export default function CatalogPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const {
     catalog: initialCatalog,
     currentUser,
@@ -101,7 +109,7 @@ export default function CatalogPage() {
             {catalog.title}
           </h1>
           <section
-            aria-label="目录摘要"
+            aria-label={t("catalog.summary")}
             className="mt-4 rounded-lg border border-border bg-muted/5 p-4 sm:p-5"
           >
             <div className="flex flex-col gap-4 sm:flex-row">
@@ -116,18 +124,18 @@ export default function CatalogPage() {
                     loading="lazy"
                   />
                 ) : (
-                  <span>暂无封面</span>
+                  <span>{t("work.noCover")}</span>
                 )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="m-0 whitespace-pre-wrap text-sm leading-[1.75]">
-                  {catalog.description || "这个目录还没有填写说明。"}
+                  {catalog.description || t("catalog.detailNoDescription")}
                 </p>
               </div>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs text-muted">
               <span>
-                创建者{" "}
+                {t("catalog.creator")}
                 <Link
                   className="font-semibold text-primary hover:underline"
                   to={`/users/${catalog.ownerUserId}`}
@@ -136,19 +144,19 @@ export default function CatalogPage() {
                 </Link>
               </span>
               <span>
-                创建于{" "}
+                {t("catalog.createdAt")}{" "}
                 <time className="font-mono" dateTime={catalog.createdAt}>
-                  {formatDate(catalog.createdAt)}
+                  {formatDate(catalog.createdAt, { locale })}
                 </time>
               </span>
               <span>
-                更新于{" "}
+                {t("catalog.updatedAt")}{" "}
                 <time className="font-mono" dateTime={catalog.updatedAt}>
-                  {formatDate(catalog.updatedAt)}
+                  {formatDate(catalog.updatedAt, { locale })}
                 </time>
               </span>
               <span className="font-mono">
-                {formatNumber(catalog.itemCount)} 部作品
+                {t("favorite.workCount", { count: catalog.itemCount })}
               </span>
               {canEditSummary || canDelete ? (
                 <div className="ml-auto">
@@ -170,7 +178,7 @@ export default function CatalogPage() {
             onSaved={updateCatalog}
           />
           <section aria-labelledby="comments-title" className="mt-8 scroll-mt-28 border-t border-border py-4.5" id="sec-comments">
-            <h2 className="mb-4 text-base font-bold" id="comments-title">评论（{formatNumber(commentCount)}）</h2>
+            <h2 className="mb-4 text-base font-bold" id="comments-title">{t("discussion.tabComments", { count: commentCount })}</h2>
             <CommentPanel
               target={{ kind: "catalog", id: catalog.id }}
               currentUserId={currentUser?.id ?? null}
@@ -182,18 +190,18 @@ export default function CatalogPage() {
         </div>
 
         <aside
-          aria-label="目录侧栏"
+          aria-label={t("catalog.sidebar")}
           className="w-full shrink-0 space-y-5 min-[981px]:sticky min-[981px]:top-20 min-[981px]:w-72 min-[981px]:self-start"
         >
-          <SidebarPanel title="目录概览">
+          <SidebarPanel title={t("catalog.overview")}>
             <div className="flex items-end gap-2">
               <strong className="font-display text-3xl leading-none">
-                {formatNumber(catalog.itemCount)}
+                {formatNumber(catalog.itemCount, locale)}
               </strong>
-              <span className="text-sm text-muted">部作品</span>
+              <span className="text-sm text-muted">{t("catalog.worksUnit")}</span>
             </div>
             <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 border-t border-border pt-3 text-xs">
-              <dt className="text-muted">创建者</dt>
+              <dt className="text-muted">{t("catalog.owner")}</dt>
               <dd className="m-0 min-w-0">
                 <Link
                   className="font-semibold text-primary hover:underline"
@@ -202,22 +210,22 @@ export default function CatalogPage() {
                   {catalog.ownerName}
                 </Link>
               </dd>
-              <dt className="text-muted">创建时间</dt>
+              <dt className="text-muted">{t("catalog.createdTime")}</dt>
               <dd className="m-0 font-mono">
                 <time dateTime={catalog.createdAt}>
-                  {formatDate(catalog.createdAt)}
+                  {formatDate(catalog.createdAt, { locale })}
                 </time>
               </dd>
-              <dt className="text-muted">最近更新</dt>
+              <dt className="text-muted">{t("catalog.updatedTime")}</dt>
               <dd className="m-0 font-mono">
                 <time dateTime={catalog.updatedAt}>
-                  {formatDate(catalog.updatedAt)}
+                  {formatDate(catalog.updatedAt, { locale })}
                 </time>
               </dd>
             </dl>
           </SidebarPanel>
 
-          <SidebarPanel title="作者的其他目录">
+          <SidebarPanel title={t("catalog.other")}>
             {otherCatalogs.length ? (
               <ul className="m-0 list-none divide-y divide-border p-0">
                 {otherCatalogs.map((item) => (
@@ -229,14 +237,14 @@ export default function CatalogPage() {
                       {item.title}
                     </Link>
                     <span className="mt-0.5 block font-mono text-[11px] text-muted">
-                      {formatNumber(item.itemCount)} 部作品
+                      {t("favorite.workCount", { count: item.itemCount })}
                     </span>
                   </li>
                 ))}
               </ul>
             ) : (
               <EmptyState
-                title="这位用户还没有其他公开目录。"
+                title={t("catalog.noOther")}
                 variant="plain"
                 className="leading-6"
               />
@@ -246,20 +254,20 @@ export default function CatalogPage() {
                 className="mt-3 block border-t border-border pt-3 text-xs font-semibold text-primary hover:underline"
                 to={`/users/${catalog.ownerUserId}/catalogs`}
               >
-                查看作者的全部目录
+                {t("catalog.allByOwner")}
               </Link>
             ) : null}
           </SidebarPanel>
 
-          <SidebarPanel title="相关页面">
-            <nav aria-label="目录相关页面">
+          <SidebarPanel title={t("catalog.related")}>
+            <nav aria-label={t("catalog.relatedNav")}>
               <ul className="m-0 list-none divide-y divide-border p-0 text-sm">
                 <li>
                   <Link
                     className="block py-2 first:pt-0 hover:text-primary"
                     to="/catalogs"
                   >
-                    浏览全部目录
+                    {t("catalog.allCollections")}
                   </Link>
                 </li>
                 <li>
@@ -267,7 +275,7 @@ export default function CatalogPage() {
                     className="block py-2 hover:text-primary"
                     to={`/users/${catalog.ownerUserId}`}
                   >
-                    查看作者主页
+                    {t("catalog.ownerProfile")}
                   </Link>
                 </li>
                 {currentUser && currentUser.id !== catalog.ownerUserId ? (
@@ -276,7 +284,7 @@ export default function CatalogPage() {
                       className="block py-2 last:pb-0 hover:text-primary"
                       to="/me/catalogs"
                     >
-                      管理我的目录
+                      {t("catalog.manageMine")}
                     </Link>
                   </li>
                 ) : null}

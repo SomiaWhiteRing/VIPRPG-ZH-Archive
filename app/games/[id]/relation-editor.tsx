@@ -1,3 +1,4 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 
@@ -59,6 +60,7 @@ const menuItemClass =
   "flex min-h-9 w-full cursor-pointer data-[disabled]:cursor-not-allowed items-center rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15 data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
 export function RelationEditor(props: Omit<RelationEditorProps, "onSaved">) {
+  const t = useMessages();
   const [snapshot, setSnapshot] = useState({ source: props.relations, value: props });
   const sequence = useRef(0);
   const data = snapshot.source === props.relations ? snapshot.value : props;
@@ -67,7 +69,7 @@ export function RelationEditor(props: Omit<RelationEditorProps, "onSaved">) {
     const current = ++sequence.current;
     const result = await requestJson<{
       ok: true; work: NonNullable<Awaited<ReturnType<typeof getGameWorkRelations>>>; capabilities: RelationEditorCapabilities;
-    }>(`/api/works/${props.workId}/relations`, {}, "作品关联加载失败");
+    }>(`/api/works/${props.workId}/relations`, {}, t("relation.edit.loadFailed"));
     if (current === sequence.current)
       setSnapshot({ source: props.relations, value: { ...props, ...result.work, ...result.capabilities } });
   }
@@ -103,6 +105,8 @@ export function RelationCreateForm({
   excludedWorkIds,
   onSaved,
 }: RelationCreateFormProps) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -159,7 +163,8 @@ export function RelationCreateForm({
       } catch (error) {
         if (!controller.signal.aborted)
           setSearchError(
-            error instanceof Error ? error.message : "搜索失败，请重试。",
+            error instanceof ApiResponseError ? error.messageFor(locale)
+              : error instanceof Error ? error.message : t("relation.edit.searchFailed"),
           );
       } finally {
         if (!controller.signal.aborted) setSearching(false);
@@ -169,23 +174,23 @@ export function RelationCreateForm({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [menuOpen, query, retry, selected, workId, exclusions]);
+  }, [menuOpen, query, retry, selected, workId, exclusions, locale, t]);
 
   async function createRelation() {
     if (busy) return;
     if (!selected) {
-      toast.error("请先查找并选择关联对象。");
+      toast.error(t("relation.edit.pick"));
       return;
     }
     if (excludedIds.has(selected.id)) {
-      toast.error("该作品已在关联列表中。");
+      toast.error(t("relation.edit.duplicate"));
       return;
     }
     if (
       relationChoice.startsWith("translation:") &&
       selected.language === language
     ) {
-      toast.error("原版和译版语言必须不同。");
+      toast.error(t("relation.edit.sameLanguage"));
       return;
     }
 
@@ -222,10 +227,10 @@ export function RelationCreateForm({
       setResult(null);
       setSearching(false);
       setSearchError("");
-      toast.success("关联已建立。");
+      toast.success(t("relation.edit.created"));
       await onSaved();
     } catch (error) {
-      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败，请检查连接后重试。");
+      toast.error(error instanceof ApiResponseError ? error : t("relation.edit.network"));
     } finally {
       setBusy(false);
     }
@@ -235,7 +240,7 @@ export function RelationCreateForm({
     ...(canCreateRelation
       ? WORK_RELATION_TYPES.map((value) => ({
           value: `work:${value}`,
-          label: relationLabel(value),
+          label: relationLabel(value, locale),
         }))
       : []),
     ...(canCreateTranslation
@@ -243,9 +248,9 @@ export function RelationCreateForm({
           Object.entries(TRANSLATION_ROLE_LABELS) as Array<
             [keyof typeof TRANSLATION_ROLE_LABELS, string]
           >
-        ).map(([value, label], index) => ({
+        ).map(([value], index) => ({
           value: `translation:${value}`,
-          label,
+          label: t(`relation.${value}`),
           separatorBefore: canCreateRelation && index === 0,
         }))
       : []),
@@ -257,7 +262,7 @@ export function RelationCreateForm({
         <div className="w-64 max-w-full">
           <SearchComboBox
             id={`relation-target-${workId}`}
-            label="关联作品"
+            label={t("relation.edit.target")}
             query={query}
             selectedKey={selected?.id ?? null}
             onClear={() => {
@@ -279,7 +284,7 @@ export function RelationCreateForm({
             items={searching || searchError ? [] : candidates}
             getKey={(candidate) => candidate.id}
             getText={(candidate) => candidate.title}
-            placeholder="搜索作品名称或别名"
+            placeholder={t("relation.edit.placeholder")}
             maxLength={100}
             onChoose={(candidate) => {
               setSelected(candidate);
@@ -299,7 +304,7 @@ export function RelationCreateForm({
                     blobSha256={candidate.coverBlobSha256}
                     width={320}
                     height={240}
-                    fallback="暂无封面"
+                    fallback={t("work.noCover")}
                     fallbackClassName="flex h-full items-center text-xs text-muted"
                     imageClassName="block h-full w-auto max-w-none object-contain object-left"
                   />
@@ -313,8 +318,8 @@ export function RelationCreateForm({
                 role={searchError ? "alert" : "status"}
               >
                 {searching
-                    ? "正在搜索…"
-                    : searchError || "没有找到可关联的作品。"}
+                    ? t("relation.edit.searching")
+                    : searchError || t("relation.edit.noMatch")}
               </p>
             ) : null}
             footer={
@@ -326,7 +331,7 @@ export function RelationCreateForm({
                   className="m-2"
                   onClick={() => setRetry((value) => value + 1)}
                 >
-                  重新搜索
+                  {t("relation.edit.retry")}
                 </Button>
               ) : null
             }
@@ -334,7 +339,7 @@ export function RelationCreateForm({
         </div>
         <div className="flex items-center gap-1">
           <SelectField
-            aria-label="关联类型"
+            aria-label={t("relation.edit.type")}
             triggerClassName="w-[calc(5em+3rem+2px)] shrink-0"
             disabled={busy}
             onValueChange={(value) => {
@@ -350,7 +355,7 @@ export function RelationCreateForm({
           onClick={() => void createRelation()}
           type="button"
         >
-          {busy ? "正在添加…" : "添加关联"}
+          {busy ? t("relation.edit.adding") : t("relation.edit.add")}
         </Button>
         <WorkRelationGuide />
       </div>
@@ -368,6 +373,8 @@ export function RelationManager({
   canDeleteTranslation,
   onSaved,
 }: RelationEditorProps) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const toast = useToast();
   const removalReturnFocusRef = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -400,8 +407,8 @@ export function RelationManager({
       `/api/work-relations/${relation.id}`,
       "PATCH",
       { relationType },
-      "关联类型已更新。",
-      "关联类型更新失败。",
+      t("relation.edit.updated"),
+      t("relation.edit.updateFailed"),
     );
   }
 
@@ -415,8 +422,8 @@ export function RelationManager({
       path,
       "DELETE",
       undefined,
-      "关联已删除。",
-      "删除关联失败。",
+      t("relation.edit.deleted"),
+      t("relation.edit.deleteFailed"),
     );
     if (removed) setPendingRemoval(null);
   }
@@ -454,7 +461,7 @@ export function RelationManager({
       await onSaved();
       return true;
     } catch (error) {
-      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败，请检查连接后重试。");
+      toast.error(error instanceof ApiResponseError ? error : t("relation.edit.network"));
       return false;
     } finally {
       setBusy(false);
@@ -462,7 +469,7 @@ export function RelationManager({
   }
 
   if (!allTranslations.length && !relationGroups.length) {
-    return <EmptyState title="这个作品还没有关联作品。" />;
+    return <EmptyState title={t("relation.edit.empty")} />;
   }
 
   return (
@@ -472,7 +479,7 @@ export function RelationManager({
           <RelationSectionHeader
             count={allTranslations.length}
             id="translation-relations-heading"
-            title="翻译关联"
+            title={t("relation.edit.translations")}
           />
           <ol className="divide-y divide-border border-b border-border">
             {allTranslations.map((translation, index) => {
@@ -517,7 +524,7 @@ export function RelationManager({
           <RelationSectionHeader
             count={group.items.length}
             id={`work-relations-${group.type}`}
-            title={relationLabel(group.type)}
+            title={relationLabel(group.type, locale)}
           />
           <ol className="divide-y divide-border border-b border-border">
             {group.items.map((relation, index) => {
@@ -571,15 +578,15 @@ export function RelationManager({
           }}
         >
           <AlertDialogTitle className="m-0 text-lg font-bold">
-            删除与“{pendingRemoval?.title}”的关联？
+            {t("relation.edit.removeTitle", { title: pendingRemoval?.title ?? "" })}
           </AlertDialogTitle>
           <AlertDialogDescription className="m-0 text-sm leading-6 text-muted">
-            对向关系也会同时删除。
+            {t("relation.edit.removeBoth")}
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
               <Button disabled={busy} type="button" variant="outline">
-                取消
+                {t("relation.edit.cancel")}
               </Button>
             </AlertDialogCancel>
             <Button
@@ -588,7 +595,7 @@ export function RelationManager({
               type="button"
               variant="destructive"
             >
-              {busy ? "正在删除…" : "确认删除"}
+              {busy ? t("relation.edit.removing") : t("relation.edit.confirm")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -606,12 +613,13 @@ function RelationSectionHeader({
   id: string;
   title: string;
 }) {
+  const t = useMessages();
   return (
     <header className="flex items-baseline gap-3 border-b border-border pb-3">
       <h2 className="m-0 font-display text-xl font-bold" id={id}>
         {title}
       </h2>
-      <span className="font-mono text-xs text-muted">共 {count} 个</span>
+      <span className="font-mono text-xs text-muted">{t("relation.edit.count", { count })}</span>
     </header>
   );
 }
@@ -633,11 +641,13 @@ function WorkRelationActions({
   relationType: string;
   title: string;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
   if (!canEdit && !canDelete) {
     return (
-      <span className="text-sm text-muted">{relationLabel(relationType)}</span>
+      <span className="text-sm text-muted">{relationLabel(relationType, locale)}</span>
     );
   }
 
@@ -646,19 +656,19 @@ function WorkRelationActions({
       <div className="hidden items-center gap-1 sm:flex">
         {canEdit ? (
           <SelectField
-            aria-label={`${title}的关联类型`}
+            aria-label={t("relation.edit.typeFor", { title })}
             triggerClassName="w-[calc(5em+3rem+2px)] shrink-0"
             disabled={busy}
             onValueChange={onChangeType}
             options={WORK_RELATION_TYPES.map((value) => ({
               value,
-              label: relationLabel(value),
+              label: relationLabel(value, locale),
             }))}
             value={relationType}
           />
         ) : (
           <span className="px-2 text-sm text-muted">
-            {relationLabel(relationType)}
+            {relationLabel(relationType, locale)}
           </span>
         )}
         {canDelete ? (
@@ -672,7 +682,7 @@ function WorkRelationActions({
             type="button"
             variant="ghost"
           >
-            删除
+            {t("relation.edit.remove")}
           </Button>
         ) : null}
       </div>
@@ -680,7 +690,7 @@ function WorkRelationActions({
         <DropdownMenu.Trigger asChild>
           <Button
             ref={menuTriggerRef}
-            aria-label={`管理关联：${title}`}
+            aria-label={t("relation.edit.manage", { title })}
             className="size-8 rounded-full sm:hidden"
             disabled={busy}
             size="icon"
@@ -699,7 +709,7 @@ function WorkRelationActions({
             {canEdit ? (
               <>
                 <DropdownMenu.Label className="px-2.5 py-1.5 text-xs font-semibold text-muted">
-                  关联类型
+                  {t("relation.edit.type")}
                 </DropdownMenu.Label>
                 <DropdownMenu.RadioGroup
                   value={relationType}
@@ -711,7 +721,7 @@ function WorkRelationActions({
                       key={value}
                       value={value}
                     >
-                      {relationLabel(value)}
+                      {relationLabel(value, locale)}
                     </DropdownMenu.RadioItem>
                   ))}
                 </DropdownMenu.RadioGroup>
@@ -727,7 +737,7 @@ function WorkRelationActions({
                 className={`${menuItemClass} text-destructive focus:text-destructive`}
                 onSelect={() => onDelete(menuTriggerRef.current)}
               >
-                删除关联
+                {t("relation.edit.removeRelation")}
               </DropdownMenu.Item>
             ) : null}
           </DropdownMenu.Content>
@@ -750,8 +760,9 @@ function TranslationRelationActions({
   role: "original" | "translation";
   title: string;
 }) {
+  const t = useMessages();
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
-  const roleLabel = TRANSLATION_ROLE_LABELS[role];
+  const roleLabel = t(`relation.${role}`);
 
   return (
     <div className="flex items-center gap-1">
@@ -767,7 +778,7 @@ function TranslationRelationActions({
           type="button"
           variant="ghost"
         >
-          删除
+          {t("relation.edit.remove")}
         </Button>
       ) : null}
       {canDelete ? (
@@ -775,7 +786,7 @@ function TranslationRelationActions({
           <DropdownMenu.Trigger asChild>
             <Button
               ref={menuTriggerRef}
-              aria-label={`管理翻译关联：${title}`}
+              aria-label={t("relation.edit.manageTranslation", { title })}
               className="size-8 rounded-full sm:hidden"
               disabled={busy}
               size="icon"
@@ -797,7 +808,7 @@ function TranslationRelationActions({
                 className={`${menuItemClass} text-destructive focus:text-destructive`}
                 onSelect={() => onDelete(menuTriggerRef.current)}
               >
-                删除关联
+                {t("relation.edit.removeRelation")}
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>

@@ -1,5 +1,6 @@
 import { parsePositiveId } from "@/app/.server/http/request";
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
+import { readList, readNullableString, readRequiredString } from "@/app/.server/http/work-form";
 import { parseWorkReferenceDuration } from "@/app/.server/http/work-reference-duration";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { parseCharacterSelectionsJson } from "@/app/.server/db/characters";
@@ -40,7 +41,7 @@ export async function POST(
     const { workId: rawWorkId } = await context.params;
     const workId = parsePositiveId(rawWorkId, "id", "作品 ID 不合法");
     const current = await getOwnedWorkForEdit(runtime, workId, auth.user);
-    if (!current) throw new HttpError(404, "作品不存在或不属于当前上传者");
+    if (!current) throw new HttpError(404, "作品不存在或当前账户无权维护", undefined, "upload.metadata.error.ownedMissing");
     const form = await request.formData();
     const metadata = parseMetadata(form);
     const characterFaceSheets = form
@@ -87,14 +88,14 @@ export async function POST(
 function parseMetadata(form: FormData) {
   const status = form.get("status");
   if (status !== null && status !== "published" && status !== "hidden") {
-    throw new HttpError(400, "status 不合法");
+    throw new HttpError(400, "status 不合法", undefined, "upload.error.status");
   }
   const distribution = readRequiredString(
     form.get("distribution"),
     "distribution",
   );
   if (distribution !== "archive" && distribution !== "external") {
-    throw new HttpError(400, "distribution 不合法");
+    throw new HttpError(400, "distribution 不合法", undefined, "upload.error.distribution");
   }
   return {
     ...workVisibilityFormInput(form),
@@ -126,24 +127,4 @@ function parseMetadata(form: FormData) {
     translators: parseTranslatorSelectionsJson(form.get("translators")),
     downloadUrl: readNullableString(form.get("download_url")),
   };
-}
-
-function readRequiredString(value: unknown, field: string): string {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new HttpError(400, `${field} 不能为空`);
-  }
-  return value.trim();
-}
-
-function readNullableString(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "string") throw new HttpError(400, "文本字段格式不合法");
-  return value.trim() || null;
-}
-
-function readList(value: FormDataEntryValue | null): string[] {
-  return String(value ?? "")
-    .split(/[,，\r\n]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
 }

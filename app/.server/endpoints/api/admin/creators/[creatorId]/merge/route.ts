@@ -3,6 +3,7 @@ import { mergeCreators } from "@/app/.server/db/catalog-maintenance";
 import { parsePositiveId } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
+import { translate } from "@/lib/i18n/core";
 
 export async function POST(
   runtime: AppRuntime,
@@ -23,6 +24,6 @@ export async function POST(
     await mergeCreators(runtime, auth.user, source, target);
     return json({ ok: true, redirectTo: `/admin/creators/${target}` });
   } catch (error) {
-    return jsonError("人物合并失败", error);
+    return jsonError(translate(runtime.uiLocale, "admin.creators.mergeFailed"), error);
   }
 }

@@ -1,4 +1,5 @@
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { Badge } from "@/app/components/ui/badge";
@@ -28,11 +29,6 @@ const categories = Object.entries(PERMISSION_CATEGORIES).map(
     ...definition,
   }),
 );
-const roleKindLabels = {
-  built_in: "系统角色",
-  bootstrap_admin: "根管理员",
-  custom: "自定义角色",
-};
 
 export function PermissionMatrix({
   permissions,
@@ -41,6 +37,8 @@ export function PermissionMatrix({
   permissions: readonly Permission[];
   roles: RoleSummary[];
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [roles, setRoles] = useState(initialRoles);
   const [savedRoles, setSavedRoles] = useState(initialRoles);
   const [selectedRoleId, setSelectedRoleId] = useState(initialRoles[0]?.id);
@@ -86,19 +84,20 @@ export function PermissionMatrix({
     const category = PERMISSION_CATEGORIES[permission.category];
     return (
       !search ||
-      `${permission.label} ${permission.scope} ${permission.description} ${permission.key} ${category.label} ${PERMISSION_GROUPS[category.group]}`
+      `${t(`permission.${permission.key}`)} ${t(`permission.scope.${permission.key}`)} ${t(`permission.description.${permission.key}`)} ${permission.label} ${permission.scope} ${permission.description} ${permission.key} ${t(`admin.permissions.category.${permission.category}`)} ${t(`admin.permissions.group.${category.group}`)} ${category.label} ${PERMISSION_GROUPS[category.group]}`
         .toLowerCase()
         .includes(search)
     );
   });
-  const visibleGroups = Object.entries(PERMISSION_GROUPS)
-    .map(([key, label]) => ({
+  const visibleGroups = (Object.keys(PERMISSION_GROUPS) as (keyof typeof PERMISSION_GROUPS)[])
+    .map((key) => ({
       key,
-      label,
+      label: t(`admin.permissions.group.${key}`),
       categories: categories
         .filter((category) => category.group === key)
         .map((category) => ({
           ...category,
+          label: t(`admin.permissions.category.${category.key}`),
           permissions: visiblePermissions.filter(
             (permission) => permission.category === category.key,
           ),
@@ -109,7 +108,7 @@ export function PermissionMatrix({
 
   const confirm = useConfirm();
   useNavigationGuard(hasUnsavedChanges, () =>
-    confirm("有未保存的角色或权限修改，确定离开并放弃这些修改吗？"),
+    confirm(t("admin.roles.leave")),
   );
 
   async function request(url: string, init: RequestInit) {
@@ -130,7 +129,7 @@ export function PermissionMatrix({
       if (error instanceof ApiResponseError && error.code === "role_conflict") {
         const currentRole = (error.payload as { currentRole?: RoleSummary }).currentRole;
         if (currentRole) setConflict(currentRole);
-        setError(error.message);
+        setError(error.messageFor(locale));
       }
       throw error;
     }
@@ -157,16 +156,16 @@ export function PermissionMatrix({
         body: JSON.stringify(input),
       });
       const created = payload.role;
-      if (!created) throw new Error("角色已创建，但未收到角色资料。请刷新页面后查看。");
+      if (!created) throw new Error(t("admin.roles.missingCreated"));
       setRoles((current) => [...current, created]);
       setSavedRoles((current) => [...current, created]);
       setSelectedRoleId(created.id);
       setQuery("");
-      toast.success(`已创建“${created.name}”，请选择需要授予的权限。`);
+      toast.success(t("admin.roles.created", { name: created.name }));
       form.reset();
       setNewRoleDirty(false);
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "创建失败，请重试。");
+      toast.error(cause instanceof Error ? cause : t("admin.roles.createFailed"));
     } finally {
       setSaving(null);
     }
@@ -181,15 +180,15 @@ export function PermissionMatrix({
         body: JSON.stringify({ template: "wiki_editor" }),
       });
       const created = payload.role;
-      if (!created) throw new Error("角色已创建，请刷新查看。");
+      if (!created) throw new Error(t("admin.roles.createdRefresh"));
       setRoles((current) => [...current, created]);
       setSavedRoles((current) => [...current, created]);
       setSelectedRoleId(created.id);
       setConflict(null);
       setQuery("");
-      toast.success("已创建维基人角色并保存模板权限，可在用户管理中分配。");
+      toast.success(t("admin.roles.wikiCreated"));
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "创建失败，请重试。");
+      toast.error(cause instanceof Error ? cause : t("admin.roles.createFailed"));
     } finally {
       setSaving(null);
     }
@@ -214,7 +213,7 @@ export function PermissionMatrix({
         body: JSON.stringify({ ...patch, expected: roleEditSnapshot(saved) }),
       });
       const persisted = payload.role;
-      if (!persisted) throw new Error("角色已保存，但未收到保存后的资料。请刷新页面后查看。");
+      if (!persisted) throw new Error(t("admin.roles.missingProfile"));
       setRoles((current) =>
         current.map((item) =>
           item.id === role.id ? { ...persisted, permissionKeys: item.permissionKeys } : item,
@@ -225,11 +224,11 @@ export function PermissionMatrix({
           item.id === role.id ? persisted : item,
         ),
       );
-      toast.success("角色资料已保存。");
+      toast.success(t("admin.roles.profileSaved"));
       setConflict(null);
     } catch (cause) {
       toast.error(
-        cause instanceof Error ? cause.message : "角色资料保存失败，请重试。",
+        cause instanceof Error ? cause : t("admin.roles.profileFailed"),
       );
     } finally {
       setSaving(null);
@@ -249,7 +248,7 @@ export function PermissionMatrix({
         }),
       });
       const persisted = payload.role;
-      if (!persisted) throw new Error("权限已保存，但未收到保存后的资料。请刷新页面后查看。");
+      if (!persisted) throw new Error(t("admin.roles.missingPermissions"));
       setRoles((current) => current.map((item) => item.id === role.id
         ? { ...item, permissionKeys: persisted.permissionKeys, userCount: persisted.userCount } : item));
       setSavedRoles((current) =>
@@ -259,11 +258,11 @@ export function PermissionMatrix({
             : item,
         ),
       );
-      toast.success("该角色的权限已保存。");
+      toast.success(t("admin.roles.permissionsSaved"));
       setConflict(null);
     } catch (cause) {
       toast.error(
-        cause instanceof Error ? cause.message : "权限保存失败，请重试。",
+        cause instanceof Error ? cause : t("admin.roles.permissionsFailed"),
       );
     } finally {
       setSaving(null);
@@ -287,27 +286,27 @@ export function PermissionMatrix({
   return (
     <div className="grid gap-6">
       <div className="flex flex-col items-start gap-4 lg:flex-row">
-        <aside className="admin-panel grid w-full shrink-0 gap-3 lg:sticky lg:top-20 lg:w-60" aria-label="账户角色">
+        <aside className="admin-panel grid w-full shrink-0 gap-3 lg:sticky lg:top-20 lg:w-60" aria-label={t("admin.roles.roles")}>
           <div className="lg:hidden">
             <Label className="grid gap-2">
-              账户角色
+              {t("admin.roles.roles")}
               <SelectField
-                aria-label="选择账户角色"
+                aria-label={t("admin.roles.selectRole")}
                 disabled={saving !== null}
                 value={String(selectedRoleId ?? "")}
                 onValueChange={(value) => selectRole(Number(value))}
                 options={orderedRoles.map((item) => ({
                   value: String(item.id),
-                  label: `${item.name}${item.status === "disabled" ? "（已停用）" : ""}${dirtyRoleIds.includes(item.id) ? " · 未保存" : ""}`,
+                  label: `${item.name}${item.status === "disabled" ? t("admin.users.inactiveRole") : ""}${dirtyRoleIds.includes(item.id) ? t("admin.roles.unsavedSuffix") : ""}`,
                 }))}
               />
             </Label>
           </div>
-          <nav className="hidden gap-3 lg:grid" aria-label="选择账户角色">
+          <nav className="hidden gap-3 lg:grid" aria-label={t("admin.roles.selectRole")}>
             {[false, true].map((custom) => (
               <div className="grid gap-1" key={String(custom)}>
                 <h2 className="px-2 pb-1 text-xs font-semibold text-muted">
-                  {custom ? "自定义角色" : "系统角色"}
+                  {custom ? t("admin.roles.kind.custom") : t("admin.roles.kind.built_in")}
                 </h2>
                 {orderedRoles
                   .filter((item) => (item.kind === "custom") === custom)
@@ -326,20 +325,20 @@ export function PermissionMatrix({
                       <span className="min-w-0 wrap-anywhere">
                         {item.name}
                         <span className="block text-xs font-normal text-muted">
-                          {item.status === "disabled" ? "已停用 · " : ""}
-                          {item.userCount} 位单独授权成员
+                          {item.status === "disabled" ? t("admin.roles.disabledPrefix") : ""}
+                          {t("admin.roles.members", { count: item.userCount })}
                         </span>
                       </span>
                       {dirtyRoleIds.includes(item.id) ? (
                         <span className="shrink-0 text-xs text-primary">
-                          未保存
+                          {t("admin.roles.unsaved")}
                         </span>
                       ) : null}
                     </Button>
                   ))}
                 {custom && !roles.some((item) => item.kind === "custom") ? (
                   <EmptyState
-                    title="暂无自定义角色"
+                    title={t("admin.roles.noCustom")}
                     variant="plain"
                     className="px-2 text-xs"
                   />
@@ -363,38 +362,36 @@ export function PermissionMatrix({
                   {role.name}
                 </h2>
                 <p className="text-xs text-muted">
-                  {roleKindLabels[role.kind]} · {role.userCount} 位单独授权成员 · 已选{" "}
-                  {role.permissionKeys.length} / {permissions.length} 项权限
+                  {t("admin.roles.roleSummary", { kind: t(`admin.roles.kind.${role.kind}`), members: role.userCount, selected: role.permissionKeys.length, total: permissions.length })}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">
-                  {role.status === "disabled" ? "停用" : "启用"}
-                  {role.status !== saved.status ? "（未保存）" : ""}
+                  {role.status === "disabled" ? t("admin.roles.disabled") : t("admin.users.activeBadge")}
+                  {role.status !== saved.status ? t("admin.roles.unsavedStatus") : ""}
                 </Badge>
-                {!editable ? <Badge variant="outline">系统功能固定</Badge> : null}
-                {role.applicationEnabled ? <Badge variant="outline">开放申请</Badge> : null}
-                {role.availableToAll ? <Badge variant="outline">全员开放</Badge> : null}
+                {!editable ? <Badge variant="outline">{t("admin.roles.fixed")}</Badge> : null}
+                {role.applicationEnabled ? <Badge variant="outline">{t("admin.roles.applications")}</Badge> : null}
+                {role.availableToAll ? <Badge variant="outline">{t("admin.roles.global")}</Badge> : null}
               </div>
             </div>
             {error ? <Notice>{error}</Notice> : null}
             {conflict?.id === role.id ? (
               <div className="border-y border-border py-3 text-sm">
                 <p>
-                  服务器上的最新配置：{conflict.name} ·{" "}
-                  {conflict.permissionKeys.length} 项权限。当前草稿仍保留。
+                  {t("admin.roles.conflict", { name: conflict.name, count: conflict.permissionKeys.length })}
                 </p>
-                <p className="mt-2 whitespace-pre-wrap">{conflict.description || "暂无说明"}</p>
-                <p>开放申请：{conflict.applicationEnabled ? "是" : "否"}；全员开放：{conflict.availableToAll ? "是" : "否"}。</p>
+                <p className="mt-2 whitespace-pre-wrap">{conflict.description || t("admin.roles.noDescription")}</p>
+                <p>{t("admin.roles.conflictFlags", { applications: t(conflict.applicationEnabled ? "admin.archiveDetail.yes" : "admin.archiveDetail.no"), global: t(conflict.availableToAll ? "admin.archiveDetail.yes" : "admin.archiveDetail.no") })}</p>
                 <details className="my-2">
-                  <summary className="cursor-pointer">查看最新权限</summary>
+                  <summary className="cursor-pointer">{t("admin.roles.viewLatest")}</summary>
                   <ul className="mt-2 grid gap-1">
                     {permissions
                       .filter((permission) =>
                         conflict.permissionKeys.includes(permission.key),
                       )
                       .map((permission) => (
-                        <li key={permission.key}>{permission.label}</li>
+                        <li key={permission.key}>{t(`permission.${permission.key}`)}</li>
                       ))}
                   </ul>
                 </details>
@@ -412,26 +409,26 @@ export function PermissionMatrix({
                     );
                     setConflict(null);
                     setError(null);
-                    toast.info("已载入最新配置，可以重新编辑。");
+                    toast.info(t("admin.roles.latestLoaded"));
                   }}
                   size="sm"
                   type="button"
                   variant="outline"
                 >
-                  放弃本角色草稿并载入最新配置
+                  {t("admin.roles.discardLoad")}
                 </Button>
               </div>
             ) : null}
 
             <section className="border-b border-border pb-5" aria-labelledby="role-profile-heading" key={role.id}>
-              <h3 id="role-profile-heading" className="text-base font-semibold">角色资料与开放设置</h3>
+              <h3 id="role-profile-heading" className="text-base font-semibold">{t("admin.roles.profile")}</h3>
                 <form onSubmit={saveProfile} className="mt-4">
                   <fieldset
                     className="grid gap-4 sm:grid-cols-2"
                     disabled={saving !== null}
                   >
                     <Label className="grid gap-2">
-                      中文名称
+                      {t("admin.roles.chineseName")}
                       <Input
                         maxLength={80}
                         name="name"
@@ -444,11 +441,11 @@ export function PermissionMatrix({
                       />
                     </Label>
                     <div className="grid content-start gap-2 text-sm">
-                      <span className="font-semibold">角色标识</span>
+                      <span className="font-semibold">{t("admin.roles.key")}</span>
                       <code className="break-all text-muted">{role.key}</code>
                     </div>
                     <Label className="grid gap-2">
-                      管理优先级
+                      {t("admin.roles.priority")}
                       <Input
                         max={editable ? 699 : undefined}
                         min={editable ? 101 : undefined}
@@ -462,29 +459,29 @@ export function PermissionMatrix({
                         }
                       />
                       <span className="text-xs font-normal text-muted">
-                        有角色分配权限时，只能管理优先级低于自己的用户和角色。
+                        {t("admin.roles.priorityHelp")}
                       </span>
                     </Label>
                     <Label className="grid gap-2">
-                      角色状态
+                      {t("admin.roles.status")}
                       <SelectField
-                        aria-label="角色状态"
+                        aria-label={t("admin.roles.status")}
                         disabled={!editable || saving !== null}
                         value={role.status}
                         onValueChange={(value) =>
                           updateRole({ status: value as RoleSummary["status"] })
                         }
                         options={[
-                          { value: "active", label: "启用" },
-                          { value: "disabled", label: "停用" },
+                          { value: "active", label: t("admin.users.activeBadge") },
+                          { value: "disabled", label: t("admin.roles.disabled") },
                         ]}
                       />
                       <span className="text-xs font-normal text-muted">
-                        停用后不再授予权限；重新启用会恢复原成员的授权。
+                        {t("admin.roles.disableHelp")}
                       </span>
                     </Label>
                     <Label className="grid gap-2 sm:col-span-2">
-                      权限说明
+                      {t("admin.roles.description")}
                       <Textarea
                         name="description"
                         value={role.description}
@@ -492,7 +489,7 @@ export function PermissionMatrix({
                           updateRole({ description: event.target.value })
                         }
                       />
-                      <span className="text-xs font-normal text-muted">在个人中心展示的角色总说明；功能明细由下方权限配置生成。</span>
+                      <span className="text-xs font-normal text-muted">{t("admin.roles.descriptionHelp")}</span>
                     </Label>
                     {roleSupportsApplications(role) ? (
                       <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
@@ -500,23 +497,23 @@ export function PermissionMatrix({
                         <Label className="flex items-center gap-2" htmlFor="role-application-enabled">
                           <Checkbox id="role-application-enabled" checked={role.applicationEnabled} disabled={saving !== null}
                             onCheckedChange={(checked) => updateRole({ applicationEnabled: checked === true })} />
-                          开放申请
+                          {t("admin.roles.applications")}
                         </Label>
-                        <p className="text-xs text-muted">{role.key === "admin" ? "申请仅超级管理员可见和处理。关闭后会结束尚未处理的申请，并通知申请人。" : "关闭后会结束尚未处理的申请，并通知申请人。"}</p>
+                        <p className="text-xs text-muted">{role.key === "admin" ? t("admin.roles.adminApplyHelp") : t("admin.roles.applyHelp")}</p>
                         </div>
                         {roleSupportsGlobalAccess(role) ? <div className="grid content-start gap-2 rounded-md border border-border p-3">
                         <Label className="flex items-center gap-2" htmlFor="role-available-to-all">
                           <Checkbox id="role-available-to-all" checked={role.availableToAll} disabled={saving !== null}
                             onCheckedChange={(checked) => updateRole({ availableToAll: checked === true })} />
-                          向所有用户开放
+                          {t("admin.roles.openToAll")}
                         </Label>
-                        <p className="text-xs text-muted">所有正常登录用户均可使用，包括以后注册的用户。开启时结束待审申请；收回时保留单独授权。</p>
-                        </div> : <p className="text-sm text-muted">管理员不能向所有用户开放。</p>}
+                        <p className="text-xs text-muted">{t("admin.roles.openHelp")}</p>
+                        </div> : <p className="text-sm text-muted">{t("admin.roles.adminNotGlobal")}</p>}
                       </div>
-                    ) : <p className="text-sm text-muted sm:col-span-2">此角色不开放申请，也不能向所有用户开放。</p>}
+                    ) : <p className="text-sm text-muted sm:col-span-2">{t("admin.roles.restricted")}</p>}
                     <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
                       <Button disabled={saving !== null || !profileDirty} type="submit">
-                        {saving === "profile" ? "保存中…" : "保存角色资料"}
+                        {saving === "profile" ? t("admin.characterIndex.saving") : t("admin.roles.saveProfile")}
                       </Button>
                       <Button
                         disabled={!profileDirty}
@@ -533,41 +530,49 @@ export function PermissionMatrix({
                         type="button"
                         variant="ghost"
                       >
-                        撤销资料修改
+                        {t("admin.roles.revertProfile")}
                       </Button>
-                      <span className="text-sm text-muted" role="status">{profileDirty ? "角色资料有未保存修改" : "角色资料已保存"}</span>
+                      <span className="text-sm text-muted" role="status">{profileDirty ? t("admin.roles.profileDirty") : t("admin.roles.profileClean")}</span>
                     </div>
                   </fieldset>
                 </form>
             </section>
 
             <div className="pt-2">
-              <h3 className="text-base font-semibold">功能权限</h3>
-              <p className="mt-1 text-sm text-muted">{editable ? "功能权限单独保存；用户的单独禁用优先于角色授权。" : "系统角色的功能固定，仅供查看。"}</p>
+              <h3 className="text-base font-semibold">{t("admin.permissions.functional")}</h3>
+              <p className="mt-1 text-sm text-muted">{editable ? t("admin.permissions.editableDescription") : t("admin.permissions.fixedDescription")}</p>
             </div>
 
             {editable && warnings.length > 0 ? (
               <details className="border-b border-border pb-3" open>
                 <summary className="cursor-pointer text-sm font-semibold">
-                  配置提示（{warnings.length}）
+                  {t("admin.roles.warningCount", { count: warnings.length })}
                 </summary>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
-                  {warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
+                  {warnings.map((warning) => {
+                    if (warning.kind === "dependency") {
+                      return <li key={warning.permission}>{t("admin.permissionWarnings.dependency", {
+                        permission: t(`permission.${warning.permission}`),
+                        required: t(`permission.${warning.required}`),
+                      })}</li>;
+                    }
+                    const names = warning.missing.map((key) => t(`permission.${key}`));
+                    const permissions = locale === "zh-Hans" ? names.join("、") : new Intl.ListFormat(locale).format(names);
+                    return <li key={warning.kind}>{t(`admin.permissionWarnings.${warning.kind}`, { permissions })}</li>;
+                  })}
                 </ul>
                 <p className="mt-2 text-xs text-muted">
-                  不自动授予权限；若由其他角色提供配套能力，可保留当前配置。
+                  {t("admin.roles.warningHelp")}
                 </p>
               </details>
             ) : null}
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <Input
-                aria-label="查找权限"
+                aria-label={t("admin.permissions.search")}
                 className="h-9 flex-1 basis-64"
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索业务、权限、范围或备注"
+                placeholder={t("admin.permissions.searchHint")}
                 type="search"
                 value={query}
               />
@@ -577,16 +582,16 @@ export function PermissionMatrix({
                 type="button"
                 variant="ghost"
               >
-                展开全部分组
+                {t("admin.permissions.expandGroups")}
               </Button>
               <span className="text-xs text-muted" role="status">
                 {search
-                  ? `找到 ${visiblePermissions.length} 项`
-                  : `共 ${permissions.length} 项权限`}
+                  ? t("admin.permissions.matches", { count: visiblePermissions.length })
+                  : t("admin.permissions.total", { count: permissions.length })}
               </span>
             </div>
             <nav
-              aria-label="跳转到权限业务分组"
+              aria-label={t("admin.permissions.jump")}
               className="flex flex-wrap gap-x-4 gap-y-1 border-b border-border pb-2 text-sm"
             >
               {visibleGroups.map((group) => (
@@ -605,11 +610,11 @@ export function PermissionMatrix({
               ))}
             </nav>
             <p className="text-xs text-muted">
-              {editable ? "勾选需要授予的功能，保存后生效。" : "下方勾选状态为系统预设。"}
+              {editable ? t("admin.permissions.editableHint") : t("admin.permissions.fixedHint")}
             </p>
 
               <TableWrap compact minWidth={760}
-                label={`${role.name}的业务权限`}
+                label={t("admin.permissions.roleTable", { name: role.name })}
                 className="table-fixed [&_td]:px-3 [&_td]:py-2"
               >
                 <colgroup>
@@ -621,12 +626,12 @@ export function PermissionMatrix({
                 </colgroup>
                 <thead className="border-b border-border bg-card text-left text-sm">
                   <tr className="[&_th]:px-3 [&_th]:py-3 [&_th]:font-semibold">
-                    <th scope="col">业务对象</th>
-                    <th scope="col">权限操作</th>
-                    <th scope="col">适用范围</th>
-                    <th scope="col">角色授权</th>
+                    <th scope="col">{t("admin.permissions.object")}</th>
+                    <th scope="col">{t("admin.permissions.operation")}</th>
+                    <th scope="col">{t("admin.permissions.scope")}</th>
+                    <th scope="col">{t("admin.permissions.grant")}</th>
                     <th scope="col">
-                      <span className="sr-only">备注</span>
+                      <span className="sr-only">{t("admin.permissions.notes")}</span>
                     </th>
                   </tr>
                 </thead>
@@ -678,13 +683,13 @@ export function PermissionMatrix({
                                 {group.label}
                               </Button>
                               <span className="text-xs font-normal tabular-nums text-muted">
-                                {granted} / {entries.length} 已选
-                                {search ? "（匹配项）" : ""}
+                                {t("admin.permissions.selected", { selected: granted, total: entries.length })}
+                                {search ? t("admin.permissions.filtered") : ""}
                               </span>
                             </div>
                             <Button
                               aria-expanded={allNotesExpanded}
-                              aria-label={`${allNotesExpanded ? "收起" : "展开"}${group.label}的所有备注`}
+                              aria-label={t(allNotesExpanded ? "character.collapseGroup" : "character.expandGroup", { label: t("admin.permissions.groupNotes", { name: group.label }) })}
                               onClick={() => {
                                 const keys = entries.map(
                                   (permission) => permission.key,
@@ -706,8 +711,8 @@ export function PermissionMatrix({
                               variant="ghost"
                             >
                               {allNotesExpanded
-                                ? "收起所有备注"
-                                : "展开所有备注"}
+                                ? t("admin.permissions.collapseNotes")
+                                : t("admin.permissions.expandNotes")}
                             </Button>
                           </div>
                         </th>
@@ -746,14 +751,14 @@ export function PermissionMatrix({
                                         className="cursor-pointer text-sm leading-5"
                                         htmlFor={`permission-${permission.key}`}
                                       >
-                                        {permission.label}
+                                        {t(`permission.${permission.key}`)}
                                       </Label>
                                     </th>
                                     <td
                                       id={`scope-${permission.key}`}
                                       className="text-sm text-muted"
                                     >
-                                      {permission.scope}
+                                      {t(`permission.scope.${permission.key}`)}
                                     </td>
                                     <td>
                                       <div className="flex items-center gap-2">
@@ -781,11 +786,11 @@ export function PermissionMatrix({
                                         >
                                           {changed
                                             ? checked
-                                              ? "待授予"
-                                              : "待撤销"
+                                              ? t("admin.permissions.grantPending")
+                                              : t("admin.permissions.revokePending")
                                             : checked
-                                              ? "已授予"
-                                              : "未授予"}
+                                              ? t("admin.permissions.granted")
+                                              : t("admin.permissions.notGranted")}
                                         </span>
                                       </div>
                                     </td>
@@ -793,7 +798,9 @@ export function PermissionMatrix({
                                       <Button
                                         aria-controls={`note-${permission.key}`}
                                         aria-expanded={noteExpanded}
-                                        aria-label={`${noteExpanded ? "收起" : "查看"}${permission.label}的备注`}
+                                        aria-label={t(noteExpanded ? "character.collapseGroup" : "character.expandGroup", {
+                                          label: t("admin.permissions.permissionNotes", { name: t(`permission.${permission.key}`) }),
+                                        })}
                                         className="min-h-7 px-1 text-xs"
                                         onClick={() =>
                                           setExpandedNotes((current) =>
@@ -809,7 +816,7 @@ export function PermissionMatrix({
                                         type="button"
                                         variant="ghost"
                                       >
-                                        {noteExpanded ? "收起" : "备注"}
+                                        {noteExpanded ? t("admin.users.collapse") : t("admin.permissions.notes")}
                                       </Button>
                                     </td>
                                   </tr>
@@ -820,10 +827,10 @@ export function PermissionMatrix({
                                   >
                                     <td colSpan={5}>
                                       <p className="text-sm leading-6">
-                                        {permission.description}
+                                        {t(`permission.description.${permission.key}`)}
                                       </p>
                                       <p className="mt-1 text-xs text-muted">
-                                        权限标识：<code>{permission.key}</code>
+                                        {t("admin.permissions.key")}: <code>{permission.key}</code>
                                       </p>
                                     </td>
                                   </tr>
@@ -838,7 +845,7 @@ export function PermissionMatrix({
               </TableWrap>
             {visiblePermissions.length === 0 ? (
               <EmptyState
-                title="没有匹配的权限，请尝试其他关键词。"
+                title={t("admin.permissions.empty")}
                 variant="plain"
                 className="py-4"
               />
@@ -848,9 +855,9 @@ export function PermissionMatrix({
               <div className="admin-save-bar justify-between">
                 <span className="text-sm text-muted" role="status">
                   {changedPermissions.length
-                    ? `${changedPermissions.length} 项权限修改未保存（含其他分类）`
-                    : "权限无未保存修改"}
-                  {profileDirty ? " · 角色资料另有未保存修改" : ""}
+                    ? t("admin.permissions.unsaved", { count: changedPermissions.length })
+                    : t("admin.permissions.saved")}
+                  {profileDirty ? t("admin.permissions.profileUnsaved") : ""}
                 </span>
                 <div className="flex gap-2">
                   <Button
@@ -863,7 +870,7 @@ export function PermissionMatrix({
                     type="button"
                     variant="ghost"
                   >
-                    撤销权限修改
+                    {t("admin.permissions.revert")}
                   </Button>
                   <Button
                     disabled={
@@ -873,21 +880,21 @@ export function PermissionMatrix({
                     type="button"
                   >
                     {saving === "permissions"
-                      ? "保存中…"
-                      : "保存该角色全部权限"}
+                      ? t("admin.characterIndex.saving")
+                      : t("admin.permissions.saveAll")}
                   </Button>
                 </div>
               </div>
             ) : null}
           </section>
         ) : (
-          <EmptyState title="暂无角色，请先创建角色。" />
+          <EmptyState title={t("admin.roles.empty")} />
         )}
       </div>
 
       <details className="admin-panel admin-details">
         <summary className="w-fit cursor-pointer text-sm font-semibold">
-          新建自定义角色
+          {t("admin.roles.new")}
         </summary>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Button
@@ -899,10 +906,10 @@ export function PermissionMatrix({
             type="button"
             variant="outline"
           >
-            按模板创建维基人
+            {t("admin.roles.wikiTemplate")}
           </Button>
           <span className="text-xs text-muted">
-            {ROLE_TEMPLATES.wiki_editor.description}
+            {t("admin.permissionWarnings.wiki")}
           </span>
         </div>
         <form
@@ -915,24 +922,24 @@ export function PermissionMatrix({
             disabled={saving !== null}
           >
             <Label className="grid gap-2">
-              中文名称
+              {t("admin.roles.chineseName")}
               <Input maxLength={80} name="name" required />
             </Label>
             <Label className="grid gap-2">
-              角色标识
+              {t("admin.roles.key")}
               <Input
                 maxLength={64}
                 name="key"
                 pattern="[a-z0-9]+(_[a-z0-9]+)*"
                 required
-                placeholder="例如：content_editor"
+                placeholder={t("admin.roles.keyExample")}
               />
               <span className="text-xs font-normal text-muted">
-                小写字母、数字和下划线，创建后不可修改。
+                {t("admin.roles.keyHelp")}
               </span>
             </Label>
             <Label className="grid gap-2">
-              管理优先级
+              {t("admin.roles.priority")}
               <Input
                 defaultValue="200"
                 max={699}
@@ -942,19 +949,19 @@ export function PermissionMatrix({
                 type="number"
               />
               <span className="text-xs font-normal text-muted">
-                101–699；普通用户为 100，上传者为 400，管理员为 700。
+                {t("admin.roles.priorityRange")}
               </span>
             </Label>
             <Label className="grid gap-2">
-              角色备注
+              {t("admin.roles.notes")}
               <Textarea
                 name="description"
-                placeholder="记录角色用途或分配对象"
+                placeholder={t("admin.roles.notesHint")}
               />
             </Label>
             <div className="md:col-span-2">
               <Button type="submit">
-                {saving === "new" ? "创建中…" : "创建角色"}
+                {saving === "new" ? t("admin.roles.creating") : t("admin.roles.create")}
               </Button>
             </div>
           </fieldset>

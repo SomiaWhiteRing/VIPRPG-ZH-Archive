@@ -1,5 +1,6 @@
 import { Button } from "@/app/components/ui/button";
-import { ENGINE_OPTIONS } from "@/lib/labels";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { ENGINE_OPTIONS, engineLabel, engineShortLabel } from "@/lib/labels";
 import { cn } from "@/lib/ui/cn";
 
 type EngineOption = (typeof ENGINE_OPTIONS)[number];
@@ -15,13 +16,16 @@ export function EnginePicker({
   onValueChange: (value: EngineOption["value"]) => void;
   value: string;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   return (
     <div
-      aria-label="选择游戏引擎"
+      aria-label={t("upload.engine")}
       className="flex min-w-0 flex-wrap items-stretch gap-1.5"
       role="radiogroup"
     >
       {ENGINE_OPTIONS.map((option, index) => {
+        const label = engineLabel(option.value, locale);
         const reason = disabledReason?.(option) ?? null;
         const optionDisabled = disabled || Boolean(reason);
         const selected = option.value === value;
@@ -36,7 +40,7 @@ export function EnginePicker({
             <Button
               aria-checked={selected}
               aria-label={
-                reason ? `${option.label}（${reason}）` : option.label
+                reason ? t("upload.metadata.engineUnavailable", { label, reason }) : label
               }
               className={cn(
                 "min-h-8 rounded-full px-3 font-mono text-xs shadow-none",
@@ -51,7 +55,7 @@ export function EnginePicker({
               type="button"
               variant="outline"
             >
-              {option.shortLabel}
+              {engineShortLabel(option.value, locale)}
             </Button>
           </span>
         );

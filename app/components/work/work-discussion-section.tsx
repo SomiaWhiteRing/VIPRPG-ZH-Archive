@@ -1,22 +1,26 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { useState } from "react";
-import { Link, useNavigate, useRevalidator, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useRevalidator } from "react-router";
 import { CommentPanel } from "@/app/components/comments/comment-panel";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type { RootCommentPage, WorkCollection } from "@/lib/dto/db/work-community";
-import { formatDate, formatExactTimestamp, formatNumber, parseTimestamp } from "@/lib/format";
+import { formatDate, formatExactTimestamp, parseTimestamp } from "@/lib/format";
 import { requestJson } from "@/lib/ui/api-response";
 
 type WorkCollections = { items: WorkCollection[]; total: number; page: number; pageSize: number };
 
 export function useWorkCollections(workId: number, initialCollections: WorkCollections) {
+  const t = useMessages();
   const [snapshot, setSnapshot] = useState({ source: initialCollections, collections: initialCollections });
   const collections = snapshot.source === initialCollections ? snapshot.collections : initialCollections;
   async function refreshCollections() {
     const result = await requestJson<{ ok: true; collections: WorkCollections }>(
-      `/api/works/${workId}/collections?notes=1&page=${collections.page}`, {}, "吐槽列表加载失败",
+      `/api/works/${workId}/collections?notes=1&page=${collections.page}`, {}, t("discussion.loadNotes"),
     );
     setSnapshot({ source: initialCollections, collections: result.collections });
   }
@@ -31,25 +35,31 @@ export function WorkDiscussionSection({ workId, currentUserId, canPin, commentCo
   comments: RootCommentPage;
   collections: WorkCollections;
 }) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const t = useMessages();
+  const { search, hash } = useLocation();
+  const searchParams = new URLSearchParams(search);
+  const locale = useUiLocale();
+  const navigationLocale = useNavigationLocale();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
   const activeTab = searchParams.get("tab") === "collections" ? "collections" : "comments";
+  function navigateTab(tab: string, page?: number) {
+    const params = new URLSearchParams(search);
+    params.set("tab", tab);
+    if (navigationLocale) params.set(UI_LOCALE_PARAM, navigationLocale);
+    if (page !== undefined) params.set("page", String(page));
+    void navigate({ search: params.toString(), hash: page === undefined ? hash : "#sec-comments" }, { preventScrollReset: true });
+  }
   return (
     <section
       aria-labelledby="comments-title"
       className="scroll-mt-28 border-t border-border py-4.5"
       id="sec-comments"
     >
-      <Tabs value={activeTab} onValueChange={(value) => {
-        setSearchParams((params) => {
-          params.set("tab", value);
-          return params;
-        }, { preventScrollReset: true });
-      }}>
-        <TabsList aria-label="作品评论与吐槽" id="comments-title">
-          <TabsTrigger value="comments">评论（{formatNumber(commentCount)}）</TabsTrigger>
-          <TabsTrigger value="collections">吐槽（{formatNumber(collections.total)}）</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={navigateTab}>
+        <TabsList aria-label={t("work.comments")} id="comments-title">
+          <TabsTrigger value="comments">{t("discussion.tabComments", { count: commentCount })}</TabsTrigger>
+          <TabsTrigger value="collections">{t("discussion.tabNotes", { count: collections.total })}</TabsTrigger>
         </TabsList>
         <TabsContent value="comments" forceMount className="data-[state=inactive]:hidden">
           <CommentPanel
@@ -76,21 +86,16 @@ export function WorkDiscussionSection({ workId, currentUserId, canPin, commentCo
                       </Link>
                     </div>
                     <time className="mt-1 block text-xs text-muted" dateTime={parseTimestamp(entry.favoritedAt).toISOString()} title={formatExactTimestamp(entry.favoritedAt)}>
-                      {formatDate(entry.favoritedAt)}
+                      {formatDate(entry.favoritedAt, { locale })}
                     </time>
                     {entry.note ? <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-black dark:text-foreground">{entry.note}</p> : null}
                   </div>
                 </li>
               ))}
             </ul>
-          ) : <EmptyState title="暂无吐槽。" />}
+          ) : <EmptyState title={t("discussion.noNotes")} />}
           <PaginationLinks page={collections.page} pageSize={collections.pageSize} total={collections.total}
-            onPageChange={(page) => {
-              const params = new URLSearchParams(searchParams);
-              params.set("tab", "collections");
-              params.set("page", String(page));
-              void navigate(`?${params}#sec-comments`, { preventScrollReset: true });
-            }} />
+            onPageChange={(page) => navigateTab("collections", page)} />
         </TabsContent>
       </Tabs>
     </section>

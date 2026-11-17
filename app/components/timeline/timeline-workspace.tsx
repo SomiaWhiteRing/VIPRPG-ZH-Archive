@@ -1,7 +1,12 @@
-import { requestJson } from "@/lib/ui/api-response";
+import { RichMessage } from "@/app/components/ui/rich-message";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { preserveUiLocale, UI_LOCALE_PARAM, withoutUiLocale, type UiLocale } from "@/lib/i18n/locale";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Link, useLocation, useNavigate, useNavigation, useRevalidator, useRouteLoaderData } from "react-router";
+import { useLocation, useNavigate, useNavigation, useRevalidator, useRouteLoaderData } from "react-router";
 import { ChevronDown, Globe, RefreshCw, Settings, Trash2, Users } from "lucide-react";
 import type { loader as rootLoader } from "@/app/root";
 import { Button } from "@/app/components/ui/button";
@@ -21,7 +26,7 @@ import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
 import { useToast } from "@/app/components/ui/toast";
-import { TIMELINE_FILTER_KINDS, TIMELINE_KIND_LABELS, type TimelineItem, type TimelineKind, type TimelinePage, type TimelineReplyPage, type TimelineSettings, type TimelineView } from "@/lib/dto/db/timeline";
+import { TIMELINE_FILTER_KINDS, type TimelineItem, type TimelineKind, type TimelinePage, type TimelineReplyPage, type TimelineSettings, type TimelineView } from "@/lib/dto/db/timeline";
 import { cn } from "@/lib/ui/cn";
 
 type Props = {
@@ -52,7 +57,7 @@ function timelineHref(basePath: string, view: TimelineView, kind?: TimelineKind,
   return basePath + (query.size ? `?${query}` : "");
 }
 
-function groupTimelineDays(items: TimelineItem[], serverTime: number | undefined) {
+function groupTimelineDays(items: TimelineItem[], serverTime: number | undefined, locale: UiLocale) {
   const today = serverTime === undefined ? null : formatDateKey(new Date(serverTime));
   const yesterday = serverTime === undefined ? null : formatDateKey(new Date(serverTime - 86400000));
   const groups: { date: string; label: string; entries: { item: TimelineItem; olderRenames?: TimelineItem[] }[] }[] = [];
@@ -60,7 +65,7 @@ function groupTimelineDays(items: TimelineItem[], serverTime: number | undefined
     const date = formatDateKey(parseTimestamp(item.createdAt));
     const group = groups.at(-1);
     if (group?.date !== date) {
-      groups.push({ date, label: date === today ? "今天" : date === yesterday ? "昨天" : formatDate(item.createdAt, { time: false }), entries: [{ item }] });
+      groups.push({ date, label: date === today ? translate(locale, "timeline.feed.today") : date === yesterday ? translate(locale, "timeline.feed.yesterday") : formatDate(item.createdAt, { time: false, locale }), entries: [{ item }] });
       continue;
     }
     const previous = group.entries.at(-1);
@@ -71,11 +76,12 @@ function groupTimelineDays(items: TimelineItem[], serverTime: number | undefined
 }
 
 function AccountHistoryEntry({ item, showAuthor, timeAction }: { item: TimelineItem; showAuthor: boolean; timeAction?: ReactNode }) {
+  const t = useMessages();
   return <article className="flex min-w-0 gap-2.5 sm:gap-3">
-    {showAuthor && item.kind === "rename" && <Link className="shrink-0 self-start" to={`/users/${item.actor.id}`} aria-label={`${item.actor.displayName}的个人主页`}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>}
+    {showAuthor && item.kind === "rename" && <Link className="shrink-0 self-start" to={`/users/${item.actor.id}`} aria-label={t("timeline.feed.profile", { name: item.actor.displayName })}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>}
     <div className="grid min-w-0 flex-1 gap-2">
       <p className="m-0 text-sm leading-relaxed wrap-anywhere">
-        {item.kind === "join" ? <>{showAuthor && <><strong>{item.actor.displayName}</strong> </>}加入了VIPRPG.org</> : <>由 <strong>{item.nameChange!.previousName}</strong> 改名为 <strong>{item.nameChange!.newName}</strong></>}
+        {item.kind === "join" ? <>{showAuthor ? <><strong>{item.actor.displayName}</strong>{" "}{t("timeline.feed.joined")}</> : t("timeline.feed.joinedSelf")}</> : <RichMessage id="timeline.feed.rename" values={{ before: item.nameChange!.previousName, after: item.nameChange!.newName }} components={{ oldName: children => <strong key="before">{children}</strong>, newName: children => <strong key="after">{children}</strong> }} />}
       </p>
       <div className="flex flex-wrap items-center gap-x-2">
         <Timestamp value={item.createdAt} format="duration" className="text-xs text-muted" />
@@ -86,13 +92,14 @@ function AccountHistoryEntry({ item, showAuthor, timeAction }: { item: TimelineI
 }
 
 function AccountHistoryGroup({ item, olderRenames, showAuthor }: { item: TimelineItem; olderRenames: TimelineItem[]; showAuthor: boolean }) {
+  const t = useMessages();
   const [expanded, setExpanded] = useState(false);
   const historyId = useId();
   return <>
     <AccountHistoryEntry item={item} showAuthor={showAuthor} timeAction={
       <Button type="button" variant="ghost" size="sm" className="min-h-8 gap-1 px-1 text-xs font-normal text-secondary"
         aria-expanded={expanded} aria-controls={historyId} onClick={() => setExpanded(!expanded)}>
-        另 {olderRenames.length} 条改名<ChevronDown aria-hidden className={expanded ? "rotate-180" : undefined} />
+        {t("timeline.feed.moreRenames", { count: olderRenames.length })}<ChevronDown aria-hidden className={expanded ? "rotate-180" : undefined} />
       </Button>
     } />
     <ol id={historyId} hidden={!expanded} className="m-0 mt-2 list-none space-y-3 p-0">
@@ -101,22 +108,25 @@ function AccountHistoryGroup({ item, olderRenames, showAuthor }: { item: Timelin
   </>;
 }
 
-async function mutateTimeline(path: string, method: string, body?: unknown) {
+async function mutateTimeline(path: string, locale: UiLocale, method: string, body?: unknown) {
 
-  await requestJson(path, {
+  const url = new URL(path, window.location.origin);
+  url.searchParams.set(UI_LOCALE_PARAM, locale);
+  await requestJson(url.href, {
     method,
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
-  });
-
+  }, translate(locale, "timeline.action.failed"));
 }
 
 export function TimelineWorkspace(props: Props) {
   const location = useLocation();
-  return <TimelineWorkspaceContent key={`${props.viewerId}:${location.pathname}${location.search}`} {...props} />;
+  return <TimelineWorkspaceContent key={`${props.viewerId}:${location.pathname}?${withoutUiLocale(location.search)}`} {...props} />;
 }
 
 function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, view = "all", profile = false, showAuthor = true, readOnlyInteractions = false, expandReplies = true, canCompose = false, canPublish = false, hasCursor = false, focused = false, initialReplies, targetReplyId = null, inboxItemId }: Props) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const root = useRouteLoaderData<typeof rootLoader>("root");
   const isPostAuthorHidden = useIsPostAuthorHidden();
   const visibleItems = page.items.filter(item => {
@@ -140,8 +150,8 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
   const reportCacheError = useCallback(() => {
     if (cacheErrorShown.current) return;
     cacheErrorShown.current = true;
-    toast.error("无法读写本地草稿，请检查浏览器存储空间或权限。");
-  }, [toast]);
+    toast.error(t("timeline.action.draftError"));
+  }, [t, toast]);
   const draft = useTimelineDraft({ userId: canCompose && !profile ? viewerId : null, kind: "status", onError: reportCacheError });
   const mounted = useRef(true);
   useEffect(() => {
@@ -152,6 +162,11 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
   const navigationState = useRef(navigation.state);
   navigationState.current = navigation.state;
   const navigate = useNavigate();
+  function navigateFeed(path: string) {
+    const source = new URL(window.location.href);
+    const target = preserveUiLocale(new URL(path, source), source);
+    return navigate(target.pathname + target.search);
+  }
   const revalidator = useRevalidator();
   const anyReplyBusy = Object.values(replyBusy).some(Boolean);
   const allowCreate = !profile && canCompose && canPublish && settings?.enabled;
@@ -161,7 +176,7 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
     if (submitting.current || composing.current || imageBusy || !draft.ready) return;
     const body = draft.body.trim();
     if (!body || bodyLength(body) > 500) {
-      setValidation("请填写 1–500 个字符的吐槽。");
+      setValidation(t("timeline.action.postLength"));
       return;
     }
     submitting.current = true;
@@ -170,16 +185,16 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
     setRecovery(false);
     try {
       const imageIds = await statusEditor.current!.uploadImages();
-      await mutateTimeline("/api/timeline", "POST", { body, imageIds, requestKey: draft.requestKey });
+      await mutateTimeline("/api/timeline", locale, "POST", { body, imageIds, requestKey: draft.requestKey });
       await draft.clear();
-      toast.success("吐槽已发布。");
+      toast.success(t("timeline.action.posted"));
       // Leaving is unrestricted; a finished request must not return to an old feed.
       if (!mounted.current || navigationState.current !== "idle") return;
-      if (kind || hasCursor) await navigate(timelineHref(basePath, view));
+      if (kind || hasCursor) await navigateFeed(timelineHref(basePath, view));
       else await revalidator.revalidate();
     } catch (error) {
       setRecovery(true);
-      toast.error(error instanceof Error ? error.message : "发布失败，请重试。");
+      toast.error(error instanceof ApiResponseError ? error.messageFor(locale) : error instanceof Error ? error.message : t("timeline.action.postFailed"));
     } finally {
       submitting.current = false;
       setBusy(false);
@@ -188,13 +203,13 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
 
   async function remove(item: TimelineItem) {
     if (busy) return;
-    await confirm("确认删除这条时间线？", {
-      title: "删除时间线",
-      confirmLabel: "删除",
+    await confirm(t("timeline.action.removeConfirm"), {
+      title: t("timeline.action.removeTitle"),
+      confirmLabel: t("timeline.action.delete"),
       destructive: true,
       action: async () => {
-        await mutateTimeline(`/api/timeline/${item.id}`, "DELETE");
-        toast.success(item.kind === "status" ? "吐槽已删除。" : "动态已移除。");
+        await mutateTimeline(`/api/timeline/${item.id}`, locale, "DELETE");
+        toast.success(item.kind === "status" ? t("timeline.action.postDeleted") : t("timeline.action.eventRemoved"));
         await revalidator.revalidate();
       },
     });
@@ -202,9 +217,9 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
 
   function rangeToggle(icon: boolean) {
     const following = view === "following";
-    const label = following ? "当前为好友时间线，点击切换到全站时间线" : "当前为全站时间线，点击切换到好友时间线";
-    return <Button variant={following ? "default" : "outline"} size={icon ? "icon" : "sm"} className={cn("h-8 min-h-8 shrink-0 rounded-full", icon ? "size-8" : "px-2 text-xs font-medium")} type="button" aria-label={label} title={label} aria-pressed={following} disabled={busy || anyReplyBusy} onClick={() => void navigate(timelineHref(basePath, following ? "all" : "following", kind))}>
-      {icon ? following ? <Users aria-hidden /> : <Globe aria-hidden /> : following ? "好友时间线" : "全站时间线"}
+    const label = following ? t("timeline.feed.followingHint") : t("timeline.feed.allHint");
+    return <Button variant={following ? "default" : "outline"} size={icon ? "icon" : "sm"} className={cn("h-8 min-h-8 shrink-0 rounded-full", icon ? "size-8" : "px-2 text-xs font-medium")} type="button" aria-label={label} title={label} aria-pressed={following} disabled={busy || anyReplyBusy} onClick={() => void navigateFeed(timelineHref(basePath, following ? "all" : "following", kind))}>
+      {icon ? following ? <Users aria-hidden /> : <Globe aria-hidden /> : following ? t("timeline.feed.following") : t("timeline.feed.all")}
     </Button>;
   }
 
@@ -213,12 +228,12 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
     const id = "timeline-status";
     return (
       <form onSubmit={(event) => void submit(event)} aria-busy={busy} className="grid gap-2">
-        <Label htmlFor={id} className="sr-only">说点什么</Label>
-        <StatusEditor ref={statusEditor} id={id} label="吐槽内容" body={value} images={draft.images} onImagesChange={draft.setImages} onImagesBusyChange={setImageBusy} busy={busy || !ready} onChange={(body) => { onChange(body); setValidation(""); }} onError={setValidation} onCompositionChange={(value) => { composing.current = value; }} beforeCounter={viewerId && !profile ? <span className="sm:hidden">{rangeToggle(true)}</span> : undefined} actions={<>
-          <Button type="submit" size="sm" disabled={busy || imageBusy || !ready || !value.trim()}>{busy ? "正在保存…" : "发布吐槽"}</Button>
+        <Label htmlFor={id} className="sr-only">{t("timeline.action.postPrompt")}</Label>
+        <StatusEditor ref={statusEditor} id={id} label={t("timeline.action.postLabel")} body={value} images={draft.images} onImagesChange={draft.setImages} onImagesBusyChange={setImageBusy} busy={busy || !ready} onChange={(body) => { onChange(body); setValidation(""); }} onError={setValidation} onCompositionChange={(value) => { composing.current = value; }} beforeCounter={viewerId && !profile ? <span className="sm:hidden">{rangeToggle(true)}</span> : undefined} actions={<>
+          <Button type="submit" size="sm" disabled={busy || imageBusy || !ready || !value.trim()}>{busy ? t("admin.discussionTags.saving") : t("timeline.action.postSubmit")}</Button>
         </>} />
         {validation && <Notice>{validation}</Notice>}
-        {recovery && <p role="status" className="m-0 text-sm text-muted">输入已保留，可重试。如果登录已失效，请<Link className="text-primary underline" to={`/login?next=${encodeURIComponent(basePath)}`} target="_blank" rel="noopener noreferrer">在新标签页登录</Link>后回来提交。</p>}
+        {recovery && <p role="status" className="m-0 text-sm text-muted">{t("timeline.feed.recovery")}<Link className="text-primary underline" to={`/login?next=${encodeURIComponent(basePath)}`} target="_blank" rel="noopener noreferrer">{t("timeline.feed.signIn")}</Link>{t("timeline.feed.recoveryEnd")}</p>}
       </form>
     );
   }
@@ -226,27 +241,27 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
   return (
     <div className="grid w-full min-w-0 gap-3">
       {!readOnlyInteractions && !focused && <div className="rounded-xl border border-border bg-card">
-        {canCompose && !settings?.enabled && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">时间线已停止记录业务动态。<Link className="ml-1 text-secondary hover:underline" to="/me/timeline">开启时间线</Link>，记录操作和发布吐槽。</p>}
-        {canCompose && settings?.enabled && !canPublish && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">当前账号暂时不能发布新吐槽，仍可查看动态。</p>}
-        {allowCreate && <section aria-label="发布吐槽" className="p-3 sm:p-4">{editor()}</section>}
+        {canCompose && !settings?.enabled && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">{t("timeline.feed.disabled")}<Link className="ml-1 text-secondary hover:underline" to="/me/timeline">{t("timeline.feed.enable")}</Link>{t("timeline.feed.enableEnd")}</p>}
+        {canCompose && settings?.enabled && !canPublish && <p className="m-0 px-3 py-3 text-sm text-muted sm:px-4">{t("timeline.feed.denied")}</p>}
+        {allowCreate && <section aria-label={t("timeline.action.postSubmit")} className="p-3 sm:p-4">{editor()}</section>}
         <div className={cn("grid min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-x-2 px-2 py-2 sm:px-3", viewerId && !profile && "sm:grid-cols-[auto_minmax(0,1fr)_auto]", canCompose && "border-t border-border")}>
-          {!!viewerId && !profile && <nav aria-label="时间线范围" className="hidden min-w-0 items-center sm:flex">
+          {!!viewerId && !profile && <nav aria-label={t("timeline.feed.range")} className="hidden min-w-0 items-center sm:flex">
             {rangeToggle(false)}
           </nav>}
-          <nav aria-label="动态类型" className="flex min-w-0 items-center gap-0.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <nav aria-label={t("timeline.feed.kind")} className="flex min-w-0 items-center gap-0.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {!!viewerId && !profile && !allowCreate && <span className="mr-1 shrink-0 sm:hidden">{rangeToggle(true)}</span>}
-            {[undefined, ...TIMELINE_FILTER_KINDS].map((value) => <Link key={value ?? "all"} to={timelineHref(basePath, view, value)} aria-current={kind === value ? "page" : undefined} className={cn("inline-flex h-8 shrink-0 items-center rounded-full px-2 text-xs transition-colors hover:bg-muted/10", kind === value ? "bg-primary/10 font-medium text-secondary" : "text-muted")}>{value ? TIMELINE_KIND_LABELS[value] : "全部"}</Link>)}
+            {[undefined, ...TIMELINE_FILTER_KINDS].map((value) => <Link key={value ?? "all"} to={timelineHref(basePath, view, value)} aria-current={kind === value ? "page" : undefined} className={cn("inline-flex h-8 shrink-0 items-center rounded-full px-2 text-xs transition-colors hover:bg-muted/10", kind === value ? "bg-primary/10 font-medium text-secondary" : "text-muted")}>{t(value ? `timeline.feed.kind.${value}` : "timeline.feed.allKinds")}</Link>)}
           </nav>
           {!!viewerId && !profile && <div className="hidden shrink-0 items-center justify-end gap-1 sm:flex">
-            <Button asChild variant="ghost" size="icon" className="size-8 text-muted"><Link to="/me/timeline" aria-label="时间线设置"><Settings aria-hidden /></Link></Button>
-            <Button variant="ghost" size="icon" className="size-8 text-muted" type="button" aria-label="刷新时间线" disabled={busy || anyReplyBusy || revalidator.state !== "idle"} onClick={() => void revalidator.revalidate()}><RefreshCw aria-hidden className={revalidator.state !== "idle" ? "motion-safe:animate-spin" : undefined} /></Button>
+            <Button asChild variant="ghost" size="icon" className="size-8 text-muted"><Link to="/me/timeline" aria-label={t("timeline.feed.settings")}><Settings aria-hidden /></Link></Button>
+            <Button variant="ghost" size="icon" className="size-8 text-muted" type="button" aria-label={t("timeline.feed.refresh")} disabled={busy || anyReplyBusy || revalidator.state !== "idle"} onClick={() => void revalidator.revalidate()}><RefreshCw aria-hidden className={revalidator.state !== "idle" ? "motion-safe:animate-spin" : undefined} /></Button>
           </div>}
         </div>
       </div>}
       <>
-        <section aria-label="时间线动态" aria-busy={revalidator.state !== "idle"} className="overflow-hidden rounded-xl border border-border bg-card">
-          {!visibleItems.length ? <EmptyState variant="plain" className="p-4" title={kind ? "还没有这类动态。" : view === "following" ? "你和好友暂时没有公开动态。" : mine || profile ? "还没有公开动态。" : "还没有公开动态，来留下第一条吐槽吧。"} /> : (
-            groupTimelineDays(visibleItems, root?.serverTime).map((group) => <section key={group.date} aria-label={group.label}>
+        <section aria-label={t("timeline.feed.feed")} aria-busy={revalidator.state !== "idle"} className="overflow-hidden rounded-xl border border-border bg-card">
+          {!visibleItems.length ? <EmptyState variant="plain" className="p-4" title={kind ? t("timeline.feed.emptyKind") : view === "following" ? t("timeline.feed.emptyFriends") : mine || profile ? t("timeline.feed.empty") : t("timeline.feed.emptyPublic")} /> : (
+            groupTimelineDays(visibleItems, root?.serverTime, locale).map((group) => <section key={group.date} aria-label={group.label}>
               <h2 className="m-0 border-b border-border bg-muted/5 px-3 py-2 text-xs font-medium text-muted sm:px-4"><time dateTime={group.date}>{group.label}</time></h2>
               <ol className="m-0 list-none divide-y divide-border/60 p-0">
                 {group.entries.map(({ item, olderRenames }, index) => {
@@ -265,21 +280,21 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
                   const targetLink = item.target && <Link to={item.target.href} prefetch="none" className="font-medium text-secondary hover:underline">{item.target.title}</Link>;
                   const footer = <>
                     <Timestamp value={item.createdAt} format="duration" className="text-muted" />
-                    {item.canDelete && (!profile || item.actor.id === viewerId) && <Button variant="ghost" size="sm" className="min-h-8 gap-1 px-1 text-xs font-normal text-muted" type="button" disabled={busy} onClick={() => void remove(item)} aria-label={item.kind === "status" ? "删除吐槽" : "移除动态"}><Trash2 aria-hidden />{item.kind === "status" ? "删除" : "移除"}</Button>}
+                    {item.canDelete && (!profile || item.actor.id === viewerId) && <Button variant="ghost" size="sm" className="min-h-8 gap-1 px-1 text-xs font-normal text-muted" type="button" disabled={busy} onClick={() => void remove(item)} aria-label={item.kind === "status" ? t("timeline.action.postDelete") : t("timeline.action.eventRemove")}><Trash2 aria-hidden />{item.kind === "status" ? t("timeline.action.delete") : t("core.action.remove")}</Button>}
                   </>;
                   return <li key={item.id} id={`timeline-event-${item.id}`} className={cn("scroll-mt-24 px-3 sm:px-4", compact ? "py-3" : "py-4")}>
                     <article className="flex min-w-0 gap-2.5 sm:gap-3">
-                      {showAuthor && (continued ? <span aria-hidden className="size-9 shrink-0" /> : <Link className="shrink-0 self-start" to={`/users/${item.actor.id}`} aria-label={`${item.actor.displayName}的个人主页`}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>)}
+                      {showAuthor && (continued ? <span aria-hidden className="size-9 shrink-0" /> : <Link className="shrink-0 self-start" to={`/users/${item.actor.id}`} aria-label={t("timeline.feed.profile", { name: item.actor.displayName })}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>)}
                       <div className="min-w-0 flex-1">
                         {(showAuthor || item.kind !== "status") && <p className="m-0 text-sm leading-relaxed wrap-anywhere">
                           {showAuthor && <Link className="font-semibold text-secondary hover:underline" to={`/users/${item.actor.id}`}>{item.actor.displayName}</Link>}
-                          {item.kind === "comment" && item.target ? <><span className="text-muted"> 在 </span>{targetLink}<span className="text-muted"> 下发表了评论</span></> : <>
-                            {item.kind !== "status" && <> <span className="text-muted">{item.kind === "play" ? "初次游玩了" : item.action}</span> </>}
+                          {item.kind === "comment" && item.target ? <>{" "}<span className="text-muted">{t("timeline.feed.commentBefore")}</span>{targetLink}<span className="text-muted">{t("timeline.feed.commentAfter")}</span></> : <>
+                            {item.kind !== "status" && <> <span className="text-muted">{t(item.kind === "upload" && item.action === "上传了新版本" ? "timeline.feed.event.version" : `timeline.feed.event.${item.kind}`)}</span> </>}
                             {targetLink}
                           </>}
                         </p>}
                         {item.text && <div className={cn((showAuthor || item.kind !== "status") && "mt-2", item.kind !== "status" && "rounded-r-md border-l-2 border-primary/20 bg-muted/5 py-2 pl-3 pr-2")}><StatusBody segments={item.body} collapse /></div>}
-                        <CommentImages images={item.images} imageLabel={item.kind === "comment" ? "评论图片" : "吐槽图片"} />
+                        <CommentImages images={item.images} imageLabel={item.kind === "comment" ? t("image.comment") : t("timeline.feed.statusImage")} />
                         {item.work && <TimelineWorkPreview work={item.work} compact={compact} />}
                         {item.kind === "status" ? <StatusInteractions item={item} viewerId={viewerId} readOnly={readOnlyInteractions} expandReplies={expandReplies} initialPage={initialReplies} onCacheError={reportCacheError} onBusyChange={onReplyBusyChange}>{footer}</StatusInteractions> : <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                           {footer}
@@ -293,9 +308,9 @@ function TimelineWorkspaceContent({ page, viewerId, settings, basePath, kind, vi
             </section>)
           )}
         </section>
-        {(hasCursor || page.nextCursor) && <nav aria-label="时间线分页" className="flex flex-wrap justify-between gap-3">
-          {hasCursor ? <Button asChild variant="outline"><Link to={timelineHref(basePath, view, kind)}>返回最新</Link></Button> : <span />}
-          {page.nextCursor && <Button asChild variant="outline"><Link to={timelineHref(basePath, view, kind, page.nextCursor)} prefetch="none">更早的动态</Link></Button>}
+        {(hasCursor || page.nextCursor) && <nav aria-label={t("timeline.feed.pagination")} className="flex flex-wrap justify-between gap-3">
+          {hasCursor ? <Button asChild variant="outline"><Link to={timelineHref(basePath, view, kind)}>{t("timeline.feed.latest")}</Link></Button> : <span />}
+          {page.nextCursor && <Button asChild variant="outline"><Link to={timelineHref(basePath, view, kind, page.nextCursor)} prefetch="none">{t("timeline.feed.older")}</Link></Button>}
         </nav>}
       </>
     </div>

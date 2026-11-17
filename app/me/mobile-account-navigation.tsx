@@ -6,7 +6,9 @@ import { ChevronDown, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useInboxUnread } from "@/app/components/inbox-indicator";
 import { UnreadBadge } from "@/app/components/ui/unread-badge";
-import { Link, useLocation, useOutletContext } from "react-router";
+import { useLocation, useOutletContext } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages } from "@/lib/i18n/react";
 
 export type AccountOutletContext = { canUpload: boolean };
 
@@ -21,6 +23,7 @@ export function MobileAccountNavigation(props: MobileAccountNavigationProps) {
 }
 
 function MobileAccountNavigationMenu({ children, heading = false }: MobileAccountNavigationProps) {
+  const t = useMessages();
   const { canUpload } = useOutletContext<AccountOutletContext>();
   const { messagesUnread } = useInboxUnread();
   const location = useLocation();
@@ -56,17 +59,17 @@ function MobileAccountNavigationMenu({ children, heading = false }: MobileAccoun
           className="inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl"
         >
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
-            <Dialog.Title>个人中心</Dialog.Title>
+            <Dialog.Title>{t("header.me")}</Dialog.Title>
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" size="icon" className="size-11" aria-label="关闭个人中心导航">
+              <Button type="button" variant="ghost" size="icon" className="size-11" aria-label={t("account.nav.close")}>
                 <X aria-hidden="true" />
               </Button>
             </Dialog.Close>
           </div>
-          <nav aria-label="个人中心导航" className="min-h-0 space-y-5 overflow-y-auto overscroll-contain px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <nav aria-label={t("account.nav.label")} className="min-h-0 space-y-5 overflow-y-auto overscroll-contain px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {groups.map((group) => (
               <div key={group ?? "overview"}>
-                {group ? <h2 className="mb-2 text-xs font-semibold text-muted">{group}</h2> : null}
+                {group ? <h2 className="mb-2 text-xs font-semibold text-muted">{t(group)}</h2> : null}
                 <div className="grid grid-cols-2 gap-2">
                   {items.filter((item) => item.group === group).map((item) => {
                     const active = isAccountNavigationActive(item, location.pathname);
@@ -80,7 +83,7 @@ function MobileAccountNavigationMenu({ children, heading = false }: MobileAccoun
                             active ? "border-primary/30 bg-primary/10 font-semibold text-secondary" : "border-border text-foreground hover:bg-muted/15",
                           )}
                         >
-                          {item.label}
+                          {t(item.label)}
                           {item.href === "/me/messages" ? <UnreadBadge className="ml-auto" count={messagesUnread} /> : null}
                         </Link>
                       </Dialog.Close>

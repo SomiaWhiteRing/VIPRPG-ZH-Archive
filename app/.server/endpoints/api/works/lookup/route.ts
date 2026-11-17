@@ -37,7 +37,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
     const excludedIds = request.method === "POST"
       ? (await readJsonObject(request, "Invalid work lookup request")).excludeWorkIds
       : url.searchParams.get("excludeWorkIds") ?? "";
-    if (typeof excludedIds !== "string") throw new HttpError(400, "Invalid excluded work id");
+    if (typeof excludedIds !== "string") throw new HttpError(400, "Invalid excluded work id", undefined, "work.lookup.excludedId");
     const excludedWorkIds = excludedIds
       .split(",")
       .filter(Boolean)

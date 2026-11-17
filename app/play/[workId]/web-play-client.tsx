@@ -44,13 +44,15 @@ import { subscribeGameResourcesChanged } from "./web-play-events";
 import { createInstallWorker, InstallDiagnosticsPanel } from "./web-play-install-worker-entry";
 import type {
   WebPlayInstallation,
+  WebPlayInstallErrorMessage,
   WebPlayInstallWorkerInput,
   WebPlayInstallWorkerOutput,
   WebPlayMetadata,
   WebPlayStorageSnapshot,
 } from "@/app/play/[workId]/web-play-types";
 import { DISPLAY_TIME_ZONE, formatBytes, parseTimestamp } from "@/lib/format";
-import { installStatusLabel } from "@/lib/labels";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { requestJson } from "@/lib/ui/api-response";
 import {
   Camera,
@@ -68,11 +70,13 @@ type WebPlayLog = {
   id: string;
   level: PlayerLogLevel;
   message: string;
+  errorMessage?: WebPlayInstallErrorMessage;
+  reasonMessage?: WebPlayInstallErrorMessage;
   createdAt: string;
 };
 
 type BrowserStorageStatus = WebPlayStorageSnapshot & {
-  protectionStatus: "已获得" | "未获得" | "浏览器不支持" | "查询失败" | "申请失败";
+  protectionStatus: "granted" | "denied" | "unsupported" | "queryFailed" | "requestFailed";
 };
 
 const mobileControlsQuery = "(hover: none) and (pointer: coarse)";
@@ -99,6 +103,8 @@ export function WebPlayClient({
   secondary,
   stats,
 }: WebPlayClientProps) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const toast = useToast();
   const clientEnvironment = useClientEnvironment();
   const [metadata, setMetadata] = useState(providedMetadata);
@@ -116,7 +122,7 @@ export function WebPlayClient({
   const [running, setRunning] = useState(false);
   const [playerStarting, setPlayerStarting] = useState(false);
   const [playerStopping, setPlayerStopping] = useState(false);
-  const [operationError, setOperationError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | WebPlayInstallErrorMessage | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const [logs, setLogs] = useState<WebPlayLog[]>([]);
@@ -153,12 +159,12 @@ export function WebPlayClient({
 
   const installed = installation?.status === "ready";
   const installing = installation?.status === "installing";
-  const installAction = hasPreviousInstallation ? "更新" : "安装";
+  const installAction = hasPreviousInstallation ? "update" : "install";
   const localStatusLabel = installSessionActive || installing
-    ? `${installAction}中`
+    ? t("play.install.inProgress", { action: installAction })
     : hasPreviousInstallation && !installed
-      ? installation?.status === "failed" ? "更新失败" : "待更新"
-      : installStatusLabel(installation?.status ?? "deleted");
+      ? installation?.status === "failed" ? t("play.install.updateFailed") : t("play.install.pendingUpdate")
+      : t(`play.install.status.${installation?.status ?? "deleted"}`);
   const interruptedInstalling = installing && !installSessionActive;
   const failed = installation?.status === "failed";
   const playerBusy = running || playerStarting;
@@ -220,12 +226,13 @@ export function WebPlayClient({
   }, [capture, captureDisabled]);
 
   const addLog = useCallback(
-    (level: WebPlayLog["level"], message: string) => {
+    (level: WebPlayLog["level"], message: string, feedback?: Pick<WebPlayLog, "errorMessage" | "reasonMessage">) => {
       if (lifetimeRef.current?.signal.aborted) return;
       pendingLogs.current.push({
         id: `${Date.now()}:${Math.random().toString(16).slice(2)}`,
         level,
         message: message.slice(0, 16_000),
+        ...feedback,
         createdAt: new Date().toISOString(),
       });
       if (pendingLogs.current.length > 300) pendingLogs.current.shift();
@@ -242,14 +249,14 @@ export function WebPlayClient({
   const copyLogs = useCallback(async () => {
     setCopyingLogs(true);
     try {
-      await navigator.clipboard.writeText(logs.map(formatLog).join("\n"));
-      toast.success(`已复制 ${logs.length} 条日志。`);
+      await navigator.clipboard.writeText(logs.map((log) => formatLog(log, t)).join("\n"));
+      toast.success(t("play.diagnostic.copied", { count: logs.length }));
     } catch {
-      toast.error("复制失败，请允许浏览器访问剪贴板后重试。");
+      toast.error(t("play.diagnostic.copyFailed"));
     } finally {
       setCopyingLogs(false);
     }
-  }, [logs, toast]);
+  }, [logs, t, toast]);
 
   useEffect(() => {
     const lifetime = new AbortController();
@@ -274,9 +281,9 @@ export function WebPlayClient({
     ({ currentLocation, nextLocation }) => (installSessionActive || running || playerStarting) &&
       currentLocation.pathname !== nextLocation.pathname,
     async () => {
-      if (installSessionActive) return confirm(`游戏${installAction}尚未完成，确定离开并中断${installAction}吗？`);
+      if (installSessionActive) return confirm(t("play.install.leave", { action: installAction }));
       await exitImmersive();
-      if (!(await confirm("在线游玩尚未结束，确定离开并停止游戏吗？"))) {
+      if (!(await confirm(t("play.diagnostic.leaveGame")))) {
         focusPlayerCanvas();
         return false;
       }
@@ -286,7 +293,7 @@ export function WebPlayClient({
         setRunning(false);
         return true;
       } catch (error) {
-        setOperationError(error instanceof Error ? error.message : "游戏存档尚未写入，请重试。");
+        setOperationError(formatFeedbackError(error, locale, t("play.diagnostic.savePending")));
         return false;
       }
     },
@@ -307,7 +314,7 @@ export function WebPlayClient({
       if (installSessionActive || playerBusy) return;
       try {
         await cleanupExpiredGameResources().catch(error => {
-          if (mounted) addLog("warning", error instanceof Error ? error.message : "本地资源暂未清理。");
+          if (mounted) addLog("warning", formatFeedbackError(error, locale, t("play.diagnostic.localCleanup")));
         });
         const value = await getWebPlayInstallation(metadata.playKey);
         const previous = value?.status === "ready" ? false : (await listWebPlayInstallations()).some(
@@ -317,11 +324,11 @@ export function WebPlayClient({
         setInstallation(value);
         if (value?.status !== "ready") setHasPreviousInstallation(previous);
         if (value?.status === "installing") {
-          addLog("warning", "检测到安装尚未完成。如果其他页面仍在安装，请等待完成后刷新。");
+          addLog("warning", t("play.diagnostic.unfinished"));
         }
       } catch (error) {
         if (mounted) {
-          addLog("warning", error instanceof Error ? error.message : "读取本地安装状态失败。");
+          addLog("warning", formatFeedbackError(error, locale, t("play.diagnostic.readState")));
         }
       } finally {
         if (mounted) setLoadingLocalState(false);
@@ -337,7 +344,7 @@ export function WebPlayClient({
       unsubscribe();
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [addLog, metadata.playKey, metadata.workId, installSessionActive, playerBusy]);
+  }, [addLog, metadata.playKey, metadata.workId, installSessionActive, playerBusy, locale, t]);
 
 
   useEffect(() => {
@@ -346,17 +353,17 @@ export function WebPlayClient({
     void (async () => {
       const { removed, deferred } = await cleanupObsoleteGameResources(metadata);
       if (!current) return;
-      if (deferred) addLog("info", "其他游玩页面仍在使用资源或尚未响应，旧资源清理已延后。");
+      if (deferred) addLog("info", t("play.diagnostic.cleanupDeferred"));
       if (removed.length === 0) return;
-      addLog("info", `已清理 ${removed.length} 份不再使用的旧游戏资源，存档和截图保留。`);
+      addLog("info", t("play.diagnostic.cleanupDone", { count: removed.length }));
       setInstallation(await getWebPlayInstallation(metadata.playKey));
       const snapshot = await readBrowserStorage();
       if (current) setBrowserStorage(snapshot);
     })().catch((error: unknown) => {
-      if (current) addLog("warning", `旧资源暂未清理：${error instanceof Error ? error.message : "请下次进入时重试"}`);
+      if (current) addLog("warning", t("play.diagnostic.cleanupRetry", { reason: formatFeedbackError(error, locale, t("play.diagnostic.retryNext")) }));
     });
     return () => { current = false; };
-  }, [addLog, installed, installSessionActive, metadata, running, playerStarting]);
+  }, [addLog, installed, installSessionActive, metadata, running, playerStarting, locale, t]);
 
   useEffect(() => {
     const frame = document.getElementById("web-player-frame");
@@ -436,8 +443,8 @@ export function WebPlayClient({
       if (message.type === "install-rejected") {
         installSessionRef.current = false;
         setInstallSessionActive(false);
-        setOperationError(message.message);
-        addLog("error", message.message);
+        setOperationError(message.errorMessage ?? message.message);
+        addLog("error", message.message, { errorMessage: message.errorMessage });
         return;
       }
 
@@ -447,7 +454,10 @@ export function WebPlayClient({
         return;
       }
 
-      if (message.type === "log") addLog(message.level, message.message);
+      if (message.type === "log") {
+        const { errorMessage, reasonMessage } = message;
+        addLog(message.level, message.message, { errorMessage, reasonMessage });
+      }
     };
     workerRef.current = worker;
 
@@ -468,24 +478,24 @@ export function WebPlayClient({
 
     try {
       if (playerBusy) {
-        throw new Error("游戏运行中不能安装游戏。");
+        throw new Error(t("play.diagnostic.installWhileRunning"));
       }
 
       setInstallSessionActive(true);
       setBrowserStorage(null);
       await cleanupExpiredGameResources().catch(error => {
-        addLog("warning", error instanceof Error ? error.message : "部分旧资源暂未清理。");
+        addLog("warning", formatFeedbackError(error, locale, t("play.diagnostic.partialCleanup")));
       });
       signal.throwIfAborted();
       const { protectionStatus, ...storageSnapshot } = await readBrowserStorage(true);
       signal.throwIfAborted();
       setBrowserStorage({ protectionStatus, ...storageSnapshot });
-      if (protectionStatus === "查询失败" || protectionStatus === "申请失败") {
-        addLog("warning", `自动清理保护${protectionStatus}，仍可继续安装游戏。`);
+      if (protectionStatus === "queryFailed" || protectionStatus === "requestFailed") {
+        addLog("warning", t("play.diagnostic.storageWarning", { status: t(`play.diagnostic.storage.${protectionStatus}`) }));
       }
       signal.throwIfAborted();
       if (!(await canManageGameResources())) {
-        throw new Error("当前浏览器不支持安全管理本地游戏资源。");
+        throw new Error(t("play.diagnostic.storageUnsupported"));
       }
       signal.throwIfAborted();
       const worker = ensureWorker();
@@ -497,7 +507,7 @@ export function WebPlayClient({
         storageSnapshot,
         analyticsEnabled: analyticsInstallStarted.current !== null,
       } satisfies WebPlayInstallWorkerInput);
-      addLog("info", `开始下载并${installAction}浏览器本地的游戏文件。`);
+      addLog("info", t("play.install.logStart", { action: installAction }));
     } catch (error) {
       if (signal.aborted) return;
       const start = analyticsInstallStarted.current;
@@ -508,11 +518,11 @@ export function WebPlayClient({
         work_id: metadata.workId, archive_version_id: metadata.archiveVersionId });
       installSessionRef.current = false;
       setInstallSessionActive(false);
-      const message = error instanceof Error ? error.message : `启动${installAction}失败。`;
+      const message = formatFeedbackError(error, locale, t("play.install.startFailed", { action: installAction }));
       setOperationError(message);
       addLog("error", message);
     }
-  }, [addLog, ensureWorker, installAction, metadata, playerBusy]);
+  }, [addLog, ensureWorker, installAction, metadata, playerBusy, locale, t]);
 
   useEffect(() => {
     if (loadingLocalState || !hasPreviousInstallation || installed || installing || playerBusy || installSessionActive ||
@@ -525,31 +535,31 @@ export function WebPlayClient({
       type: "cancel",
       playKey: metadata.playKey,
     } satisfies WebPlayInstallWorkerInput);
-    addLog("warning", `已请求取消${installAction}。`);
-  }, [addLog, installAction, metadata.playKey]);
+    addLog("warning", t("play.install.cancelRequested", { action: installAction }));
+  }, [addLog, installAction, metadata.playKey, t]);
 
   const deleteLocalInstall = useCallback(async () => {
     setOperationError(null);
 
     try {
       if (playerBusy) {
-        throw new Error("游戏运行中不能卸载游戏。");
+        throw new Error(t("play.diagnostic.uninstallWhileRunning"));
       }
 
       if (!(await canManageGameResources())) {
-        throw new Error("当前浏览器不支持安全管理本地游戏资源。");
+        throw new Error(t("play.diagnostic.storageUnsupported"));
       }
       await deleteLocalGame(metadata.playKey);
       setInstallation(null);
       setBrowserStorage(await readBrowserStorage());
-      addLog("info", "已卸载游戏。游戏存档不受影响。");
+      addLog("info", t("play.diagnostic.uninstalled"));
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "卸载游戏失败。";
+        formatFeedbackError(error, locale, t("play.diagnostic.uninstallFailed"));
       setOperationError(message);
       addLog("error", message);
     }
-  }, [addLog, metadata.playKey, playerBusy]);
+  }, [addLog, metadata.playKey, playerBusy, locale, t]);
 
   const startPlayer = useCallback(async (): Promise<boolean> => {
     if (running) return true;
@@ -560,7 +570,7 @@ export function WebPlayClient({
     let analyticsStarted: number | null = null;
     try {
       if (!installed) {
-        throw new Error("需要先完成本地安装。");
+        throw new Error(t("play.diagnostic.needInstall"));
       }
 
       startingRef.current = true;
@@ -581,7 +591,7 @@ export function WebPlayClient({
         setRunning(false);
         setPageFullscreen(false);
         if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-      }, image => { void captureRef.current(async () => image); });
+      }, image => { void captureRef.current(async () => image); }, locale);
       playerRef.current = player;
       await player.ready;
       signal.throwIfAborted();
@@ -601,7 +611,7 @@ export function WebPlayClient({
       playerRef.current?.dispose();
       playerRef.current = null;
       const message =
-        error instanceof Error ? error.message : "启动在线游玩失败。";
+        formatFeedbackError(error, locale, t("play.diagnostic.launchFailed"));
       setOperationError(message);
       addLog("error", message);
       setRunning(false);
@@ -613,7 +623,7 @@ export function WebPlayClient({
       startingRef.current = false;
       if (!signal.aborted) setPlayerStarting(false);
     }
-  }, [addLog, checkForUpdate, installed, metadata, running]);
+  }, [addLog, checkForUpdate, installed, metadata, running, locale, t]);
 
   const lockOrientation = useCallback(
     async (next: DisplayOrientation): Promise<boolean> => {
@@ -644,7 +654,7 @@ export function WebPlayClient({
     async (next: DisplayOrientation): Promise<boolean> => {
       const frame = document.getElementById("web-player-frame");
       if (!frame) {
-        setOperationError("找不到游戏画面，无法进入全屏。请刷新页面后重试。");
+        setOperationError(t("play.diagnostic.missingCanvas"));
         return false;
       }
 
@@ -657,7 +667,7 @@ export function WebPlayClient({
           focusPlayerCanvas();
           return true;
         } catch {
-          addLog("warning", "浏览器未进入原生全屏，已改为铺满页面。");
+          addLog("warning", t("play.diagnostic.fullscreenFallback"));
         }
       }
 
@@ -666,7 +676,7 @@ export function WebPlayClient({
       focusPlayerCanvas();
       return true;
     },
-    [addLog, lockOrientation, mobileControls, setDisplayOrientation],
+    [addLog, lockOrientation, mobileControls, setDisplayOrientation, t],
   );
 
   const enterPageFullscreen = useCallback(() => {
@@ -692,15 +702,15 @@ export function WebPlayClient({
       playerRef.current = null;
       await exitImmersive();
       if (!lifetimeRef.current?.signal.aborted) setRunning(false);
-      addLog("info", "游戏已停止。");
+      addLog("info", t("play.diagnostic.stopped"));
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : "游戏停止失败。");
+      setOperationError(formatFeedbackError(error, locale, t("play.diagnostic.stopFailed")));
     } finally {
       if (!lifetimeRef.current?.signal.aborted) {
         setPlayerStopping(false);
       }
     }
-  }, [addLog, exitImmersive]);
+  }, [addLog, exitImmersive, locale, t]);
 
   useEffect(() => {
     if (clientEnvironment !== "android") return;
@@ -734,22 +744,22 @@ export function WebPlayClient({
 
   const storageSummary = useMemo(() => {
     return [
-      { label: "本地状态", value: localStatusLabel },
+      { label: t("play.diagnostic.local"), value: localStatusLabel },
       {
-        label: "存档保护",
-        info: "防止存档被浏览器自动清理的功能，浏览器会对常访问的网站自动分配。",
-        value: browserStorage?.protectionStatus ?? "查询中…",
+        label: t("play.diagnostic.protection"),
+        info: t("play.diagnostic.protectionHelp"),
+        value: t(`play.diagnostic.storage.${browserStorage?.protectionStatus ?? "checking"}`),
       },
       {
-        label: "本站浏览器用量",
-        value: browserStorage?.storageUsageBytes == null ? "未知" : formatBytes(browserStorage.storageUsageBytes),
+        label: t("play.diagnostic.usage"),
+        value: browserStorage?.storageUsageBytes == null ? t("play.diagnostic.unknown") : formatBytes(browserStorage.storageUsageBytes),
       },
       {
-        label: "浏览器额度",
-        value: browserStorage?.storageQuotaBytes == null ? "未知" : formatBytes(browserStorage.storageQuotaBytes),
+        label: t("play.diagnostic.quota"),
+        value: browserStorage?.storageQuotaBytes == null ? t("play.diagnostic.unknown") : formatBytes(browserStorage.storageQuotaBytes),
       },
     ];
-  }, [localStatusLabel, browserStorage]);
+  }, [localStatusLabel, browserStorage, t]);
 
   const rotation =
     immersive && mobileControls && !orientationLockActive
@@ -769,16 +779,16 @@ export function WebPlayClient({
       }
     >
       <DetailPageLayout
-        sidebarLabel="作品操作与资料"
+        sidebarLabel={t("play.diagnostic.sidebar")}
         main={
           <>
             <section aria-labelledby="player-title" className="py-4.5">
               <div className="mb-3.5 flex items-baseline justify-between gap-4">
                 <h2 className="m-0 text-base font-bold" id="player-title">
-                  游戏画面
+                  {t("play.install.surface")}
                 </h2>
                 <span className="font-mono text-xs text-muted">
-                  {running ? "运行中" : playerStarting ? "启动中" : installSessionActive ? `${installAction}中` : "待机"}
+                  {running ? t("play.install.running") : playerStarting ? t("play.install.starting") : installSessionActive ? t("play.install.inProgress", { action: installAction }) : t("play.install.idle")}
                 </span>
               </div>
               <div className="aspect-4/3 w-full">
@@ -807,23 +817,23 @@ export function WebPlayClient({
                     placeholder={!running ? (
                       <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/55 p-6 text-center text-sm text-white/75">
                         {playerStarting
-                          ? "正在启动 EasyRPG…"
+                          ? t("play.install.startingEngine")
                           : installSessionActive
-                            ? `正在${installAction}游戏文件…`
+                            ? t("play.install.processingFiles", { action: installAction })
                             : installed
-                              ? "游戏已准备好"
-                              : hasPreviousInstallation ? "待更新" : "未安装"}
+                              ? t("play.install.ready")
+                              : hasPreviousInstallation ? t("play.install.pendingUpdate") : t("play.install.status.deleted")}
                       </div>
                     ) : null}
                     toolbar={immersive ? (
                       <>
                         {mobileControls && running ? (
                           <Button
-                            aria-label={`切换为${nextOrientation === "landscape" ? "横屏" : "竖屏"}`}
+                            aria-label={t(nextOrientation === "landscape" ? "play.install.landscape" : "play.install.portrait")}
                             className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
                             onClick={() => void changeDisplayOrientation(nextOrientation)}
                             size="icon"
-                            title={`切换为${nextOrientation === "landscape" ? "横屏" : "竖屏"}`}
+                            title={t(nextOrientation === "landscape" ? "play.install.landscape" : "play.install.portrait")}
                             type="button"
                             variant="outline"
                           >
@@ -831,11 +841,11 @@ export function WebPlayClient({
                           </Button>
                         ) : null}
                         <Button
-                          aria-label="恢复窗口"
+                          aria-label={t("play.install.windowed")}
                           className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
                           onClick={() => void exitImmersive()}
                           size="icon"
-                          title="恢复窗口"
+                          title={t("play.install.windowed")}
                           type="button"
                           variant="outline"
                         >
@@ -843,12 +853,12 @@ export function WebPlayClient({
                         </Button>
                         {!mobileControls ? (
                           <Button
-                            aria-label={capturing ? "正在截取图片" : "截取图片"}
+                            aria-label={t(capturing ? "play.install.capturing" : "play.install.capture")}
                             className="border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white"
                             disabled={captureDisabled}
                             onClick={() => void captureScreenshot()}
                             size="icon"
-                            title="截取图片"
+                            title={t("play.install.capture")}
                             type="button"
                             variant="outline"
                           >
@@ -874,10 +884,10 @@ export function WebPlayClient({
             primary={
               <div className="grid gap-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="m-0 text-base font-bold">在线游玩</h2>
+                  <h2 className="m-0 text-base font-bold">{t("work.play")}</h2>
                   <span className="font-mono text-xs text-muted">
                     {loadingLocalState
-                      ? "读取中"
+                      ? t("play.install.status.loading")
                       : localStatusLabel}
                   </span>
                 </div>
@@ -887,7 +897,7 @@ export function WebPlayClient({
                     tone="error"
                     className="m-0 rounded-md border p-3 text-sm"
                   >
-                    {hasPreviousInstallation ? "上次更新没有正常结束。请重试更新。" : "上次安装没有正常结束。请清理并重新安装。"}
+                    {t("play.install.interrupted", { action: installAction })}
                   </Notice>
                 ) : null}
                 {operationError ? (
@@ -896,7 +906,7 @@ export function WebPlayClient({
                     className="m-0 rounded-md border p-3 text-sm"
                     role="alert"
                   >
-                    {operationError}
+                    {typeof operationError === "string" ? operationError : t(operationError.key, operationError.values)}
                   </Notice>
                 ) : null}
 
@@ -906,7 +916,7 @@ export function WebPlayClient({
 
                 {loadingLocalState ? (
                   <Button className="w-full" disabled type="button">
-                    读取本地状态…
+                    {t("play.install.loadingLocal")}
                   </Button>
                 ) : installSessionActive ? (
                   <Button
@@ -916,7 +926,7 @@ export function WebPlayClient({
                     type="button"
                     variant="outline"
                   >
-                    {installing ? `取消${installAction}` : `${installAction}中…`}
+                    {installing ? t("play.install.cancel", { action: installAction }) : t("play.install.working", { action: installAction })}
                   </Button>
                 ) : failed || interruptedInstalling ? (
                   <Rm2kButton
@@ -925,7 +935,7 @@ export function WebPlayClient({
                     onClick={startInstall}
                     type="button"
                   >
-                    {hasPreviousInstallation ? "重试更新" : "清理并重装"}
+                    {t("play.install.retry", { action: installAction })}
                   </Rm2kButton>
                 ) : installed ? (
                   !running ? (
@@ -937,7 +947,7 @@ export function WebPlayClient({
                       onClick={() => void startDefaultPlayer()}
                       type="button"
                     >
-                      {playerStarting ? "正在启动…" : "启动游戏"}
+                      {playerStarting ? t("play.install.launching") : t("play.install.startGame")}
                     </Rm2kButton>
                   ) : (
                     <div className={mobileControls ? "grid gap-2" : "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2"}>
@@ -950,7 +960,7 @@ export function WebPlayClient({
                           variant="outline"
                         >
                           <Maximize aria-hidden />
-                          网页全屏
+                          {t("play.install.fullscreenPage")}
                         </Button>
                       ) : null}
                       <Button
@@ -961,15 +971,15 @@ export function WebPlayClient({
                         variant="outline"
                       >
                         <Expand aria-hidden />
-                        全屏幕
+                        {t("play.install.fullscreenScreen")}
                       </Button>
                       {!mobileControls ? (
                         <Button
-                          aria-label={capturing ? "正在截取图片" : "截取图片"}
+                          aria-label={t(capturing ? "play.install.capturing" : "play.install.capture")}
                           disabled={captureDisabled}
                           onClick={() => void captureScreenshot()}
                           size="icon"
-                          title="截取图片"
+                          title={t("play.install.capture")}
                           type="button"
                           variant="outline"
                         >
@@ -985,7 +995,7 @@ export function WebPlayClient({
                     onClick={startInstall}
                     type="button"
                   >
-                    {hasPreviousInstallation ? "更新游戏" : "安装到浏览器"} · {formatBytes(metadata.installTotalSizeBytes)}
+                    {t("play.install.start", { action: installAction })} · {formatBytes(metadata.installTotalSizeBytes)}
                   </Rm2kButton>
                 )}
 
@@ -1001,17 +1011,17 @@ export function WebPlayClient({
                     }}
                   >
                     <summary className={desktopControlsHelp ? "cursor-pointer pr-28 text-sm font-semibold text-muted hover:text-foreground" : "cursor-pointer text-sm font-semibold text-muted hover:text-foreground"}>
-                      本地数据与诊断
+                      {t("play.diagnostic.title")}
                     </summary>
                     <div className="mt-3 grid gap-3">
                       <dl className="grid gap-2 text-xs">
                         <DiagnosticRow
-                          label="归档内容"
-                          value={`${formatBytes(metadata.totalSizeBytes)} / ${metadata.totalFiles.toLocaleString("zh-CN")} 文件`}
+                          label={t("play.diagnostic.archive")}
+                          value={t("play.diagnostic.sizeFiles", { size: formatBytes(metadata.totalSizeBytes), count: metadata.totalFiles })}
                         />
                         <DiagnosticRow
-                          label={`${installAction}内容`}
-                          value={`${formatBytes(metadata.installTotalSizeBytes)} / ${metadata.installTotalFiles.toLocaleString("zh-CN")} 文件`}
+                          label={t("play.install.content", { action: installAction })}
+                          value={t("play.diagnostic.sizeFiles", { size: formatBytes(metadata.installTotalSizeBytes), count: metadata.installTotalFiles })}
                         />
                         {storageSummary?.map((item) => (
                           <DiagnosticRow
@@ -1036,7 +1046,7 @@ export function WebPlayClient({
                             type="button"
                             variant="outline"
                           >
-                            {playerStopping ? "正在停止…" : "停止游戏"}
+                            {playerStopping ? t("play.diagnostic.stopping") : t("play.diagnostic.stop")}
                           </Button>
                         ) : null}
                         <WebPlaySaveExport key={metadata.workId} playKey={metadata.playKey} playerBusy={playerBusy} active={diagnosticsOpen} title={metadata.title} workId={metadata.workId} />
@@ -1052,14 +1062,14 @@ export function WebPlayClient({
                             type="button"
                             variant="outline"
                           >
-                            卸载游戏
+                            {t("play.diagnostic.uninstall")}
                           </Button>
                         ) : null}
                       </div>
 
                       <div className="border-t border-border pt-3 font-mono text-xs">
                         <div className="mb-2 flex items-center justify-between gap-2">
-                          <strong>运行日志 · {logs.length}</strong>
+                          <strong>{t("play.diagnostic.logs", { count: logs.length })}</strong>
                           {logs.length ? (
                             <div className="flex items-center gap-1">
                               <Button
@@ -1069,7 +1079,7 @@ export function WebPlayClient({
                                 type="button"
                                 variant="ghost"
                               >
-                                {copyingLogs ? "复制中…" : "复制"}
+                                {copyingLogs ? t("play.diagnostic.copying") : t("play.diagnostic.copy")}
                               </Button>
                               <Button
                                 disabled={copyingLogs}
@@ -1081,7 +1091,7 @@ export function WebPlayClient({
                                 type="button"
                                 variant="ghost"
                               >
-                                清空
+                                {t("play.diagnostic.clear")}
                               </Button>
                             </div>
                           ) : null}
@@ -1093,13 +1103,13 @@ export function WebPlayClient({
                                 className={`${logTone(log.level)} whitespace-pre-wrap wrap-anywhere`}
                                 key={log.id}
                               >
-                                {formatLog(log)}
+                                {formatLog(log, t)}
                               </li>
                             ))}
                           </ol>
                         ) : (
                           <EmptyState
-                            title="暂无日志。"
+                            title={t("play.diagnostic.emptyLogs")}
                             variant="plain"
                             className="text-xs"
                           />
@@ -1123,13 +1133,13 @@ export function WebPlayClient({
                       deleteButtonRef.current?.focus();
                     }}
                   >
-                    <AlertDialogTitle>卸载游戏？</AlertDialogTitle>
+                    <AlertDialogTitle>{t("play.diagnostic.uninstallConfirm")}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      已下载的本地游戏文件将被删除，浏览器存档不会受到影响。之后需要重新安装才能在线游玩。
+                      {t("play.diagnostic.uninstallDetails")}
                     </AlertDialogDescription>
                     <AlertDialogFooter>
                       <AlertDialogCancel asChild>
-                        <Button variant="outline">取消</Button>
+                        <Button variant="outline">{t("play.save.cancel")}</Button>
                       </AlertDialogCancel>
                       <AlertDialogAction asChild>
                         <Button
@@ -1139,7 +1149,7 @@ export function WebPlayClient({
                           }}
                           variant="destructive"
                         >
-                          卸载游戏
+                          {t("play.diagnostic.uninstall")}
                         </Button>
                       </AlertDialogAction>
                     </AlertDialogFooter>
@@ -1161,11 +1171,12 @@ function InstallProgress({
   installation,
   compact = false,
 }: {
-  action: "安装" | "更新";
+  action: "install" | "update";
   installation: WebPlayInstallation;
   compact?: boolean;
 }) {
-  const progressLabel = `${action}进度`;
+  const t = useMessages();
+  const progressLabel = t("play.install.progress", { action });
   const downloadPercent = percent(
     installation.downloadedBytes,
     installation.downloadBytesTotal,
@@ -1178,24 +1189,26 @@ function InstallProgress({
   return (
     <div className={`grid gap-2 ${compact ? "text-xs" : "text-sm"}`}>
       <div className="flex items-center justify-between gap-3">
-        <span>下载进度</span>
+        <span>{t("play.install.downloadProgress")}</span>
         <strong className="text-right font-medium">
           {formatBytes(installation.downloadedBytes)} /{" "}
           {formatBytes(installation.downloadBytesTotal)}
         </strong>
       </div>
-      <Progress aria-label="下载进度" value={downloadPercent} />
+      <Progress aria-label={t("play.install.downloadProgress")} value={downloadPercent} />
       <div className="flex items-center justify-between gap-3">
         <span>{progressLabel}</span>
         <strong className="text-right font-medium">
-          {installation.installedFiles.toLocaleString("zh-CN")} /{" "}
-          {installation.totalFiles.toLocaleString("zh-CN")} 文件
+          {t("play.install.fileProgress", {
+            done: installation.installedFiles,
+            total: installation.totalFiles,
+          })}
         </strong>
       </div>
       <Progress aria-label={progressLabel} value={extractPercent} />
       {installation.error ? (
         <Notice tone="error" className="m-0 rounded-md border p-3 text-sm">
-          {installation.error}
+          {installation.errorMessage ? t(installation.errorMessage.key, installation.errorMessage.values) : installation.error}
         </Notice>
       ) : null}
     </div>
@@ -1220,7 +1233,7 @@ function logTone(level: WebPlayLog["level"]): string {
   return "text-muted";
 }
 
-function formatLog(log: WebPlayLog): string {
+function formatLog(log: WebPlayLog, t: ReturnType<typeof useMessages>): string {
   const time = parseTimestamp(log.createdAt).toLocaleTimeString("zh-CN", {
     timeZone: DISPLAY_TIME_ZONE,
     hour: "2-digit",
@@ -1228,7 +1241,12 @@ function formatLog(log: WebPlayLog): string {
     second: "2-digit",
     hour12: false,
   });
-  return log.message.split(/\r?\n/).map((line) => `[${time}]${line}`).join("\n");
+  const { errorMessage, reasonMessage } = log;
+  const values = reasonMessage
+    ? { ...errorMessage?.values, reason: t(reasonMessage.key, reasonMessage.values) }
+    : errorMessage?.values;
+  const message = errorMessage ? t(errorMessage.key, values).slice(0, 16_000) : log.message;
+  return message.split(/\r?\n/).map((line) => `[${time}]${line}`).join("\n");
 }
 
 function unlockScreenOrientation(): void {
@@ -1262,28 +1280,28 @@ async function readBrowserStorage(requestPersistence = false): Promise<BrowserSt
       persistedStorage: null,
       storageQuotaBytes: null,
       storageUsageBytes: null,
-      protectionStatus: "浏览器不支持",
+      protectionStatus: "unsupported",
     };
   }
 
   let persistedStorage: boolean | null = null;
-  let protectionStatus: BrowserStorageStatus["protectionStatus"] = "浏览器不支持";
+  let protectionStatus: BrowserStorageStatus["protectionStatus"] = "unsupported";
 
   if (typeof storage.persisted === "function") {
     try {
       persistedStorage = await storage.persisted();
-      protectionStatus = persistedStorage ? "已获得" : "未获得";
+      protectionStatus = persistedStorage ? "granted" : "denied";
     } catch {
-      protectionStatus = "查询失败";
+      protectionStatus = "queryFailed";
     }
   }
 
   if (requestPersistence && persistedStorage !== true && typeof storage.persist === "function") {
     try {
       persistedStorage = await storage.persist();
-      protectionStatus = persistedStorage ? "已获得" : "未获得";
+      protectionStatus = persistedStorage ? "granted" : "denied";
     } catch {
-      protectionStatus = "申请失败";
+      protectionStatus = "requestFailed";
     }
   }
 

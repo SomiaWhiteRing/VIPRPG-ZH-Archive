@@ -1,3 +1,5 @@
+import { formatFeedbackError } from "@/lib/i18n/feedback";
+import { translate } from "@/lib/i18n/core";
 import { assertSameOrigin } from "@/app/.server/auth/origin";
 import { queuePublicEmailChallenge } from "@/app/.server/auth/public-email-challenge";
 import { assertAuthEmailRateLimit, assertAuthSourceRateLimit } from "@/app/.server/auth/rate-limit";
@@ -12,7 +14,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
   let email = String(formData.get("email") ?? "");
   try {
     assertSameOrigin(runtime, request);
-    email = normalizeEmail(readRequiredFormString(formData, "email"));
+    email = normalizeEmail(readRequiredFormString(formData, "email", "auth.error.emailRequired"));
     await assertAuthSourceRateLimit(runtime, "password-reset");
     await assertAuthEmailRateLimit(runtime, `password-reset:${email}`);
     queuePublicEmailChallenge(runtime, { purpose: "password_reset", email, nextPath });
@@ -20,7 +22,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
   } catch (error) {
     return redirectWithParams(request, "/forgot-password", {
       next: nextPath, email,
-      error: error instanceof Error ? error.message : "找回密码验证码发送失败",
+      error: formatFeedbackError(error, runtime.uiLocale, translate(runtime.uiLocale, "auth.error.resetSendFailed")),
     });
   }
 }

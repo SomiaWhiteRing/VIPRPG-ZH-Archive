@@ -1,3 +1,6 @@
+import { translate } from "./i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "./i18n/locale";
+
 export const FORUM_PAGE_SIZE = 30;
 export const FORUM_POST_PAGE_SIZE = 20;
 export const FORUM_COMMENT_PAGE_SIZE = 10;
@@ -36,6 +39,14 @@ export const FORUM_REPORT_REASONS = [
   "违法内容",
   "其他",
 ] as const;
+
+export const reportReasonKeys = {
+  "垃圾广告": "forum.reason.spam",
+  "人身攻击或骚扰": "forum.reason.harassment",
+  "隐私或人身安全": "forum.reason.privacy",
+  "违法内容": "forum.reason.illegal",
+  "其他": "forum.reason.other",
+} as const satisfies Record<(typeof FORUM_REPORT_REASONS)[number], string>;
 
 export type ForumState = "published" | "hidden" | "deleted";
 export type ForumTarget = { kind: "topic" | "post" | "comment"; id: number };
@@ -180,24 +191,24 @@ export function normalizeForumTag(value: string): string {
 export function forumTagKey(value: string): string {
   return normalizeForumTag(value).toLowerCase();
 }
-export function forumTagError(value: string): string | null {
+export function forumTagError(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string | null {
   const name = normalizeForumTag(value);
   if (
     /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(value.replace(/\u200d/gu, "")) ||
     /[[\]]/u.test(name)
   )
-    return "TAG 不能包含方括号、控制字符或换行。";
+    return translate(locale, "forum.tags.invalidChars");
   const length = Array.from(
     new Intl.Segmenter("zh", { granularity: "grapheme" }).segment(name),
   ).length;
-  if (length < 1) return "请输入 TAG。";
+  if (length < 1) return translate(locale, "forum.tags.required");
   if (length > FORUM_TAG_LENGTH)
-    return `TAG 最多 ${FORUM_TAG_LENGTH} 个字符。`;
+    return translate(locale, "forum.tags.tooLong", { count: FORUM_TAG_LENGTH });
   if (
     /^[\p{P}\p{Z}\s]+$/u.test(name) ||
     FORUM_RESERVED_TAGS.includes(forumTagKey(name))
   )
-    return "此名称不能用作 TAG。";
+    return translate(locale, "forum.tags.invalidName");
   return null;
 }
 export function forumTargetHref(

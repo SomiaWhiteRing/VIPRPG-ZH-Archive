@@ -34,6 +34,7 @@ export async function GET(
         {
           ok: false,
           error: "Archive version not found",
+          messageKey: "play.install.error.archiveUnavailable",
         },
         { status: 404 },
       );

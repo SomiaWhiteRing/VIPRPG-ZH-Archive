@@ -1,6 +1,6 @@
 import { requireUser } from "@/app/.server/auth/guards";
 import { markAllInboxItemsRead } from "@/app/.server/db/inbox";
-import { redirectResponse } from "@/app/.server/http/form";
+import { redirectWithParams } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
 
@@ -18,7 +18,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
       return json({ ok: true, count });
     }
 
-    return redirectResponse(new URL("/inbox", request.url));
+    return redirectWithParams(request, "/inbox", {});
   } catch (error) {
     return jsonError("Inbox read-all failed", error);
   }

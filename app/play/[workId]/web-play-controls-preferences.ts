@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 import { useCallback, useEffect, useState } from "react";
 import { isCustomKeyboardCode, keyboardKeys } from "./web-play-keyboard-keys";
 
@@ -37,8 +39,12 @@ export function isCustomControlId(id: string): id is CustomControlId {
   return customControlIds.some((controlId) => controlId === id);
 }
 
-export function getControlLabel(layout: ControlLayout, id: ControlId): string {
-  return isCustomControlId(id) ? keyboardKeys[layout.customKeys[id]].label : controlDefinitions[id].label;
+export function getControlLabel(layout: ControlLayout, id: ControlId, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  if (isCustomControlId(id)) return keyboardKeys[layout.customKeys[id]].label;
+  if (id === "dpad" || id === "up" || id === "left" || id === "right" || id === "down" || id === "highlight" || id === "screenshot") {
+    return translate(locale, `play.touch.${id}`);
+  }
+  return controlDefinitions[id].label;
 }
 
 export function changeCustomKey(layout: ControlLayout, id: CustomControlId, code: string): ControlLayout {

@@ -43,13 +43,13 @@ export async function prepareObjectUpload(
     )
     .bind(input.sha256, input.importJobId, input.userId)
     .first<{ import_status: string; object_status: string | null }>();
-  if (!row) throw new HttpError(404, "Import job not found");
+  if (!row) throw new HttpError(404, "Import job not found", undefined, "upload.error.jobMissing");
   if (
     !["preflighted", "uploading_source", "uploading_metadata"].includes(
       row.import_status,
     )
   ) {
-    throw new HttpError(409, "Import job does not accept object uploads");
+    throw new HttpError(409, "Import job does not accept object uploads", undefined, "upload.error.objectUploadClosed");
   }
   if (row.object_status === "purging") {
     throwObjectPurging(input.kind);
@@ -289,7 +289,7 @@ function assertObjectRecordChanged(
 
 function assertImportJobUploadChanged(result: D1Result): void {
   if ((result.meta.changes ?? 0) === 0) {
-    throw new HttpError(409, "Import job does not accept object uploads");
+    throw new HttpError(409, "Import job does not accept object uploads", undefined, "upload.error.objectUploadClosed");
   }
 }
 
@@ -297,5 +297,8 @@ function throwObjectPurging(kind: "blob" | "core_pack"): never {
   throw new HttpError(
     409,
     `${kind === "blob" ? "Blob" : "Core pack"} is being garbage-collected; retry the upload`,
+    undefined,
+    "upload.error.objectPurging",
+    { kind },
   );
 }

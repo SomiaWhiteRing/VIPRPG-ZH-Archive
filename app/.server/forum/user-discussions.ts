@@ -1,11 +1,12 @@
 import { emojiText } from "@/lib/face-emojis";
+import type { UiLocale } from "@/lib/i18n/locale";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import type { UserDiscussionItem } from "@/lib/dto/forum/activity";
 import type { ForumPage } from "@/lib/forum";
 import { forumPage } from "@/lib/forum";
 import type { ForumRuntime } from "./runtime";
 
-type DiscussionPageInput = { page?: number; pageSize?: number };
+type DiscussionPageInput = { page?: number; pageSize?: number; locale?: UiLocale };
 type DiscussionRow = {
   kind: "post" | "comment";
   id: number;
@@ -72,7 +73,7 @@ async function userDiscussions(
           ? ("topic" as const)
           : row.kind,
       title: row.title,
-      snippet: emojiText(row.snippet).slice(0,180),
+      snippet: emojiText(row.snippet, input.locale).slice(0,180),
       createdAt: row.created_at.includes("T")
         ? row.created_at
         : row.created_at.replace(" ", "T") + "Z",

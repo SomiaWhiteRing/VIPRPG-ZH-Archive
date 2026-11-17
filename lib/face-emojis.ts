@@ -1,5 +1,7 @@
 import { mentionText } from "./mentions";
 import { forumElementText } from "./forum-elements";
+import { translate } from "./i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "./i18n/locale";
 import type { CharacterPortrait } from "@/lib/character-names";
 
 export type FaceEmojiCell = { blobSha256: string; row: number; column: number };
@@ -53,8 +55,9 @@ export function emojiIds(body: string): number[] {
     ),
   ];
 }
-export function emojiText(body: string): string {
-  return mentionText(forumElementText(body).replace(FACE_EMOJI_PATTERN, "[表情]"));
+export function emojiText(body: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const text = forumElementText(body, translate(locale, "forum.element.placeholder"));
+  return mentionText(text.replace(FACE_EMOJI_PATTERN, () => translate(locale, "emoji.inlinePlaceholder")));
 }
 export function bodyLength(body: string): number {
   return [...mentionText(body.replace(FACE_EMOJI_PATTERN, "\ufffc"))].length;

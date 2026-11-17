@@ -1,3 +1,7 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
 import { parsePageId, throwNotFound } from "@/app/.server/http/page-response";
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { getCreatorForAdminEdit } from "@/app/.server/db/creator-library";
@@ -18,9 +22,9 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { Textarea } from "@/app/components/ui/textarea";
 import { hasPermission } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { creatorRoleLabel, workStatusLabel } from "@/lib/labels";
-import { type LoaderFunctionArgs, type MetaFunction, Link, useLoaderData } from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction, useLoaderData } from "react-router";
 
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 import { useState } from "react";
@@ -45,18 +49,21 @@ export async function loader(args: LoaderFunctionArgs) {
   return {
     adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
     creator,
+    locale: runtime.uiLocale,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    {
-      title: [loaderData?.creator.name || "作者", "作者维护", "控制台"],
-    },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({
+    title: [loaderData?.creator.name || translate(locale, "admin.creators.creator"), translate(locale, "admin.creators.manage"), translate(locale, "admin.characterIndex.console")],
+  }, error, locale);
+};
 
 export default function AdminCreatorEditPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const navigationLocale = useNavigationLocale();
   const { adminUser, creator } = useLoaderData<typeof loader>();
   const [busy, setBusy] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -67,12 +74,12 @@ export default function AdminCreatorEditPage() {
         title={creator.name}
         actions={
           <>
-            <BackLink href="/admin/creators" label="返回作者维护" />
+            <BackLink href="/admin/creators" label={t("admin.creators.back")} />
             <Link
               className={buttonVariants({ variant: "outline" })}
               to={`/creators/${creator.id}`}
             >
-              查看公开页
+              {t("admin.creators.publicPage")}
             </Link>
           </>
         }
@@ -84,10 +91,11 @@ export default function AdminCreatorEditPage() {
         method="post"
         encType="multipart/form-data"
         onBusyChange={setBusy}
+        preserveLanguage
       >
         <input name="creator_id" type="hidden" value={creator.id} />
 
-        <Pane heading="头像">
+        <Pane heading={t("creator.edit.avatar")}>
           <AvatarCropper
             allowDelete
             avatarBlobSha256={creator.avatarBlobSha256}
@@ -98,11 +106,11 @@ export default function AdminCreatorEditPage() {
           />
         </Pane>
 
-        <Pane heading="基础信息">
+        <Pane heading={t("creator.edit.basic")}>
           <div className="grid gap-4 md:grid-cols-2">
             <FormField
               controlId="admin-creators-creatorId--field-1"
-              label="名称"
+              label={t("creator.name")}
             >
               <Input
                 id="admin-creators-creatorId--field-1"
@@ -114,8 +122,8 @@ export default function AdminCreatorEditPage() {
             </FormField>
             <FormField
               controlId="admin-creators-creatorId--field-2"
-              hint="每行一个；规范名称不必重复填写。"
-              label="别名"
+              hint={t("admin.creators.aliasHint")}
+              label={t("admin.creators.aliases")}
               wide
             >
               <Textarea
@@ -131,7 +139,7 @@ export default function AdminCreatorEditPage() {
             </div>
             <FormField
               controlId="admin-creators-creatorId--field-4"
-              label="简介"
+              label={t("admin.creators.bio")}
               wide
             >
               <Textarea
@@ -145,20 +153,20 @@ export default function AdminCreatorEditPage() {
         </Pane>
 
         <StickySaveBar>
-          <Button type="submit" disabled={busy || avatarBusy}>保存作者资料</Button>
+          <Button type="submit" disabled={busy || avatarBusy}>{t("admin.creators.save")}</Button>
         </StickySaveBar>
       </RedirectForm>
       {hasPermission(adminUser, "creator.merge_any") ? (
-        <Pane heading="合并重复人物" tone="danger">
+        <Pane heading={t("admin.creators.merge")} tone="danger">
           <ConfirmingForm
-            action={`/api/admin/creators/${creator.id}/merge`}
+            action={`/api/admin/creators/${creator.id}/merge${navigationLocale ? `?${UI_LOCALE_PARAM}=${navigationLocale}` : ""}`}
             confirmField="target_id"
-            title="确认合并人物？"
-            description="保留目标人物资料，将署名、别名和评论转移至目标，删除当前人物条目。此操作无法撤销。"
+            title={t("admin.creators.confirm")}
+            description={t("admin.creators.mergeDetail")}
           >
             <FormField
               controlId="admin-creators-creatorId--field-5"
-              label="目标人物 ID"
+              label={t("admin.creators.target")}
             >
               <Input
                 id="admin-creators-creatorId--field-5"
@@ -169,7 +177,7 @@ export default function AdminCreatorEditPage() {
               />
             </FormField>
             <Button className="mt-3" type="submit" variant="destructive">
-              合并到目标人物
+              {t("admin.creators.mergeSubmit")}
             </Button>
           </ConfirmingForm>
         </Pane>
@@ -177,9 +185,9 @@ export default function AdminCreatorEditPage() {
 
       <section
         className="grid gap-3 md:grid-cols-3 grid gap-4 lg:grid-cols-2"
-        aria-label="作者关联"
+        aria-label={t("admin.creators.associations")}
       >
-        <Pane heading="作品层职务">
+        <Pane heading={t("admin.creators.roles")}>
           {creator.adminWorkCredits.length > 0 ? (
             <ul className="mt-3 grid gap-3">
               {creator.adminWorkCredits.map((credit) => (
@@ -188,15 +196,15 @@ export default function AdminCreatorEditPage() {
                     {credit.workTitle}
                   </Link>
                   <span className="text-sm text-muted">
-                    {creatorRoleLabel(credit.roleKey)} /{" "}
-                    {workStatusLabel(credit.status)}
+                    {creatorRoleLabel(credit.roleKey, locale)} /{" "}
+                    {workStatusLabel(credit.status, locale)}
                     {credit.notes ? ` / ${credit.notes}` : ""}
                   </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <EmptyState title="暂无作品层职务。" />
+            <EmptyState title={t("admin.creators.noRoles")} />
           )}
         </Pane>
       </section>

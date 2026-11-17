@@ -1,5 +1,6 @@
 import { normalizeAppOrigin } from "./auth/config";
 import type { SessionCookieRefresh } from "./auth/session";
+import { requestUiLocale, type UiLocale } from "@/lib/i18n/locale";
 
 export type AppRuntime = {
   request: Request;
@@ -8,6 +9,7 @@ export type AppRuntime = {
   db: D1Database;
   bucket: R2Bucket;
   origin: string;
+  uiLocale: UiLocale;
   memo: Map<string, unknown>;
   sessionCookieRefresh?: SessionCookieRefresh;
 };
@@ -20,6 +22,7 @@ export function createRuntime(
 ): AppRuntime {
   return {
     request,
+    uiLocale: requestUiLocale(request),
     env,
     execution,
     db: env.DB,

@@ -26,14 +26,14 @@ async function requireCharacter(runtime: AppRuntime, context: Context) {
   const { characterId: raw } = await context.params;
   const id = Number(raw);
   if (!/^[1-9]\d*$/.test(raw) || !Number.isSafeInteger(id))
-    throw new HttpError(400, "角色 ID 不合法");
+    throw new HttpError(400, "角色 ID 不合法", undefined, "admin.portraits.error.characterId");
   if (
     !(await getD1(runtime)
       .prepare("SELECT id FROM characters WHERE id=?")
       .bind(id)
       .first())
   )
-    throw new HttpError(404, "角色不存在");
+    throw new HttpError(404, "角色不存在", undefined, "comment.error.characterMissing");
   return id;
 }
 
@@ -65,7 +65,7 @@ export async function GET(
     }
     const hash = params.get("blob") ?? "";
     if (!/^[a-f0-9]{64}$/.test(hash))
-      throw new HttpError(400, "素材地址不合法");
+      throw new HttpError(400, "素材地址不合法", undefined, "admin.portraits.error.assetUrl");
     const row = await getD1(runtime)
       .prepare(
         `SELECT content_type_hint AS type,size_bytes AS size FROM blobs b
@@ -85,9 +85,9 @@ export async function GET(
         "image/bmp",
       ].includes(row.type)
     )
-      throw new HttpError(404, "素材不存在");
+      throw new HttpError(404, "素材不存在", undefined, "admin.portraits.error.assetMissing");
     const object = await getBlob(runtime, hash);
-    if (!object) throw new HttpError(404, "素材文件缺失");
+    if (!object) throw new HttpError(404, "素材文件缺失", undefined, "admin.portraits.error.fileMissing");
     return new Response(object.body, {
       headers: {
         "Content-Type": row.type,
@@ -117,16 +117,16 @@ export async function POST(
     const form = await request.formData();
     const kind = String(form.get("kind"));
     if (!["charset", "monster", "other"].includes(kind))
-      throw new HttpError(400, "请选择素材分类");
+      throw new HttpError(400, "请选择素材分类", undefined, "admin.portraits.error.categoryRequired");
     const file = form.get("image");
     if (!(file instanceof File) || !file.size || file.size > 2 * 1024 * 1024)
-      throw new HttpError(400, "请选择不超过 2 MiB 的图片");
+      throw new HttpError(400, "请选择不超过 2 MiB 的图片", undefined, "admin.portraits.invalidImage");
     let info;
     try {
-      info = inspectForumImage(await file.arrayBuffer());
+      info = inspectForumImage(await file.arrayBuffer(), undefined, runtime.uiLocale);
     } catch (error) {
       if (error instanceof ForumImageValidationError)
-        throw new HttpError(error.status, error.message);
+        throw new HttpError(error.status, error.message, undefined, error.messageKey);
       throw error;
     }
     if (
@@ -137,6 +137,8 @@ export async function POST(
       throw new HttpError(
         400,
         "图片尺寸过大，最长边不能超过 8192 像素，总像素不能超过 1600 万",
+        undefined,
+        "admin.portraits.error.assetDimensions",
       );
     const [hash] = await storeWorkImages(runtime, [
       new File([file], file.name, { type: `image/${info.format}` }),
@@ -163,7 +165,7 @@ export async function POST(
       )
       .bind(hash, kind)
       .first<AdminCharacterMaterial>();
-    if (!material) throw new HttpError(500, "素材已上传，但没有返回素材记录");
+    if (!material) throw new HttpError(500, "素材已上传，但没有返回素材记录", undefined, "admin.portraits.error.assetRecord");
     return json({ ok: true, material }, { status: 201 });
   } catch (error) {
     return jsonError("素材上传失败", error);
@@ -189,13 +191,13 @@ export async function PUT(
         form.has(key),
       )
     )
-      throw new HttpError(400, "素材配置不完整，请刷新重试");
+      throw new HttpError(400, "素材配置不完整，请刷新重试", undefined, "admin.portraits.error.assetConfigIncomplete");
     const portrait = parseCharacterPortraitLibraryForm(form);
     let parsed: unknown;
     try {
       parsed = JSON.parse(String(form.get("material_ids")));
     } catch {
-      throw new HttpError(400, "素材配置格式不合法");
+      throw new HttpError(400, "素材配置格式不合法", undefined, "admin.portraits.error.assetConfig");
     }
     if (
       !Array.isArray(parsed) ||
@@ -203,7 +205,7 @@ export async function PUT(
         (id) => typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0,
       )
     )
-      throw new HttpError(400, "素材 ID 不合法");
+      throw new HttpError(400, "素材 ID 不合法", undefined, "admin.portraits.error.assetId");
     const ids = [...new Set(parsed as number[])];
     const db = getD1(runtime);
     const selected = JSON.stringify(ids);
@@ -215,7 +217,7 @@ export async function PUT(
       .bind(selected)
       .first<{ count: number }>();
     if (count?.count !== ids.length)
-      throw new HttpError(400, "部分素材已不可用，请刷新后重试");
+      throw new HttpError(400, "部分素材已不可用，请刷新后重试", undefined, "admin.portraits.error.assetsUnavailable");
     const statements = await prepareCharacterPortraitLibraryUpdate(runtime, {
       ...portrait,
       characterId,

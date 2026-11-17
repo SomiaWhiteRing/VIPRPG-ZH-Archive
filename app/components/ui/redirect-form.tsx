@@ -1,5 +1,9 @@
-import { apiResponseError, requestResponse, readJsonResponse } from "@/lib/ui/api-response";
+import { ApiResponseError, apiResponseError, requestResponse, readJsonResponse, type ApiResponsePayload } from "@/lib/ui/api-response";
 import { useToast } from "@/app/components/ui/toast";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
+import { preserveFormRedirectLocale, UI_LOCALE_PARAM, type UiLocale } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
+import { createPath, parsePath } from "react-router";
 import {
   forwardRef,
   useRef,
@@ -11,16 +15,28 @@ import {
 type Props = Omit<ComponentPropsWithoutRef<"form">, "action" | "method" | "onSubmit"> & {
   action: string;
   method?: "post";
+  preserveLanguage?: boolean;
+  responseType?: "html" | "json";
   onBusyChange?: (busy: boolean) => void;
 };
 
 type SubmitControl = HTMLButtonElement | HTMLInputElement;
 
 export const RedirectForm = forwardRef<HTMLFormElement, Props>(function RedirectForm(
-  { action, method = "post", onBusyChange, ...props },
+  { action, method = "post", onBusyChange, preserveLanguage, responseType = "html", ...props },
   ref,
 ) {
   const toast = useToast();
+  const t = useMessages();
+  const locale = useNavigationLocale();
+  if (preserveLanguage && locale) {
+    const path = parsePath(action);
+    const params = new URLSearchParams(path.search);
+    if (!params.has(UI_LOCALE_PARAM)) {
+      params.set(UI_LOCALE_PARAM, locale);
+      action = createPath({ ...path, search: params.toString() });
+    }
+  }
   const busyRef = useRef(false);
   const [busy, setBusy] = useState(false);
 
@@ -29,6 +45,7 @@ export const RedirectForm = forwardRef<HTMLFormElement, Props>(function Redirect
     if (busyRef.current) return;
 
     const form = event.currentTarget;
+    const submittedFrom = new URL(window.location.href);
     const candidate = (event.nativeEvent as SubmitEvent).submitter;
     const submitter = candidate instanceof HTMLButtonElement || candidate instanceof HTMLInputElement
       ? candidate
@@ -51,41 +68,36 @@ export const RedirectForm = forwardRef<HTMLFormElement, Props>(function Redirect
         method: form.method,
         body,
         credentials: "same-origin",
-        headers: { Accept: "text/html" },
+        headers: { Accept: responseType === "json" ? "application/json" : "text/html" },
       });
 
       if (response.redirected) {
         const target = new URL(response.url);
         const error = target.searchParams.get("error");
         if (error) throw new Error(error);
-        if (!response.ok) throw new Error("跳转页面暂时无法打开，请稍后重试。");
-        navigateTo(target);
+        if (!response.ok) throw new UiFeedbackError("core.form.unavailable");
+        navigateTo(target, submittedFrom, preserveLanguage ? locale : undefined);
         return;
       }
 
       const payload = response.headers.get("content-type")?.includes("application/json")
-        ? await readJsonResponse(response) as {
-            ok?: boolean;
-            detail?: string;
-            error?: string;
-            redirectTo?: string;
-          }
+        ? await readJsonResponse<ApiResponsePayload>(response, t("core.form.failed"), true)
         : null;
       if (!response.ok || payload?.ok === false) {
-        throw apiResponseError(response.status, payload ?? {}, "提交失败");
+        throw apiResponseError(response.status, payload ?? {}, t("core.form.failed"));
       }
       if (!payload?.redirectTo) {
-        throw new Error("服务器没有返回跳转地址，请刷新页面确认操作结果。");
+        throw new UiFeedbackError("core.form.missing");
       }
-      navigateTo(new URL(payload.redirectTo, window.location.href));
+      navigateTo(new URL(payload.redirectTo, window.location.href), submittedFrom, preserveLanguage ? locale : undefined);
     } catch (error) {
-      toast.error(
-        error instanceof TypeError
-          ? "无法连接服务器，请检查网络后重试。"
-          : error instanceof Error
-            ? error.message
-            : "提交失败，请稍后重试。",
-      );
+      if (error instanceof TypeError || (error instanceof ApiResponseError && error.code === "network_error")) {
+        toast.error(t("core.form.network"));
+      } else if (error instanceof ApiResponseError && error.code === "invalid_response") {
+        toast.error(t("core.form.badResponse"));
+      } else {
+        toast.error(error instanceof Error ? error : t("core.form.retry"));
+      }
       busyRef.current = false;
       setBusy(false);
       onBusyChange?.(false);
@@ -105,9 +117,12 @@ export const RedirectForm = forwardRef<HTMLFormElement, Props>(function Redirect
   );
 });
 
-function navigateTo(target: URL) {
+function navigateTo(target: URL, submittedFrom: URL, locale?: UiLocale | null) {
   if (target.origin !== window.location.origin) {
-    throw new Error("服务器返回了无效的跳转地址，请刷新页面后重试。");
+    throw new UiFeedbackError("core.form.invalid");
+  }
+  if (locale !== undefined) {
+    preserveFormRedirectLocale(target, submittedFrom, new URL(window.location.href), locale);
   }
   window.location.assign(target.href);
 }

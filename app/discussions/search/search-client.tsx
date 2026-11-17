@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { Timestamp } from "@/app/components/ui/timestamp";
 import type { PublicSearchPage } from "@/lib/dto/forum/activity";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -6,7 +7,7 @@ import {
   ForumAuthorName,
   Highlight,
 } from "@/app/discussions/shared";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export function DiscussionSearch({
   query,
@@ -17,20 +18,21 @@ export function DiscussionSearch({
   result: PublicSearchPage;
   error?: string;
 }) {
+  const t = useMessages();
   const isPostAuthorHidden = useIsPostAuthorHidden();
   const visibleHits = result.items.filter(hit => !isPostAuthorHidden(hit.author?.id));
   return (
-    <section aria-label="讨论搜索" className="min-w-0">
+    <section aria-label={t("forum.search")} className="min-w-0">
       {error ? (
         <p role="alert" className="my-4 text-destructive">
           {error}
         </p>
       ) : !query ? null : !result.items.length ? (
-        <EmptyState title={`没有找到包含‘${query}’的讨论。`} />
+        <EmptyState title={t("forum.searchEmpty", { query })} />
       ) : (
         <>
           <p role="status" className="my-6 text-sm text-muted">
-            {result.total} 个结果
+            {t("forum.searchCount", { count: result.total })}
           </p>
           {visibleHits.map((hit) => (
             <article
@@ -50,7 +52,7 @@ export function DiscussionSearch({
                 {hit.author ? (
                   <ForumAuthorName author={hit.author} query={query} />
                 ) : null}{" "}
-                · {hit.kind === "comment" ? "楼中楼回复" : "主楼"} ·{" "}
+                · {hit.kind === "comment" ? t("forum.nestedResult") : t("forum.rootResult")} ·{" "}
                 <Timestamp value={hit.createdAt} />
               </div>
             </article>

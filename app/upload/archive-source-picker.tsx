@@ -1,3 +1,6 @@
+import { UiFeedbackError } from "@/lib/i18n/feedback";
+import { isMessageKey, type MessageKey } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { Notice } from "@/app/components/ui/notice";
 
 import { Button } from "@/app/components/ui/button";
@@ -75,6 +78,7 @@ export function ArchiveSourcePicker({
 }) {
   const dragDepthRef = useRef(0);
   const instructionsId = useId();
+  const t = useMessages();
   const [fileDragActive, setFileDragActive] = useState(false);
   const archiveInputRef = useRef<HTMLInputElement>(null);
   const allActionsDisabled = disabled && (!onExternal || externalDisabled);
@@ -91,7 +95,7 @@ export function ArchiveSourcePicker({
   return (
     <div>
       <header className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="m-0 text-lg font-bold">游戏文件</h2>
+        <h2 className="m-0 text-lg font-bold">{t("upload.files")}</h2>
         <ArchiveAdvancedOptions
           checkMissingResources={checkMissingResources}
           onCheckMissingResourcesChange={onCheckMissingResourcesChange}
@@ -122,8 +126,8 @@ export function ArchiveSourcePicker({
           aria-disabled={allActionsDisabled || undefined}
           aria-label={
             fileDragActive
-              ? "松开以上传游戏文件"
-              : "拖入游戏文件夹、ZIP 或 7z 压缩包"
+              ? t("upload.picker.releaseFiles")
+              : t("upload.picker.dropFiles")
           }
           className={cn(
             "grid min-h-52 place-items-center rounded-lg border-2 border-dashed border-border bg-background p-5 text-center transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
@@ -175,10 +179,10 @@ export function ArchiveSourcePicker({
             >
               <Upload className="size-8 text-primary" />
               <strong aria-live="polite">
-                {fileDragActive ? "松开以上传" : "拖入游戏文件夹、ZIP 或 7z 压缩包"}
+                {fileDragActive ? t("upload.picker.release") : t("upload.picker.dropFiles")}
               </strong>
               <span className="text-sm text-muted" id={instructionsId}>
-                文件夹根目录或压缩包内须包含 RPG_RT.lmt
+                {t("upload.picker.lmt")}
               </span>
             </Button>
             <div className="mt-2 flex flex-wrap justify-center gap-2">
@@ -186,7 +190,7 @@ export function ArchiveSourcePicker({
                 accept=".zip,.7z,application/zip,application/x-7z-compressed"
                 disabled={disabled}
                 inputRef={archiveInputRef}
-                label="选择 ZIP / 7z"
+                label={t("upload.picker.archive")}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) {
@@ -197,7 +201,7 @@ export function ArchiveSourcePicker({
               <FilePicker
                 directory
                 disabled={disabled}
-                label="以文件夹方式选择"
+                label={t("upload.picker.folder")}
                 multiple
                 onChange={(event) => {
                   const files = Array.from(event.target.files ?? []);
@@ -218,7 +222,7 @@ export function ArchiveSourcePicker({
                   type="button"
                   variant="outline"
                 >
-                  填写外链
+                  {t("upload.picker.external")}
                 </Button>
               ) : null}
             </div>
@@ -246,6 +250,7 @@ function ArchiveAdvancedOptions({
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const sharedPlayerId = useId();
+  const t = useMessages();
   const missingResourcesId = useId();
 
   return (
@@ -259,24 +264,24 @@ function ArchiveAdvancedOptions({
           variant="ghost"
         >
           <SlidersHorizontal aria-hidden />
-          高级选项
+          {t("upload.picker.advanced")}
           <ChevronDown aria-hidden className="transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none" />
         </Button>
       </Popover.Trigger>
       <Popover.Portal anchorRef={trigger}>
         <Popover.Content
           align="end"
-          aria-label="游戏文件高级选项"
+          aria-label={t("upload.picker.advancedNamed")}
           className="z-50 w-96 max-w-[calc(100vw-1.5rem)] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-3 text-card-foreground shadow-surface data-[side=top]:[--popover-slide-offset:0.5rem] motion-safe:data-[state=open]:animate-popover-slide-open motion-safe:data-[state=closed]:animate-popover-slide-closed"
           collisionPadding={12}
           side="bottom"
           sideOffset={6}
         >
           <div className="mb-2 flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold">高级选项</h3>
+            <h3 className="text-sm font-semibold">{t("upload.picker.advanced")}</h3>
             <Popover.Close asChild>
               <Button
-                aria-label="关闭高级选项"
+                aria-label={t("upload.picker.closeAdvanced")}
                 className="size-7 text-muted pointer-coarse:size-9"
                 size="icon"
                 type="button"
@@ -294,8 +299,8 @@ function ArchiveAdvancedOptions({
                 id={missingResourcesId}
                 onCheckedChange={(checked) => onCheckMissingResourcesChange(checked === true)}
               />
-              <Label className="flex-1 py-1.5" htmlFor={missingResourcesId}>检测缺失素材</Label>
-              <InfoTooltip>扫描游戏引用但上传文件中未找到的素材。由于游戏可能在无法正常触发的分歧里引用未实装素材，检测结果仅供参考。</InfoTooltip>
+              <Label className="flex-1 py-1.5" htmlFor={missingResourcesId}>{t("upload.picker.detect")}</Label>
+              <InfoTooltip>{t("upload.picker.detectHelp")}</InfoTooltip>
             </div>
 
             <div className="flex min-h-7 items-center gap-2">
@@ -305,8 +310,8 @@ function ArchiveAdvancedOptions({
                 id={sharedPlayerId}
                 onCheckedChange={(checked) => onUseSharedPlayerChange(checked === true)}
               />
-              <Label className="flex-1 py-1.5" htmlFor={sharedPlayerId}>使用共享EasyRPG</Label>
-              <InfoTooltip>移除根目录中的Player.exe，下载时使用最新的EasyRPG Player Kai。</InfoTooltip>
+              <Label className="flex-1 py-1.5" htmlFor={sharedPlayerId}>{t("upload.picker.shared")}</Label>
+              <InfoTooltip>{t("upload.picker.sharedHelp")}</InfoTooltip>
             </div>
 
           </div>
@@ -318,30 +323,31 @@ function ArchiveAdvancedOptions({
 }
 
 function UploadDetectionLog({ task }: { task: BrowserUploadTaskSnapshot | null }) {
+  const t = useMessages();
   const headingId = useId();
   const missing = task?.stats.missingResources;
   const sharedPlayer = task?.stats.sharedPlayer;
   const restoredRtpFiles = task?.stats.restoredRtpFiles ?? [];
-  const summary = !missing ? "尚无缺失素材检测结果"
-    : missing.missing.length ? `检测到 ${missing.missing.length} 项疑似缺失素材`
-      : missing.limited || missing.reasons.length ? "请查看下方检测说明" : "未发现疑似缺失素材";
+  const summary = !missing ? t("upload.picker.noResult")
+    : missing.missing.length ? t("upload.picker.missingCount", { count: missing.missing.length })
+      : missing.limited || missing.reasons.length ? t("upload.picker.seeDetails") : t("upload.picker.noneMissing");
   return (
     <section aria-labelledby={headingId} className="mt-3 border-t border-border pt-3">
-      <h3 className="text-sm font-semibold" id={headingId}>检测日志</h3>
+      <h3 className="text-sm font-semibold" id={headingId}>{t("upload.picker.log")}</h3>
       <p aria-live="polite" className="mt-1 text-xs text-muted">{summary}</p>
       {sharedPlayer || restoredRtpFiles.length > 0 || (missing && (missing.missing.length > 0 || missing.reasons.length > 0 || missing.limited)) ? (
-        <div aria-label="检测日志明细" className="mt-2 max-h-48 overflow-auto overscroll-contain rounded-sm text-xs" role="region" tabIndex={0}>
+        <div aria-label={t("upload.picker.logDetails")} className="mt-2 max-h-48 overflow-auto overscroll-contain rounded-sm text-xs" role="region" tabIndex={0}>
           <ul className="grid gap-1 whitespace-nowrap">
             {missing?.missing.map(file => (
-              <li className="min-w-max text-red-600 dark:text-red-300" key={file.path}>疑似缺失：{file.path} — {file.source}</li>
+              <li className="min-w-max text-red-600 dark:text-red-300" key={file.path}>{t("upload.picker.missingNamed", { path: file.path, source: file.source })}</li>
             ))}
             {missing?.reasons.map(reason => (
               <li className="min-w-max text-red-600 dark:text-red-300" key={reason}>{reason}</li>
             ))}
-            {missing?.limited ? <li className="min-w-max text-red-600 dark:text-red-300">缺失检测不完整，最多列出 200 项；未列出不代表文件齐全。</li> : null}
-            {sharedPlayer ? <li className="min-w-max text-muted">播放器替换：{sharedPlayer.path}（{formatBytes(sharedPlayer.size)}）— 下载时使用共享 EasyRPG Player Kai</li> : null}
+            {missing?.limited ? <li className="min-w-max text-red-600 dark:text-red-300">{t("upload.picker.limited")}</li> : null}
+            {sharedPlayer ? <li className="min-w-max text-muted">{t("upload.picker.playerReplaced", { path: sharedPlayer.path, size: formatBytes(sharedPlayer.size) })}</li> : null}
             {restoredRtpFiles.map(file => (
-              <li className="min-w-max text-blue-600 dark:text-blue-300" key={`rtp:${file.path}`}>自动补充 RTP：{file.path}</li>
+              <li className="min-w-max text-blue-600 dark:text-blue-300" key={`rtp:${file.path}`}>{t("upload.picker.rtp", { path: file.path })}</li>
             ))}
           </ul>
         </div>
@@ -357,6 +363,7 @@ function ExistingArchiveCard({
   onRemove?: () => void;
   source: ArchiveSourceSummary;
 }) {
+  const t = useMessages();
   return (
     <article className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="p-4">
@@ -367,25 +374,24 @@ function ExistingArchiveCard({
           <span className="min-w-0">
             <strong className="block truncate">{source.name}</strong>
             <span className="mt-0.5 block text-xs text-muted">
-              本站归档 · {source.fileCount.toLocaleString("zh-CN")} 个文件 ·{" "}
-              {formatBytes(source.sizeBytes)}
+              {t("upload.picker.sourceSummary", { kind: t("upload.picker.archiveType"), count: source.fileCount, size: formatBytes(source.sizeBytes) })}
             </span>
           </span>
           <strong className="font-mono text-lg">100%</strong>
         </div>
         <Progress
-          aria-label="现有游戏文件已就绪"
+          aria-label={t("upload.picker.existingReady")}
           className="mt-4"
           value={100}
         />
         <div className="mt-2 text-xs text-muted">
-          <strong>游戏文件已就绪</strong>
+          <strong>{t("upload.picker.filesReady")}</strong>
         </div>
       </div>
       {onRemove ? (
         <footer className="flex justify-end border-t border-border bg-background/60 px-4 py-3">
           <Button onClick={onRemove} size="sm" type="button" variant="outline">
-            移除
+            {t("upload.picker.remove")}
           </Button>
         </footer>
       ) : null}
@@ -410,15 +416,20 @@ function UploadTaskCard({
   sourceSummary: ArchiveSourceSummary;
   task: BrowserUploadTaskSnapshot | null;
 }) {
+  const t = useMessages();
   const progress = Math.min(100, task?.progress.percent ?? 0);
+  const reason = task?.errorMessage ? t(task.errorMessage.key, task.errorMessage.values) : task?.terminalPending?.reason ?? task?.error;
+  const taskError = task?.terminalPending && reason
+    ? t(task.terminalPending.key, { reason })
+    : reason;
   const missing = task?.stats.missingResources;
   const progressLabel = task?.extrasBusy && task.commitStarted
-    ? `上传追加文件 ${task.extrasProgress?.completed ?? 0}/${task.extrasProgress?.total ?? 0}`
+    ? t("upload.picker.extraProgress", { done: task.extrasProgress?.completed ?? 0, total: task.extrasProgress?.total ?? 0 })
     : task?.sourceReady
-    ? "游戏文件已就绪"
+    ? t("upload.picker.filesReady")
     : task
-      ? uploadPhaseLabel(task.phase)
-      : "准备上传";
+      ? uploadPhaseLabel(task.phase, t)
+      : t("upload.picker.prepareUpload");
   const canCancel = Boolean(
     task &&
       ["running", "waiting"].includes(task.status) &&
@@ -445,15 +456,17 @@ function UploadTaskCard({
           <span className="min-w-0">
             <strong className="block truncate">{sourceSummary.name}</strong>
             <span className="mt-0.5 block text-xs text-muted">
-              {mode === "folder" ? "文件夹" : mode === "7z" ? "7z 压缩包" : "ZIP 压缩包"} ·{" "}
-              {sourceSummary.fileCount.toLocaleString("zh-CN")} 个文件 ·{" "}
-              {formatBytes(sourceSummary.sizeBytes)}
+              {t("upload.picker.sourceSummary", {
+                kind: t(mode === "folder" ? "upload.picker.typeFolder" : mode === "7z" ? "upload.picker.type7z" : "upload.picker.typeZip"),
+                count: sourceSummary.fileCount,
+                size: formatBytes(sourceSummary.sizeBytes),
+              })}
             </span>
           </span>
           <strong className="font-mono text-lg">{Math.round(progress)}%</strong>
         </div>
         <Progress
-          aria-label="游戏文件处理、上传与校验进度"
+          aria-label={t("upload.picker.progress")}
           className="mt-4"
           value={progress}
         />
@@ -467,12 +480,16 @@ function UploadTaskCard({
         </div>
         {missing && (missing.missing.length > 0 || missing.limited) ? (
           <p className="mt-2 text-xs text-red-600 dark:text-red-300" role="status">
-            {missing.missing.length ? `检测到 ${missing.missing.length} 项疑似缺失素材。` : "缺失素材检测未能完整完成。"}详情见「高级选项」中的检测日志，不影响上传。
+            {t("upload.picker.missingHint", {
+              summary: missing.missing.length
+                ? t("upload.picker.missingCount", { count: missing.missing.length })
+                : t("upload.picker.incomplete"),
+            })}
           </p>
         ) : null}
-        {task?.error ? (
-          <Notice tone="error" className="mt-3 border p-3 text-sm" role="alert">
-            {task.error}
+        {taskError ? (
+          <Notice tone="error" className="mt-3 whitespace-pre-line border p-3 text-sm" role="alert">
+            {taskError}
           </Notice>
         ) : null}
       </div>
@@ -491,12 +508,12 @@ function UploadTaskCard({
               {canceling ? (
                 <LoaderCircle aria-hidden className="animate-spin" />
               ) : <X aria-hidden />}
-              {canceling ? "取消中" : "取消上传"}
+              {canceling ? t("upload.picker.canceling") : t("upload.picker.cancel")}
             </Button>
           ) : null}
           {canRestart ? (
             <Button onClick={onRestart} size="sm" type="button">
-              重新开始
+              {t("upload.picker.restart")}
             </Button>
           ) : null}
         </footer>
@@ -564,7 +581,7 @@ export function normalizeFolderSource(
   rawFiles: UploadSourceFile[],
   suggestedName: string,
 ) {
-  if (!rawFiles.length) throw new Error("文件夹中没有可读取的文件。");
+  if (!rawFiles.length) throw new UiFeedbackError("upload.picker.emptyFolder");
   const normalized = rawFiles.map((item) => ({
     ...item,
     relativePath: normalizeArchivePath(item.relativePath),
@@ -661,20 +678,7 @@ function folderNameFromPicker(files: File[]): string {
   return first || "local-folder";
 }
 
-export function uploadPhaseLabel(phase: string): string {
-  const labels: Record<string, string> = {
-    enumerating: "读取文件",
-    hashing: "校验文件",
-    analyzing_resources: "检查素材引用",
-    building_core_pack: "整理公共文件",
-    creating_import_job: "创建上传任务",
-    preflighting: "检查已有对象",
-    uploading_source: "上传游戏文件",
-    verifying_source: "服务器校验游戏文件",
-    awaiting_metadata: "等待作品资料",
-    uploading_metadata: "上传资料图片",
-    committing: "提交入库",
-    completed: "完成",
-  };
-  return labels[phase] ?? "准备";
+export function uploadPhaseLabel(phase: string, t: (key: MessageKey) => string): string {
+  const key = `upload.phase.${phase}`;
+  return t(isMessageKey(key) ? key : "upload.phase.fallback");
 }

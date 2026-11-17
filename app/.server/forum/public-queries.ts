@@ -1,4 +1,5 @@
 import { emojiText } from "@/lib/face-emojis";
+import type { UiLocale } from "@/lib/i18n/locale";
 import type { ForumImage, ForumPage, ForumTopic } from "@/lib/forum";
 import type { PublicSearchPage } from "@/lib/dto/forum/activity";
 import {
@@ -242,7 +243,7 @@ export async function publicCommentPage(
 
 export async function indexedForumSearch(
   ctx: ForumRuntime,
-  input: { query: string; tags: number[]; featured: boolean; page: number },
+  input: { query: string; tags: number[]; featured: boolean; page: number; locale?: UiLocale },
 ): Promise<PublicSearchPage> {
   if (input.tags.length > 5) throw new HttpError(400, "最多选择 5 个 TAG。");
   if (!input.query.trim())
@@ -303,7 +304,7 @@ export async function indexedForumSearch(
       kind: r.post_id ? "post" : "comment",
       topicId: r.topic_id,
       title: r.title,
-      snippet: emojiText(r.snippet).slice(0,180),
+      snippet: emojiText(r.snippet, input.locale).slice(0,180),
       createdAt: r.created_at,
       author: author(
         r.user_id,

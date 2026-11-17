@@ -23,15 +23,18 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { DiscussionSearchResults } from "@/app/discussions/search/results";
 import type { CharacterIndexEntry } from "@/lib/character-index";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { CatalogSummary } from "@/lib/dto/db/catalogs";
-import { formatNumber } from "@/lib/format";
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
 import { FORUM_SEARCH_QUERY_LENGTH } from "@/lib/forum-search-index";
 import { stringParam } from "@/lib/params";
-import { getSearchScope, SEARCH_SCOPES } from "@/lib/search";
+import { getSearchScope, SEARCH_SCOPES, searchScopeLabel } from "@/lib/search";
 import { tagHref, type CombinedTagSummary } from "@/lib/user-tags";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, useLoaderData } from "react-router";
+import { Form, useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -39,7 +42,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const params = await searchParams;
   const query = stringParam(params.q).trim();
-  const [scope, scopeLabel] = getSearchScope(stringParam(params.scope));
+  const [scope] = getSearchScope(stringParam(params.scope));
   const page = Math.max(
     1,
     Number.parseInt(stringParam(params.page) || "1", 10) || 1,
@@ -63,57 +66,65 @@ export async function loader(args: LoaderFunctionArgs) {
     query,
     scope,
     page,
-    scopeLabel,
+    locale: runtime.uiLocale,
     result,
     directory,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors(
     {
       title: loaderData?.query
-        ? [`“${loaderData.query}”的搜索结果`, loaderData.scopeLabel]
-        : "站内搜索",
+        ? [translate(locale, "search.titleQuery", { query: loaderData.query }), searchScopeLabel(loaderData.scope, locale)]
+        : translate(locale, "search.title"),
       page:
         loaderData?.discussions?.result.page ?? (loaderData?.query ? loaderData.page : undefined),
     },
-    error,
+    error, locale,
   );
+};
 
 export default function SearchPage() {
-  const { discussions, query, scope, page, scopeLabel, result, directory } =
+  const { discussions, query, scope, page, result, directory } =
     useLoaderData<typeof loader>();
+  const t = useMessages();
+  const locale = useNavigationLocale();
+  const uiLocale = useUiLocale();
+  const scopeLabel = searchScopeLabel(scope, uiLocale);
+  const resultsLabel = t("search.resultsScope", { scope: scopeLabel });
   return (
     <PageContainer>
-      <PageHeader compact title="搜索站内内容" />
+      <PageHeader compact title={t("search.heading")} />
       <Form
         key={`${scope}:${query}`}
         className="my-6 flex gap-2"
         action="/search"
       >
         <Label className="sr-only" htmlFor="search-query">
-          搜索关键词
+          {t("search.keyword")}
         </Label>
         <Input
           className="h-10 min-w-0 flex-1 rounded-md border border-input bg-card px-3 text-sm text-foreground shadow-sm outline-none placeholder:text-muted focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
           id="search-query"
           name="q"
           defaultValue={query}
-          placeholder="输入关键词"
+          placeholder={t("search.placeholder")}
           type="search"
           maxLength={
             scope === "discussions" ? FORUM_SEARCH_QUERY_LENGTH : undefined
           }
         />
         <input name="scope" type="hidden" value={scope} />
-        <Rm2kButton type="submit">搜索</Rm2kButton>
+        {locale && <input name={UI_LOCALE_PARAM} type="hidden" value={locale} />}
+        <Rm2kButton type="submit">{t("search.submit")}</Rm2kButton>
       </Form>
       <nav
         className="flex flex-wrap gap-x-5 gap-y-2 border-b border-border pb-4 text-sm font-bold"
-        aria-label="搜索范围"
+        aria-label={t("search.scope")}
       >
-        {SEARCH_SCOPES.map(([value, label]) => (
+        {SEARCH_SCOPES.map(([value]) => (
           <Link
             className={
               scope === value
@@ -123,7 +134,7 @@ export default function SearchPage() {
             to={searchHref(query, value)}
             key={value}
           >
-            {label}
+            {searchScopeLabel(value, uiLocale)}
           </Link>
         ))}
       </nav>
@@ -132,16 +143,16 @@ export default function SearchPage() {
       ) : !query ? null : result ? (
         <>
           <p className="my-6 text-sm text-muted">
-            “{query}”在{scopeLabel}中找到 {formatNumber(result.total)} 个结果
+            {t("search.count", { query, scope: scopeLabel, count: result.total })}
           </p>
           {result.items.length > 0 ? (
-            <section className="divide-y divide-border border-y border-border" aria-label="作品搜索结果">
+            <section className="divide-y divide-border border-y border-border" aria-label={resultsLabel}>
               {result.items.map((work) => (
                 <SearchResultRow key={work.id} work={work} />
               ))}
             </section>
           ) : (
-            <EmptyState title="没有找到匹配的作品。" />
+            <EmptyState title={t("search.emptyWorks")} />
           )}
           <PaginationLinks
             basePath="/search"
@@ -154,12 +165,11 @@ export default function SearchPage() {
       ) : (
         <>
           <p className="my-6 text-sm text-muted">
-            “{query}”在{scopeLabel}中找到 {formatNumber(directory?.total ?? 0)}{" "}
-            个结果
+            {t("search.count", { query, scope: scopeLabel, count: directory?.total ?? 0 })}
           </p>
           {directory && directory.items.length > 0 ? (
             scope === "tags" ? (
-              <TagCloud tags={directory.items.flatMap((item) => item.tag ? [item.tag] : [])} label="标签搜索结果" />
+              <TagCloud tags={directory.items.flatMap((item) => item.tag ? [item.tag] : [])} label={resultsLabel} />
             ) : (
               <section
                 className={
@@ -171,15 +181,7 @@ export default function SearchPage() {
                         ? "divide-y divide-border border-y border-border"
                         : "grid gap-2.5"
                 }
-                aria-label={
-                  scope === "characters"
-                    ? "角色搜索结果"
-                    : scope === "catalogs"
-                      ? "目录搜索结果"
-                      : scope === "creators"
-                        ? "作者搜索结果"
-                        : "分类搜索结果"
-                }
+                aria-label={resultsLabel}
               >
                 {directory.items.map((item) =>
                   item.character ? (
@@ -209,7 +211,7 @@ export default function SearchPage() {
               </section>
             )
           ) : (
-            <EmptyState title={`没有找到匹配的${scopeLabel}。`} />
+            <EmptyState title={t("search.emptyScope", { scope: scopeLabel })} />
           )}
           {directory ? (
             <PaginationLinks
@@ -252,7 +254,7 @@ async function listDirectory(
         href: `/creators/${item.id}`,
         title: item.name,
         subtitle: null,
-        meta: `${item.workCreditCount} 个作品`,
+        meta: translate(runtime.uiLocale, "favorite.workCount", { count: item.workCreditCount }),
         creator: item,
       }),
     );
@@ -276,7 +278,7 @@ async function listDirectory(
       href: `/characters/${item.id}`,
       title: item.primaryName,
       subtitle: item.originalName,
-      meta: `${item.workCount} 个作品`,
+      meta: translate(runtime.uiLocale, "favorite.workCount", { count: item.workCount }),
       character: {
         id: item.id,
         portrait: item.defaultPortrait,
@@ -292,7 +294,7 @@ async function listDirectory(
       href: tagHref(tag.name),
       title: tag.name,
       subtitle: null,
-      meta: `${tag.usageCount} 次使用`,
+      meta: translate(runtime.uiLocale, "work.tagUses", { count: tag.usageCount }),
       tag,
     }));
   else if (scope === "catalogs")
@@ -300,7 +302,7 @@ async function listDirectory(
       href: `/catalogs/${item.id}`,
       title: item.title,
       subtitle: null,
-      meta: `${item.itemCount} 部作品 · ${item.ownerName}`,
+      meta: `${translate(runtime.uiLocale, "favorite.workCount", { count: item.itemCount })} · ${item.ownerName}`,
       catalog: item,
     }));
   else items = [];

@@ -1,14 +1,14 @@
+import { useMessages } from "@/lib/i18n/react";
 import { Button } from "@/app/components/ui/button";
 import { ShowcaseImage } from "@/app/components/profile/showcase-image";
 import {
-  SHOWCASE_LABELS,
   showcaseHref,
   type ShowcaseEntry,
   type ShowcaseKind,
 } from "@/lib/showcase";
 import { ChevronDown } from "lucide-react";
 import { useId, useRef, useState, type KeyboardEvent } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 
 const showcaseToggleClassName = "flex w-full min-h-0 items-center justify-between gap-1.5 p-0 text-left text-[11px] leading-[1.6] font-bold tracking-[0.6px] whitespace-normal text-primary [&_svg]:size-[15px] [@container(max-width:620px)]:col-start-2 [@container(max-width:620px)]:row-start-1 pointer-coarse:min-h-[27px]";
@@ -20,6 +20,7 @@ export function Showcase({
   entries: ShowcaseEntry[];
   editable?: boolean;
 }) {
+  const t = useMessages();
   const visible = entries.filter((entry) => entry.target !== null);
   const expandable = visible.filter((entry) => entry.note.trim());
   const switchable = expandable.length > 1;
@@ -66,14 +67,14 @@ export function Showcase({
     <section className="@container [--showcase-duration:420ms] [--showcase-easing:cubic-bezier(0.22,0.7,0.25,1)] [--showcase-image-height:157px] motion-reduce:[--showcase-duration:0ms]" aria-labelledby={`${id}-title`}>
       <header className="mb-[13px] flex items-center justify-between gap-3">
         <h2 className="m-0 text-lg font-bold" id={`${id}-title`}>
-          喜爱展柜
+          {t("account.nav.showcase")}
         </h2>
         {editable ? (
           <Link
             className="text-[13px] font-normal leading-[1.6] text-primary hover:underline"
             to="/me/showcase"
           >
-            编辑展柜
+            {t("showcase.public.edit")}
           </Link>
         ) : null}
       </header>
@@ -82,7 +83,7 @@ export function Showcase({
           const target = entry.target!;
           const canExpand = !!entry.note.trim();
           const expanded = active === entry.kind;
-          const label = `最喜欢的${SHOWCASE_LABELS[entry.kind]}`;
+          const label = t(`showcase.favorite.${entry.kind}`);
           return (
             <article
               className="group/showcase min-w-0 flex-[1_1_0] rounded-lg border border-border bg-card p-4 [transition:flex-grow_var(--showcase-duration)_var(--showcase-easing),background-color_var(--showcase-duration),border-color_var(--showcase-duration)] data-[expanded=true]:grow-[3.1] data-[highlighted=true]:bg-[color-mix(in_srgb,var(--color-rm2k-green-1)_8%,var(--color-card))] data-[highlighted=true]:border-[color-mix(in_srgb,var(--color-rm2k-green-1)_48%,var(--color-border))] [@container(620px<width<=760px)]:p-[13px] [@container(max-width:620px)]:p-[13px] [@container(max-width:620px)]:grid [@container(max-width:620px)]:grid-cols-[74px_minmax(0,1fr)] [@container(max-width:620px)]:grid-rows-[27px_minmax(36px,auto)_0fr] [@container(max-width:620px)]:gap-x-[13px] [@container(max-width:620px)]:[transition:grid-template-rows_var(--showcase-duration)_var(--showcase-easing),background-color_var(--showcase-duration)] [@container(max-width:620px)]:data-[expanded=true]:grid-rows-[27px_minmax(36px,auto)_1fr]"
@@ -127,7 +128,7 @@ export function Showcase({
                   }}
                   aria-expanded={expanded}
                   aria-controls={`${id}-${entry.kind}`}
-                  aria-label={`展开最喜欢的${SHOWCASE_LABELS[entry.kind]}：${target.name}的附言`}
+                  aria-label={t("showcase.public.expand", { name: target.name })}
                   onClick={() => setSelected(entry.kind)}
                   onKeyDown={(event) =>
                     navigate(
@@ -149,7 +150,7 @@ export function Showcase({
                 <Link
                   className="flex h-(--showcase-image-height) min-w-0 flex-[0_0_100%] justify-start overflow-hidden [transition:flex-basis_var(--showcase-duration)_var(--showcase-easing)] group-data-[expanded=true]/showcase:basis-(--showcase-image-height) group-[[data-kind=work][data-expanded=true]]/showcase:basis-[calc(var(--showcase-image-height)*4/3)] [@container(max-width:620px)]:col-start-1 [@container(max-width:620px)]:row-[1/3] [@container(max-width:620px)]:w-[74px] [@container(max-width:620px)]:h-[63px] [@container(max-width:620px)]:max-w-none"
                   to={showcaseHref(target)}
-                  aria-label={`查看${target.name}的详情`}
+                  aria-label={t("showcase.public.details", { name: target.name })}
                 >
                   <ShowcaseImage target={target} />
                 </Link>

@@ -10,6 +10,7 @@ import { hasPermission } from "@/lib/authz/permissions";
 import { COMMENT_IMAGE_BYTES, COMMENT_IMAGE_COUNT, type CommentImage } from "@/lib/comment-images";
 import { inspectImage, ImageValidationError } from "@/lib/image-format";
 import { HttpError, json, jsonError } from "@/lib/http";
+import { UiHttpError } from "@/lib/i18n/feedback";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { PUBLIC_STATUS } from "@/app/.server/timeline/content";
 
@@ -20,14 +21,14 @@ type StoredImage = CommentImage & {
   updated_at: string; comment_id: number | null; timeline_event_id: number | null; timeline_reply_id: number | null;
 };
 const storedColumns = `${columns},user_id,object_key,fingerprint,status,updated_at,comment_id,timeline_event_id,timeline_reply_id`;
-const pending = () => new HttpError(409, "图片上传尚待确认，请一分钟后重试，已上传图片会被保留。");
+const pending = () => new UiHttpError(409, "image.error.pendingConfirmation");
 
 export function parseCommentImageIds(value: unknown): string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > COMMENT_IMAGE_COUNT ||
       value.some((id) => typeof id !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(id)) ||
       new Set(value).size !== value.length)
-    throw new HttpError(400, "图片列表无效，最多上传 10 张图片。");
+    throw new UiHttpError(400, "image.error.invalidList");
   return value;
 }
 
@@ -98,11 +99,11 @@ export async function uploadCommentImage(runtime: AppRuntime, request: Request) 
     const auth = await requireUser(runtime, request);
     if ("response" in auth) return auth.response;
     const contentType = request.headers.get("content-type");
-    if (!contentType?.startsWith("multipart/form-data;")) throw new HttpError(400, "请选择图片文件。");
+    if (!contentType?.startsWith("multipart/form-data;")) throw new UiHttpError(400, "image.error.chooseFile");
     const bytes = await readForumBody(request, COMMENT_IMAGE_BYTES + 16384);
     let form: FormData;
     try { form = await new Response(bytes, { headers: { "Content-Type": contentType } }).formData(); }
-    catch { throw new HttpError(400, "图片请求无效。"); }
+    catch { throw new UiHttpError(400, "forum.image.invalid"); }
     const file = form.get("image"), clientId = form.get("clientId");
     const kind = form.get("targetKind"), id = Number(form.get("targetId"));
     let permissionGate = "1";
@@ -111,21 +112,21 @@ export async function uploadCommentImage(runtime: AppRuntime, request: Request) 
         ? `timeline_enabled=1 AND ${userPermissionSql("users.id", "timeline.use")} AND ${userPermissionSql("users.id", "timeline.status.create")}`
         : userPermissionSql("users.id", "timeline.reply.create");
       if (!await runtime.db.prepare(`SELECT id FROM users WHERE id=? AND status='active' AND ${permissionGate}`).bind(auth.user.id).first())
-        throw new HttpError(403, "当前账号不能上传时间线图片。");
+        throw new UiHttpError(403, "image.error.timelineForbidden");
       if (kind === "timelineReply" && (!Number.isSafeInteger(id) || id <= 0 || !await runtime.db.prepare(PUBLIC_STATUS).bind(id).first()))
-        throw new HttpError(404, "吐槽不存在或已隐藏。");
+        throw new UiHttpError(404, "image.error.timelineUnavailable");
       if (kind === "timelineReply") permissionGate += ` AND EXISTS(${PUBLIC_STATUS.replace("e.id=?", `e.id=${id}`)})`;
     } else {
       if ((kind !== "work" && kind !== "creator" && kind !== "character" && kind !== "catalog") || !Number.isSafeInteger(id) || id <= 0)
-        throw new HttpError(400, "评论目标无效。");
+        throw new UiHttpError(400, "image.error.invalidTarget");
       await assertReadableCommentTarget(runtime, { kind, id });
     }
     if (!(file instanceof File) || typeof clientId !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(clientId))
-      throw new HttpError(400, "图片或上传标识无效。");
+      throw new UiHttpError(400, "forum.image.uploadId");
     const buffer = await file.arrayBuffer();
     const meta = inspectImage(buffer, COMMENT_IMAGE_BYTES);
-    if (meta.format === "bmp") throw new HttpError(400, "评论图片仅支持 PNG、JPEG、WebP 或 GIF。");
-    if (file.type && file.type !== `image/${meta.format}`) throw new HttpError(400, "文件类型与图片内容不一致。");
+    if (meta.format === "bmp") throw new UiHttpError(400, "image.error.format");
+    if (file.type && file.type !== `image/${meta.format}`) throw new UiHttpError(400, "forum.image.typeMismatch");
     const fingerprint = await sha256Hex(buffer), db = runtime.db;
     const existing = await db.prepare(`SELECT ${storedColumns} FROM comment_images WHERE user_id=? AND client_id=?`)
       .bind(auth.user.id, clientId).first<StoredImage>();
@@ -133,9 +134,9 @@ export async function uploadCommentImage(runtime: AppRuntime, request: Request) 
       id: image.id, url: image.url, width: image.width, height: image.height, size: image.size, format: image.format,
     } });
     if (existing) {
-      if (existing.fingerprint !== fingerprint) throw new HttpError(409, "上传标识对应的图片已变化。");
+      if (existing.fingerprint !== fingerprint) throw new UiHttpError(409, "forum.image.changed");
       if (existing.status === "ready") return respond(existing);
-      if (existing.status === "cleanup" || existing.status === "cleaned") throw new HttpError(409, "图片已过期，请移除后重新选择。");
+      if (existing.status === "cleanup" || existing.status === "cleaned") throw new UiHttpError(409, "image.error.expired");
     }
     const imageId = existing?.id ?? crypto.randomUUID(), stamp = new Date().toISOString();
     const gate = `EXISTS(SELECT 1 FROM users WHERE id=? AND status='active' AND ${permissionGate}) AND
@@ -149,7 +150,7 @@ export async function uploadCommentImage(runtime: AppRuntime, request: Request) 
           SELECT ?,?,?,?,'uploading',?,?,?,?,?,? WHERE ${gate} ON CONFLICT(user_id,client_id) DO NOTHING RETURNING ${storedColumns}`)
           .bind(imageId, auth.user.id, clientId, fingerprint, `comment-images/${imageId}`, meta.format, meta.size, meta.width, meta.height, stamp,
             auth.user.id, auth.user.id).first<StoredImage>();
-    if (!row) throw new HttpError(429, "上传过于频繁或仍在处理中，请一分钟后重试。");
+    if (!row) throw new UiHttpError(429, "image.error.busy");
     try {
       await putImmutableImage(runtime.bucket, row, buffer);
       const ready = await db.prepare(`UPDATE comment_images SET status='ready',updated_at=CURRENT_TIMESTAMP
@@ -167,7 +168,12 @@ export async function uploadCommentImage(runtime: AppRuntime, request: Request) 
       throw pending();
     }
   } catch (error) {
-    return jsonError("评论图片上传失败。", error instanceof ImageValidationError ? new HttpError(error.status, error.message) : error);
+    return jsonError(
+      "评论图片上传失败。",
+      error instanceof ImageValidationError
+        ? new HttpError(error.status, error.message, undefined, error.status === 413 ? "image.size" : "forum.image.invalidFormat")
+        : error,
+    );
   }
 }
 
@@ -182,7 +188,7 @@ export async function readCommentImage(runtime: AppRuntime, id: string) {
          WHERE r.id=comment_images.timeline_reply_id AND r.hidden_at IS NULL AND ru.status='active'
            AND e.kind='status' AND e.hidden_at IS NULL AND u.status='active')) AS public
       FROM comment_images WHERE id=? AND status='ready'`).bind(id).first<StoredImage & { public: number }>();
-    if (!row) throw new HttpError(404, "图片不可用。");
+    if (!row) throw new UiHttpError(404, "image.error.unavailable");
     if (!row.public) {
       const user = await getCurrentUser(runtime);
       const draft = row.comment_id === null && row.timeline_event_id === null && row.timeline_reply_id === null;
@@ -192,10 +198,10 @@ export async function readCommentImage(runtime: AppRuntime, id: string) {
         `SELECT c.id FROM published_comments c WHERE c.id=? AND ${access.sql}`,
       ).bind(row.comment_id, ...access.binds).first();
       if (!user || !(canRead || canManage || (draft && row.user_id === user.id)))
-        throw new HttpError(404, "图片不可用。");
+        throw new UiHttpError(404, "image.error.unavailable");
     }
     const object = await runtime.bucket.get(row.object_key);
-    if (!object) throw new HttpError(404, "图片不可用。");
+    if (!object) throw new UiHttpError(404, "image.error.unavailable");
     return new Response(object.body, { headers: {
       "Content-Type": `image/${row.format}`, "Content-Length": String(object.size), "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff", "Cross-Origin-Resource-Policy": "same-origin",

@@ -1,5 +1,7 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import type { MessageKey } from "@/lib/i18n/core";
 import { useDocumentNavigationGuard } from "@/app/components/ui/use-navigation-guard";
-import { requestJson } from "@/lib/ui/api-response";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 import { useEffect, useRef, useState } from "react";
 
 import { AtSign, ImagePlus, LoaderCircle, Save, Send, X } from "lucide-react";
@@ -40,11 +42,14 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
   editing?: CommentDto;
   onCancel?: () => void;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [body, setBody] = useState(editing?.bodySource ?? "");
   const [images, setImages] = useState<Attachment[]>(() => editing?.images.map((image) => ({
     key: image.id, preview: image.url, processed: true, uploaded: image,
   })) ?? []);
-  const [progress, setProgress] = useState("");
+  const [progressMessage, setProgress] = useState<{ id: MessageKey; values?: { index: number; total: number } } | null>(null);
+  const progress = progressMessage ? t(progressMessage.id, progressMessage.values) : "";
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editor = useRef<BodyEditorHandle>(null);
@@ -80,15 +85,15 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
     if (replyToCommentId) editor.current?.focus();
   }, [replyToCommentId]);
 
-  function start(message: string) {
+  function start(id: MessageKey) {
     pending.current = true;
-    setProgress(message);
+    setProgress({ id });
     setError(null);
     onBusyChange?.(true);
   }
   function finish() {
     pending.current = false;
-    if (mounted.current) { setProgress(""); setSubmitting(false); onBusyChange?.(false); }
+    if (mounted.current) { setProgress(null); setSubmitting(false); onBusyChange?.(false); }
   }
   function release(url: string) {
     if (resources.current.delete(url)) URL.revokeObjectURL(url);
@@ -101,12 +106,12 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
     image.error = undefined;
     updateImage(image);
     try {
-      if (!image.file) throw new Error("请选择图片文件。");
+      if (!image.file) throw new Error(t("image.choose"));
       processor.current ??= createImageProcessor();
-      image.file = await processor.current.process(image.file);
+      image.file = await processor.current.process(image.file, locale);
       image.processed = true;
     } catch (cause) {
-      image.error = cause instanceof Error ? cause.message : "图片处理失败，请重试。";
+      image.error = cause instanceof Error ? cause.message : t("image.processFailed");
       throw cause;
     } finally {
       image.stage = undefined;
@@ -115,9 +120,9 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
   }
   async function addImages(files: File[]) {
     if (!files.length || pending.current || unavailable) return;
-    if (images.length + files.length > COMMENT_IMAGE_COUNT) { setError("每条评论最多上传 10 张图片。"); return; }
-    if (files.some((file) => !file.size || file.size > COMMENT_IMAGE_BYTES)) { setError("每张图片必须非空且不能超过 2 MiB。"); return; }
-    start("正在处理图片…");
+    if (images.length + files.length > COMMENT_IMAGE_COUNT) { setError(t("image.limit")); return; }
+    if (files.some((file) => !file.size || file.size > COMMENT_IMAGE_BYTES)) { setError(t("image.size")); return; }
+    start("image.processing");
     // Render the original file immediately, before loading codecs or decoding.
     const added: Attachment[] = files.map((file) => {
       const preview = URL.createObjectURL(file);
@@ -130,7 +135,7 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
         if (!mounted.current) return;
         try { await prepareImage(image); }
         catch {
-          if (mounted.current) setError(`${image.error} 可移除此图片，或在发布时重试。`);
+          if (mounted.current) setError(t("image.retryOrRemove", { error: image.error ?? "" }));
         }
       }
     } finally { finish(); }
@@ -138,7 +143,7 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
 
   async function submit() {
     if (pending.current || unavailable || !body.trim()) return;
-    start("正在上传图片…");
+    start("image.uploading");
     const next = images.map((image) => ({ ...image }));
     try {
       for (let index = 0; index < next.length; index++) {
@@ -147,30 +152,31 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
         if (!mounted.current) return;
         try {
           if (!image.processed) {
-            setProgress(`正在处理图片 ${index + 1}/${next.length}…`);
+            setProgress({ id: "image.processingIndex", values: { index: index + 1, total: next.length } });
             await prepareImage(image);
           }
           if (!mounted.current) return;
-          setProgress(`正在上传图片 ${index + 1}/${next.length}…`);
+          setProgress({ id: "image.uploadIndex", values: { index: index + 1, total: next.length } });
           image.stage = "uploading";
           image.error = undefined;
           updateImage(image);
           const form = new FormData();
-          if (!image.file) throw new Error("请选择图片文件。");
+          if (!image.file) throw new Error(t("image.choose"));
           form.set("image", image.file);
           form.set("clientId", image.key);
           form.set("targetKind", target.kind);
           form.set("targetId", String(target.id));
-          const result = await requestJson<{ image?: CommentImage }>("/api/comments/images", { method: "POST", credentials: "same-origin", body: form }, "图片上传失败");
-          if (!result.image) throw new Error("图片已上传，但未返回图片资料，请重新读取状态。");
+          const result = await requestJson<{ image?: CommentImage }>("/api/comments/images", { method: "POST", credentials: "same-origin", body: form }, t("image.uploadFailed"));
+          if (!result.image) throw new Error(t("image.missingResponse"));
           image.uploaded = result.image;
         } catch (cause) {
-          image.error = cause instanceof Error ? cause.message : "网络请求失败，请重试。";
+          image.error = cause instanceof ApiResponseError ? cause.messageFor(locale)
+            : cause instanceof Error ? cause.message : t("relation.edit.network");
           throw new Error(image.error);
         } finally { image.stage = undefined; updateImage(image); }
       }
       if (!mounted.current) return;
-      setProgress(editing ? "正在保存修改…" : replyToCommentId ? "正在发布回复…" : "正在发布评论…");
+      setProgress({ id: editing ? "comment.saving" : replyToCommentId ? "comment.postingReply" : "comment.posting" });
       setSubmitting(true);
       const payload = { body, replyToCommentId, imageIds: next.map((image) => image.uploaded!.id) };
       const serialized = JSON.stringify(payload);
@@ -179,8 +185,8 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
       const result = await requestJson<{ comment?: CommentDto }>(endpoint, {
         method: editing ? "PATCH" : "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
         body: JSON.stringify(editing ? { body, imageIds: payload.imageIds } : { ...payload, requestKey: requestIdentity.current.key }),
-      }, editing ? "评论修改失败" : "评论发送失败");
-      if (!result.comment) throw new Error("评论已保存，但未返回评论资料，请重新读取状态。");
+      }, editing ? t("comment.editFailed") : t("comment.postFailed"));
+      if (!result.comment) throw new Error(t("comment.missingResponse"));
       if (!mounted.current) return;
       setBody("");
       setImages([]);
@@ -189,14 +195,17 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
       // Release the reply target before the parent closes this composer.
       finish();
       onCreated(result.comment);
-      toast.success(editing ? "修改已保存。" : replyToCommentId ? "回复已发布。" : "评论已发布。");
+      toast.success(editing ? t("comment.saved") : replyToCommentId ? t("comment.replyPosted") : t("comment.posted"));
     } catch (cause) {
-      if (mounted.current) toast.error(`${cause instanceof Error ? cause.message : "网络请求失败。"} 正文和图片已保留，请重试。`);
+      if (mounted.current) toast.error(t("comment.draftKept", {
+        error: cause instanceof ApiResponseError ? cause.messageFor(locale)
+          : cause instanceof Error ? cause.message : t("relation.edit.network"),
+      }));
     } finally { finish(); }
   }
 
   return (
-    <div className="grid min-w-0 gap-2" role="group" aria-label="评论编辑器"
+    <div className="grid min-w-0 gap-2" role="group" aria-label={t("comment.editor")}
       onKeyDownCapture={(event) => {
         if (
           (event.target instanceof Element && !!event.target.closest("[data-mention-picker]")) ||
@@ -224,31 +233,31 @@ export function CommentComposer({ endpoint, target, replyToCommentId, inputId = 
         busy={busy || unavailable} topic={false} placeholder={placeholder} autoFocus={!!replyToCommentId || !!editing}
         onChange={setBody} onBusyChange={() => {}} onError={setError}
         onCompositionChange={(value) => { composing.current = value; }} />
-      {images.length ? <ul className="flex flex-wrap gap-2" aria-label="待发布图片">
+      {images.length ? <ul className="flex flex-wrap gap-2" aria-label={t("image.pending")}>
         {images.map((image, index) => <li key={image.key} className="w-24" aria-busy={!!image.stage}>
           <div className="relative aspect-square overflow-hidden rounded-md bg-muted/15">
-            <img src={image.preview} alt={`待发布图片 ${index + 1}`} className="size-full object-cover" />
+            <img src={image.preview} alt={t("image.pendingIndex", { index: index + 1 })} className="size-full object-cover" />
             {image.stage ? (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white" role="status">
                 <LoaderCircle aria-hidden className="size-7 animate-spin motion-reduce:animate-none" />
-                <span className="sr-only">图片 {index + 1} {image.stage === "processing" ? "正在处理" : "正在上传"}</span>
+                <span className="sr-only">{t("image.workIndex", { index: index + 1, stage: image.stage ?? "uploading" })}</span>
               </div>
             ) : (
               <Button type="button" size="icon" variant="neutral" className="absolute right-0 top-0" disabled={busy || unavailable}
-                aria-label={`移除图片 ${index + 1}`} onClick={() => { release(image.preview); setImages((current) => current.filter((item) => item.key !== image.key)); }}><X aria-hidden /></Button>
+                aria-label={t("image.removeIndex", { index: index + 1 })} onClick={() => { release(image.preview); setImages((current) => current.filter((item) => item.key !== image.key)); }}><X aria-hidden /></Button>
             )}
           </div>
-          {image.error ? <span className="text-xs text-destructive">{image.processed ? "上传失败" : "处理失败"}，发布时重试</span> : null}
+          {image.error ? <span className="text-xs text-destructive">{t("image.willRetry", { stage: image.processed ? "upload" : "process" })}</span> : null}
         </li>)}
       </ul> : null}
       <input ref={picker} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden disabled={busy || unavailable}
         onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; void addImages(files); }} />
       <EmojiPicker disabled={busy || unavailable} onSelect={(emoji, options) => editor.current?.insertEmoji(emoji, options)} onClose={() => editor.current?.focus()}>
-        {(trigger) => <CommentComposerToolbar tools={<>{trigger}<Button type="button" variant="ghost" size="icon" aria-label="提及用户" title="提及用户" data-mention-trigger={inputId} disabled={busy || unavailable} onClick={() => editor.current?.mention()}><AtSign aria-hidden /></Button><Button type="button" variant="ghost" size="icon" aria-label="上传图片" title="上传图片" disabled={busy || unavailable || images.length >= COMMENT_IMAGE_COUNT}
+        {(trigger) => <CommentComposerToolbar tools={<>{trigger}<Button type="button" variant="ghost" size="icon" aria-label={t("mention.label")} title={t("mention.label")} data-mention-trigger={inputId} disabled={busy || unavailable} onClick={() => editor.current?.mention()}><AtSign aria-hidden /></Button><Button type="button" variant="ghost" size="icon" aria-label={t("image.upload")} title={t("image.upload")} disabled={busy || unavailable || images.length >= COMMENT_IMAGE_COUNT}
             onClick={() => picker.current?.click()}><ImagePlus aria-hidden /></Button></>} actions={<>
-            {editing ? <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>取消</Button> : null}
+            {editing ? <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>{t("relation.edit.cancel")}</Button> : null}
             <Button ref={submitButton} type="button" disabled={busy || unavailable || !body.trim()} onClick={() => void submit()}
-              title="Ctrl+Enter 提交" aria-keyshortcuts="Control+Enter">{editing ? <Save aria-hidden /> : <Send aria-hidden />}{submitting ? progress : editing ? "保存修改" : replyToCommentId ? "发布回复" : "发布评论"}</Button>
+              title={t("comment.submitShortcut")} aria-keyshortcuts="Control+Enter">{editing ? <Save aria-hidden /> : <Send aria-hidden />}{submitting ? progress : editing ? t("comment.saveEdit") : replyToCommentId ? t("comment.postReply") : t("comment.post")}</Button>
         </>} />}
       </EmojiPicker>
       {progress ? <p role="status" className="sr-only">{progress}</p> : null}

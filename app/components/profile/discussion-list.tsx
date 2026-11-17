@@ -1,9 +1,8 @@
 import type { UserDiscussionItem } from "@/lib/dto/forum/activity";
 import { AccountEmpty } from "@/app/components/profile/account-content";
 import { Timestamp } from "@/app/components/ui/timestamp";
-import { Link } from "react-router";
-
-const activityLabels = { topic: "发帖", post: "回帖", comment: "楼中楼回复" };
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages } from "@/lib/i18n/react";
 
 export function DiscussionList({
   items,
@@ -12,7 +11,8 @@ export function DiscussionList({
   items: UserDiscussionItem[];
   compact?: boolean;
 }) {
-  if (!items.length) return <AccountEmpty>还没有可展示的讨论。</AccountEmpty>;
+  const t = useMessages();
+  if (!items.length) return <AccountEmpty>{t("publicProfile.noDiscussions")}</AccountEmpty>;
   return (
     <ul className={`divide-y divide-border border-border ${compact ? "border-t" : "border-b"}`}>
       {items.map((item, index) => (
@@ -31,7 +31,7 @@ export function DiscussionList({
             {item.snippet}
           </p>
           <p className="mb-0 mt-2 text-xs text-muted">
-            {activityLabels[item.kind]} ·{" "}
+            {t(`publicProfile.activity.${item.kind}`)} ·{" "}
             <Timestamp value={item.createdAt} />
           </p>
         </li>

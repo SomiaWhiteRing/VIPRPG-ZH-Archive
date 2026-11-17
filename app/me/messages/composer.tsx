@@ -1,3 +1,5 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Send } from "lucide-react";
 import { BodyEditor, type BodyEditorHandle } from "@/app/components/comments/body-editor";
@@ -9,10 +11,12 @@ import { createImageProcessor } from "@/app/discussions/image-processor";
 import { MESSAGE_BODY_LENGTH, MESSAGE_IMAGE_BYTES } from "@/lib/messages";
 import { bodyLength } from "@/lib/face-emojis";
 import { randomUuid } from "@/lib/browser/random-uuid";
-import { requestJson } from "@/lib/ui/api-response";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 import { usePushReply } from "@/app/components/use-push-reply";
 
 export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: number; lastMessageId: number; onSent: () => Promise<void> }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
@@ -35,12 +39,12 @@ export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: num
     try {
       const input = pending.current?.body === body ? pending.current : { body, clientId: randomUuid() };
       pending.current = input;
-      await requestJson(`/api/messages/${peerId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+      await requestJson(`/api/messages/${peerId}?${UI_LOCALE_PARAM}=${locale}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
       setBody("");
       pending.current = null;
       editor.current?.focus();
       await onSent().catch(() => { /* Already sent; the room/focus retries history synchronization. */ });
-    } catch (error) { toast.error(error instanceof Error ? error.message : "发送失败"); }
+    } catch (error) { toast.error(error instanceof ApiResponseError ? error.messageFor(locale) : error instanceof Error ? error.message : t("messages.sendFailed")); }
     finally { submitting.current = false; setBusy(false); }
   }
 
@@ -49,8 +53,8 @@ export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: num
     submitting.current = true;
     const preview = URL.createObjectURL(file);
     const accepted = await confirm("", {
-      title: "发送图片", confirmLabel: "发送",
-      content: <img src={preview} alt="待发送的图片" className="mx-auto max-h-[50dvh] max-w-full rounded-md object-contain" />,
+      title: t("messages.sendImage"), confirmLabel: t("messages.send"),
+      content: <img src={preview} alt={t("messages.preview")} className="mx-auto max-h-[50dvh] max-w-full rounded-md object-contain" />,
     });
     URL.revokeObjectURL(preview);
     if (!accepted) { submitting.current = false; return; }
@@ -61,20 +65,20 @@ export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: num
         || input.source.name !== file.name || input.source.size !== file.size
         || input.source.type !== file.type || input.source.lastModified !== file.lastModified) {
         processor.current ??= createImageProcessor();
-        const image = await processor.current.process(file);
-        if (!image.size || image.size > MESSAGE_IMAGE_BYTES) throw new Error("每张图片不能超过 2 MiB");
+        const image = await processor.current.process(file, locale);
+        if (!image.size || image.size > MESSAGE_IMAGE_BYTES) throw new Error(t("image.size"));
         input = { source: file, image, clientId: randomUuid() };
         pendingImage.current = input;
       }
       const form = new FormData();
       form.set("clientId", input.clientId);
       form.set("image", input.image);
-      const result = await requestJson<{ message: { id: number } }>(`/api/messages/${peerId}/image`, { method: "POST", body: form });
+      const result = await requestJson<{ message: { id: number } }>(`/api/messages/${peerId}/image?${UI_LOCALE_PARAM}=${locale}`, { method: "POST", body: form });
       input.messageId = result.message.id;
       await onSent().then(() => { pendingImage.current = null; }, () => {
         // Keep the identity for retries until the acknowledged image appears in history.
       });
-    } catch (error) { toast.error(error instanceof Error ? error.message : "图片发送失败"); }
+    } catch (error) { toast.error(error instanceof ApiResponseError ? error.messageFor(locale) : error instanceof Error ? error.message : t("messages.imageFailed")); }
     finally { submitting.current = false; setBusy(false); }
   }
 
@@ -88,16 +92,16 @@ export function MessageComposer({ peerId, lastMessageId, onSent }: { peerId: num
       }
     }}>
       <BodyEditor ref={editor} body={body} images={[]} busy={busy} topic={false} textOnly allowMentions={false} autoFocus={pushReply.value === "1"}
-        maxLength={MESSAGE_BODY_LENGTH} inputId="private-message-body" inputLabel="短信正文"
+        maxLength={MESSAGE_BODY_LENGTH} inputId="private-message-body" inputLabel={t("messages.body")}
         onChange={value => setBody(value)} onBusyChange={setBusy} onError={message => { if (message) toast.error(message); }}
         onCompositionChange={value => { composing.current = value; }} />
     </div>
     <EmojiPicker disabled={busy} onSelect={(emoji, options) => editor.current?.insertEmoji(emoji, options)}>{trigger => <div className="mt-2 flex items-center gap-2">
       {trigger}
-      <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" aria-label="发送图片"
+      <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" aria-label={t("messages.sendImage")}
         onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void sendImage(file); }} />
-      <Button type="button" variant="ghost" size="icon" disabled={busy} aria-label="发送图片" onClick={() => fileInput.current?.click()}><ImagePlus aria-hidden /></Button>
-      <Button className="ml-auto" type="submit" disabled={busy || !body.trim() || bodyLength(body) > MESSAGE_BODY_LENGTH}><Send aria-hidden />发送</Button>
+      <Button type="button" variant="ghost" size="icon" disabled={busy} aria-label={t("messages.sendImage")} onClick={() => fileInput.current?.click()}><ImagePlus aria-hidden /></Button>
+      <Button className="ml-auto" type="submit" disabled={busy || !body.trim() || bodyLength(body) > MESSAGE_BODY_LENGTH}><Send aria-hidden />{t("messages.send")}</Button>
     </div>}</EmojiPicker>
   </form>;
 }

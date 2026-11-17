@@ -3,8 +3,8 @@ import { getD1 } from "@/app/.server/db/d1";
 import { getArchiveBucket } from "./archive-bucket";
 import { blobKey, corePackKey, manifestKey } from "../../../lib/archive/object-keys";
 import { deleteUnreferencedManifest } from "./gc-manifests";
-import type { GcJobAction, GcJobPhase, GcJobReport, GcJobStatus } from "@/lib/archive/gc-job";
-import { HttpError } from "@/lib/http";
+import { GC_ITEM_RETRY_DETAIL, type GcJobAction, type GcJobPhase, type GcJobReport, type GcJobStatus } from "@/lib/archive/gc-job";
+import { UiHttpError } from "@/lib/i18n/feedback";
 
 type Job = {
   id: string; user_id: number; status: GcJobStatus; phase: GcJobPhase; cursor: string;
@@ -63,7 +63,7 @@ export async function handleManualGc(
   const db = getD1(runtime);
   if (body.action === "start") {
     if (!Number.isInteger(body.graceDays) || body.graceDays! < 0 || body.graceDays! > 3650) {
-      throw new HttpError(400, "保留天数必须是 0 到 3650 的整数");
+      throw new UiHttpError(400, "admin.cleanup.error.retention");
     }
     const existing = await db.prepare(`SELECT id FROM archive_gc_jobs WHERE user_id=?
       AND status IN ('scanning','ready','running','needs_retry') ORDER BY created_at DESC LIMIT 1`)
@@ -89,24 +89,24 @@ export async function handleManualGc(
         .bind(actor.id).first<Job>() : null;
   if (!job) {
     if (body.action === "status" && !body.jobId) return null;
-    throw new HttpError(404, "清理任务不存在");
+    throw new UiHttpError(404, "admin.cleanup.error.missing");
   }
   if (body.action === "status") return getManualGcReport(db, job.id, actor.id);
   const token = crypto.randomUUID();
   const acquired = await db.prepare(`UPDATE archive_gc_jobs SET lock_token=?,locked_at=CURRENT_TIMESTAMP
     WHERE id=? AND lock_token IS NULL`)
     .bind(token, job.id).run();
-  if (!acquired.meta.changes) throw new HttpError(409, "上一批仍在执行，请稍后刷新；若持续锁定，需管理员核查执行状态", "gc_busy");
+  if (!acquired.meta.changes) throw new UiHttpError(409, "admin.cleanup.error.busy", "gc_busy");
   try {
     const current = (await db.prepare("SELECT * FROM archive_gc_jobs WHERE id=?").bind(job.id).first<Job>())!;
     if (body.action === "scan") {
       if (current.status === "scanning") await scanManualGcPage(runtime, current, token);
     } else if (body.action === "confirm") {
-      if (body.confirm !== "SWEEP") throw new HttpError(400, "请输入 SWEEP 确认不可恢复的清理");
+      if (body.confirm !== "SWEEP") throw new UiHttpError(400, "admin.cleanup.error.confirm");
       if (current.status === "ready") {
         const valid = await db.prepare(`SELECT 1 FROM archive_gc_jobs WHERE id=?
           AND datetime(created_at)>=datetime('now','-1 day')`).bind(job.id).first();
-        if (!valid) throw new HttpError(409, "扫描结果已过期，请取消后重新扫描");
+        if (!valid) throw new UiHttpError(409, "admin.cleanup.error.expired");
         const preview = await getManualGcReport(db, job.id, actor.id);
         await db.batch([
           db.prepare(`UPDATE archive_gc_jobs SET status='running',confirmed_at=CURRENT_TIMESTAMP,
@@ -115,21 +115,21 @@ export async function handleManualGc(
             archiveCount: preview.archiveCount, archiveFileCount: preview.archiveFileCount,
             objectCount: preview.objectCount, objectSizeBytes: preview.objectSizeBytes }),
         ]);
-      } else if (!current.confirmed_at) throw new HttpError(409, "请先完成扫描，再确认清理");
+      } else if (!current.confirmed_at) throw new UiHttpError(409, "admin.cleanup.error.scanFirst");
     } else if (body.action === "run") {
-      if (!current.confirmed_at) throw new HttpError(409, "此扫描尚未确认，不能清理");
+      if (!current.confirmed_at) throw new UiHttpError(409, "admin.cleanup.error.unconfirmed");
       if (current.status === "running") await sweepManualGcPage(runtime, current, token, actor);
     } else if (body.action === "retry") {
-      if (!current.confirmed_at || current.status !== "needs_retry") throw new HttpError(409, "没有可重试的清理任务");
+      if (!current.confirmed_at || current.status !== "needs_retry") throw new UiHttpError(409, "admin.cleanup.error.retryUnavailable");
       await db.batch([
         db.prepare(`UPDATE archive_gc_job_items SET state=CASE WHEN state='failed' THEN 'pending' ELSE state END,error=NULL
           WHERE job_id=? AND (state='failed' OR (state='deleting' AND error IS NOT NULL))`).bind(job.id),
         db.prepare("UPDATE archive_gc_jobs SET status='running',updated_at=CURRENT_TIMESTAMP WHERE id=? AND lock_token=?").bind(job.id, token),
       ]);
     } else if (body.action === "cancel") {
-      if (!["scanning", "ready", "cancelled"].includes(current.status)) throw new HttpError(409, "已确认的清理只能暂停，不能撤销已删除的数据");
+      if (!["scanning", "ready", "cancelled"].includes(current.status)) throw new UiHttpError(409, "admin.cleanup.error.confirmed");
       await db.prepare("UPDATE archive_gc_jobs SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND lock_token=?").bind(job.id, token).run();
-    } else throw new HttpError(400, "未知清理操作");
+    } else throw new UiHttpError(400, "admin.cleanup.error.unknownAction");
   } finally {
     await db.prepare("UPDATE archive_gc_jobs SET lock_token=NULL,locked_at=NULL WHERE id=? AND lock_token=?").bind(job.id, token).run();
   }
@@ -218,7 +218,7 @@ async function sweepManualGcPage(runtime: AppRuntime, job: Job, token: string, a
     // Fence retries and overlapping requests before each destructive step.
     const lease = await db.prepare(`UPDATE archive_gc_jobs SET locked_at=CURRENT_TIMESTAMP
       WHERE id=? AND lock_token=?`).bind(job.id, token).run();
-    if (!lease.meta.changes) throw new HttpError(409, "清理执行权已变更，请刷新状态", "gc_busy");
+    if (!lease.meta.changes) throw new UiHttpError(409, "admin.cleanup.error.leaseChanged", "gc_busy");
     try {
       if (item.type === "archive") await purgeManualArchive(db, job, item, token);
       else await purgeManualObject(runtime, job, item, token);
@@ -226,7 +226,7 @@ async function sweepManualGcPage(runtime: AppRuntime, job: Job, token: string, a
       console.error("Manual cleanup item failed", job.id, item.type, item.object_id, error);
       await db.prepare(`UPDATE archive_gc_job_items SET state=CASE WHEN state='deleting' THEN 'deleting' ELSE 'failed' END,
         error=? WHERE job_id=? AND type=? AND object_id=? AND state IN ('pending','deleting') AND ${locked(job.id, token).sql}`)
-        .bind("删除未完成，已保留进度与安全锁；可以重试", job.id, item.type, item.object_id, job.id, token).run();
+        .bind(GC_ITEM_RETRY_DETAIL, job.id, item.type, item.object_id, job.id, token).run();
     }
   }
   const remaining = await db.prepare(`SELECT
@@ -363,7 +363,7 @@ export async function getManualGcReport(db: D1Database, jobId: string, userId: n
     AND (locked_at IS NULL OR datetime(locked_at)<datetime('now','-10 minutes')) THEN 1 ELSE 0 END AS stale_lock
     FROM archive_gc_jobs WHERE id=? AND user_id=?`).bind(jobId, userId)
     .first<Job & { lock_token: string | null; locked_at: string | null; stale_lock: number }>();
-  if (!job) throw new HttpError(404, "清理任务不存在");
+  if (!job) throw new UiHttpError(404, "admin.cleanup.error.missing");
   const manifestLocks = await db.prepare(`SELECT COUNT(*) AS count,
     COALESCE(SUM(CASE WHEN d.locked_at IS NULL OR datetime(d.locked_at)<datetime('now','-10 minutes') THEN 1 ELSE 0 END),0) AS stale
     FROM archive_gc_manifest_deletions d JOIN archive_gc_job_items i

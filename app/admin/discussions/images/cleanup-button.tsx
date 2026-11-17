@@ -1,3 +1,5 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -22,6 +24,8 @@ export function ImageCleanupButton({
   postNumber: number | null;
   retry: boolean;
 }) {
+  const t = useMessages();
+  const navigationLocale = useNavigationLocale();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   return (
@@ -33,23 +37,23 @@ export function ImageCleanupButton({
     >
       <AlertDialogTrigger asChild>
         <Button type="button" variant="outline">
-          {retry ? "重试清理" : "删除图片"}
+          {retry ? t("admin.discussions.imageRetry") : t("admin.discussions.imageDelete")}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent className="rounded-md">
         <AlertDialogTitle className="text-lg font-bold">
-          永久删除图片？
+          {t("admin.discussions.imageDeleteTitle")}
         </AlertDialogTitle>
         <AlertDialogDescription className="break-words text-sm text-muted">
           {author} ·{" "}
-          {topicId ? `主题 ${topicId} · #${postNumber}` : "未关联帖子"}
+          {topicId ? t("admin.discussions.imagePost", { id: topicId, post: postNumber ?? "" }) : t("admin.discussions.imageUnlinked")}
           <span className="mt-1 block break-all font-mono text-xs">{id}</span>
           <span className="mt-3 block">
-            图片文件将永久删除，无法恢复。关联的帖子或主题也将无法完整恢复。
+            {t("admin.discussions.imageDeleteNote")}
           </span>
         </AlertDialogDescription>
         <form
-          action="/api/admin/discussions/images"
+          action={`/api/admin/discussions/images${navigationLocale ? `?${UI_LOCALE_PARAM}=${navigationLocale}` : ""}`}
           method="post"
           onSubmit={(event) => {
             if (busy) event.preventDefault();
@@ -61,11 +65,11 @@ export function ImageCleanupButton({
           <input type="hidden" name="op" value="cleanup" />
           <AlertDialogCancel asChild>
             <Button type="button" variant="outline" disabled={busy}>
-              取消
+              {t("play.save.cancel")}
             </Button>
           </AlertDialogCancel>
           <Button type="submit" variant="destructive" disabled={busy}>
-            {busy ? "正在删除…" : "确认永久删除"}
+            {busy ? t("admin.discussions.imageDeleting") : t("admin.discussions.imageConfirm")}
           </Button>
         </form>
       </AlertDialogContent>

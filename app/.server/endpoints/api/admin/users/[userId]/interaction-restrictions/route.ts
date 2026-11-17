@@ -9,7 +9,7 @@ export async function PUT(runtime: AppRuntime, request: Request, userId: string)
   const auth = await requireUser(runtime, request);
   if ("response" in auth) return auth.response;
   const senderId = parsePositiveId(userId);
-  if (senderId === auth.user.id) throw new HttpError(404, "用户不存在");
+  if (senderId === auth.user.id) throw new HttpError(404, "用户不存在", undefined, "timeline.error.userNotFound");
   const input = await readJsonObject(request, "屏蔽设置无效", { maximumBytes: 1024, requireJsonContentType: true });
   const kinds = parseInteractionRestrictions(input.kinds);
   await setUserBlockSettings(runtime, auth.user, senderId, {}, kinds);

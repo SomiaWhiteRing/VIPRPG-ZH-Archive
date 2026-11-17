@@ -117,6 +117,7 @@ function hasJoinerContext(characters: string[], index: number): boolean {
 export function inspectDisplayName(value: string): {
   displayName: string;
   error: string | null;
+  messageKey: "account.error.nameForbidden" | "account.error.nameLength" | null;
 } {
   const canonical = value.normalize("NFC");
   const displayName = canonical.trim().replace(/\s+/gu, " ");
@@ -132,10 +133,8 @@ export function inspectDisplayName(value: string): {
     !((character === "\u200C" || character === "\u200D") &&
       hasJoinerContext(characters, index)),
   );
-  const error = forbidden
-    ? "显示名不能包含控制字符或不可见字符"
-    : !displayName || [...displayName].length > 80
-      ? "显示名长度必须为 1 至 80 个字符"
-      : null;
-  return { displayName, error };
+  if (forbidden) return { displayName, error: "显示名不能包含控制字符或不可见字符", messageKey: "account.error.nameForbidden" };
+  if (!displayName || [...displayName].length > 80)
+    return { displayName, error: "显示名长度必须为 1 至 80 个字符", messageKey: "account.error.nameLength" };
+  return { displayName, error: null, messageKey: null };
 }

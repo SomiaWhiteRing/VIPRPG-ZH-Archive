@@ -1,3 +1,5 @@
+import type { MessageKey } from "./i18n/core";
+
 export class HttpError extends Error {
   readonly status: number;
   readonly code: string;
@@ -5,6 +7,8 @@ export class HttpError extends Error {
     status: number,
     message: string,
     code = "request_error",
+    readonly messageKey?: MessageKey,
+    readonly messageValues?: Record<string, string | number>,
   ) {
     super(message);
     this.name = "HttpError";
@@ -22,8 +26,9 @@ export function json(body: unknown, init?: ResponseInit): Response {
   });
 }
 
-export function jsonError(message: string, error: unknown): Response {
+export function jsonError(message: string, error: unknown, fallbackMessageKey?: MessageKey): Response {
   const expected = error instanceof HttpError;
+  const messageKey = expected ? error.messageKey : fallbackMessageKey;
   if (!expected) console.error(message, error);
 
   const status = expected ? error.status : 500;
@@ -33,6 +38,8 @@ export function jsonError(message: string, error: unknown): Response {
       error: message,
       code: expected ? error.code : "internal_error",
       detail: publicErrorDetail(error),
+      ...(messageKey ? { messageKey } : {}),
+      ...(expected && error.messageKey && error.messageValues ? { messageValues: error.messageValues } : {}),
       timestamp: new Date().toISOString(),
     },
     { status },

@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { browsePublicCreatorWorks } from "@/app/.server/db/creator-library";
 import { throwNotFound } from "@/app/.server/http/page-response";
 import { parsePositiveId } from "@/app/.server/http/request";
@@ -7,7 +9,7 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { CreatorWorkList } from "@/app/creators/creator-work-list";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
@@ -19,27 +21,27 @@ export async function loader(args: LoaderFunctionArgs) {
     pageSize: 20,
   });
   if (!result) throwNotFound();
-  return result;
+  return { ...result, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({
-    title: [loaderData?.creator.name || "作者", "参与作品"],
-    page: loaderData?.page,
-  }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [loaderData?.creator.name || translate(locale, "work.credit.author"), translate(locale, "creator.credits")], page: loaderData?.page }, error, locale);
+};
 
 export default function CreatorWorksPage() {
+  const t = useMessages();
   const { creator, items, page, pageSize, total } = useLoaderData<typeof loader>();
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-5 sm:py-8">
       <PageHeader
-        actions={<BackLink href={`/creators/${creator.id}#sec-works`} label="返回作者" />}
+        actions={<BackLink href={`/creators/${creator.id}#sec-works`} label={t("creator.back")} />}
         subtitle={creator.name}
-        title="参与作品"
+        title={t("creator.credits")}
       />
       {items.length ? (
         <CreatorWorkList works={items} creatorName={creator.name} standalone />
-      ) : <EmptyState title="暂无参与作品。" />}
+      ) : <EmptyState title={t("creator.emptyCredits")} />}
       <PaginationLinks
         basePath={`/creators/${creator.id}/works`}
         page={page}

@@ -114,6 +114,6 @@ export async function PUT(
 
 function requiredImportJobId(request: Request): number {
   const rawImportJobId = new URL(request.url).searchParams.get("import_job_id");
-  if (!rawImportJobId) throw new HttpError(400, "import_job_id is required");
+  if (!rawImportJobId) throw new HttpError(400, "import_job_id is required", undefined, "upload.error.importJobRequired");
   return parseImportJobId(rawImportJobId);
 }

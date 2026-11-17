@@ -6,6 +6,7 @@ import { Button } from "@/app/components/ui/button";
 import { SortableListItem } from "@/app/components/ui/sortable-list-item";
 import { useToast } from "@/app/components/ui/toast";
 import { MAX_IMAGE_BYTES } from "@/lib/image-format";
+import { useMessages } from "@/lib/i18n/react";
 
 type Item = File | string;
 const fileIds = new WeakMap<File, string>();
@@ -24,6 +25,7 @@ export function PreviewPicker({ disabled = false, files, order, existingHashes, 
   imageBaseUrl: string;
   onChange: (files: File[], order: (string | number)[]) => void;
 }) {
+  const t = useMessages();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const toast = useToast();
@@ -42,11 +44,11 @@ export function PreviewPicker({ disabled = false, files, order, existingHashes, 
     if (!disabled && from !== to && from >= 0 && to >= 0 && to < items.length) change(arrayMove(items, from, to));
   }
   return <div className="grid gap-3">
-    <input id={id} ref={input} aria-label="上传预览图" type="file" accept="image/*" multiple className="sr-only" disabled={disabled} onChange={(event) => {
+    <input id={id} ref={input} aria-label={t("upload.preview.upload")} type="file" accept="image/*" multiple className="sr-only" disabled={disabled} onChange={(event) => {
       const selected = Array.from(event.target.files ?? []);
       event.target.value = "";
       const invalid = selected.find((file) => !file.type.startsWith("image/") || !file.size || file.size > MAX_IMAGE_BYTES);
-      if (invalid) { toast.error(`${invalid.name} 必须是非空图片，且不能超过 20 MiB。`); return; }
+      if (invalid) { toast.error(t("upload.preview.invalid", { name: invalid.name })); return; }
       const next = [...items];
       for (const file of selected) {
         if (!next.some((item) => typeof item !== "string" && item.name === file.name && item.size === file.size && item.lastModified === file.lastModified && item.type === file.type)) next.push(file);
@@ -57,20 +59,20 @@ export function PreviewPicker({ disabled = false, files, order, existingHashes, 
         if (over) move(items.findIndex((item) => itemId(item) === active.id), items.findIndex((item) => itemId(item) === over.id));
       }}>
         <SortableContext items={items.map(itemId)} strategy={rectSortingStrategy}>
-          <ol className="flex flex-wrap gap-2" aria-label="预览图顺序">
+          <ol className="flex flex-wrap gap-2" aria-label={t("upload.preview.order")}>
             {items.map((item, index) => <SortableListItem key={itemId(item)} id={itemId(item)} disabled={disabled} className="relative size-28 shrink-0 rounded-md border border-border bg-card sm:size-36">
               {(handle) => <>
                 <Button type="button" variant="ghost" disabled={disabled} ref={handle.setActivatorNodeRef} {...handle.attributes} {...handle.listeners}
-                  aria-label={`拖动预览图 ${index + 1} 调整顺序`} className="size-full touch-none cursor-grab overflow-hidden p-0 active:cursor-grabbing">
+                  aria-label={t("upload.preview.reorder", { index: index + 1 })} className="size-full touch-none cursor-grab overflow-hidden p-0 active:cursor-grabbing">
                   <PreviewImage item={item} imageBaseUrl={imageBaseUrl} index={index} />
                 </Button>
-                <Button type="button" variant="ghost" disabled={disabled} aria-label={`移除预览图 ${index + 1}`}
+                <Button type="button" variant="ghost" disabled={disabled} aria-label={t("upload.preview.remove", { index: index + 1 })}
                   className="absolute right-0 top-0 size-8 min-h-0 rounded-bl-md rounded-tr-md bg-black/50 p-0 text-white hover:bg-black/70"
                   onClick={() => change(items.filter((_, position) => position !== index))}><X aria-hidden /></Button>
               </>}
             </SortableListItem>)}
             <li className="size-28 shrink-0 sm:size-36">
-              <Button type="button" variant="outline" disabled={disabled} aria-label="上传预览图" onClick={() => input.current?.click()}
+              <Button type="button" variant="outline" disabled={disabled} aria-label={t("upload.preview.upload")} onClick={() => input.current?.click()}
                 className="size-full border-dashed bg-background p-0 text-muted [&_svg]:size-7"><Plus aria-hidden /></Button>
             </li>
           </ol>
@@ -80,6 +82,7 @@ export function PreviewPicker({ disabled = false, files, order, existingHashes, 
 }
 
 function PreviewImage({ item, imageBaseUrl, index }: { item: Item; imageBaseUrl: string; index: number }) {
+  const t = useMessages();
   const [local, setLocal] = useState<{ file: File; url: string } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   useEffect(() => {
@@ -89,10 +92,10 @@ function PreviewImage({ item, imageBaseUrl, index }: { item: Item; imageBaseUrl:
     return () => URL.revokeObjectURL(url);
   }, [item]);
   const src = typeof item === "string" ? imageBaseUrl + item : local?.file === item ? local.url : null;
-  const label = typeof item === "string" ? `已有预览图 ${index + 1}` : item.name;
+  const label = typeof item === "string" ? t("upload.preview.existing", { index: index + 1 }) : item.name;
   return <span className="flex size-full items-center justify-center bg-background">
     {src && failed !== src ? <img src={src} alt={label} draggable={false} className="h-full w-full select-none object-contain" onError={() => setFailed(src)} /> :
-      <span role="status" aria-label={src ? "图片加载失败" : "正在加载图片"}>
+      <span role="status" aria-label={t(src ? "upload.preview.failed" : "upload.preview.loading")}>
         {src ? <ImageOff aria-hidden /> : <LoaderCircle aria-hidden className="animate-spin" />}
       </span>}
   </span>;

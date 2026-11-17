@@ -215,13 +215,13 @@ export async function searchCharacterMaterialsForAdmin(
       (category) => category.kind === input.kind,
     )
   )
-    throw new HttpError(400, "请选择素材分类");
+    throw new HttpError(400, "请选择素材分类", undefined, "admin.portraits.error.categoryRequired");
   if (!Number.isSafeInteger(input.offset) || input.offset < 0)
-    throw new HttpError(400, "素材分页位置不合法");
+    throw new HttpError(400, "素材分页位置不合法", undefined, "admin.portraits.error.cursor");
   const query = input.query.normalize("NFKC").trim().toLocaleLowerCase("ja");
   const terms = query.split(/\s+/).filter(Boolean);
   if (query.length > 160 || terms.length > 16)
-    throw new HttpError(400, "素材搜索内容过长");
+    throw new HttpError(400, "素材搜索内容过长", undefined, "admin.portraits.error.searchLength");
   const faces = input.kind === "faceset";
   const alias = faces ? "fs" : "m";
   const clauses = faces
@@ -307,7 +307,7 @@ export async function registerAdminFaceSheetForCharacter(
     .bind(input.characterId)
     .first<{ id: number }>();
   if (!character)
-    throw new HttpError(404, "角色不存在，请返回角色维护页重新进入。");
+    throw new HttpError(404, "角色不存在，请返回角色维护页重新进入。", undefined, "admin.portraits.error.characterMissing");
 
   const fileName = input.fileName.trim().slice(0, 255) || "上传的素材表";
   await auditedEntityBatch(database, [
@@ -356,7 +356,7 @@ export async function registerAdminFaceSheetForCharacter(
     .bind(input.characterId, input.sha256)
     .first<AdminFaceSheetRow>();
   if (!row)
-    throw new HttpError(500, "脸图素材表已上传，但未能绑定到当前角色。");
+    throw new HttpError(500, "脸图素材表已上传，但未能绑定到当前角色。", undefined, "admin.portraits.error.attachFailed");
   return mapAdminFaceSheet(row);
 }
 
@@ -406,24 +406,26 @@ export async function prepareCharacterPortraitLibraryUpdate(
         }>()
     : { results: [] };
   if ((rows.results ?? []).length !== faceSheetIds.length) {
-    throw new HttpError(400, "脸图素材表选择不合法");
+    throw new HttpError(400, "脸图素材表选择不合法", undefined, "admin.portraits.error.sheetSelection");
   }
   const selectedByHash = new Map(
     (rows.results ?? []).map((row) => [row.blob_sha256, row]),
   );
   if (input.defaultPortrait) {
     const sheet = selectedByHash.get(input.defaultPortrait.blobSha256);
-    if (!sheet) throw new HttpError(400, "默认头像必须来自已绑定素材表");
+    if (!sheet) throw new HttpError(400, "默认头像必须来自已绑定素材表", undefined, "admin.portraits.error.unlinkedDefault");
     if (!sheet.is_public)
       throw new HttpError(
         400,
         "默认头像必须使用已批准或已公开作品使用的有效脸图",
+        undefined,
+        "admin.portraits.error.unapprovedDefault",
       );
     if (
       input.defaultPortrait.row >= sheet.height_px / 48 ||
       input.defaultPortrait.column >= sheet.width_px / 48
     ) {
-      throw new HttpError(400, "默认头像坐标超出素材表范围");
+      throw new HttpError(400, "默认头像坐标超出素材表范围", undefined, "admin.portraits.error.defaultCoordinates");
     }
   }
 
@@ -497,18 +499,18 @@ export function parseCharacterPortraitLibraryForm(form: FormData): {
     parsedSheetIds = JSON.parse(rawSheetIds);
     if (rawDefault) parsedDefault = JSON.parse(rawDefault);
   } catch {
-    throw new HttpError(400, "角色脸图配置格式不合法");
+    throw new HttpError(400, "角色脸图配置格式不合法", undefined, "admin.portraits.error.portraitConfig");
   }
   if (!Array.isArray(parsedSheetIds))
-    throw new HttpError(400, "角色脸图配置格式不合法");
+    throw new HttpError(400, "角色脸图配置格式不合法", undefined, "admin.portraits.error.portraitConfig");
   const faceSheetIds = parsedSheetIds.map((value) => Number(value));
   if (
     faceSheetIds.some((value) => !Number.isSafeInteger(value) || value <= 0)
   ) {
-    throw new HttpError(400, "脸图素材表 ID 不合法");
+    throw new HttpError(400, "脸图素材表 ID 不合法", undefined, "admin.portraits.error.sheetId");
   }
   if (parsedDefault === null) return { faceSheetIds, defaultPortrait: null };
-  if (!isRecord(parsedDefault)) throw new HttpError(400, "默认头像格式不合法");
+  if (!isRecord(parsedDefault)) throw new HttpError(400, "默认头像格式不合法", undefined, "admin.portraits.error.defaultFormat");
   const blobSha256 = String(parsedDefault.blobSha256 ?? "").toLowerCase();
   const row = Number(parsedDefault.row);
   const column = Number(parsedDefault.column);
@@ -519,7 +521,7 @@ export function parseCharacterPortraitLibraryForm(form: FormData): {
     !Number.isSafeInteger(column) ||
     column < 0
   ) {
-    throw new HttpError(400, "默认头像格式不合法");
+    throw new HttpError(400, "默认头像格式不合法", undefined, "admin.portraits.error.defaultFormat");
   }
   return { faceSheetIds, defaultPortrait: { blobSha256, row, column } };
 }

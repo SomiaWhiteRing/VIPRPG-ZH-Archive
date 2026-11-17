@@ -1,10 +1,11 @@
+import { translate } from "@/lib/i18n/core";
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { adminForumTags } from "@/app/.server/forum/admin";
 import { getForumRuntime } from "@/app/.server/forum/context";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { forumPage } from "@/lib/forum";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { AdminDiscussionTags } from "./workspace";
@@ -26,17 +27,16 @@ export async function loader(args: LoaderFunctionArgs) {
     page: forumPage(p.page),
   });
 
-  return { p, query, state, renderData0 };
+  return { p, query, state, renderData0, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    {
-      title: ["讨论标签", "控制台"],
-      page: loaderData?.renderData0.page,
-    },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({
+    title: [translate(locale, "admin.discussionTags.title"), translate(locale, "admin.characterIndex.console")],
+    page: loaderData?.renderData0.page,
+  }, error, locale);
+};
 
 export default function DiscussionTagsPage() {
   const { p, query, state, renderData0 } = useLoaderData<typeof loader>();

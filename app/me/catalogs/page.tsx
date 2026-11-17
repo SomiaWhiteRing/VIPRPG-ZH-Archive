@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import {
   parseAccountPage,
   requireAccountUser,
@@ -29,25 +31,28 @@ export async function loader(args: LoaderFunctionArgs) {
     pageSize: 20,
   });
 
-  return { page, result };
+  return { locale: runtime.uiLocale, page, result };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: "我的目录", page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "account.nav.catalogs"), page: loaderData?.page }, error, locale);
+};
 
 export default function MyCatalogsPage() {
+  const t = useMessages();
   const { page, result } = useLoaderData<typeof loader>();
   return (
     <div className="grid gap-6">
       <AccountPageHeader
         actions={<CatalogCreateForm />}
-        title="我的目录"
-        subtitle={`共 ${result.total} 个公开目录`}
+        title={t("account.nav.catalogs")}
+        subtitle={t("account.activity.catalogs", { count: result.total })}
       />
       {result.items.length ? (
         <CatalogSummaryList items={result.items} showDescription />
       ) : (
-        <AccountEmpty>暂无目录</AccountEmpty>
+        <AccountEmpty>{t("account.activity.noCatalogs")}</AccountEmpty>
       )}
       <PaginationLinks
         basePath="/me/catalogs"

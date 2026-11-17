@@ -1,17 +1,19 @@
+import { useMessages } from "@/lib/i18n/react";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { AndroidClientBanner } from "./android-client-banner";
 import { cn } from "@/lib/ui/cn";
 import type { HomeForumTopic } from "@/lib/forum-public";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 const directoryLinks = [
-  { href: "/creators", label: "作者名录" },
-  { href: "/characters", label: "角色图鉴" },
-  { href: "/tags", label: "作品标签" },
-  { href: "/catalogs", label: "专题目录" },
-];
+  { href: "/creators", label: "home.creators" },
+  { href: "/characters", label: "home.characters" },
+  { href: "/tags", label: "home.tags" },
+  { href: "/catalogs", label: "home.collections" },
+] as const;
 
 export function HomeCommunity({ topics, className }: { topics: HomeForumTopic[]; className?: string }) {
+  const t = useMessages();
   return (
     <aside
       className={cn("min-w-0 scroll-mt-24 border-t border-foreground pt-5 min-[981px]:border-t-0 min-[981px]:border-l min-[981px]:border-border min-[981px]:pt-0 min-[981px]:pl-5 min-[1101px]:pl-6", className)}
@@ -20,13 +22,13 @@ export function HomeCommunity({ topics, className }: { topics: HomeForumTopic[];
     >
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <h2 className="min-w-0 wrap-anywhere text-xl font-bold tracking-tight" id="community-heading">
-          讨论区
+          {t("home.community")}
         </h2>
         <Link
           className="shrink-0 whitespace-nowrap text-sm font-bold text-primary hover:text-accent"
           to="/discussions"
         >
-          进入 →
+          {t("home.enter")}
         </Link>
       </div>
       {topics.length ? (
@@ -42,7 +44,7 @@ export function HomeCommunity({ topics, className }: { topics: HomeForumTopic[];
                 </h3>
                 <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-xs leading-relaxed text-muted">
                   <span className="wrap-anywhere">{topic.authorName}</span>
-                  <span>{topic.replies} 回复</span>
+                  <span>{t("forum.replyCount", { count: topic.replies })}</span>
                   {topic.tagName ? (
                     <span className="wrap-anywhere">{topic.tagName}</span>
                   ) : null}
@@ -53,7 +55,7 @@ export function HomeCommunity({ topics, className }: { topics: HomeForumTopic[];
         </ul>
       ) : (
         <EmptyState
-          title="目前还没有公开讨论。"
+          title={t("home.noTopics")}
           variant="plain"
           className="py-4"
         />
@@ -64,11 +66,11 @@ export function HomeCommunity({ topics, className }: { topics: HomeForumTopic[];
         aria-labelledby="directory-heading"
       >
         <h2 className="mb-3 text-base font-bold" id="directory-heading">
-          随处逛逛
+          {t("home.browse")}
         </h2>
         <nav
           className="grid grid-cols-2 gap-x-4 gap-y-2.5 min-[561px]:grid-cols-4 min-[851px]:grid-cols-2"
-          aria-label="分类浏览"
+          aria-label={t("home.browseNav")}
         >
           {directoryLinks.map((link) => (
             <Link
@@ -76,7 +78,7 @@ export function HomeCommunity({ topics, className }: { topics: HomeForumTopic[];
               to={link.href}
               key={link.href}
             >
-              {link.label}
+              {t(link.label)}
             </Link>
           ))}
         </nav>
@@ -84,7 +86,7 @@ export function HomeCommunity({ topics, className }: { topics: HomeForumTopic[];
           className="mt-5 inline-block text-sm font-bold text-primary hover:text-accent"
           to="/about"
         >
-          关于本站 →
+          {t("home.about")}
         </Link>
       </section>
       <AndroidClientBanner />

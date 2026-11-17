@@ -1,4 +1,5 @@
 import { cn } from "@/lib/ui/cn";
+import { useMessages } from "@/lib/i18n/react";
 
 export function CreatorPortrait({
   avatarBlobSha256,
@@ -11,10 +12,11 @@ export function CreatorPortrait({
   name: string;
   size?: number;
 }) {
-  const initial = [...name.trim()][0] ?? "作";
+  const t = useMessages();
+  const initial = [...name.trim()][0] ?? t("avatar.creatorInitial");
   return avatarBlobSha256 ? (
     <img
-      alt={`${name}的头像`}
+      alt={t("avatar.imageAlt", { name })}
       className={cn(
         "aspect-square rounded-md border border-border object-cover",
         className,
@@ -26,7 +28,8 @@ export function CreatorPortrait({
     />
   ) : (
     <span
-      aria-label={`${name}暂无头像`}
+      role="img"
+      aria-label={t("avatar.noImage", { name })}
       className={cn(
         "grid size-48 aspect-square place-items-center rounded-md border border-border bg-muted/15 font-serif text-4xl font-bold text-muted",
         className,

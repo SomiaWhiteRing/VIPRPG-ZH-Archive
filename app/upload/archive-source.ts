@@ -1,3 +1,4 @@
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 import { inflate } from "fflate";
 import { enumerateSevenZipSourceFiles } from "./archive-7z";
 import { filesWithinArchiveGameRoot } from "./archive-game-root";
@@ -8,6 +9,7 @@ import {
   normalizeArchivePath,
 } from "@/lib/archive/file-policy";
 import type {
+  SourceFaceSheetWarning,
   UploadSourceFile,
   UploadSourceKind,
   UploadSourcePrefill,
@@ -52,7 +54,7 @@ export async function enumerateUploadSourceFiles(
 ): Promise<UploadSourceEntry[]> {
   if (sourceKind === "7z") {
     const file = files[0]?.file;
-    if (!file) throw new Error("未选择 7z 文件");
+    if (!file) throw new UiFeedbackError("upload.archive.error.sevenZipMissing");
     return enumerateSevenZipSourceFiles(file);
   }
   if (sourceKind === "zip") {
@@ -107,16 +109,16 @@ export async function inspectUploadSource(
   )).filter((file): file is File => file !== null);
 
   const faceSheetFiles: File[] = [];
-  const faceSheetWarnings: string[] = [];
+  const faceSheetWarnings: SourceFaceSheetWarning[] = [];
   const faceHashes = new Set<string>();
   for (const entry of entries) {
     if (!/^faceset\/.*\.(?:png|bmp|xyz)$/i.test(entry.path)) continue;
     try {
       if (!/\.png$/i.test(entry.path)) {
-        throw new Error("请先转换为 PNG 后手动添加。");
+        throw new UiFeedbackError("upload.faces.error.convertPng");
       }
       if (entry.size <= 0 || entry.size > 256 * 1024) {
-        throw new Error("脸图素材表必须非空且不能超过 256 KiB。");
+        throw new UiFeedbackError("upload.faces.error.sourceSize");
       }
       const file = new File([toArrayBuffer(await entry.bytes())], entry.path, {
         lastModified: entry.mtimeMs ?? 0,
@@ -127,7 +129,12 @@ export async function inspectUploadSource(
       faceHashes.add(sha256);
       faceSheetFiles.push(file);
     } catch (error) {
-      faceSheetWarnings.push(`${entry.path}：${error instanceof Error ? error.message : "无法读取脸图。"}`);
+      const failure = error instanceof Error ? error : new UiFeedbackError("upload.portrait.sheetFailed");
+      faceSheetWarnings.push({
+        name: entry.path,
+        detail: failure.message,
+        ...(failure instanceof UiFeedbackError ? { feedback: { key: failure.messageKey, values: failure.values } } : {}),
+      });
     }
   }
 
@@ -221,7 +228,7 @@ async function enumerateZipSourceFiles(
   files: UploadSourceFile[],
 ): Promise<UploadSourceEntry[]> {
   const zipFile = files[0]?.file;
-  if (!zipFile) throw new Error("未选择 ZIP 文件");
+  if (!zipFile) throw new UiFeedbackError("upload.archive.error.zipMissing");
 
   const entries = await readZipCentralDirectory(zipFile);
   return filesWithinArchiveGameRoot(
@@ -250,14 +257,14 @@ async function readZipCentralDirectory(
   const centralDirectoryOffset = readUint32(tail, eocdOffset + 16);
 
   if (diskNumber !== 0 || centralDirectoryDisk !== 0) {
-    throw new Error("暂不支持分卷 ZIP 上传。");
+    throw new UiFeedbackError("upload.archive.error.zipSplit");
   }
   if (
     entryCount === 0xffff ||
     centralDirectorySize === 0xffffffff ||
     centralDirectoryOffset === 0xffffffff
   ) {
-    throw new Error("暂不支持 ZIP64 上传。");
+    throw new UiFeedbackError("upload.archive.error.zip64");
   }
 
   const central = new Uint8Array(
@@ -271,10 +278,10 @@ async function readZipCentralDirectory(
 
   while (offset < central.byteLength) {
     if (offset + 46 > central.byteLength) {
-      throw new Error("ZIP 中央目录截断。");
+      throw new UiFeedbackError("upload.archive.error.zipTruncatedDirectory");
     }
     if (readUint32(central, offset) !== centralDirectorySignature) {
-      throw new Error("ZIP 中央目录损坏。");
+      throw new UiFeedbackError("upload.archive.error.zipInvalidDirectory");
     }
 
     const flags = readUint16(central, offset + 8);
@@ -291,20 +298,20 @@ async function readZipCentralDirectory(
     const nameEnd = nameStart + nameLength;
 
     if (nameEnd + extraLength + commentLength > central.byteLength) {
-      throw new Error("ZIP 中央目录文件名截断。");
+      throw new UiFeedbackError("upload.archive.error.zipTruncatedName");
     }
     if (
       compressedSize === 0xffffffff ||
       uncompressedSize === 0xffffffff ||
       localHeaderOffset === 0xffffffff
     ) {
-      throw new Error("暂不支持包含 ZIP64 entry 的上传包。");
+      throw new UiFeedbackError("upload.archive.error.zip64Entry");
     }
     if ((flags & zipEncryptedFlag) !== 0) {
-      throw new Error("暂不支持加密 ZIP 上传。");
+      throw new UiFeedbackError("upload.archive.error.zipEncrypted");
     }
     if (compression !== zipMethodStore && compression !== zipMethodDeflate) {
-      throw new Error("暂不支持 ZIP 压缩方法 " + compression + "。");
+      throw new UiFeedbackError("upload.archive.error.zipCompression", { method: compression });
     }
 
     const name = decodeZipPath(
@@ -344,7 +351,7 @@ async function readZipEntryBytes(
     fixed.byteLength !== 30 ||
     readUint32(fixed, 0) !== localFileHeaderSignature
   ) {
-    throw new Error("ZIP local header 损坏：" + entry.normalizedPath);
+    throw new UiFeedbackError("upload.archive.error.zipLocalHeader", { path: entry.normalizedPath });
   }
 
   const nameLength = readUint16(fixed, 26);
@@ -356,12 +363,12 @@ async function readZipEntryBytes(
       .arrayBuffer(),
   );
   if (compressed.byteLength !== entry.compressedSize) {
-    throw new Error("ZIP entry 数据截断：" + entry.normalizedPath);
+    throw new UiFeedbackError("upload.archive.error.zipEntryTruncated", { path: entry.normalizedPath });
   }
 
   if (entry.compression === zipMethodStore) {
     if (compressed.byteLength !== entry.uncompressedSize) {
-      throw new Error("ZIP store entry 大小异常：" + entry.normalizedPath);
+      throw new UiFeedbackError("upload.archive.error.zipStoredSize", { path: entry.normalizedPath });
     }
     return compressed;
   }
@@ -390,7 +397,7 @@ function findEndOfCentralDirectory(bytes: Uint8Array): number {
       return offset;
     }
   }
-  throw new Error("未找到 ZIP 中央目录。");
+  throw new UiFeedbackError("upload.archive.error.zipMissingDirectory");
 }
 
 function chooseLegacyZipEncoding(central: Uint8Array): LegacyZipEncoding {

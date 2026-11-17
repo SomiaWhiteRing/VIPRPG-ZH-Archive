@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { useMessages } from "@/lib/i18n/react";
+import { translate } from "@/lib/i18n/core";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -13,7 +15,7 @@ import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { Textarea } from "@/app/components/ui/textarea";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 import { hasPermission } from "@/lib/authz/permissions";
 import { useState } from "react";
@@ -26,6 +28,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const params = await searchParams;
 
   return {
+    locale: runtime.uiLocale,
     user: pickPageFields(user, [
       "displayName",
       "bio",
@@ -38,22 +41,25 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["个人资料", "个人中心"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "account.nav.profile"), translate(locale, "header.me")] }, error, locale);
+};
 
 export default function ProfilePage() {
+  const t = useMessages();
   const { user, canRename } = useLoaderData<typeof loader>();
   const [busy, setBusy] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   return (
     <div>
-      <AccountPageHeader title="个人资料" />
-      <RedirectFeedback success={{ profileUpdated: "个人资料已更新。" }} />
+      <AccountPageHeader title={t("account.nav.profile")} />
+      <RedirectFeedback success={{ profileUpdated: t("profile.saved") }} />
 
-      <RedirectForm action="/api/account/profile" method="post" encType="multipart/form-data" onBusyChange={setBusy}>
+      <RedirectForm action="/api/account/profile" preserveLanguage method="post" encType="multipart/form-data" onBusyChange={setBusy}>
         <div className="divide-y divide-border border-b border-border">
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-center">
-            <Label htmlFor="profile-display-name">显示名</Label>
+            <Label htmlFor="profile-display-name">{t("auth.displayName")}</Label>
             <Input
               defaultValue={user.displayName}
               id="profile-display-name"
@@ -65,7 +71,7 @@ export default function ProfilePage() {
           </div>
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-start">
             <Label className="pt-2" htmlFor="profile-bio">
-              简介
+              {t("work.intro")}
             </Label>
             <div>
               <Textarea
@@ -78,7 +84,7 @@ export default function ProfilePage() {
             </div>
           </div>
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-start">
-            <span className="text-sm font-semibold">头像</span>
+            <span className="text-sm font-semibold">{t("profile.avatar")}</span>
             <AvatarCropper
               alignActions="end"
               avatarBlobSha256={user.avatarBlobSha256}
@@ -88,30 +94,30 @@ export default function ProfilePage() {
             />
           </div>
           <div className="grid gap-2 py-4 md:grid-cols-[120px_minmax(0,1fr)] md:items-center">
-            <span className="text-sm font-semibold">账号安全</span>
+            <span className="text-sm font-semibold">{t("profile.security")}</span>
             <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
               <span className="min-w-0 break-all text-sm">
-                邮箱：{user.email}
+                {t("profile.emailValue", { email: user.email })}
               </span>
               <div className="ml-auto flex flex-wrap items-center justify-end gap-4 text-sm font-semibold">
                 <Link
                   className="text-primary hover:underline"
                   to="/me/profile/email"
                 >
-                  修改邮箱
+                  {t("profile.changeEmail")}
                 </Link>
                 <Link
                   className="text-primary hover:underline"
                   to="/me/profile/password"
                 >
-                  修改密码
+                  {t("profile.changePassword")}
                 </Link>
                 {!user.isBootstrapAdmin ? (
                   <Link
                     className="text-destructive hover:underline"
                     to="/me/profile/delete"
                   >
-                    注销账号
+                    {t("profile.deleteAccount")}
                   </Link>
                 ) : null}
               </div>
@@ -119,7 +125,7 @@ export default function ProfilePage() {
           </div>
         </div>
         <div className="mt-5 flex justify-end">
-          <Rm2kButton type="submit" disabled={busy || avatarBusy}>保存资料</Rm2kButton>
+          <Rm2kButton type="submit" disabled={busy || avatarBusy}>{t("profile.save")}</Rm2kButton>
         </div>
       </RedirectForm>
     </div>

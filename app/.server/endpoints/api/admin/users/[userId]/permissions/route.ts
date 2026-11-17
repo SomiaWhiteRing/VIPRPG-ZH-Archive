@@ -18,10 +18,10 @@ export async function POST(
     const userId = parsePositiveId((await context.params).userId);
     const body: unknown = await readJsonObject(request, "请求必须为 JSON 对象");
     if (!body || typeof body !== "object" || Array.isArray(body))
-      throw new HttpError(400, "权限设置无效");
+      throw new HttpError(400, "权限设置无效", undefined, "admin.roles.error.invalidUserPermission");
     const { permissionKey, blocked } = body as Record<string, unknown>;
     if (!isPermissionKey(permissionKey) || typeof blocked !== "boolean")
-      throw new HttpError(400, "权限设置无效");
+      throw new HttpError(400, "权限设置无效", undefined, "admin.roles.error.invalidUserPermission");
     await setUserPermissionBlocked(runtime, { actor: auth.user, targetUserId: userId, permissionKey, blocked });
     return json({ ok: true, access: await readAdminUserAccess(runtime, auth.user, userId) });
   } catch (error) {

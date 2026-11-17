@@ -1,3 +1,5 @@
+import { formatFeedbackError } from "@/lib/i18n/feedback";
+import { translate } from "@/lib/i18n/core";
 import { assertSameOrigin } from "@/app/.server/auth/origin";
 import { hashPassword } from "@/app/.server/auth/password";
 import { assertAuthSourceRateLimit } from "@/app/.server/auth/rate-limit";
@@ -15,10 +17,11 @@ import type { AppRuntime } from "@/app/.server/runtime";
 export async function POST(runtime: AppRuntime, request: Request) {
   const formData = await request.formData();
   const nextPath = sanitizeRedirectPath(formData.get("next"), "/login");
-  const email = normalizeEmail(readRequiredFormString(formData, "email"));
+  let email = "";
 
   try {
     assertSameOrigin(runtime, request);
+    email = normalizeEmail(readRequiredFormString(formData, "email", "auth.error.emailRequired"));
     await assertAuthSourceRateLimit(runtime, "password-reset-confirm");
     const passwordHash = await hashPassword(readRequiredPassword(formData, "password"));
     await consumeLatestEmailChallenge(runtime, {
@@ -27,7 +30,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
       codeHash: await hashVerificationCode(runtime, {
         email,
         purpose: "password_reset",
-        code: readRequiredFormString(formData, "code"),
+        code: readRequiredFormString(formData, "code", "auth.error.codeRequired"),
       }),
     });
 
@@ -44,7 +47,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
       next: nextPath,
       email,
       sent: "1",
-      error: error instanceof Error ? error.message : "密码重置失败",
+      error: formatFeedbackError(error, runtime.uiLocale, translate(runtime.uiLocale, "auth.error.resetFailed")),
     });
   }
 }

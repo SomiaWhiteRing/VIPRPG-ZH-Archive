@@ -4,6 +4,7 @@ import { createRequestHandler, RouterContextProvider } from "react-router";
 import { api } from "./app/.server/api";
 import { getSiteAnalyticsConfig } from "./app/.server/analytics";
 import { refreshSessionCookie } from "./app/.server/auth/session";
+import { getCurrentUser } from "./app/.server/auth/current-user";
 import { parseCookie, SESSION_COOKIE_NAME } from "./app/.server/auth/session-token";
 import { createRuntime } from "./app/.server/runtime";
 import type { AppRuntime } from "./app/.server/runtime";
@@ -53,11 +54,12 @@ async function render(request: Request, context: RouterContextProvider, runtime:
 
   // HTML embeds build-specific asset URLs and network dimensions for analytics.
   const analytics = encodeURIComponent(JSON.stringify(getSiteAnalyticsConfig(runtime)));
-  const cacheKey = `${url.origin}/__cache/anonymous-pages/${version}/${analytics}${url.pathname}`;
+  const cacheKey = `${url.origin}/__cache/anonymous-pages/${version}/${runtime.uiLocale}/${analytics}${url.pathname}`;
   const cache = await caches.open("viprpg-public-pages");
   const cached = await cache.match(cacheKey).catch(() => undefined);
   if (cached) {
     const response = new Response(cached.body, cached);
+    response.headers.set("Cache-Control", "private, no-store");
     response.headers.append("Server-Timing", "public-page-cache;desc=HIT");
     return response;
   }
@@ -87,6 +89,7 @@ app.use("*", async (c, next) => {
   }
   const runtime = createRuntime(c.req.raw, c.env, c.executionCtx, import.meta.env.DEV);
   c.set("runtime", runtime);
+  await getCurrentUser(runtime);
   await next();
   if (runtime.sessionCookieRefresh && c.res.status >= 200 && c.res.status < 400
     && c.req.path !== "/api/inbox/device-notifications"

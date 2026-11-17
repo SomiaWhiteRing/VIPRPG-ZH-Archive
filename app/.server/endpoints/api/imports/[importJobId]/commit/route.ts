@@ -91,7 +91,7 @@ async function parseCommitRequest(request: Request): Promise<CommitRequest> {
   try {
     value = await readJsonObject(request, "请求必须为 JSON 对象");
   } catch {
-    throw new HttpError(400, "Invalid commit payload");
+    throw new HttpError(400, "Invalid commit payload", undefined, "upload.error.commitPayload");
   }
 
   if (
@@ -100,7 +100,7 @@ async function parseCommitRequest(request: Request): Promise<CommitRequest> {
     typeof value.manifestJson !== "string" ||
     !isRecord(value.metadata)
   ) {
-    throw new HttpError(400, "Invalid commit payload");
+    throw new HttpError(400, "Invalid commit payload", undefined, "upload.error.commitPayload");
   }
 
   const excludedFileTypes = value.excludedFileTypes ?? [];
@@ -115,7 +115,7 @@ async function parseCommitRequest(request: Request): Promise<CommitRequest> {
         typeof item.examplePath !== "string",
     )
   ) {
-    throw new HttpError(400, "Invalid excluded file summary");
+    throw new HttpError(400, "Invalid excluded file summary", undefined, "upload.error.excludedSummary");
   }
 
   return {

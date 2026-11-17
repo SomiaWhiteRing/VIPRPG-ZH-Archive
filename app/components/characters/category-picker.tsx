@@ -11,6 +11,7 @@ import {
   characterNodePath,
 } from "@/lib/character-index";
 import { cn } from "@/lib/ui/cn";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { Check, ChevronDown, ChevronRight, Folder } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
@@ -40,6 +41,8 @@ export function CategoryPicker({
   triggerClassName?: string;
   showHeader?: boolean;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const trigger = useRef<HTMLButtonElement>(null);
@@ -47,7 +50,7 @@ export function CategoryPicker({
   const viewport = useRef<HTMLDivElement>(null);
   const scrollTop = useRef(0);
   const browsingContext = useRef<string | null>(null);
-  const fieldLabel = mode === "parent" ? "上级分类" : "所属分类";
+  const fieldLabel = t(`character.categoryPicker.${mode}`);
   const available = useMemo(() => {
     const excluded =
       mode === "parent" && categoryId
@@ -66,8 +69,8 @@ export function CategoryPicker({
   const selectedPath = value
     ? characterNodePath(categories, value)
     : mode === "parent"
-      ? "一级分类（无上级）"
-      : "选择分类";
+      ? t("character.categoryPicker.root")
+      : t("character.categoryPicker.choose");
   const searching = Boolean(query.trim());
 
   function changeOpen(next: boolean) {
@@ -102,6 +105,7 @@ export function CategoryPicker({
       const hasChildren = node.children.length > 0;
       const isExpanded = searching || expanded.has(node.id);
       const selected = value === node.id;
+      const count = counts?.get(node.id);
       return (
         <li key={node.id}>
           <div
@@ -115,7 +119,7 @@ export function CategoryPicker({
                 type="button"
                 variant="ghost"
                 className="size-8 min-h-8 shrink-0 p-0"
-                aria-label={`${isExpanded ? "收起" : "展开"}${node.label}`}
+                aria-label={t(isExpanded ? "character.collapseGroup" : "character.expandGroup", { label: node.label })}
                 aria-expanded={isExpanded}
                 disabled={disabled || searching}
                 onClick={() =>
@@ -148,7 +152,7 @@ export function CategoryPicker({
             >
               <Folder aria-hidden />
               <span className="min-w-0 flex-1 wrap-anywhere">{node.label}</span>
-              {counts?.has(node.id) ? <span className="text-xs text-muted tabular-nums">{counts.get(node.id)}</span> : null}
+              {count !== undefined ? <span className="text-xs text-muted tabular-nums">{count.toLocaleString(locale)}</span> : null}
               {selected ? <Check aria-hidden /> : null}
             </Button>
           </div>
@@ -184,14 +188,14 @@ export function CategoryPicker({
           onOpenAutoFocus={() => {
             if (viewport.current) viewport.current.scrollTop = scrollTop.current;
           }}
-          aria-label={`选择${fieldLabel}`}
+          aria-label={t("character.categoryPicker.chooseNamed", { field: fieldLabel })}
           className="z-50 flex max-h-[min(30rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-md border border-border bg-card text-foreground shadow-surface"
         >
           {showHeader ? <div className="grid gap-2 border-b border-border p-3">
             <Input
               type="search"
-              aria-label={`搜索${fieldLabel}`}
-              placeholder="搜索中文名、日文名或分类路径"
+              aria-label={t("character.categoryPicker.searchNamed", { field: fieldLabel })}
+              placeholder={t("character.categoryPicker.search")}
               value={query}
               disabled={disabled}
               onChange={(event) => setQuery(event.target.value)}
@@ -201,7 +205,7 @@ export function CategoryPicker({
               }}
             />
             <p className="wrap-anywhere text-xs text-muted">
-              当前选择：{selectedPath}
+              {t("character.categoryPicker.selected", { path: selectedPath })}
             </p>
           </div> : null}
           <div
@@ -224,12 +228,12 @@ export function CategoryPicker({
                 onClick={() => choose(null)}
               >
                 <Folder aria-hidden />
-                <span className="flex-1">{emptyLabel ?? "一级分类（无上级）"}</span>
+                <span className="flex-1">{emptyLabel ?? t("character.categoryPicker.root")}</span>
                 {value === null ? <Check aria-hidden /> : null}
               </Button>
             ) : null}
             <ul
-              aria-label={`可选${fieldLabel}`}
+              aria-label={t("character.categoryPicker.available", { field: fieldLabel })}
               className={cn((mode === "parent" || emptyLabel) && "border-t border-border pt-1")}
             >
               {renderNodes(roots)}
@@ -237,8 +241,8 @@ export function CategoryPicker({
             {!roots.length ? (
               <p role="status" className="p-3 text-sm text-muted">
                 {searching
-                  ? "没有匹配的分类，请尝试其他名称。"
-                  : `没有可选的${fieldLabel}。`}
+                  ? t("character.categoryPicker.noMatch")
+                  : t("character.categoryPicker.empty", { field: fieldLabel })}
               </p>
             ) : null}
           </div>

@@ -1,3 +1,4 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { ColumnGrid } from "@/app/components/ui/column-grid";
 import { TreeGuides, TreeIndent } from "@/app/components/ui/tree-layout";
 
@@ -68,6 +69,8 @@ export function CharacterIndexBrowser({
   data: CharacterIndexData;
   initialQuery: string;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [query, setQuery] = useState(initialQuery);
   const [draftQuery, setDraftQuery] = useState(initialQuery);
   const [expanded, setExpanded] = useState(() =>
@@ -187,7 +190,7 @@ export function CharacterIndexBrowser({
           afterCategory = true;
         } else {
           if (afterCategory && parentLabel)
-            continuation = `其他 ${parentLabel}角色`;
+            continuation = t("character.otherInGroup", { name: parentLabel });
           afterCategory = false;
           pending.push(node);
           if (pending.length === columns) flush();
@@ -197,7 +200,7 @@ export function CharacterIndexBrowser({
       return result;
     };
     return flatten(roots, 1);
-  }, [roots, columns]);
+  }, [roots, columns, t]);
   const itemKeys = useMemo(() => rows.map((row) => row.key), [rows]);
   const anchorKeys = useMemo(
     () =>
@@ -331,7 +334,7 @@ export function CharacterIndexBrowser({
   return (
     <div className="flex flex-col items-start gap-5 md:flex-row lg:gap-8">
       <nav
-        aria-label="角色分类目录"
+        aria-label={t("character.categoryNav")}
         className="hidden max-h-[calc(100dvh-6rem)] shrink-0 flex-col overflow-hidden border-border pb-3 md:sticky md:top-20 md:flex md:w-52 md:border-r md:pr-3 lg:w-60"
       >
         <CharacterFilter
@@ -352,13 +355,13 @@ export function CharacterIndexBrowser({
       <Dialog.Root onOpenChange={setMenuOpen} open={menuOpen}>
         <Dialog.Trigger asChild>
           <Button
-            aria-label="打开角色分类目录"
+            aria-label={t("character.openCategoryNav")}
             className="fixed bottom-[calc(1.25rem+max(env(safe-area-inset-bottom),var(--page-footer-occlusion,0px)))] left-[calc(1rem+env(safe-area-inset-left))] z-40 min-h-12 gap-2 rounded-full px-4 shadow-surface md:hidden"
             ref={menuTriggerRef}
             type="button"
           >
             <ListTree aria-hidden />
-            分类
+            {t("character.categoryButton")}
           </Button>
         </Dialog.Trigger>
         <Dialog.Portal>
@@ -376,11 +379,11 @@ export function CharacterIndexBrowser({
           >
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
               <Dialog.Title className="text-base font-semibold">
-                阵营与角色群
+                {t("character.factions")}
               </Dialog.Title>
               <Dialog.Close asChild>
                 <Button
-                  aria-label="关闭角色分类目录"
+                  aria-label={t("character.closeCategoryNav")}
                   size="icon"
                   type="button"
                   variant="ghost"
@@ -390,7 +393,7 @@ export function CharacterIndexBrowser({
               </Dialog.Close>
             </div>
             <nav
-              aria-label="移动端角色分类目录"
+              aria-label={t("character.mobileCategoryNav")}
               className="flex min-h-0 flex-1 flex-col overflow-hidden p-3"
             >
               <CharacterFilter
@@ -425,7 +428,7 @@ export function CharacterIndexBrowser({
             measurementGroup={measurementGroup}
             itemKeys={itemKeys}
             anchorKeys={anchorKeys}
-            label="角色列表"
+            label={t("character.list")}
             ref={listRef}
             scrollOffset={headerHeight}
             stickyItems={stickyItems}
@@ -477,17 +480,17 @@ export function CharacterIndexBrowser({
                               : "text-sm font-semibold",
                         )}
                       >
-                        {node.label}
+                        {node.id === UNCLASSIFIED_GROUP_ID ? t("character.uncategorized") : node.label}
                       </h2>
                       <span className="text-xs tabular-nums text-muted">
-                        {formatNumber(characterCount(node))}
+                        {formatNumber(characterCount(node), locale)}
                       </span>
                       {canEditIndex && node.id !== UNCLASSIFIED_GROUP_ID ? (
                         <a
-                          aria-label={`编辑分类 ${node.label}`}
+                          aria-label={t("character.editCategoryNamed", { name: node.label })}
                           className="inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                           href={`/admin/characters/index?category=${encodeURIComponent(node.id)}`}
-                          title="编辑分类"
+                          title={t("character.editCategoryTitle")}
                         >
                           <FolderPen aria-hidden size={13} />
                         </a>
@@ -533,7 +536,7 @@ export function CharacterIndexBrowser({
             }}
           />
         ) : (
-          <EmptyState title="暂无角色。" />
+          <EmptyState title={t("character.empty")} />
         )}
       </div>
     </div>
@@ -549,6 +552,7 @@ function CharacterFilter({
   onDraftChange: (value: string) => void;
   onApply: (value: string) => void;
 }) {
+  const t = useMessages();
   return (
     <form
       onSubmit={(event) => {
@@ -556,23 +560,23 @@ function CharacterFilter({
         onApply(draftQuery);
       }}
       role="search"
-      aria-label="筛选角色"
+      aria-label={t("character.filter")}
       className="mb-4 shrink-0 space-y-2 border-b border-border pb-3"
     >
       <div className="flex items-center gap-1.5">
         <Input
-          aria-label="筛选角色"
+          aria-label={t("character.filter")}
           className="h-8 px-2 py-1 text-xs"
           value={draftQuery}
           onChange={(event) => onDraftChange(event.target.value)}
-          placeholder="名称、别名或阵营"
+          placeholder={t("character.filterPlaceholder")}
           type="search"
         />
         <Button
-          aria-label="搜索"
+          aria-label={t("search.submit")}
           className="size-8"
           size="icon"
-          title="搜索"
+          title={t("search.submit")}
           type="submit"
         >
           <Search aria-hidden />
@@ -595,6 +599,7 @@ function CharacterMenu({
   expanded: Set<string>;
   onToggle: (id: string) => void;
 }) {
+  const t = useMessages();
   return (
     <>
       {nodes.map((node) =>
@@ -604,7 +609,7 @@ function CharacterMenu({
             open={expanded.has(node.id)}
             onToggle={() => onToggle(node.id)}
             key={node.id}
-            label={node.label}
+            label={node.id === UNCLASSIFIED_GROUP_ID ? t("character.uncategorized") : node.label}
           >
             <CharacterMenu
               nodes={node.children}
@@ -647,12 +652,14 @@ function MenuBranch({
   open: boolean;
   onToggle: () => void;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   return (
     <div>
       <div className="flex items-start">
         <Button
           aria-expanded={open}
-          aria-label={`${open ? "收起" : "展开"}${label}`}
+          aria-label={t(open ? "character.collapseGroup" : "character.expandGroup", { label })}
           className="size-7 min-h-7 shrink-0 rounded-sm p-0"
           onClick={onToggle}
           type="button"
@@ -675,7 +682,7 @@ function MenuBranch({
         >
           <span>{label}</span>
           <span className="text-[11px] font-normal tabular-nums text-muted">
-            {formatNumber(count)}
+            {formatNumber(count, locale)}
           </span>
         </Button>
       </div>

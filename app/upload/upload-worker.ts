@@ -1,4 +1,7 @@
-import { apiResponseError, requestJson, requestResponse, readJsonResponse } from "@/lib/ui/api-response";
+import { isMessageKey, translate, type MessageKey } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE } from "@/lib/i18n/locale";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
+import { ApiResponseError, apiResponseError, requestJson, requestResponse, readJsonResponse, type ApiResponsePayload } from "@/lib/ui/api-response";
 import { sha256Hex } from "@/lib/sha256";
 
 /// <reference lib="webworker" />
@@ -208,7 +211,7 @@ async function startSource(
         "/api/tools/easyrpg-kai/updates/stable/windows-x64", { method: "GET" },
       );
       if (selection.status !== "available" || selection.artifact?.format !== "exe") {
-        throw new Error("共享 Kai 播放器不可用，请先在“链接”中推荐 Windows EXE，或关闭共享播放器选项。");
+        throw new UiFeedbackError("upload.worker.sharedUnavailable");
       }
     }
     const scan = await scanAndHash(task, sourceFiles, message.useSharedPlayer, message.checkMissingResources);
@@ -278,7 +281,7 @@ async function startSource(
       // without preflighting or uploading it; source-ready still checks the ledger.
       const source: SourceFile = { path: resource.path, size: resource.size, mtimeMs: null,
         contentType: contentTypeForArchivePath(resource.path), bytes: async () => {
-          throw new Error(`项目库中的 RTP 已不可用：${resource.path}`);
+          throw new UiFeedbackError("upload.worker.rtpUnavailable", { path: resource.path });
         } };
       scan.includedFiles.push({ ...resource, pathSortKey: resource.path.toLowerCase(), role: "asset",
         storageKind: "blob", mtimeMs: null, contentType: source.contentType, packEntryPath: null, source });
@@ -366,27 +369,34 @@ function publishExtraCandidates(runtime: UploadRuntime): void {
 async function reloadExtraSource(message: Extract<UploadWorkerInput, { type: "extras_source" }>): Promise<void> {
   const runtime = runtimeFor(message.localTaskId);
   if (!runtime?.preparedSource || runtime.task.commitStarted || runtime.task.extrasBusy || runtime.settled) return;
-  runtime.task = emitTask({ ...runtime.task, extrasBusy: true, extrasError: null }, true);
+  runtime.task = emitTask({ ...runtime.task, extrasBusy: true, extrasError: null, extrasErrorMessage: null }, true);
   try {
     const files = await enumerateUploadSourceFiles(message.files, message.sourceKind);
     await waitForCancellation(runtime);
     const included = new Set(runtime.preparedSource.files.map(file => file.path.normalize("NFC").toLowerCase()));
     runtime.extraSources = files.filter(file => !included.has(file.path.normalize("NFC").toLowerCase()) && !isSharedPlayerPath(file.path));
-    runtime.task = { ...runtime.task, extrasError: extraSourceError(runtime) };
+    runtime.task = { ...runtime.task, ...extraSourceError(runtime) };
     publishExtraCandidates(runtime);
   } catch (error) {
     if (runtime.settled) return;
-    runtime.task = { ...runtime.task, extrasError: error instanceof Error ? error.message : "无法读取附赠文件" };
+    const failure = error instanceof Error ? error : new UiFeedbackError("upload.extras.reloadError");
+    runtime.task = {
+      ...runtime.task,
+      extrasError: failure.message,
+      extrasErrorMessage: failure instanceof UiFeedbackError ? { key: failure.messageKey, values: failure.values } : null,
+    };
   } finally {
     if (!runtime.settled) runtime.task = emitTask({ ...runtime.task, extrasBusy: false }, true);
   }
 }
 
-function extraSourceError(runtime: UploadRuntime): string | null {
+function extraSourceError(runtime: UploadRuntime): Pick<BrowserUploadTaskSnapshot, "extrasError" | "extrasErrorMessage"> {
   const missing = runtime.task.extras?.find(file =>
     !runtime.preparedSource?.extras?.some(uploaded => uploaded.path === file.path) &&
     !runtime.extraSources?.some(source => source.path === file.path));
-  return missing ? `请重新选择原始游戏文件以读取追加文件：${missing.path}` : null;
+  if (!missing) return { extrasError: null, extrasErrorMessage: null };
+  const error = new UiFeedbackError("upload.extras.missingSource", { path: missing.path });
+  return { extrasError: error.message, extrasErrorMessage: { key: error.messageKey, values: error.values } };
 }
 
 async function selectExtras(message: Extract<UploadWorkerInput, { type: "select_extras" }>): Promise<void> {
@@ -399,11 +409,11 @@ async function selectExtras(message: Extract<UploadWorkerInput, { type: "select_
     const file = candidates.get(path);
     return file ? [file] : [];
   }) };
-  runtime.task = emitTask({ ...runtime.task, extrasError: extraSourceError(runtime) }, true);
+  runtime.task = emitTask({ ...runtime.task, ...extraSourceError(runtime) }, true);
   try {
     await saveRuntimeDraft(runtime);
   } catch {
-    postMessage({ type: "draft_save_error", message: "追加文件选择保存失败，请勿刷新或关闭页面。" } satisfies UploadWorkerOutput);
+    postMessage({ type: "draft_save_error", message: "追加文件选择保存失败，请勿刷新或关闭页面。", messageKey: "upload.draft.extrasSaveFailed" } satisfies UploadWorkerOutput);
   }
 }
 
@@ -426,7 +436,7 @@ async function saveFormDraft(
   } catch {
     postMessage({
       type: "draft_save_error",
-      message: "作品资料草稿自动保存失败，请勿刷新或关闭页面。",
+      message: "作品资料草稿自动保存失败，请勿刷新或关闭页面。", messageKey: "upload.draft.autoSaveFailed",
     } satisfies UploadWorkerOutput);
   }
 }
@@ -447,7 +457,7 @@ async function confirmMetadata(
   runtime.metadata = message.metadata;
   runtime.metadataBlobs = message.metadataBlobs;
   runtime.task = emitTask(
-    { ...runtime.task, metadataConfirmed: true, error: null },
+    { ...runtime.task, metadataConfirmed: true, error: null, errorMessage: null, terminalPending: null },
     true,
   );
   if (runtime.preparedSource) await saveRuntimeDraft(runtime);
@@ -515,7 +525,7 @@ async function restoreDraft(draft: UploadRecoveryDraft): Promise<void> {
     // browser saved its draft. Restore the exact saved selection before joining.
     await markSourceReady(draft.serverImportJobId, draft.preparedSource);
     await waitForCancellation(runtime);
-    runtime.task = emitTask({ ...runtime.task, extrasError: extraSourceError(runtime) }, true);
+    runtime.task = emitTask({ ...runtime.task, ...extraSourceError(runtime) }, true);
     publishExtraCandidates(runtime);
     await tryJoin(runtime);
   } catch (error) {
@@ -609,7 +619,7 @@ async function tryJoin(runtime: UploadRuntime): Promise<void> {
       ...runtime.task,
       status: "completed",
       phase: "completed",
-      error: null,
+      error: null, errorMessage: null, terminalPending: null,
       result,
       progress: { ...runtime.task.progress, percent: 100, currentPath: null },
     });
@@ -628,7 +638,7 @@ async function cancelRuntime(localTaskId: string): Promise<void> {
   if (runtime.task.phase === "committing" || isTerminal(runtime.task.status)) {
     await rejectCancellation(
       runtime,
-      "任务正在提交，当前不能取消或离开上传页。",
+      "upload.draft.cancelLocked",
     );
     return;
   }
@@ -650,7 +660,7 @@ async function performCancellation(runtime: UploadRuntime): Promise<boolean> {
   if (runtime.task.phase === "committing") {
     await rejectCancellation(
       runtime,
-      "任务正在提交，当前不能取消或离开上传页。",
+      "upload.draft.cancelLocked",
     );
     return false;
   }
@@ -659,7 +669,7 @@ async function performCancellation(runtime: UploadRuntime): Promise<boolean> {
     await settleRuntime(runtime, {
       ...runtime.task,
       status: "canceled",
-      error: null,
+      error: null, errorMessage: null, terminalPending: null,
     });
     return true;
   }
@@ -673,25 +683,30 @@ async function performCancellation(runtime: UploadRuntime): Promise<boolean> {
   if (!state || !isTerminalImportJobStatus(state.status)) {
     await rejectCancellation(
       runtime,
-      "服务端尚未确认取消，上传任务和恢复草稿均已保留。",
+      "upload.worker.cancelPending",
     );
     return false;
   }
-  await settleRuntime(
-    runtime,
-    terminalTaskFromState(runtime.task, state, "上传任务已结束"),
-  );
+  await settleRuntime(runtime, terminalTaskFromState(
+    runtime.task,
+    state,
+    translate(DEFAULT_UI_LOCALE, "upload.worker.terminal"),
+    { key: "upload.worker.terminal" },
+  ));
   return true;
 }
 
 async function rejectCancellation(
   runtime: UploadRuntime,
-  message: string,
+  messageKey: MessageKey,
 ): Promise<void> {
+  const message = new UiFeedbackError(messageKey).message;
   runtime.task = emitTask(
     {
       ...runtime.task,
       error: message,
+      errorMessage: { key: messageKey },
+      terminalPending: null,
     },
     true,
   );
@@ -707,7 +722,13 @@ async function failRuntime(
   error: unknown,
 ): Promise<void> {
   if (runtime.settled) return;
-  const message = error instanceof Error ? error.message : "上传任务失败";
+  const failure = error instanceof Error ? error : new UiFeedbackError("upload.worker.failed");
+  const message = failure.message;
+  const errorMessage = failure instanceof UiFeedbackError
+    ? { key: failure.messageKey, values: failure.values }
+    : failure instanceof ApiResponseError && isMessageKey(failure.payload.messageKey)
+      ? { key: failure.payload.messageKey, values: failure.messageValues }
+      : null;
   let state: OwnedImportJobState | null = null;
   if (runtime.task.serverImportJobId) {
     state = await requestTerminalTransition(
@@ -722,24 +743,29 @@ async function failRuntime(
       ...runtime.task,
       status: "failed",
       error: message,
+      errorMessage,
+      terminalPending: null,
     });
     return;
   }
   if (state && isTerminalImportJobStatus(state.status)) {
     await settleRuntime(
       runtime,
-      terminalTaskFromState(runtime.task, state, message),
+      terminalTaskFromState(runtime.task, state, message, errorMessage),
     );
     return;
   }
 
+  const terminalPendingKey = runtime.preparedSource
+    ? "upload.worker.terminalPendingDraft"
+    : "upload.worker.terminalPendingCancel";
   runtime.task = emitTask(
     {
       ...runtime.task,
       status: runtime.preparedSource ? "waiting" : "running",
-      error: runtime.preparedSource
-        ? `${message}；服务端终态尚未确认，恢复草稿已保留。`
-        : `${message}；服务端终态尚未确认，请重试取消。`,
+      errorMessage,
+      terminalPending: { key: terminalPendingKey, reason: message },
+      error: translate(DEFAULT_UI_LOCALE, terminalPendingKey, { reason: message }),
     },
     true,
   );
@@ -750,21 +776,22 @@ function terminalTaskFromState(
   task: BrowserUploadTaskSnapshot,
   state: OwnedImportJobState,
   fallbackError: string,
+  errorMessage: BrowserUploadTaskSnapshot["errorMessage"] = null,
 ): BrowserUploadTaskSnapshot {
   if (state.status === "completed") {
     return {
       ...task,
       status: "completed",
       phase: "completed",
-      error: null,
+      error: null, errorMessage: null, terminalPending: null,
       result: state.result,
       progress: { ...task.progress, percent: 100, currentPath: null },
     };
   }
   if (state.status === "canceled") {
-    return { ...task, status: "canceled", error: null };
+    return { ...task, status: "canceled", error: null, errorMessage: null, terminalPending: null };
   }
-  return { ...task, status: "failed", error: fallbackError };
+  return { ...task, status: "failed", error: fallbackError, errorMessage, terminalPending: null };
 }
 
 async function scanAndHash(
@@ -782,7 +809,7 @@ async function scanAndHash(
   let task = initialTask;
   let missingScan: MissingResourceScan | null = null;
   const players = useSharedPlayer ? sourceFiles.filter((file) => isSharedPlayerPath(file.path)) : [];
-  if (players.length > 1) throw new Error("根目录存在多个大小写不同的 Player.exe，请先保留一个再上传。");
+  if (players.length > 1) throw new UiFeedbackError("upload.worker.duplicatePlayer");
   const player = players[0];
   task = { ...task, stats: { ...task.stats, sharedPlayer: player ? { path: player.path, size: player.size } : null } };
   let includedFiles: IncludedFile[] = [];
@@ -1139,7 +1166,7 @@ async function preflightObjects(
   task = emitTask(task, true);
 
   if (!task.serverImportJobId) {
-    throw new Error("上传任务缺少导入记录，无法进行上传前检查。");
+    throw new UiFeedbackError("upload.worker.missingPreflight");
   }
 
   const response = await jsonFetch<{
@@ -1181,7 +1208,7 @@ async function uploadMissingObjects(input: {
   missingBlobs: Set<string>;
   missingCorePacks: Set<string>;
 }): Promise<BrowserUploadTaskSnapshot> {
-  if (!input.task.serverImportJobId) throw new Error("上传任务缺少导入记录");
+  if (!input.task.serverImportJobId) throw new UiFeedbackError("upload.worker.missingImport");
   const importJobId = input.task.serverImportJobId;
   let task = setPhase(input.task, "uploading_source", 0, null);
   let uploadedBytes = 0;
@@ -1270,16 +1297,25 @@ async function commitTask(
   } catch (error) {
     const completed = await waitForCompletedImportResult(importJobId);
     if (completed) return completed;
+    if (error instanceof ApiResponseError && error.code === "network_error") {
+      throw new UiFeedbackError("core.form.network");
+    }
     throw error;
   }
-  const payload = (await readJsonResponse(response, "提交入库失败", true).catch(() => null)) as
+  const payload = (await readJsonResponse(response, undefined, true).catch(() => null)) as
     | { ok: true; result: UploadTaskCommitResult }
-    | { ok: false; detail?: string; error?: string }
+    | (ApiResponsePayload & { ok: false })
     | null;
   if (response.ok && payload?.ok) return payload.result;
   const completed = await waitForCompletedImportResult(importJobId);
   if (completed) return completed;
-  throw apiResponseError(response.status, payload && !payload.ok ? payload : {}, "提交入库失败");
+  const failure: ApiResponsePayload = payload && !payload.ok ? payload : {};
+  const failed = apiResponseError(response.status, failure);
+  if (isMessageKey(failure.messageKey) || (typeof failure.detail === "string" && failure.detail.trim())) throw failed;
+  if (response.status === 401) throw new UiFeedbackError("core.request.session");
+  if (response.status === 403) throw new UiFeedbackError("core.request.forbidden");
+  if (typeof failure.error === "string" && failure.error.trim()) throw failed;
+  throw new UiFeedbackError("upload.worker.commitFailed", { status: response.status });
 }
 
 async function waitForCompletedImportResult(
@@ -1347,7 +1383,7 @@ async function markSourceReady(
   importJobId: number | null,
   source: PreparedArchiveSource,
 ): Promise<void> {
-  if (!importJobId) throw new Error("上传任务缺少导入记录");
+  if (!importJobId) throw new UiFeedbackError("upload.worker.missingImport");
   await jsonFetch(`/api/imports/${importJobId}/source-ready`, {
     method: "POST",
     body: JSON.stringify(buildSourceManifest(source)),
@@ -1473,7 +1509,7 @@ async function uploadMetadataBlobs(
   sourceBlobSha256s: ReadonlySet<string>,
   faceSheetHashes: ReadonlySet<string>,
 ): Promise<void> {
-  if (!importJobId) throw new Error("上传任务缺少导入记录");
+  if (!importJobId) throw new UiFeedbackError("upload.worker.missingImport");
   for (const blob of blobs) {
     const isFaceSheet = faceSheetHashes.has(blob.sha256);
     if (sourceBlobSha256s.has(blob.sha256) && !isFaceSheet) continue;
@@ -1525,7 +1561,7 @@ function createInitialTask(input: {
       currentPath: null,
     },
     stats: emptyStats(),
-    error: null,
+    error: null, errorMessage: null,
     result: null,
   };
 }

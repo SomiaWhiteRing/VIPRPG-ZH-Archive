@@ -1,10 +1,13 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
 import { requestJson } from "@/lib/ui/api-response";
 
 import { Button } from "@/app/components/ui/button";
 import { ShowcaseImage } from "@/app/components/profile/showcase-image";
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { Label } from "@/app/components/ui/label";
-import { SHOWCASE_LABELS, type ShowcaseKind, type ShowcaseTarget } from "@/lib/showcase";
+import { type ShowcaseKind, type ShowcaseTarget } from "@/lib/showcase";
 import { useEffect, useState } from "react";
 
 export function ShowcaseTargetPicker({
@@ -18,6 +21,8 @@ export function ShowcaseTargetPicker({
   disabled: boolean;
   onChoose: (target: ShowcaseTarget) => void;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<{
@@ -38,7 +43,7 @@ export function ShowcaseTargetPicker({
     setError("");
     const timer = window.setTimeout(async () => {
       try {
-        const params = new URLSearchParams({ kind, q: query });
+        const params = new URLSearchParams({ kind, q: query, [UI_LOCALE_PARAM]: locale });
 
         const data = (await requestJson(`/api/account/showcase?${params}`, {
           signal: controller.signal,
@@ -54,7 +59,7 @@ export function ShowcaseTargetPicker({
       } catch (error) {
         if (!controller.signal.aborted)
           setError(
-            error instanceof Error ? error.message : "搜索失败，请重试。",
+            formatFeedbackError(error, locale, t("showcase.picker.failed")),
           );
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -64,14 +69,14 @@ export function ShowcaseTargetPicker({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [kind, menuOpen, query, retry]);
+  }, [kind, menuOpen, query, retry, locale, t]);
 
   return (
     <div className="grid gap-1.5">
-      <Label htmlFor={id}>选择{SHOWCASE_LABELS[kind]}</Label>
+      <Label htmlFor={id}>{t("showcase.picker.pick", { kind })}</Label>
       <SearchComboBox
         id={id}
-        label={`选择${SHOWCASE_LABELS[kind]}`}
+        label={t("showcase.picker.pick", { kind })}
         query={query}
         onQueryChange={setQuery}
         onOpenChange={setOpen}
@@ -81,7 +86,7 @@ export function ShowcaseTargetPicker({
         items={loading || error ? [] : options}
         getKey={(target) => target.id}
         getText={(target) => target.name}
-        placeholder={selectedName ?? `搜索${SHOWCASE_LABELS[kind]}名称或别名`}
+        placeholder={selectedName ?? t("showcase.picker.search", { kind })}
         onChoose={(target) => {
           onChoose(target);
           setQuery("");
@@ -105,8 +110,8 @@ export function ShowcaseTargetPicker({
             role={error ? "alert" : "status"}
           >
             {loading
-              ? "正在搜索…"
-              : error || `没有找到可公开展示的${SHOWCASE_LABELS[kind]}。`}
+              ? t("showcase.picker.searching")
+              : error || t("showcase.picker.empty", { kind })}
           </p>
         }
         footer={
@@ -119,7 +124,7 @@ export function ShowcaseTargetPicker({
                 className="m-2"
                 onClick={() => setRetry((current) => current + 1)}
               >
-                重新搜索
+                {t("showcase.picker.retry")}
               </Button>
             ) : null}
           </>

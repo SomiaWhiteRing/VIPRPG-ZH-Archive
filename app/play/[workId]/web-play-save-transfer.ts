@@ -1,3 +1,4 @@
+import { UiFeedbackDOMException, UiFeedbackError } from "@/lib/i18n/feedback";
 import { Crc32 } from "@/lib/archive/crc32";
 import { zipSync, type Zippable } from "fflate";
 
@@ -13,8 +14,6 @@ const maxFiles = 100;
 const maxSaveBytes = 16 * 1024 * 1024;
 const maxTotalBytes = 40 * 1024 * 1024;
 const signature = new TextEncoder().encode("LcfSaveData");
-const changedMessage = "本地存档已变化，请重新导入并确认。";
-const zipStructureMessage = "ZIP 结构不受支持，请使用根目录仅包含 SaveNN.lsd 的 ZIP。";
 
 function saveName(name: string, allowDownloadSuffix = false): string | null {
   const match = (allowDownloadSuffix
@@ -24,40 +23,40 @@ function saveName(name: string, allowDownloadSuffix = false): string | null {
 }
 
 function validateSave(file: SaveFile): void {
-  if (!saveName(file.name)) throw new Error("请选择 Save01.lsd 这类存档文件，保留原始槽位编号。");
-  if (file.bytes.byteLength > maxSaveBytes) throw new Error(`单个存档不能超过 16 MiB：${file.name}`);
+  if (!saveName(file.name)) throw new UiFeedbackError("play.save.invalidName");
+  if (file.bytes.byteLength > maxSaveBytes) throw new UiFeedbackError("play.save.tooLargeNamed", { name: file.name });
   if (file.bytes.length < signature.length + 1 || file.bytes[0] !== signature.length
     || signature.some((byte, index) => file.bytes[index + 1] !== byte)) {
-    throw new Error(`不是有效的 LSD 存档：${file.name}`);
+    throw new UiFeedbackError("play.save.invalidLsd", { name: file.name });
   }
 }
 
 function validateIncoming(files: SaveFile[]): void {
-  if (!files.length || files.length > maxFiles) throw new Error("每次最多导入 100 个存档，请至少选择一个存档。");
+  if (!files.length || files.length > maxFiles) throw new UiFeedbackError("play.save.batch");
   const names = new Set<string>();
   let total = 0;
   for (const file of files) {
     validateSave(file);
     const name = saveName(file.name)!;
-    if (names.has(name)) throw new Error(`导入来源包含重复槽位：${name}，请分批导入。`);
+    if (names.has(name)) throw new UiFeedbackError("play.save.duplicate", { name });
     names.add(name);
     total += file.bytes.length;
-    if (total > maxTotalBytes) throw new Error("本次解压后的存档总量超过 40 MiB。");
+    if (total > maxTotalBytes) throw new UiFeedbackError("play.save.total");
   }
 }
 
 export async function parseSaveImports(files: File[], signal: AbortSignal): Promise<SaveFile[]> {
   signal.throwIfAborted();
-  if (!files.length || files.length > maxFiles) throw new Error("每次请选择 1 至 100 个 LSD 或 ZIP 文件。");
+  if (!files.length || files.length > maxFiles) throw new UiFeedbackError("play.save.fileCount");
   const incoming: SaveFile[] = [];
   const names = new Set<string>();
   let total = 0;
   const add = (file: SaveFile) => {
     validateSave(file);
-    if (names.has(file.name)) throw new Error(`导入来源包含重复槽位：${file.name}，请分批导入。`);
-    if (incoming.length >= maxFiles) throw new Error("每次最多导入 100 个存档。");
+    if (names.has(file.name)) throw new UiFeedbackError("play.save.duplicate", { name: file.name });
+    if (incoming.length >= maxFiles) throw new UiFeedbackError("play.save.max");
     total += file.bytes.length;
-    if (total > maxTotalBytes) throw new Error("本次解压后的存档总量超过 40 MiB。");
+    if (total > maxTotalBytes) throw new UiFeedbackError("play.save.total");
     names.add(file.name);
     incoming.push(file);
   };
@@ -65,18 +64,18 @@ export async function parseSaveImports(files: File[], signal: AbortSignal): Prom
     signal.throwIfAborted();
     const zipped = /\.zip$/i.test(file.name);
     const name = zipped ? null : saveName(file.name, true);
-    if (!zipped && !name) throw new Error("请选择 Save01.lsd 这类存档文件，保留原始槽位编号。");
+    if (!zipped && !name) throw new UiFeedbackError("play.save.invalidName");
     if (file.size > (zipped ? maxTotalBytes : maxSaveBytes)) {
-      throw new Error(zipped ? "单个 ZIP 文件不能超过 40 MiB。" : "单个存档不能超过 16 MiB。");
+      throw new UiFeedbackError(zipped ? "play.save.zipLarge" : "play.save.saveLarge");
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
     signal.throwIfAborted();
-    if (bytes.length !== file.size) throw new Error("读取文件失败，请重新选择文件。");
+    if (bytes.length !== file.size) throw new UiFeedbackError("play.save.fileRead");
     if (zipped) {
       const entries = readZipDirectory(bytes);
       for (const entry of entries) {
-        if (names.has(entry.name)) throw new Error(`导入来源包含重复槽位：${entry.name}，请分批导入。`);
-        if (incoming.length >= maxFiles) throw new Error("每次最多导入 100 个存档。");
+        if (names.has(entry.name)) throw new UiFeedbackError("play.save.duplicate", { name: entry.name });
+        if (incoming.length >= maxFiles) throw new UiFeedbackError("play.save.max");
         const remaining = Math.min(maxSaveBytes, maxTotalBytes - total);
         const contents = await inflateZipEntry(bytes, entry, remaining, signal);
         add({ name: entry.name, bytes: contents, timestamp: entry.timestamp });
@@ -106,7 +105,7 @@ type ZipEntry = {
 function readZipDirectory(bytes: Uint8Array): ZipEntry[] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const bounds = (offset: number, length: number, end = bytes.length) => {
-    if (offset < 0 || length < 0 || offset + length > end) throw new Error("ZIP 文件不完整或已损坏。");
+    if (offset < 0 || length < 0 || offset + length > end) throw new UiFeedbackError("play.save.brokenZip");
   };
   const u16 = (offset: number) => { bounds(offset, 2); return view.getUint16(offset, true); };
   const u32 = (offset: number) => { bounds(offset, 4); return view.getUint32(offset, true); };
@@ -117,16 +116,16 @@ function readZipDirectory(bytes: Uint8Array): ZipEntry[] {
       break;
     }
   }
-  if (end < 0) throw new Error("ZIP 文件不完整或已损坏。");
+  if (end < 0) throw new UiFeedbackError("play.save.brokenZip");
   const count = u16(end + 10);
   const directorySize = u32(end + 12);
   const directoryOffset = u32(end + 16);
   if (u16(end + 4) !== 0 || u16(end + 6) !== 0 || u16(end + 8) !== count) {
-    throw new Error("不支持多磁盘 ZIP 文件。");
+    throw new UiFeedbackError("play.save.multiZip");
   }
-  if (!count) throw new Error("ZIP 中没有可导入的 LSD 存档。");
-  if (count > maxFiles) throw new Error("每次最多导入 100 个存档。");
-  if (directoryOffset + directorySize !== end) throw new Error("ZIP 文件不完整或使用了不支持的 ZIP64 格式。");
+  if (!count) throw new UiFeedbackError("play.save.noLsd");
+  if (count > maxFiles) throw new UiFeedbackError("play.save.max");
+  if (directoryOffset + directorySize !== end) throw new UiFeedbackError("play.save.zip64");
   bounds(directoryOffset, directorySize, end);
   const extra = (offset: number, length: number) => {
     const extraEnd = offset + length;
@@ -137,7 +136,7 @@ function readZipDirectory(bytes: Uint8Array): ZipEntry[] {
       const size = u16(offset + 2);
       bounds(offset + 4, size, extraEnd);
       // ZIP64, AES and alternate Unicode paths can change the interpretation.
-      if (tag === 0x0001 || tag === 0x9901 || tag === 0x7075) throw new Error(zipStructureMessage);
+      if (tag === 0x0001 || tag === 0x9901 || tag === 0x7075) throw new UiFeedbackError("play.save.structure");
       offset += 4 + size;
     }
   };
@@ -147,7 +146,7 @@ function readZipDirectory(bytes: Uint8Array): ZipEntry[] {
   let total = 0;
   for (let index = 0; index < count; index++) {
     bounds(cursor, 46, end);
-    if (u32(cursor) !== 0x02014b50) throw new Error("ZIP 中央目录已损坏。");
+    if (u32(cursor) !== 0x02014b50) throw new UiFeedbackError("play.save.directory");
     const flags = u16(cursor + 8);
     const method = u16(cursor + 10);
     const nameLength = u16(cursor + 28);
@@ -155,22 +154,22 @@ function readZipDirectory(bytes: Uint8Array): ZipEntry[] {
     const commentLength = u16(cursor + 32);
     const attributes = u32(cursor + 38);
     const mode = (attributes >>> 16) & 0o170000;
-    if ((flags & ~0x080e) !== 0) throw new Error("不支持加密或特殊编码的 ZIP 文件。");
+    if ((flags & ~0x080e) !== 0) throw new UiFeedbackError("play.save.encoding");
     if (u16(cursor + 6) > 20 || (method !== 0 && method !== 8) || u16(cursor + 34) !== 0) {
-      throw new Error("不支持此 ZIP 压缩格式或多磁盘 ZIP 文件。");
+      throw new UiFeedbackError("play.save.compression");
     }
-    if ((attributes & 0x10) || (mode && mode !== 0o100000)) throw new Error(zipStructureMessage);
+    if ((attributes & 0x10) || (mode && mode !== 0o100000)) throw new UiFeedbackError("play.save.structure");
     bounds(cursor + 46, nameLength + extraLength + commentLength, end);
     const rawName = bytes.subarray(cursor + 46, cursor + 46 + nameLength);
-    if (rawName.some(byte => byte > 0x7f)) throw new Error(zipStructureMessage);
+    if (rawName.some(byte => byte > 0x7f)) throw new UiFeedbackError("play.save.structure");
     const name = saveName(String.fromCharCode(...rawName));
-    if (!name) throw new Error(zipStructureMessage);
-    if (names.has(name)) throw new Error(`导入来源包含重复槽位：${name}，请分批导入。`);
+    if (!name) throw new UiFeedbackError("play.save.structure");
+    if (names.has(name)) throw new UiFeedbackError("play.save.duplicate", { name });
     names.add(name);
     const size = u32(cursor + 24);
     total += size;
-    if (size > maxSaveBytes) throw new Error(`单个存档不能超过 16 MiB：${name}`);
-    if (total > maxTotalBytes) throw new Error("本次解压后的存档总量超过 40 MiB。");
+    if (size > maxSaveBytes) throw new UiFeedbackError("play.save.tooLargeNamed", { name });
+    if (total > maxTotalBytes) throw new UiFeedbackError("play.save.total");
     extra(cursor + 46 + nameLength, extraLength);
     const date = u16(cursor + 14);
     const time = u16(cursor + 12);
@@ -180,7 +179,7 @@ function readZipDirectory(bytes: Uint8Array): ZipEntry[] {
       compressedSize: u32(cursor + 20), offset: u32(cursor + 42), dataOffset: 0, timestamp });
     cursor += 46 + nameLength + extraLength + commentLength;
   }
-  if (cursor !== end) throw new Error("ZIP 中央目录已损坏。");
+  if (cursor !== end) throw new UiFeedbackError("play.save.directory");
   // Require every local entry to be indexed exactly once, with no hidden records,
   // SFX prefix, overlap, trailing payload, or directory traversal entries.
   entries.sort((a, b) => a.offset - b.offset);
@@ -189,34 +188,34 @@ function readZipDirectory(bytes: Uint8Array): ZipEntry[] {
     const entry = entries[index];
     const nextOffset = entries[index + 1]?.offset ?? directoryOffset;
     const offset = entry.offset;
-    if (offset !== expectedOffset) throw new Error(zipStructureMessage);
+    if (offset !== expectedOffset) throw new UiFeedbackError("play.save.structure");
     bounds(offset, 30, nextOffset);
     if (u32(offset) !== 0x04034b50 || u16(offset + 4) > 20
-      || u16(offset + 6) !== entry.flags || u16(offset + 8) !== entry.method) throw new Error("ZIP 文件头与中央目录不一致。");
+      || u16(offset + 6) !== entry.flags || u16(offset + 8) !== entry.method) throw new UiFeedbackError("play.save.headers");
     const nameLength = u16(offset + 26);
     const extraLength = u16(offset + 28);
     bounds(offset + 30, nameLength + extraLength, nextOffset);
     const localName = bytes.subarray(offset + 30, offset + 30 + nameLength);
-    if (!sameBytes(localName, entry.rawName)) throw new Error("ZIP 文件名不一致。");
+    if (!sameBytes(localName, entry.rawName)) throw new UiFeedbackError("play.save.zipName");
     extra(offset + 30 + nameLength, extraLength);
     entry.dataOffset = offset + 30 + nameLength + extraLength;
     bounds(entry.dataOffset, entry.compressedSize, nextOffset);
     const descriptor = (entry.flags & 8) !== 0;
     for (const [field, expected] of [[14, entry.crc], [18, entry.compressedSize], [22, entry.size]]) {
       const value = u32(offset + field);
-      if (value !== expected && !(descriptor && value === 0)) throw new Error("ZIP 文件尺寸或校验信息不一致。");
+      if (value !== expected && !(descriptor && value === 0)) throw new UiFeedbackError("play.save.sizeChecksum");
     }
     let dataEnd = entry.dataOffset + entry.compressedSize;
     if (descriptor) {
       const length = nextOffset - dataEnd;
       if (length === 16 && u32(dataEnd) === 0x08074b50) dataEnd += 4;
-      else if (length !== 12) throw new Error("ZIP 数据描述符已损坏。");
+      else if (length !== 12) throw new UiFeedbackError("play.save.descriptor");
       if (u32(dataEnd) !== entry.crc || u32(dataEnd + 4) !== entry.compressedSize || u32(dataEnd + 8) !== entry.size) {
-        throw new Error("ZIP 数据描述符校验失败。");
+        throw new UiFeedbackError("play.save.descriptorCheck");
       }
       dataEnd += 12;
     }
-    if (dataEnd !== nextOffset) throw new Error(zipStructureMessage);
+    if (dataEnd !== nextOffset) throw new UiFeedbackError("play.save.structure");
     expectedOffset = nextOffset;
   }
   return entries;
@@ -224,12 +223,12 @@ function readZipDirectory(bytes: Uint8Array): ZipEntry[] {
 
 async function inflateZipEntry(archive: Uint8Array, entry: ZipEntry, limit: number, signal: AbortSignal): Promise<Uint8Array> {
   signal.throwIfAborted();
-  if (entry.size > limit) throw new Error("本次解压后的存档总量超过 40 MiB。");
+  if (entry.size > limit) throw new UiFeedbackError("play.save.total");
   const compressed = archive.subarray(entry.dataOffset, entry.dataOffset + entry.compressedSize);
   const checksum = new Crc32();
   let bytes: Uint8Array;
   if (entry.method === 0) {
-    if (compressed.length > limit) throw new Error("存档解压大小超过安全限制。");
+    if (compressed.length > limit) throw new UiFeedbackError("play.save.extractLimit");
     bytes = compressed.slice();
     checksum.update(bytes);
   } else {
@@ -237,7 +236,7 @@ async function inflateZipEntry(archive: Uint8Array, entry: ZipEntry, limit: numb
     try {
       decoder = new DecompressionStream("deflate-raw");
     } catch {
-      throw new Error("当前浏览器不支持 ZIP 解压，请更新浏览器，或先解压后选择 LSD 文件。");
+      throw new UiFeedbackError("play.save.noDecompression");
     }
     let offset = 0;
     // Feed bounded compressed chunks, and apply backpressure while counting real
@@ -262,7 +261,7 @@ async function inflateZipEntry(archive: Uint8Array, entry: ZipEntry, limit: numb
         signal.throwIfAborted();
         if (result.done) break;
         size += result.value.length;
-        if (size > limit || size > entry.size) throw new Error("ZIP 实际解压大小超过安全限制或与文件头不符。");
+        if (size > limit || size > entry.size) throw new UiFeedbackError("play.save.extractSize");
         checksum.update(result.value);
         chunks.push(result.value);
       }
@@ -272,15 +271,15 @@ async function inflateZipEntry(archive: Uint8Array, entry: ZipEntry, limit: numb
     } catch (error) {
       await reader.cancel().catch(() => undefined);
       signal.throwIfAborted();
-      if (error instanceof Error && error.message.startsWith("ZIP 实际")) throw error;
-      throw new Error("ZIP 解压失败，文件可能不完整或已损坏。");
+      if (error instanceof UiFeedbackError && error.messageKey === "play.save.extractSize") throw error;
+      throw new UiFeedbackError("play.save.extractFailed");
     } finally {
       signal.removeEventListener("abort", abort);
       reader.releaseLock();
     }
   }
   signal.throwIfAborted();
-  if (bytes.length !== entry.size || checksum.digest() !== entry.crc) throw new Error(`ZIP 存档校验失败：${entry.name}`);
+  if (bytes.length !== entry.size || checksum.digest() !== entry.crc) throw new UiFeedbackError("play.save.zipCrc", { name: entry.name });
   return bytes;
 }
 
@@ -289,7 +288,7 @@ export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 export function saveDirectory(workId: number): string {
-  if (!Number.isSafeInteger(workId) || workId <= 0) throw new Error("作品编号无效。");
+  if (!Number.isSafeInteger(workId) || workId <= 0) throw new UiFeedbackError("play.save.workId");
   return `/work-saves/${workId}`;
 }
 
@@ -302,7 +301,7 @@ function fileAtCursor(directory: string, cursor: IDBCursorWithValue): SaveFile |
   if (!name) return null;
   const entry = cursor.value as { mode?: number; contents?: Uint8Array; timestamp?: Date } | null;
   if (!entry || typeof entry.mode !== "number" || (entry.mode & 0o170000) !== 0o100000 || !(entry.contents instanceof Uint8Array)) {
-    throw new Error(`本地存档格式异常：${name}，请先检查浏览器存储。`);
+    throw new UiFeedbackError("play.save.localFormat", { name });
   }
   return { name, bytes: entry.contents, sourcePath: String(cursor.key),
     timestamp: entry.timestamp instanceof Date && Number.isFinite(entry.timestamp.getTime()) ? entry.timestamp : undefined };
@@ -315,7 +314,7 @@ export async function openExistingDatabase(directory: string): Promise<IDBDataba
     let missing = false;
     let blocked = false;
     request.onupgradeneeded = () => { missing = true; request.transaction!.abort(); };
-    request.onblocked = () => { blocked = true; reject(new Error("本地存档正在被其他页面使用，请关闭其他游戏页面后重试。")); };
+    request.onblocked = () => { blocked = true; reject(new UiFeedbackError("play.save.otherPage")); };
     request.onsuccess = () => {
       const db = request.result;
       db.onversionchange = () => db.close();
@@ -388,7 +387,7 @@ export async function readSaveFiles(workId: number): Promise<SaveFile[]> {
         try {
           const file = fileAtCursor(directory, cursor);
           if (file) {
-            if (names.has(file.name)) throw new Error(`本地存在大小写重复槽位：${file.name}，请先整理存档后重试。`);
+            if (names.has(file.name)) throw new UiFeedbackError("play.save.localDuplicate", { name: file.name });
             names.add(file.name);
             files.push(file);
           }
@@ -433,7 +432,7 @@ export async function importSaveFiles(
   validateIncoming(incoming);
   const directory = saveDirectory(workId);
   const snapshot = new Map(existingSnapshot.map(file => [file.name, file]));
-  if (snapshot.size !== existingSnapshot.length) throw new Error(changedMessage);
+  if (snapshot.size !== existingSnapshot.length) throw new UiFeedbackError("play.save.changed");
   return new Promise<number>((resolve, reject) => {
     let db: IDBDatabase | undefined;
     let tx: IDBTransaction | undefined;
@@ -452,7 +451,7 @@ export async function importSaveFiles(
     };
     const abort = () => {
       if (committed) return;
-      failure = signal.reason ?? new DOMException("已取消导入。", "AbortError");
+      failure = signal.reason ?? new UiFeedbackDOMException("AbortError", "play.save.importCanceled");
       if (tx) {
         try { tx.abort(); } catch { /* Completion may already be queued. */ }
       } else finish(failure);
@@ -469,7 +468,7 @@ export async function importSaveFiles(
           if (cursor) {
             const file = fileAtCursor(directory, cursor);
             if (file) {
-              if (current.has(file.name)) throw new Error(changedMessage);
+              if (current.has(file.name)) throw new UiFeedbackError("play.save.changed");
               current.set(file.name, file);
             }
             cursor.continue();
@@ -477,11 +476,11 @@ export async function importSaveFiles(
           }
           // Validate the complete reviewed snapshot inside this write transaction.
           // Another tab's save between the dialog and commit never gets overwritten.
-          if (current.size !== snapshot.size) throw new Error(changedMessage);
+          if (current.size !== snapshot.size) throw new UiFeedbackError("play.save.changed");
           for (const [name, file] of current) {
             const previous = snapshot.get(name);
             if (!previous || file.sourcePath !== (previous.sourcePath ?? `${directory}/${previous.name}`)
-              || !sameBytes(file.bytes, previous.bytes)) throw new Error(changedMessage);
+              || !sameBytes(file.bytes, previous.bytes)) throw new UiFeedbackError("play.save.changed");
           }
           for (const file of incoming) {
             const name = saveName(file.name)!;
@@ -493,7 +492,7 @@ export async function importSaveFiles(
           }
         } catch (error) { failure = error; transaction.abort(); }
       };
-      transaction.onabort = () => finish(failure ?? transaction.error ?? new Error("导入存档失败。"));
+      transaction.onabort = () => finish(failure ?? transaction.error ?? new UiFeedbackError("play.save.importFailed"));
       transaction.oncomplete = () => {
         committed = true;
         if (!upgrading) finish();
@@ -526,8 +525,8 @@ export async function importSaveFiles(
       if (signal.aborted) { abort(); return; }
       try { write(db.transaction("FILE_DATA", "readwrite")); } catch (error) { finish(error); }
     };
-    request.onerror = () => finish(failure ?? request.error ?? new Error("无法打开本地存档。"));
-    request.onblocked = () => finish(new Error("本地存档正在被其他页面使用，请关闭其他游戏页面后重试。"));
+    request.onerror = () => finish(failure ?? request.error ?? new UiFeedbackError("play.save.open"));
+    request.onblocked = () => finish(new UiFeedbackError("play.save.otherPage"));
   });
 }
 
@@ -553,11 +552,11 @@ export function saveArchiveFilename(title: string, workId: number): string {
 }
 
 export function saveArchiveBlob(files: SaveFile[]): Blob {
-  if (!files.length) throw new Error("请选择要导出的存档。");
+  if (!files.length) throw new UiFeedbackError("play.save.exportNone");
   const entries: Zippable = Object.create(null) as Zippable;
   for (const file of files) {
     const name = saveName(file.name);
-    if (!name || Object.hasOwn(entries, name)) throw new Error("存档槽位无效或重复，无法导出。");
+    if (!name || Object.hasOwn(entries, name)) throw new UiFeedbackError("play.save.exportSlot");
     entries[name] = file.timestamp && Number.isFinite(file.timestamp.getTime())
       && file.timestamp.getFullYear() >= 1980 && file.timestamp.getFullYear() <= 2107
       ? [file.bytes, { mtime: file.timestamp }] : file.bytes;

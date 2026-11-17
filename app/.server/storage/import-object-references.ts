@@ -1,7 +1,7 @@
 import { normalizeSha256 } from "@/lib/sha256";
 import { findExistingObjects } from "@/app/.server/db/archive-objects";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { HttpError } from "@/lib/http";
+import { UiHttpError } from "@/lib/i18n/feedback";
 
 export type ImportObjectReferences = {
   blobs: string[];
@@ -10,18 +10,17 @@ export type ImportObjectReferences = {
 
 export function parseImportObjectReferences(
   value: unknown,
-  messages: { invalidList: string; invalidHash: string },
 ): ImportObjectReferences {
   if (
     !isRecord(value) ||
     !Array.isArray(value.blobs) ||
     !Array.isArray(value.corePacks)
   ) {
-    throw new HttpError(400, messages.invalidList);
+    throw new UiHttpError(400, "upload.error.draftList");
   }
   return {
-    blobs: normalizeHashItems(value.blobs, messages.invalidHash),
-    corePacks: normalizeHashItems(value.corePacks, messages.invalidHash),
+    blobs: normalizeHashItems(value.blobs),
+    corePacks: normalizeHashItems(value.corePacks),
   };
 }
 
@@ -43,17 +42,16 @@ export async function findMissingImportObjectReferences(
 
 function normalizeHashItems(
   values: unknown[],
-  invalidMessage: string,
 ): string[] {
   const hashes = new Set<string>();
   for (const value of values) {
     if (!isRecord(value) || typeof value.sha256 !== "string") {
-      throw new HttpError(400, invalidMessage);
+      throw new UiHttpError(400, "upload.error.draftHash");
     }
     try {
       hashes.add(normalizeSha256(value.sha256));
     } catch {
-      throw new HttpError(400, invalidMessage);
+      throw new UiHttpError(400, "upload.error.draftHash");
     }
   }
   return [...hashes];

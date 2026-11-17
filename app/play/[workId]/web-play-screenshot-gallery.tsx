@@ -1,3 +1,4 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { ImageLightbox } from "@/app/components/media/image-lightbox";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
@@ -23,6 +24,8 @@ export function WebPlayScreenshotGallery({
   screenshots: ScreenshotPreview[];
   title: string;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [selectedIds, setSelectedIds] = useState(new Set<string>());
@@ -61,20 +64,19 @@ export function WebPlayScreenshotGallery({
   }
 
   function deleteBatch() {
-    const scopeLabel = scope === "selected" ? "所选" : scope === "page" ? "本页" : "全部";
-    return deleteScreenshots(batchScreenshots, `确认删除${scopeLabel} ${batchScreenshots.length} 张截图？删除后无法恢复。`);
+    return deleteScreenshots(batchScreenshots, t("play.screenshot.confirmBatch", { scope, count: batchScreenshots.length }));
   }
 
   if (!screenshots.length) return null;
 
   return (
     <Card
-      aria-label="截图画廊"
+      aria-label={t("play.screenshot.gallery")}
       className="order-1 min-w-0 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full"
     >
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="m-0 text-base font-bold">截图画廊</h2>
-        <span className="font-mono text-xs text-muted">{screenshots.length}</span>
+        <h2 className="m-0 text-base font-bold">{t("play.screenshot.gallery")}</h2>
+        <span className="font-mono text-xs text-muted">{screenshots.length.toLocaleString(locale)}</span>
       </div>
       <div className="mb-2 flex min-h-10 flex-wrap items-center justify-between gap-x-2">
         <div className="flex items-center gap-2">
@@ -83,16 +85,16 @@ export function WebPlayScreenshotGallery({
             id={selectPageId}
             onCheckedChange={(checked) => selectScreenshots(pageScreenshots, checked === true)}
           />
-          <Label className="cursor-pointer text-xs" htmlFor={selectPageId}>全选本页</Label>
+          <Label className="cursor-pointer text-xs" htmlFor={selectPageId}>{t("play.screenshot.selectPage")}</Label>
         </div>
         <div className="flex items-center gap-1">
-          <span className="text-xs text-muted" role="status">已选 {selectedScreenshots.length} 张</span>
+          <span className="text-xs text-muted" role="status">{t("play.screenshot.selected", { count: selectedScreenshots.length })}</span>
           <Button
-            aria-label="清空截图选择"
+            aria-label={t("play.screenshot.clearSelection")}
             disabled={!selectedScreenshots.length}
             onClick={() => setSelectedIds(new Set())}
             size="icon"
-            title="清空选择"
+            title={t("play.screenshot.clear")}
             type="button"
             variant="ghost"
           >
@@ -102,14 +104,14 @@ export function WebPlayScreenshotGallery({
       </div>
       <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0">
         {pageScreenshots.map((screenshot) => {
-          const capturedAt = parseTimestamp(screenshot.createdAt).toLocaleString("zh-CN", { timeZone: DISPLAY_TIME_ZONE, hour12: false });
+          const capturedAt = parseTimestamp(screenshot.createdAt).toLocaleString(locale, { timeZone: DISPLAY_TIME_ZONE, hour12: false });
           const label = `${title} · ${capturedAt}`;
           return (
             <li className="min-w-0" key={screenshot.id}>
               <ScreenshotThumbnail screenshot={screenshot} label={label} onClick={() => setActiveId(screenshot.id)} />
               <div className="mt-1 flex flex-wrap items-center gap-1">
                 <Checkbox
-                  aria-label={`选择截图：${label}`}
+                  aria-label={t("play.screenshot.selectNamed", { label })}
                   checked={selectedIds.has(screenshot.id)}
                   onCheckedChange={(checked) => selectScreenshots([screenshot], checked === true)}
                 />
@@ -118,21 +120,21 @@ export function WebPlayScreenshotGallery({
                 </time>
                 <div className="ml-auto flex items-center gap-1">
                   <a
-                    aria-label={`下载截图：${label}`}
+                    aria-label={t("play.screenshot.downloadNamed", { label })}
                     className={buttonVariants({ variant: "ghost", size: "icon" })}
                     download={screenshotFilename(screenshot)}
                     href={screenshot.url}
-                    title="下载截图"
+                    title={t("play.screenshot.download")}
                   >
                     <Download aria-hidden />
                   </a>
                   <Button
-                    aria-label={`删除截图：${label}`}
+                    aria-label={t("play.screenshot.deleteNamed", { label })}
                     className="text-destructive hover:text-destructive"
                     disabled={busy}
-                    onClick={() => void deleteScreenshots([screenshot], "确认删除这张截图？删除后无法恢复。")}
+                    onClick={() => void deleteScreenshots([screenshot], t("play.screenshot.confirmDelete"))}
                     size="icon"
-                    title="删除截图"
+                    title={t("play.screenshot.delete")}
                     type="button"
                     variant="ghost"
                   >
@@ -145,13 +147,13 @@ export function WebPlayScreenshotGallery({
         })}
       </ul>
       {totalPages > 1 ? (
-        <nav aria-label="截图分页" className="mt-3 flex items-center justify-center gap-2">
+        <nav aria-label={t("play.screenshot.pagination")} className="mt-3 flex items-center justify-center gap-2">
           <Button
-            aria-label="上一页截图"
+            aria-label={t("play.screenshot.previousNamed")}
             disabled={currentPage === 0}
             onClick={() => setPage(currentPage - 1)}
             size="icon"
-            title="上一页"
+            title={t("play.screenshot.previous")}
             type="button"
             variant="outline"
           >
@@ -161,11 +163,11 @@ export function WebPlayScreenshotGallery({
             {currentPage + 1} / {totalPages}
           </span>
           <Button
-            aria-label="下一页截图"
+            aria-label={t("play.screenshot.nextNamed")}
             disabled={currentPage === totalPages - 1}
             onClick={() => setPage(currentPage + 1)}
             size="icon"
-            title="下一页"
+            title={t("play.screenshot.next")}
             type="button"
             variant="outline"
           >
@@ -175,37 +177,37 @@ export function WebPlayScreenshotGallery({
       ) : null}
       <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
         <SelectField
-          aria-label="截图批量操作范围"
+          aria-label={t("play.screenshot.scope")}
           className="min-w-0 flex-1"
           disabled={busy}
           onValueChange={(value) => {
             setScope(value as ScreenshotScope);
           }}
           options={[
-            { value: "selected", label: `所选截图（${selectedScreenshots.length}）` },
-            { value: "page", label: `本页截图（${pageScreenshots.length}）` },
-            { value: "all", label: `全部截图（${screenshots.length}）` },
+            { value: "selected", label: t("play.screenshot.scope.selected", { count: selectedScreenshots.length }) },
+            { value: "page", label: t("play.screenshot.scope.page", { count: pageScreenshots.length }) },
+            { value: "all", label: t("play.screenshot.scope.all", { count: screenshots.length }) },
           ]}
           value={scope}
         />
         <Button
-          aria-label={downloading ? "正在打包截图" : "批量下载截图"}
+          aria-label={downloading ? t("play.screenshot.pack") : t("play.screenshot.batchDownload")}
           disabled={busy || !batchScreenshots.length}
           onClick={() => void downloadScreenshots(batchScreenshots)}
           size="icon"
-          title="批量下载 ZIP"
+          title={t("play.screenshot.downloadZip")}
           type="button"
           variant="outline"
         >
           {downloading ? <LoaderCircle aria-hidden className="animate-spin" /> : <Download aria-hidden />}
         </Button>
         <Button
-          aria-label={deleting ? "正在删除截图" : "批量删除截图"}
+          aria-label={deleting ? t("play.screenshot.deleting") : t("play.screenshot.batchDelete")}
           className="text-destructive hover:border-destructive hover:text-destructive"
           disabled={busy || !batchScreenshots.length}
           onClick={() => void deleteBatch()}
           size="icon"
-          title="批量删除截图"
+          title={t("play.screenshot.batchDelete")}
           type="button"
           variant="outline"
         >
@@ -226,7 +228,7 @@ export function WebPlayScreenshotGallery({
           }))}
           plugins={[LightboxDownload]}
           pixelated
-          labels={{ Download: "下载截图" }}
+          labels={{ Download: t("play.screenshot.download") }}
         />
       ) : null}
     </Card>
@@ -234,7 +236,8 @@ export function WebPlayScreenshotGallery({
 }
 
 export function ScreenshotThumbnail({ screenshot, label, onClick, className = "", selected }: { screenshot: ScreenshotPreview; label: string; onClick: MouseEventHandler<HTMLButtonElement>; className?: string; selected?: boolean }) {
-  return <Button aria-label={`查看截图：${label}`} aria-pressed={selected} className={`block aspect-4/3 h-auto min-h-0 w-full overflow-hidden rounded-md bg-black p-0 hover:bg-black ${className}`}
+  const t = useMessages();
+  return <Button aria-label={t("play.screenshot.viewNamed", { label })} aria-pressed={selected} className={`block aspect-4/3 h-auto min-h-0 w-full overflow-hidden rounded-md bg-black p-0 hover:bg-black ${className}`}
     onClick={onClick} type="button" variant="ghost">
     <img alt={label} className="block h-full w-full object-contain [image-rendering:pixelated]" height={screenshot.height} loading="lazy" src={screenshot.url} width={screenshot.width} />
   </Button>;

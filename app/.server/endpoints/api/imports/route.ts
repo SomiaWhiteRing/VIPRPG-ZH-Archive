@@ -75,7 +75,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
 
 function readString(value: unknown, name: string): string {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new HttpError(400, `Invalid ${name}`);
+    throw new HttpError(400, `Invalid ${name}`, undefined, "upload.error.invalidField", { field: name });
   }
 
   return value.trim();
@@ -83,7 +83,7 @@ function readString(value: unknown, name: string): string {
 
 function readNonNegativeInteger(value: unknown, name: string): number {
   if (!Number.isSafeInteger(value) || Number(value) < 0) {
-    throw new HttpError(400, `Invalid ${name}`);
+    throw new HttpError(400, `Invalid ${name}`, undefined, "upload.error.invalidField", { field: name });
   }
 
   return Number(value);
@@ -95,7 +95,7 @@ function readNullablePositiveInteger(
 ): number | null {
   if (value === undefined || value === null) return null;
   if (!Number.isSafeInteger(value) || Number(value) <= 0) {
-    throw new HttpError(400, `Invalid ${name}`);
+    throw new HttpError(400, `Invalid ${name}`, undefined, "upload.error.invalidField", { field: name });
   }
   return Number(value);
 }
@@ -107,13 +107,13 @@ async function parseCreateImportRequest(
   try {
     value = await readJsonObject(request, "请求必须为 JSON 对象");
   } catch {
-    throw new HttpError(400, "Invalid JSON body");
+    throw new HttpError(400, "Invalid JSON body", undefined, "request.invalidJson");
   }
   if (!isRecord(value)) {
-    throw new HttpError(400, "Invalid import job body");
+    throw new HttpError(400, "Invalid import job body", undefined, "upload.error.invalidJobBody");
   }
   if (typeof value.filePolicyVersion !== "string") {
-    throw new HttpError(400, "Invalid filePolicyVersion");
+    throw new HttpError(400, "Invalid filePolicyVersion", undefined, "upload.error.filePolicy");
   }
   return value as CreateImportRequest;
 }

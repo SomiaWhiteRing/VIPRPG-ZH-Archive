@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { MENTION_PATTERN, readMention } from "@/lib/mentions";
 
 export function MentionText({ text }: { text: string }) {

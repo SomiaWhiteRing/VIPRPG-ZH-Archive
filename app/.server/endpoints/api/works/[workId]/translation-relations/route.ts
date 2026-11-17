@@ -44,9 +44,9 @@ async function readBody(request: Request): Promise<{
     "Invalid translation relation body",
   );
   if (body.targetRole !== undefined && typeof body.targetRole !== "string")
-    throw new HttpError(400, "Translation role must be a string");
+    throw new HttpError(400, "Translation role must be a string", undefined, "relation.error.translationRoleValue");
   if (body.targetWorkId !== undefined && typeof body.targetWorkId !== "number")
-    throw new HttpError(400, "Target work id must be a number");
+    throw new HttpError(400, "Target work id must be a number", undefined, "relation.error.targetIdType");
   return body as {
     targetRole?: "original" | "translation";
     targetWorkId?: number;

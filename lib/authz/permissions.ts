@@ -217,7 +217,7 @@ export const PERMISSIONS = {
     category: "tag",
     label: "编辑所有标签资料",
     scope: "全部标签资料",
-    description: "编辑标签名称、命名空间和说明；不包含合并标签。",
+    description: "编辑标签命名空间和说明；不支持改名、合并或删除。",
   },
   "work.update_own": {
     category: "work",
@@ -235,8 +235,8 @@ export const PERMISSIONS = {
   "relation.create": {
     category: "relation",
     label: "创建作品关联",
-    scope: "本人上传的作品",
-    description: "为本人上传的作品新增关联；自动建立对向关联无需对向作品的上传者权限。",
+    scope: "自己维护的作品",
+    description: "为自己维护的作品新增关联；自动建立对向关联时，无需对向作品的维护者资格。",
   },
   "relation.create_any": {
     category: "relation",
@@ -265,8 +265,8 @@ export const PERMISSIONS = {
   "translation_relation.create": {
     category: "relation",
     label: "创建翻译关联",
-    scope: "本人上传的作品",
-    description: "为本人上传的作品建立原作与译作关系；自动建立对向关联无需对向作品的上传者权限。",
+    scope: "自己维护的作品",
+    description: "为自己维护的作品建立原作与译作关系；自动建立对向关联时，无需对向作品的维护者资格。",
   },
   "translation_relation.delete_any": {
     category: "relation",
@@ -622,16 +622,17 @@ export function canMergeWorks(
 
 export function permissionConfigurationWarnings(
   keys: readonly PermissionKey[],
-): string[] {
-  const warnings: string[] = [];
+): (
+  | { kind: "archive" | "merge"; missing: PermissionKey[] }
+  | { kind: "dependency"; permission: PermissionKey; required: PermissionKey }
+)[] {
+  const warnings: ReturnType<typeof permissionConfigurationWarnings> = [];
   if (ARCHIVE_UPLOAD_PERMISSIONS.some((key) => keys.includes(key))) {
     const missing = ARCHIVE_UPLOAD_PERMISSIONS.filter(
       (key) => !keys.includes(key),
     );
     if (missing.length)
-      warnings.push(
-        `完成本站归档发布还需：${missing.map((key) => PERMISSIONS[key].label).join("、")}。`,
-      );
+      warnings.push({ kind: "archive", missing });
   }
   const dependencies: Partial<Record<PermissionKey, PermissionKey>> = {
     "timeline.status.create": "timeline.use",
@@ -653,13 +654,11 @@ export function permissionConfigurationWarnings(
   };
   if (keys.includes("work.merge_any")) {
     const missing = (["relation.delete_any", "translation_relation.delete_any"] as const).filter((key) => !keys.includes(key));
-    if (missing.length) warnings.push(`合并作品还需：${missing.map((key) => PERMISSIONS[key].label).join("、")}。`);
+    if (missing.length) warnings.push({ kind: "merge", missing });
   }
   for (const [key, dependency] of Object.entries(dependencies)) {
     if (keys.includes(key as PermissionKey) && !keys.includes(dependency)) {
-      warnings.push(
-        `使用“${PERMISSIONS[key as PermissionKey].label}”的完整管理入口还需“${PERMISSIONS[dependency].label}”。`,
-      );
+      warnings.push({ kind: "dependency", permission: key as PermissionKey, required: dependency });
     }
   }
   return warnings;

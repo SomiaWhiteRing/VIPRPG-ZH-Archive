@@ -1,7 +1,10 @@
+import { useMessages } from "@/lib/i18n/react";
 import { useEffect, useRef } from "react";
-import { Link, useLocation } from "react-router";
+import { useLocation } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export function SiteFooter() {
+  const t = useMessages();
   const pathname = useLocation().pathname;
   const footerRef = useRef<HTMLElement>(null);
   const hidden = pathname === "/discussions" || pathname.startsWith("/discussions/");
@@ -43,23 +46,23 @@ export function SiteFooter() {
           <p className="m-0 text-primary-foreground/75">
             © 2026 VIPRPG.org
           </p>
-          <nav aria-label="页脚导航" className="flex flex-wrap gap-4">
-            <Link to="/about">关于</Link>
-            <a href="https://status.viprpg.org/">运行状态</a>
+          <nav aria-label={t("footer.nav")} className="flex flex-wrap gap-4">
+            <Link to="/about">{t("footer.about")}</Link>
+            <a href="https://status.viprpg.org/">{t("footer.status")}</a>
             <a
               href="https://viprpg.org/discussions/1"
               rel="noreferrer"
               target="_blank"
             >
-              反馈
+              {t("footer.feedback")}
             </a>
           </nav>
         </div>
-        <nav aria-label="支持与闲谈" className="mt-4 flex justify-end gap-4 text-xs text-primary-foreground/60">
+        <nav aria-label={t("footer.community")} className="mt-4 flex justify-end gap-4 text-xs text-primary-foreground/60">
           <a href="https://fes.viprpg.org">祭</a>
-          <a href="https://afdian.com/a/whitering" rel="noreferrer" target="_blank">赛钱箱</a>
-          <Link to="/sea">永恒之海</Link>
-          <Link to="/material-search">大镜</Link>
+          <a href="https://afdian.com/a/whitering" rel="noreferrer" target="_blank">{t("footer.donate")}</a>
+          <Link to="/sea">{t("sea.title")}</Link>
+          <Link to="/material-search">{t("material.title")}</Link>
         </nav>
       </div>
     </footer>

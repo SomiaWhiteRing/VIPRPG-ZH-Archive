@@ -102,7 +102,7 @@ export async function getWorkFavorite(runtime: AppRuntime, workId: number, userI
      FROM works w LEFT JOIN user_work_entries e ON e.work_id=w.id AND e.user_id=?
      WHERE w.id=? AND ${access.sql}`,
   ).bind(userId, workId, ...access.binds).first<{ favorited: number; note: string }>();
-  if (!row) throw new HttpError(404, "作品不存在");
+  if (!row) throw new HttpError(404, "作品不存在", undefined, "comment.error.workMissing");
   const [ownTags, publicTags, userTags, frequentTags] = await Promise.all([
     database.prepare("SELECT name FROM user_work_tags WHERE work_id=? AND user_id=? ORDER BY sort_order,name")
       .bind(workId, userId).all<{ name: string }>(),

@@ -1,5 +1,8 @@
+import { translate, type MessageKey } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
-import { data, useLoaderData, useRouteLoaderData, type HeadersFunction, type LinksFunction, type LoaderFunctionArgs } from "react-router";
+import { data, useLoaderData, useRouteLoaderData, type HeadersFunction, type LinksFunction, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { Settings } from "lucide-react";
 import type { loader as rootLoader } from "@/app/root";
 import { Button } from "@/app/components/ui/button";
@@ -10,7 +13,7 @@ import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { RpgDialogue, RpgFace } from "@/app/components/ui/rpg-dialogue";
 import { layoutSeaDialogue, limitSeaBodyInput, SEA_ASSETS, seaBitmap } from "@/lib/ui/eternal-sea";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { getUserAvatarSrc } from "@/lib/user-profile";
 import { runtimeContext } from "@/app/.server/router-context";
 import { prepareSeaActor } from "@/app/.server/sea/identity";
@@ -20,10 +23,16 @@ import { loadSeaFont } from "@/app/components/sea/font";
 import { useToast } from "@/app/components/ui/toast";
 import { HttpError } from "@/lib/http";
 import { SEA_ANONYMOUS_NAME, SEA_ANONYMOUS_NAME_LIMIT, SEA_FACE_COUNT, type SeaSubmission } from "@/lib/dto/sea";
-import { requestJson } from "@/lib/ui/api-response";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 import { useClientEnvironment } from "@/app/components/use-client-environment";
 import type { PageLayoutHandle } from "@/app/components/use-page-layout";
 import "./sea.css";
+
+const sendErrorKeys: Readonly<Record<string, MessageKey>> = {
+  sea_request_conflict: "sea.conflict",
+  sea_muted: "sea.muted",
+  sea_rate_limited: "sea.rate",
+};
 
 const SEA_NAME_KEY = "viprpg:sea:anonymous-name";
 const SEA_FACE_KEY = "viprpg:sea:anonymous-face";
@@ -33,7 +42,10 @@ export const handle = {
   layout: { hideBackToTop: true, hideSiteHeader: true, hideSiteFooter: true },
 } satisfies PageLayoutHandle;
 
-export const meta = () => pageMetaDescriptors({ title: "永恒之海", description: "海边的几句话。" });
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "sea.title"), description: translate(locale, "sea.description") }, error, locale);
+};
 export const links: LinksFunction = () => [
   { rel: "preload", as: "image", href: `${SEA_ASSETS}/ocean.gif`, media: "(prefers-reduced-motion: no-preference)", fetchPriority: "high" },
   { rel: "preload", as: "image", href: `${SEA_ASSETS}/ocean.png`, media: "(prefers-reduced-motion: reduce)", fetchPriority: "high" },
@@ -44,7 +56,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
   let cookie: string | undefined;
   try { cookie = (await prepareSeaActor(runtime)).cookie; }
   catch (error) { if (!(error instanceof HttpError) || error.status !== 401) throw error; }
-  return data(await seaRoom(runtime).snapshot(), { headers: cookie ? { "Set-Cookie": cookie } : undefined });
+  return data({ ...await seaRoom(runtime).snapshot(), locale: runtime.uiLocale }, { headers: cookie ? { "Set-Cookie": cookie } : undefined });
 }
 export const headers: HeadersFunction = ({ loaderHeaders }) => {
   const headers = new Headers(loaderHeaders);
@@ -52,6 +64,8 @@ export const headers: HeadersFunction = ({ loaderHeaders }) => {
   return headers;
 };
 export default function EternalSeaPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const environment = useClientEnvironment();
   const native = environment === "android";
   const session = useRouteLoaderData<typeof rootLoader>("root")?.session;
@@ -63,7 +77,7 @@ export default function EternalSeaPage() {
   const [settings, setSettings] = useState<{ open: boolean; name: string; face: number; portrait?: CharacterAvatarSelection }>({ open: false, name: "", face: 0 });
   const avatarMode = session && useOwnAvatar ? "own" : "alex";
   const name = avatarMode === "own" && session ? session.displayName : anonymousName || SEA_ANONYMOUS_NAME;
-  const { messages, font, refresh } = useSeaRoom(useLoaderData<typeof loader>());
+  const { messages, font, refresh } = useSeaRoom(useLoaderData<typeof loader>(), locale);
   const toast = useToast();
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
@@ -195,14 +209,16 @@ export default function EternalSeaPage() {
     sendingRef.current = true;
     setSending(true);
     try {
-      await requestJson("/api/sea/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(submission) }, "发言失败");
+      await requestJson(`/api/sea/messages?${UI_LOCALE_PARAM}=${locale}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(submission) }, t("sea.sendFailed"));
       followingRef.current = true;
       await refresh();
       submissionRef.current = null;
       setDraft(current => current === submission.body ? "" : current);
       inputRef.current?.focus();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "发言失败，请稍后再试");
+      const key = error instanceof ApiResponseError && error.code && Object.hasOwn(sendErrorKeys, error.code)
+        ? sendErrorKeys[error.code] : undefined;
+      toast.error(key ? t(key) : error instanceof ApiResponseError ? error.messageFor(locale) : error instanceof Error ? error.message : t("sea.sendFailed"));
     } finally {
       sendingRef.current = false;
       setSending(false);
@@ -210,15 +226,15 @@ export default function EternalSeaPage() {
   }
 
   return (
-    <main className="eternal-sea-page" data-scroll={native ? "document" : "log"} aria-label="永恒之海">
-      <h1 className="sr-only">永恒之海</h1>
+    <main className="eternal-sea-page" data-scroll={native ? "document" : "log"} aria-label={t("sea.title")}>
+      <h1 className="sr-only">{t("sea.title")}</h1>
       {backgroundReady && <div className="sea-room">
         <div className="sea-composer-dock" inert={!composerReady}>
           <form className="sea-composer" onSubmit={send}>
             <div className="sea-compose-fields">
               {session ? (
                 <Button type="button" variant="ghost" className="sea-face-button"
-                  aria-label={useOwnAvatar ? "以匿名身份发言" : "以账号身份发言"}
+                  aria-label={useOwnAvatar ? t("sea.anonymous") : t("sea.account")}
                   onClick={() => setUseOwnAvatar((current) => !current)}>
                   <RpgFace index={useOwnAvatar ? 0 : anonymousFace}
                     avatarUrl={useOwnAvatar ? accountAvatar : undefined}
@@ -228,8 +244,8 @@ export default function EternalSeaPage() {
                 <span className="sea-face-button"><RpgFace index={anonymousFace} portrait={anonymousPortrait} /></span>
               )}
               <div className="sea-input-area">
-                <Label htmlFor="sea-input" className="sr-only">发言内容</Label>
-                <Textarea id="sea-input" ref={inputRef} value={draft} rows={3} className="sea-input" placeholder="把握"
+                <Label htmlFor="sea-input" className="sr-only">{t("sea.body")}</Label>
+                <Textarea id="sea-input" ref={inputRef} value={draft} rows={3} className="sea-input" placeholder={t("sea.placeholder")}
                   onChange={(event) => setDraft(composingRef.current ? event.target.value : limitSeaBodyInput(event.target.value))}
                   onCompositionStart={() => { composingRef.current = true; }}
                   onCompositionEnd={(event) => {
@@ -239,7 +255,7 @@ export default function EternalSeaPage() {
                 <div className="sea-submit-row">
                   {avatarMode === "alex" && <Dialog.Root open={settings.open} onOpenChange={(open) => setSettings({ open, name: anonymousName, face: anonymousFace, portrait: anonymousPortrait })}>
                     <Dialog.Trigger asChild>
-                      <Button type="button" variant="rm2k" size="sm" className="sea-settings-trigger" aria-label="发言设置">
+                      <Button type="button" variant="rm2k" size="sm" className="sea-settings-trigger" aria-label={t("sea.settings")}>
                         <Settings aria-hidden="true" />
                       </Button>
                     </Dialog.Trigger>
@@ -249,7 +265,7 @@ export default function EternalSeaPage() {
                         className="left-1/2 top-1/2 max-h-[calc(100dvh-2rem)] w-[min(23rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl"
                         aria-describedby={undefined}>
                         <header className="border-b border-border px-5 py-4">
-                          <Dialog.Title>匿名发言设置</Dialog.Title>
+                          <Dialog.Title>{t("sea.anonymousSettings")}</Dialog.Title>
                         </header>
                         <div className="grid gap-4 px-5 py-5">
                           <div className="flex items-center gap-3">
@@ -262,7 +278,7 @@ export default function EternalSeaPage() {
                             }} />
                           </div>
                           <div className="grid gap-2">
-                            <Label htmlFor="sea-anonymous-name">匿名名称</Label>
+                            <Label htmlFor="sea-anonymous-name">{t("sea.name")}</Label>
                             <Input id="sea-anonymous-name" className="text-base" maxLength={SEA_ANONYMOUS_NAME_LIMIT} value={settings.name}
                               placeholder={SEA_ANONYMOUS_NAME} onChange={event => {
                                 const name = event.target.value;
@@ -273,8 +289,8 @@ export default function EternalSeaPage() {
                         <footer className="flex justify-end gap-2 border-t border-border px-5 py-3">
                           <Button type="button" variant="ghost" className="mr-auto" onClick={() => {
                             setSettings({ open: true, name: "", face: 0 });
-                          }}>重置</Button>
-                          <Dialog.Close asChild><Button type="button" variant="ghost">取消</Button></Dialog.Close>
+                          }}>{t("upload.cover.reset")}</Button>
+                          <Dialog.Close asChild><Button type="button" variant="ghost">{t("play.save.cancel")}</Button></Dialog.Close>
                           <Button type="button" onClick={() => {
                             const name = settings.name.trim();
                             setAnonymousName(name);
@@ -290,18 +306,18 @@ export default function EternalSeaPage() {
                             } catch {
                               // Keep the in-memory selection when browser storage is unavailable.
                             }
-                          }}>保存</Button>
+                          }}>{t("core.action.save")}</Button>
                         </footer>
                       </Dialog.Content>
                     </Dialog.Portal>
                   </Dialog.Root>}
-                  <Button type="submit" variant="rm2k" size="sm" className="sea-submit" disabled={!canSend || sending}>发言</Button>
+                  <Button type="submit" variant="rm2k" size="sm" className="sea-submit" disabled={!canSend || sending}>{t("sea.send")}</Button>
                 </div>
               </div>
             </div>
           </form>
         </div>
-        {dialoguesStarted && <div className="sea-log" inert={!roomReady} role="log" aria-label="海边的对话" aria-live="polite" aria-relevant="additions" ref={logRef}
+        {dialoguesStarted && <div className="sea-log" inert={!roomReady} role="log" aria-label={t("sea.log")} aria-live="polite" aria-relevant="additions" ref={logRef}
           onScroll={() => {
             const log = logRef.current;
             if (!native && scrollInitializedRef.current && log) followingRef.current = log.scrollHeight - log.scrollTop - log.clientHeight < 32;

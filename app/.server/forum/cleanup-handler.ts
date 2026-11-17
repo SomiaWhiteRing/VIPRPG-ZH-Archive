@@ -3,14 +3,16 @@ import {
   reconcileForumImage,
 } from "@/app/.server/forum/image-storage";
 import { HttpError, jsonError } from "@/lib/http";
+import { translate } from "@/lib/i18n/core";
+import { preserveUiLocale, type UiLocale } from "@/lib/i18n/locale";
 import type { ForumRequestRuntime } from "./request";
 import { readForumBody, requireForumUser } from "./request";
 
-export async function POST(ctx: ForumRequestRuntime, request: Request) {
+export async function POST(ctx: ForumRequestRuntime, request: Request, locale: UiLocale) {
   try {
     const auth = await requireForumUser(ctx, request, [
       "forum.content.moderate_any",
-    ]);
+    ], locale);
     const bytes = await readForumBody(request);
     const form = await new Response(bytes, {
         headers: { "Content-Type": request.headers.get("content-type") ?? "" },
@@ -18,10 +20,10 @@ export async function POST(ctx: ForumRequestRuntime, request: Request) {
       id = form.get("id"),
       op = form.get("op");
     if (typeof id !== "string" || (op !== "cleanup" && op !== "reconcile"))
-      throw new HttpError(400, "清理操作无效。");
+      throw new HttpError(400, translate(locale, "admin.discussions.imageInvalid"));
     const db = ctx.db;
     if (op === "reconcile") {
-      await reconcileForumImage(ctx, id);
+      await reconcileForumImage(ctx, id, locale);
     } else {
       const row = await db
         .prepare(
@@ -42,7 +44,7 @@ export async function POST(ctx: ForumRequestRuntime, request: Request) {
         if (!cleaned)
           throw new HttpError(
             409,
-            "图片尚不符合清理条件。请先隐藏帖子或主题，或核对上传状态。",
+            translate(locale, "admin.discussions.imageConflict"),
           );
         await ctx.bucket.delete(cleaned.object_key);
       } else {
@@ -63,14 +65,16 @@ export async function POST(ctx: ForumRequestRuntime, request: Request) {
         ]);
       }
     }
+    const url = new URL(request.url);
+    const target = preserveUiLocale(new URL("/admin/discussions/images", url), url);
     return new Response(null, {
       status: 303,
       headers: {
-        Location: "/admin/discussions/images",
+        Location: target.pathname + target.search,
         "Cache-Control": "no-store",
       },
     });
   } catch (error) {
-    return jsonError("图片清理失败。", error);
+    return jsonError(translate(locale, "admin.discussions.imageFailed"), error);
   }
 }

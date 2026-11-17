@@ -1,6 +1,8 @@
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { parseCommentTargetKind } from "@/lib/comment-target";
 import { CommentCategoryFilter } from "@/app/components/profile/comment-category-filter";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { parseAccountPage } from "@/app/.server/auth/account-user";
 import { searchUserComments } from "@/app/.server/db/work-community";
 import { requirePublicProfileSection } from "@/app/.server/public-user";
@@ -31,29 +33,28 @@ export async function loader(args: LoaderFunctionArgs) {
     kind,
   });
   const base = `/users/${user.id}/comments`;
-  return { displayName: user.displayName, page, result, base, kind };
+  return { locale: runtime.uiLocale, displayName: user.displayName, page, result, base, kind };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    {
-      title: [loaderData?.displayName || "用户", "评论"],
-      page: loaderData?.page,
-    },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "timeline.feed.kind.comment");
+  const name = loaderData?.displayName;
+  return pageMetaDescriptors({ title: name ? [name, title] : title, page: loaderData?.page }, error, locale);
+};
 
 export default function PublicComments() {
+  const t = useMessages();
   const { page, result, base, kind } = useLoaderData<typeof loader>();
   const { userId } = useParams();
   const hidePosts = useIsPostAuthorHidden()(Number(userId));
   return (
-    <section aria-label="评论">
+    <section aria-label={t("timeline.feed.kind.comment")}>
       <CommentCategoryFilter basePath={base} kind={kind} />
       {hidePosts ? null : result.items.length ? (
         <CommentSummaryList items={result.items} />
       ) : (
-        <AccountEmpty>{kind ? "这个类别下还没有公开评论。" : "还没有公开评论。"}</AccountEmpty>
+        <AccountEmpty>{kind ? t("publicProfile.noFilteredComments") : t("publicProfile.noComments")}</AccountEmpty>
       )}
       <PaginationLinks
         basePath={base}

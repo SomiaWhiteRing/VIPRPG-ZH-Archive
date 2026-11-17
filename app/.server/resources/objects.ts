@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 import { inspectWorkImage } from "@/app/.server/storage/work-images";
 import type { AppRuntime } from "@/app/.server/runtime";
 import {
@@ -23,28 +25,30 @@ function checksumHex(value: ArrayBuffer | undefined) {
 export function assertArtifactObject(
   row: ToolArtifact,
   object: R2Object | null,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ): asserts object is R2Object {
-  if (!object) throw new HttpError(503, "安装包存储对象缺失，请联系管理员");
+  if (!object) throw new HttpError(503, translate(locale, "admin.resources.missingObject"), undefined, "admin.resources.missingObject");
   if (
     object.key !== row.object_key ||
     object.size !== row.size_bytes ||
     checksumHex(object.checksums.sha256) !== row.sha256
   )
-    throw new HttpError(503, "安装包存储校验信息不一致，已停止下载和发布");
+    throw new HttpError(503, translate(locale, "admin.resources.mismatch"), undefined, "admin.resources.mismatch");
 }
 export async function verifyArtifactObject(
   runtime: AppRuntime,
   row: ToolArtifact,
 ) {
   const object = await runtime.bucket.head(row.object_key);
-  assertArtifactObject(row, object);
+  assertArtifactObject(row, object, runtime.uiLocale);
   return object;
 }
 export async function readLimited(
   request: Request,
   limit: number,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ): Promise<ArrayBuffer> {
-  if (!request.body) throw new HttpError(400, "请求内容为空");
+  if (!request.body) throw new HttpError(400, translate(locale, "admin.package.error.emptyBody"), undefined, "admin.package.error.emptyBody");
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -55,7 +59,7 @@ export async function readLimited(
       size += value.byteLength;
       if (size > limit) {
         await reader.cancel();
-        throw new HttpError(413, "请求内容超过大小限制");
+        throw new HttpError(413, translate(locale, "admin.package.error.largeBody"), undefined, "admin.package.error.largeBody");
       }
       chunks.push(value);
     }
@@ -78,10 +82,10 @@ export async function uploadIcon(
   request: Request,
 ) {
   await getResource(runtime, id);
-  const bytes = await readLimited(request, MAX_RESOURCE_ICON_BYTES);
+  const bytes = await readLimited(request, MAX_RESOURCE_ICON_BYTES, runtime.uiLocale);
   const info = inspectWorkImage(bytes);
   if (!["png", "gif", "jpeg"].includes(info.format) || info.width > 512 || info.height > 512)
-    throw new HttpError(400, "图标须为边长不超过 512px 的 PNG、GIF 或 JPG／JPEG");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.package.error.iconFormat"), undefined, "admin.package.error.iconFormat");
   const sha = await sha256Hex(bytes);
   await assertObjectUploadAllowed(runtime, { kind: "blob", sha256: sha });
   await runtime.bucket.put(blobKey(sha), bytes, {
@@ -124,11 +128,11 @@ async function finishUpload(
   const row = await getArtifact(runtime, id);
   if (row.storage_status === "cleanup" || row.storage_status === "cleaned") {
     await runtime.bucket.delete(row.object_key);
-    throw new HttpError(409, "该上传已被清理");
+    throw new HttpError(409, translate(runtime.uiLocale, "admin.package.error.cleaned"), undefined, "admin.package.error.cleaned");
   }
   if (row.storage_status === "ready") return;
   if (row.upload_token !== token)
-    throw new HttpError(409, "上传结果请重新确认");
+    throw new HttpError(409, translate(runtime.uiLocale, "admin.package.error.recheck"), undefined, "admin.package.error.recheck");
   await verifyArtifactObject(runtime, row);
   await verifyPackageArtifact(runtime, row);
   const crc = row.format === "exe" ? row.crc32 ?? await artifactCrc32(runtime.bucket, row) : null;
@@ -161,17 +165,17 @@ export async function uploadArtifact(
     row.release_status !== "draft" ||
     ["cleanup", "cleaned"].includes(row.storage_status)
   )
-    throw new HttpError(409, "该版本不接受上传");
+    throw new HttpError(409, translate(runtime.uiLocale, "admin.package.error.closed"), undefined, "admin.package.error.closed");
   if (row.storage_status === "ready") {
     await verifyArtifactObject(runtime, row);
     return;
   }
   if (uploadRecent(row))
-    throw new HttpError(409, "该文件正在上传；中断后请确认上传结果");
+    throw new HttpError(409, translate(runtime.uiLocale, "admin.package.error.inProgress"), undefined, "admin.package.error.inProgress");
   const length = request.headers.get("content-length");
   if (length !== null && Number(length) !== row.size_bytes)
-    throw new HttpError(400, "文件长度与登记内容不一致");
-  if (!request.body) throw new HttpError(400, "安装包内容为空");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.package.error.sizeMismatch"), undefined, "admin.package.error.sizeMismatch");
+  if (!request.body) throw new HttpError(400, translate(runtime.uiLocale, "admin.package.error.emptyPackage"), undefined, "admin.package.error.emptyPackage");
   const token = crypto.randomUUID();
   await batchMutation(
     runtime,
@@ -220,7 +224,7 @@ export async function uploadArtifact(
       if (write.value && pump.status === "rejected") throw pump.reason;
       object = write.value ?? (await runtime.bucket.head(row.object_key));
     } else await request.body.cancel();
-    assertArtifactObject(row, object);
+    assertArtifactObject(row, object, runtime.uiLocale);
     await finishUpload(runtime, actor, id, token);
   } catch (error) {
     await runtime.db
@@ -236,7 +240,9 @@ export async function uploadArtifact(
     if (error instanceof HttpError) throw error;
     throw new HttpError(
       409,
-      "上传结果待确认，请先点击确认；文件完整时无需重新上传",
+      translate(runtime.uiLocale, "admin.package.error.pending"),
+      undefined,
+      "admin.package.error.pending",
     );
   }
 }
@@ -251,10 +257,10 @@ export async function confirmArtifact(
     row.release_status !== "draft" ||
     ["cleanup", "cleaned"].includes(row.storage_status)
   )
-    throw new HttpError(409, "该上传不可确认");
+    throw new HttpError(409, translate(runtime.uiLocale, "admin.package.error.cannotConfirm"), undefined, "admin.package.error.cannotConfirm");
   const object = await runtime.bucket.head(row.object_key);
   if (!object) {
-    if (uploadRecent(row)) throw new HttpError(409, "上传尚未结束，请稍后确认");
+    if (uploadRecent(row)) throw new HttpError(409, translate(runtime.uiLocale, "admin.package.error.wait"), undefined, "admin.package.error.wait");
     await batchMutation(
       runtime,
       actor,
@@ -272,7 +278,7 @@ export async function confirmArtifact(
     );
     return;
   }
-  assertArtifactObject(row, object);
+  assertArtifactObject(row, object, runtime.uiLocale);
   await verifyPackageArtifact(runtime, row);
   const crc = row.format === "exe" ? row.crc32 ?? await artifactCrc32(runtime.bucket, row) : null;
   await batchMutation(
@@ -299,9 +305,9 @@ export async function cleanupArtifact(
 ) {
   const row = await getArtifact(runtime, id);
   if (row.published_at !== null)
-    throw new HttpError(409, "已发布安装包由自动清理回收，不能手动删除");
+    throw new HttpError(409, translate(runtime.uiLocale, "admin.package.error.published"), undefined, "admin.package.error.published");
   if (uploadRecent(row))
-    throw new HttpError(409, "上传仍在进行，十五分钟后再清理中断的请求");
+    throw new HttpError(409, translate(runtime.uiLocale, "admin.package.error.cleanupWait"), undefined, "admin.package.error.cleanupWait");
   await batchMutation(
     runtime,
     actor,
@@ -337,7 +343,7 @@ export async function cleanupArtifact(
 export async function inspectStorage(runtime: AppRuntime, cursor?: string) {
   if (cursor?.startsWith("records:")) {
     const after = cursor.slice("records:".length);
-    if (after.length > 80) throw new HttpError(400, "检查游标不正确");
+    if (after.length > 80) throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.badCursor"), undefined, "admin.resources.badCursor");
     const rows = (
       await runtime.db
         .prepare(
@@ -354,7 +360,7 @@ export async function inspectStorage(runtime: AppRuntime, cursor?: string) {
         issues.push({
           key: row.object_key,
           issue:
-            error instanceof HttpError ? error.message : "存储服务暂时不可用",
+            error instanceof HttpError ? error.message : translate(runtime.uiLocale, "admin.resources.storageUnavailable"),
         });
       }
     }
@@ -362,11 +368,11 @@ export async function inspectStorage(runtime: AppRuntime, cursor?: string) {
       issues,
       scanned: Math.min(rows.length, 100),
       nextCursor: rows.length > 100 ? `records:${rows[99].id}` : null,
-      phase: "数据库引用",
+      phase: translate(runtime.uiLocale, "admin.resources.storageRecords"),
     };
   }
   if (cursor && !cursor.startsWith("objects:"))
-    throw new HttpError(400, "检查游标不正确");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.badCursor"), undefined, "admin.resources.badCursor");
   const listed = await runtime.bucket.list({
     prefix: "tools/artifacts/",
     limit: 100,
@@ -381,18 +387,18 @@ export async function inspectStorage(runtime: AppRuntime, cursor?: string) {
     if (!row)
       issues.push({
         key: object.key,
-        issue: "没有对应的安装包记录；不会自动删除",
+        issue: translate(runtime.uiLocale, "admin.resources.untracked"),
       });
     else if (row.storage_status !== "ready")
       issues.push({
         key: object.key,
-        issue: `状态为 ${row.storage_status}，请在所属链接中确认或清理`,
+        issue: translate(runtime.uiLocale, "admin.resources.storageState", { status: row.storage_status }),
       });
     else {
       try {
         await verifyArtifactObject(runtime, row);
       } catch {
-        issues.push({ key: object.key, issue: "文件校验不一致" });
+        issues.push({ key: object.key, issue: translate(runtime.uiLocale, "admin.resources.checksum") });
       }
     }
   }
@@ -400,6 +406,6 @@ export async function inspectStorage(runtime: AppRuntime, cursor?: string) {
     issues,
     nextCursor: listed.truncated ? `objects:${listed.cursor}` : "records:",
     scanned: listed.objects.length,
-    phase: "存储对象",
+    phase: translate(runtime.uiLocale, "admin.resources.storageObjects"),
   };
 }

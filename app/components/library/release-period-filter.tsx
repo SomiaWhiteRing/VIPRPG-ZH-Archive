@@ -1,7 +1,8 @@
 import { Button } from "@/app/components/ui/button";
 import * as Popover from "@/app/components/ui/popover";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 
 const itemClass = "flex min-h-8 w-full min-w-0 items-center justify-center rounded-md px-1 text-sm tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary";
 const inactiveClass = "font-medium text-primary hover:bg-primary/10";
@@ -15,6 +16,7 @@ export function ReleasePeriodFilter({ period, currentYear, basePath, params }: {
   params: Record<string, string | undefined>;
 }) {
   const initialYear = period ? Number(period.slice(0, 4)) : currentYear;
+  const t = useMessages();
   // Anchor ten-year pages to the current year, not the selected year.
   const initialLastYear = currentYear + Math.ceil((initialYear - currentYear) / 10) * 10;
   const [lastYear, setLastYear] = useState(Math.min(9999, Math.max(10, initialLastYear)));
@@ -51,8 +53,8 @@ export function ReleasePeriodFilter({ period, currentYear, basePath, params }: {
     return search.size ? `${basePath}?${search}` : basePath;
   }
 
-  return <div className="grid w-full min-w-0 grid-cols-4 gap-x-1.5 gap-y-1" aria-label="选择发布年份" aria-busy={rolling}>
-    <Button type="button" variant="ghost" className={`${itemClass} ${inactiveClass} py-0`} disabled={rolling || lastYear <= 10} onClick={() => shiftYears(-10)} aria-label="往年们，查看更早十年">往年们</Button>
+  return <div className="grid w-full min-w-0 grid-cols-4 gap-x-1.5 gap-y-1" aria-label={t("release.select")} aria-busy={rolling}>
+    <Button type="button" variant="ghost" className={`${itemClass} ${inactiveClass} py-0`} disabled={rolling || lastYear <= 10} onClick={() => shiftYears(-10)} aria-label={t("release.earlierHint")}>{t("release.earlier")}</Button>
     {Array.from({ length: 10 }, (_, index) => lastYear - 9 + index).map((year) => <ReleaseYear
       key={year}
       year={year}
@@ -60,7 +62,7 @@ export function ReleasePeriodFilter({ period, currentYear, basePath, params }: {
       href={href}
       rolling={rolling}
     />)}
-    <Button type="button" variant="ghost" className={`${itemClass} ${inactiveClass} py-0`} disabled={rolling || lastYear >= 9999} onClick={() => shiftYears(10)} aria-label="来年们，查看更晚十年">来年们</Button>
+    <Button type="button" variant="ghost" className={`${itemClass} ${inactiveClass} py-0`} disabled={rolling || lastYear >= 9999} onClick={() => shiftYears(10)} aria-label={t("release.laterHint")}>{t("release.later")}</Button>
   </div>;
 }
 
@@ -71,6 +73,9 @@ function ReleaseYear({ year, period, href, rolling }: {
   rolling: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const t = useMessages();
+  const locale = useUiLocale();
+  const monthFormat = new Intl.DateTimeFormat(locale, { month: "short", timeZone: "UTC" });
   const trigger = useRef<HTMLButtonElement>(null);
   const yearText = String(year).padStart(4, "0");
   const selected = period.slice(0, 4) === yearText;
@@ -83,23 +88,23 @@ function ReleaseYear({ year, period, href, rolling }: {
         variant="ghost"
         disabled={rolling}
         className={`${itemClass} ${selected ? `${activeClass} hover:bg-primary/90` : inactiveClass} py-0`}
-        aria-label={`${year}年，选择全年或月份`}
-      >{year}年</Button>
+        aria-label={t("release.choose", { year })}
+      >{t("release.year", { year })}</Button>
     </Popover.Trigger>
     <Popover.Portal anchorRef={trigger}>
       <Popover.Content
-        aria-label={`${year}年发布月份`}
+        aria-label={t("release.months", { year })}
         side="bottom"
         align="start"
         sideOffset={4}
         collisionPadding={12}
         className="z-50 w-60 max-w-[calc(100vw-24px)] rounded-md border border-border bg-card p-1 shadow-surface outline-none"
       >
-        <Link to={href(yearText)} onClick={() => setOpen(false)} aria-current={period === yearText ? "true" : undefined} className={`${monthClass} ${period === yearText ? activeClass : inactiveClass}`}>{year}年</Link>
+        <Link to={href(yearText)} onClick={() => setOpen(false)} aria-current={period === yearText ? "true" : undefined} className={`${monthClass} ${period === yearText ? activeClass : inactiveClass}`}>{t("release.year", { year })}</Link>
         <div className="grid grid-cols-4 gap-x-1.5 gap-y-1">
           {Array.from({ length: 12 }, (_, index) => 12 - index).map((month) => {
             const value = `${yearText}-${String(month).padStart(2, "0")}`;
-            return <Link key={month} to={href(value)} onClick={() => setOpen(false)} aria-current={period === value ? "true" : undefined} className={`${monthClass} ${period === value ? activeClass : inactiveClass}`}>{month}月</Link>;
+            return <Link key={month} to={href(value)} onClick={() => setOpen(false)} aria-current={period === value ? "true" : undefined} className={`${monthClass} ${period === value ? activeClass : inactiveClass}`}>{monthFormat.format(new Date(Date.UTC(2000, month - 1, 1)))}</Link>;
           })}
         </div>
       </Popover.Content>

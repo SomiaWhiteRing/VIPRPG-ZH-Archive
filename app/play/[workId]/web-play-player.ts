@@ -1,4 +1,7 @@
 import { isAndroidClient } from "@/lib/browser/client-environment";
+import { UiFeedbackDOMException, UiFeedbackError } from "@/lib/i18n/feedback";
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 import { localRequest, type NativePlayerResources } from "@/lib/browser/android-local";
 import type { WebPlayMetadata } from "./web-play-types";
 import { easyRpgConfigArguments } from "@/lib/archive/easyrpg-config";
@@ -85,8 +88,14 @@ export function createPlayerSession(
   onFullscreen: () => void,
   onExit: () => void,
   onScreenshot: (image: PlayerScreenshot) => void,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ): PlayerSession {
   const native = isAndroidClient();
+  const formatPlayerError = (error: unknown) => error instanceof UiFeedbackError
+    ? translate(locale, error.messageKey, error.values)
+    : error instanceof UiFeedbackDOMException
+    ? translate(locale, error.messageKey)
+    : formatLogValue(error);
   let nativeResources: NativePlayerResources | undefined;
   const lifetime = new AbortController();
   const resourceLifetime = new AbortController();
@@ -112,7 +121,7 @@ export function createPlayerSession(
       const current = await getWebPlayInstallation(metadata.playKey);
       const expires = current && gameResourceExpiresAt(current, await readGameRetentionDays());
       if (!current || current.status !== "ready" || (expires != null && expires <= Date.now()) || !await hasGameResources(current)) {
-        throw new Error("本地游戏资源已清理，请重新安装。存档和截图保留。");
+        throw new UiFeedbackError("play.diagnostic.resourcesRemoved");
       }
       const updated = await markWebPlayLastPlayed(metadata.playKey, recordLaunch);
       if (updated) await renewGameBucket(updated);
@@ -122,7 +131,7 @@ export function createPlayerSession(
 
   function refreshResources() {
     void touchResources().catch(error => {
-      onLog("error", formatLogValue(error));
+      onLog("error", formatPlayerError(error));
       void dispose().then(onExit).catch(() => {});
     });
   }
@@ -164,7 +173,7 @@ export function createPlayerSession(
       }
       clearInterval(renewalTimer);
       document.removeEventListener("visibilitychange", refreshResources);
-      if (played) await touchResources().catch(error => onLog("warning", formatLogValue(error)));
+      if (played) await touchResources().catch(error => onLog("warning", formatPlayerError(error)));
       disconnectLogs?.();
       disconnectLogs = undefined;
       restoreWorker?.();
@@ -179,7 +188,7 @@ export function createPlayerSession(
       notifyGameResourcesChanged();
     })();
     // Cleanup on unmount cannot await; retain an error report for failed saves.
-    void disposing.catch(error => onLog("error", formatLogValue(error)));
+    void disposing.catch(error => onLog("error", formatPlayerError(error)));
     return disposing;
   }
 
@@ -198,7 +207,7 @@ export function createPlayerSession(
       const installation = await getWebPlayInstallation(metadata.playKey);
       const expires = installation && gameResourceExpiresAt(installation, await readGameRetentionDays());
       if (installation?.status !== "ready" || (expires != null && expires <= Date.now())) {
-        throw new Error("本地游戏资源已更新或清理，请刷新页面后重新安装。");
+        throw new UiFeedbackError("play.diagnostic.resourcesChanged");
       }
       packages = await readGamePackages(
         installation, metadata.archiveVersionId, metadata.manifestSha256, lifetime.signal,
@@ -207,7 +216,7 @@ export function createPlayerSession(
       await upgradeWebPlaySaves(metadata.workId, lifetime.signal);
     }
     const runtimeBasePath = nativeResources?.runtimeBasePath ?? metadata.runtimeBasePath;
-    if (!runtimeBasePath) throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
+    if (!runtimeBasePath) throw new UiFeedbackError("play.diagnostic.runtimeUnavailable");
     await preparePlayerConfig(lifetime.signal, nativeResources);
     await load(frame, lifetime.signal, () => {
       // Preserve the runtime's existing URL options (e.g. load-game-id).
@@ -218,7 +227,7 @@ export function createPlayerSession(
     const playerDocument = frame.contentDocument;
     const canvas = playerDocument?.getElementById("canvas");
     if (!playerWindow || !playerDocument || !canvas)
-      throw new Error("无法创建游戏画面，请刷新后重试。");
+      throw new UiFeedbackError("play.diagnostic.canvasCreate");
 
     // The isolated document needs its own compiled Tailwind utilities.
     const styles = playerDocument.createElement("style");
@@ -239,14 +248,14 @@ export function createPlayerSession(
       playerDocument.head.appendChild(script);
     });
     if (!playerWindow.createEasyRpgPlayer)
-      throw new Error("游戏运行组件未正确加载，请刷新页面后重试。");
+      throw new UiFeedbackError("play.diagnostic.runtimeUnavailable");
 
     restoreWorker = interceptPlayerWorker(playerWindow, {
       workId: metadata.workId, title: metadata.title, runtimeBasePath,
       nativeUrl: nativeResources?.url, signal: lifetime.signal,
       onSize: (width, height) => canvas.style.setProperty("--player-aspect", String(width / height)),
       onScreenshot,
-      onError: error => onLog("error", `处理播放器文件失败：${formatLogValue(error)}`),
+      onError: error => onLog("error", translate(locale, "play.diagnostic.playerFileFailed", { reason: formatPlayerError(error) })),
     });
     const args = metadata.easyRpg ? easyRpgConfigArguments(metadata.easyRpg) : [];
     if (!metadata.easyRpg && metadata.engineFamily === "rpg_maker_2003_maniac") args.push("--patch-maniac");
@@ -265,7 +274,7 @@ export function createPlayerSession(
       arguments: args,
       netplayEndpoint,
       signal: lifetime.signal,
-      onError: (error: unknown) => onLog("error", formatLogValue(error)),
+      onError: (error: unknown) => onLog("error", formatPlayerError(error)),
       onFullscreen,
       onExit: () => { void dispose().then(onExit).catch(() => {}); },
     });
@@ -278,7 +287,8 @@ export function createPlayerSession(
     document.addEventListener("visibilitychange", refreshResources);
     notifyGameResourcesChanged();
   })().catch((error: unknown) => {
-    const failure = new Error(formatLogValue(error));
+    const failure = error instanceof UiFeedbackError || error instanceof UiFeedbackDOMException
+      ? error : new Error(formatLogValue(error));
     void dispose();
     throw failure;
   });
@@ -375,7 +385,7 @@ function load(
       };
       const failed = () => {
         cleanup();
-        reject(new Error("游戏运行组件加载失败，请刷新页面后重试。"));
+        reject(new UiFeedbackError("play.diagnostic.runtimeLoad"));
       };
       const canceled = () => {
         cleanup();

@@ -17,9 +17,12 @@ import { SelectField } from "@/app/components/ui/select";
 import { StatList } from "@/app/components/ui/stat-list";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { hasPermission } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatBytes, formatDate, formatNumber } from "@/lib/format";
-import { type LoaderFunctionArgs, type MetaFunction, Link, useLoaderData } from "react-router";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { formatBytes, formatDate } from "@/lib/format";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { type LoaderFunctionArgs, type MetaFunction, useLoaderData } from "react-router";
 
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
@@ -42,52 +45,60 @@ export async function loader(args: LoaderFunctionArgs) {
   return {
     adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
     archiveVersion,
+    locale: runtime.uiLocale,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const archive = loaderData?.archiveVersion;
+  return pageMetaDescriptors(
     {
       title: [
-        loaderData?.archiveVersion.workTitle || "作品",
-        loaderData ? `归档 #${loaderData.archiveVersion.id}` : "归档维护",
-        "控制台",
+        archive?.workTitle || translate(locale, "admin.works.game"),
+        archive ? translate(locale, "admin.archiveDetail.numbered", { id: archive.id }) : translate(locale, "admin.archiveDetail.detail"),
+        translate(locale, "admin.characterIndex.console"),
       ],
     },
     error,
+    locale,
   );
+};
 
 export default function AdminArchiveVersionEditPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { adminUser, archiveVersion } = useLoaderData<typeof loader>();
   return (
     <main key={archiveVersion.id}>
       <PageHeader
         compact
-        eyebrow="编辑归档快照"
-        title={`归档 #${archiveVersion.id}`}
-        subtitle={`所属游戏：${archiveVersion.workTitle}`}
+        eyebrow={t("admin.archiveDetail.editSnapshot")}
+        title={t("admin.archiveDetail.numbered", { id: archiveVersion.id })}
+        subtitle={t("admin.archiveDetail.game", { title: archiveVersion.workTitle })}
         actions={
           <>
-            <BackLink href="/admin/archive-versions" label="返回归档管理" />
+            <BackLink href="/admin/archive-versions" label={t("admin.archives.back")} />
             {hasPermission(adminUser, "work.metadata.update_any") || hasPermission(adminUser, "work.distribution.update_any") ? (
               <Link
                 className={buttonVariants({ variant: "outline" })}
                 to={`/admin/works/${archiveVersion.workId}`}
               >
-                编辑游戏
+                {t("admin.archiveDetail.editGame")}
               </Link>
             ) : null}
             <Link
               className={buttonVariants({ variant: "outline" })}
               to={`/games/${archiveVersion.workId}`}
             >
-              查看公开页
+              {t("admin.archiveDetail.publicPage")}
             </Link>
           </>
         }
       />
       <RedirectForm
         action={`/api/admin/archive-versions/${archiveVersion.id}/update`}
+        preserveLanguage
         className="grid gap-4"
         method="post"
       >
@@ -96,27 +107,27 @@ export default function AdminArchiveVersionEditPage() {
           type="hidden"
           value={archiveVersion.id}
         />
-        <Pane heading="快照资料">
-          <SectionHeading title="只修改归档事实，不改变游戏关系" />
+        <Pane heading={t("admin.archiveDetail.snapshot")}>
+          <SectionHeading title={t("admin.archiveDetail.scope")} />
           <div className="grid gap-4 md:grid-cols-2">
             <FormField
               controlId="admin-archive-versions-archiveVersionId--field-1"
-              label="状态"
+              label={t("admin.list.status")}
             >
               <SelectField
                 id="admin-archive-versions-archiveVersionId--field-1"
-                aria-label="状态"
+                aria-label={t("admin.list.status")}
                 defaultValue={archiveVersion.status}
                 name="status"
                 options={[
-                  { value: "published", label: "已发布" },
-                  { value: "hidden", label: "隐藏" },
+                  { value: "published", label: t("upload.own.status.published") },
+                  { value: "hidden", label: t("upload.own.status.hidden") },
                 ]}
               />
             </FormField>
             <FormField
               controlId="admin-archive-versions-archiveVersionId--field-2"
-              label="来源名称"
+              label={t("admin.archiveDetail.sourceName")}
             >
               <Input
                 id="admin-archive-versions-archiveVersionId--field-2"
@@ -126,7 +137,7 @@ export default function AdminArchiveVersionEditPage() {
             </FormField>
             <FormField
               controlId="admin-archive-versions-archiveVersionId--field-3"
-              label="来源网址"
+              label={t("admin.archiveDetail.sourceUrl")}
             >
               <Input
                 id="admin-archive-versions-archiveVersionId--field-3"
@@ -138,7 +149,7 @@ export default function AdminArchiveVersionEditPage() {
           </div>
         </Pane>
         <StickySaveBar>
-          <Button type="submit">保存归档</Button>
+          <Button type="submit">{t("admin.archiveDetail.save")}</Button>
           {hasPermission(adminUser, "archive_version.set_current") &&
           archiveVersion.status === "published" &&
           !archiveVersion.isCurrent ? (
@@ -147,7 +158,7 @@ export default function AdminArchiveVersionEditPage() {
               type="submit"
               variant="outline"
             >
-              设为当前
+              {t("admin.archives.setCurrent")}
             </Button>
           ) : null}
         </StickySaveBar>
@@ -157,57 +168,58 @@ export default function AdminArchiveVersionEditPage() {
       !archiveVersion.isCurrent ? (
         <RedirectForm
           action={`/api/admin/archive-versions/${archiveVersion.id}/current`}
+          preserveLanguage
           id="set-current-archive-version"
           method="post"
         />
       ) : null}
       <section className="grid gap-4 md:grid-cols-3">
-        <Pane heading="状态">
+        <Pane heading={t("admin.list.status")}>
           <StatList
             items={[
               {
-                label: "状态",
+                label: t("admin.list.status"),
                 value: (
                   <StatusBadge kind="archive" value={archiveVersion.status} />
                 ),
               },
               {
-                label: "当前快照",
-                value: archiveVersion.isCurrent ? "是" : "否",
+                label: t("admin.archiveDetail.currentSnapshot"),
+                value: t(archiveVersion.isCurrent ? "admin.archiveDetail.yes" : "admin.archiveDetail.no"),
               },
-              { label: "上传者", value: archiveVersion.uploaderName ?? "未知" },
+              { label: t("work.sidebar.uploader"), value: archiveVersion.uploaderName ?? t("play.diagnostic.unknown") },
               {
-                label: "发布时间",
+                label: t("admin.archiveDetail.publishedAt"),
                 value: archiveVersion.publishedAt
-                  ? formatDate(archiveVersion.publishedAt)
-                  : "未发布",
+                  ? formatDate(archiveVersion.publishedAt, { locale })
+                  : t("admin.archiveDetail.unpublished"),
               },
             ]}
           />
         </Pane>
-        <Pane heading="规模">
+        <Pane heading={t("admin.works.size")}>
           <StatList
             items={[
               {
-                label: "文件数",
-                value: formatNumber(archiveVersion.totalFiles),
+                label: t("admin.archiveDetail.fileCount"),
+                value: archiveVersion.totalFiles.toLocaleString(locale),
               },
               {
-                label: "容量",
+                label: t("admin.archives.capacity"),
                 value: formatBytes(archiveVersion.totalSizeBytes),
               },
               {
-                label: "对象存储读取",
-                value: formatNumber(archiveVersion.estimatedR2GetCount),
+                label: t("admin.archiveDetail.reads"),
+                value: archiveVersion.estimatedR2GetCount.toLocaleString(locale),
               },
               {
-                label: "创建时间",
-                value: formatDate(archiveVersion.createdAt),
+                label: t("admin.archiveDetail.created"),
+                value: formatDate(archiveVersion.createdAt, { locale }),
               },
             ]}
           />
         </Pane>
-        <Pane heading="清单">
+        <Pane heading={t("admin.archiveDetail.manifest")}>
           <StatList
             items={[
               {
@@ -218,8 +230,8 @@ export default function AdminArchiveVersionEditPage() {
                   </span>
                 ),
               },
-              { label: "文件策略", value: archiveVersion.filePolicyVersion },
-              { label: "打包器", value: archiveVersion.packerVersion },
+              { label: t("admin.archiveDetail.policy"), value: archiveVersion.filePolicyVersion },
+              { label: t("admin.archiveDetail.packer"), value: archiveVersion.packerVersion },
             ]}
           />
         </Pane>

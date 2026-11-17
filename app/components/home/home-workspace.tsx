@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { requestJson } from "@/lib/ui/api-response";
 import type { HomePageData } from "@/app/.server/home-page-data";
 import type { GameCardSummary } from "@/lib/dto/db/game-library";
@@ -10,9 +11,10 @@ import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { useToast } from "@/app/components/ui/toast";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, recommendedWorks, topics }: HomePageData) {
+  const t = useMessages();
   const [randomSelection, setRandomSelection] = useState(randomWorks);
   const [randomBusy, setRandomBusy] = useState(false);
   const toast = useToast();
@@ -27,7 +29,7 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
 
       setRandomSelection(result.works);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "随机作品加载失败，请稍后重试。");
+      toast.error(error instanceof Error ? error : t("home.randomFailure"));
     } finally {
       setRandomBusy(false);
     }
@@ -42,14 +44,14 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
         >
           <PageHeader
             compact
-            title="最近更新"
+            title={t("home.recent")}
             titleId="recent-heading"
             actions={
               <Link
                 className="shrink-0 whitespace-nowrap text-sm font-bold text-primary hover:text-accent"
                 to="/games"
               >
-                查看全部 →
+                {t("home.all")}
               </Link>
             }
           />
@@ -71,14 +73,14 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
               className="text-2xl font-bold tracking-tight"
               id="original-heading"
             >
-              最近原创
+              {t("home.original")}
             </h2>
           </div>
           <Link
             className="ml-auto shrink-0 whitespace-nowrap text-sm font-bold text-primary hover:text-accent min-[851px]:mt-5 min-[851px]:inline-block"
             to="/games?original=1"
           >
-            查看全部 →
+            {t("home.all")}
           </Link>
         </div>
         <div className="min-w-0 flex-1">
@@ -95,10 +97,10 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
           className="shrink-0 text-2xl font-bold tracking-tight min-[851px]:w-[135px] min-[1101px]:w-[170px]"
           id="recommendations-heading"
         >
-          站长推荐
+          {t("home.recommended")}
         </h2>
         <div className="min-w-0 flex-1">
-          <HomeWorkGrid singleRow works={recommendedWorks} emptyTitle="站长还没有推荐游戏。" />
+          <HomeWorkGrid singleRow works={recommendedWorks} emptyTitle={t("home.noRecommendations")} />
         </div>
       </section>
 
@@ -113,7 +115,7 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
               className="text-2xl font-bold tracking-tight"
               id="random-heading"
             >
-              随机作品
+              {t("home.random")}
             </h2>
           </div>
           <Button
@@ -124,7 +126,7 @@ export function HomeWorkspace({ recentWorks, recentOriginalWorks, randomWorks, r
             aria-controls="random-work-grid"
             onClick={() => void refreshRandomWorks()}
           >
-            试试手气
+            {t("home.shuffle")}
           </Button>
         </div>
         <div
@@ -154,10 +156,11 @@ function HomeWorkGrid({
   emptyTitle?: string;
   titleAs?: "h2" | "h3";
 }) {
+  const t = useMessages();
   if (!works.length) {
     return (
       <EmptyState
-        title={emptyTitle ?? (original ? "目前还没有公开的原创作品。" : "目前还没有公开的作品。")}
+        title={emptyTitle ?? (original ? t("home.noOriginal") : t("home.noWorks"))}
         variant="plain"
         className="py-6"
       />

@@ -27,7 +27,7 @@ export async function POST(
     const body = await readBody(request);
     const missing = await findMissingImportObjectReferences(runtime, body);
     if (missing.blobs.length || missing.corePacks.length) {
-      throw new HttpError(409, "上传草稿引用的游戏文件已经不完整，请重新上传");
+      throw new HttpError(409, "上传草稿引用的游戏文件已经不完整，请重新上传", undefined, "upload.error.draftFilesMissing");
     }
     const job = await resumeOwnedImportJob(runtime, id, auth.user);
     return json({
@@ -51,8 +51,5 @@ export async function POST(
 
 async function readBody(request: Request) {
   const value: unknown = await readJsonObject(request, "请求必须为 JSON 对象").catch(() => null);
-  return parseImportObjectReferences(value, {
-    invalidList: "上传草稿文件清单格式不合法",
-    invalidHash: "上传草稿文件哈希格式不合法",
-  });
+  return parseImportObjectReferences(value);
 }

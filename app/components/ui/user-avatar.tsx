@@ -1,4 +1,5 @@
 import { cn } from "@/lib/ui/cn";
+import { useMessages } from "@/lib/i18n/react";
 import { getUserAvatarSrc } from "@/lib/user-profile";
 
 type UserAvatarProps = {
@@ -14,9 +15,10 @@ export function UserAvatar({
   className,
   size = 40,
 }: UserAvatarProps) {
+  const t = useMessages();
   return (
     <img
-      alt={`${displayName}的头像`}
+      alt={t("avatar.imageAlt", { name: displayName })}
       className={cn(
         "shrink-0 rounded-full bg-muted/10 object-cover",
         className,

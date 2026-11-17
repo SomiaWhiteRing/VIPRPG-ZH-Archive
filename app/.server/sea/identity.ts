@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { getAuthSecret } from "@/app/.server/auth/config";
 import { parseCookie, SESSION_COOKIE_NAME } from "@/app/.server/auth/session-token";
@@ -18,7 +19,7 @@ export async function seaIpKey(runtime: AppRuntime) {
   const ip = runtime.request.headers.get("cf-connecting-ip");
   // The development Worker has no edge header. Forwarded headers are never trusted.
   if (!ip && !["localhost", "127.0.0.1", "[::1]"].includes(new URL(runtime.origin).hostname))
-    throw new HttpError(503, "暂时无法确认访问来源");
+    throw new HttpError(503, translate(runtime.uiLocale, "sea.ip"));
   return (await hashRequestFingerprint(runtime, `sea-ip:${ip ?? "local"}`))!;
 }
 
@@ -28,7 +29,7 @@ export async function prepareSeaActor(runtime: AppRuntime): Promise<{ actor: Sea
   if (user) return { actor: { key: `user:${user.id}`, userId: user.id, name: user.displayName, avatarBlobSha256: user.avatarBlobSha256, ipKey } };
   // An expired, revoked or disabled login must not silently publish as a guest.
   if (parseCookie(runtime.request.headers.get("cookie"), SESSION_COOKIE_NAME))
-    throw new HttpError(401, "登录状态已失效，请重新登录或退出登录后发言");
+    throw new HttpError(401, translate(runtime.uiLocale, "sea.expired"));
   const value = parseCookie(runtime.request.headers.get("cookie"), COOKIE);
   const key = await guestKey(runtime);
   if (value) {

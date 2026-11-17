@@ -335,7 +335,7 @@ async function run(): Promise<void> {
     await verifyPermissionHistory(browser, origin);
   }
   stage("recover a real browser upload");
-  context = await browser.newContext();
+  context = await browser.newContext({ locale: "zh-CN" });
   if (reportPath) await context.addInitScript(() => {
     const OriginalWorker = window.Worker;
     const phases: Array<{ phase: string; ms: number }> = [];
@@ -679,7 +679,7 @@ async function verifyEditorNavigation(
   adminCookie: string,
 ) {
   stage("verify editor state follows the entity through browser history");
-  const editorContext = await currentBrowser.newContext();
+  const editorContext = await currentBrowser.newContext({ locale: "zh-CN" });
   const editor = await editorContext.newPage();
   try {
     await editorContext.addCookies([
@@ -863,7 +863,7 @@ async function verifyPermissionHistory(
 ) {
   stage("protect permission drafts without the Navigation API");
   const rootCookie = await login(origin, "root@example.test");
-  const rootContext = await currentBrowser.newContext();
+  const rootContext = await currentBrowser.newContext({ locale: "zh-CN" });
   try {
     await rootContext.addCookies([
       { name: "viprpg_session", value: rootCookie.split("=")[1], url: origin },

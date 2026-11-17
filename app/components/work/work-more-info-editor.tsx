@@ -2,6 +2,7 @@ import { AddInformationButton, InformationRow } from "@/app/components/ui/inform
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import type { WorkMoreInfo } from "@/lib/work-more-info";
 import {
   MORE_INFO_BODY_MAX_LENGTH,
@@ -30,6 +31,8 @@ export function WorkMoreInfoEditor({
   disabled?: boolean;
   showErrors?: boolean;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [invalid, setInvalid] = useState(false);
   function update(rowId: string, patch: Partial<WorkMoreInfo>) {
     onChange(
@@ -46,29 +49,29 @@ export function WorkMoreInfoEditor({
         if (details) details.open = true;
       }}
     >
-      <legend className="mb-2 text-sm font-bold">更多信息</legend>
+      <legend className="mb-2 text-sm font-bold">{t("upload.info.moreInfo")}</legend>
       {rows.map((row, index) => {
         const prefix = `${id}-${row.id}`;
-        const error = moreInfoItemError(row);
+        const error = moreInfoItemError(row, locale);
         const visibleError = showErrors || invalid ? error : null;
         return (
           <InformationRow
             key={row.id}
             disabled={disabled}
-            removeLabel={`移除第 ${index + 1} 条更多信息`}
+            removeLabel={t("upload.info.remove", { index: index + 1 })}
             removeFocusId={`${id}-add`}
             onRemove={() => onChange(rows.filter((item) => item.id !== row.id))}
             error={visibleError ? { id: `${prefix}-error`, message: visibleError.message } : undefined}
             label={
             <div className="grid min-w-0 gap-1">
               <Label className="sr-only" htmlFor={`${prefix}-title`}>
-                标题
+                {t("upload.info.title")}
               </Label>
               <Input
                 className="px-2 text-xs sm:text-sm"
                 id={`${prefix}-title`}
                 value={row.title}
-                placeholder="标题"
+                placeholder={t("upload.info.title")}
                 maxLength={MORE_INFO_TITLE_MAX_LENGTH}
                 aria-invalid={visibleError?.field === "title"}
                 aria-describedby={
@@ -90,13 +93,13 @@ export function WorkMoreInfoEditor({
           >
             <div className="grid min-w-0 gap-1">
               <Label className="sr-only" htmlFor={`${prefix}-body`}>
-                内容
+                {t("upload.info.body")}
               </Label>
               <Textarea
                 className="h-10 min-h-10 resize-y px-2 sm:px-3"
                 id={`${prefix}-body`}
                 value={row.body}
-                placeholder="内容"
+                placeholder={t("upload.info.body")}
                 rows={1}
                 maxLength={MORE_INFO_BODY_MAX_LENGTH}
                 aria-invalid={visibleError?.field === "body"}
@@ -120,7 +123,7 @@ export function WorkMoreInfoEditor({
         const rowId = crypto.randomUUID();
         onChange([...rows, { id: rowId, title: "", body: "" }]);
         return `${id}-${rowId}-title`;
-      }}>添加信息</AddInformationButton>
+      }}>{t("upload.info.add")}</AddInformationButton>
     </fieldset>
   );
 }

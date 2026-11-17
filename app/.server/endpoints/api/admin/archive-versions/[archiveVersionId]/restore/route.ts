@@ -2,9 +2,10 @@ import { requirePermission } from "@/app/.server/auth/authorize";
 import { restoreArchiveVersion } from "@/app/.server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import { redirectBack } from "@/app/.server/http/form";
-import { parsePositiveId } from "@/app/.server/http/request";
+import { parseArchiveVersionId } from "@/app/.server/db/archive-downloads";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 
 type RouteContext = {
   params: {
@@ -29,10 +30,7 @@ export async function POST(
 
   try {
     const { archiveVersionId: rawArchiveVersionId } = await context.params;
-    const archiveVersionId = parsePositiveId(
-      rawArchiveVersionId,
-      "archive version id",
-    );
+    const archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
     const archiveVersion = await restoreArchiveVersion(
       runtime,
       archiveVersionId,
@@ -57,6 +55,6 @@ export async function POST(
 
     return redirectBack(request, "/admin/archive-versions/trash");
   } catch (error) {
-    return jsonError("ArchiveVersion restore failed", error);
+    return jsonError("ArchiveVersion restore failed", error, error instanceof UiFeedbackError ? error.messageKey : undefined);
   }
 }

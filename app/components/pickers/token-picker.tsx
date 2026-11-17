@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { Button } from "@/app/components/ui/button";
 import { TokenChip, TokenDragPreview } from "@/app/components/ui/token-input";
@@ -62,6 +63,7 @@ export function TokenPicker({
   showHelp?: boolean;
   singleLineRecommendations?: boolean;
 }) {
+  const t = useMessages();
   const reorder = useTokenReorder(values, onChange, disabled || !sortable);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -97,10 +99,10 @@ export function TokenPicker({
       !exactMatch &&
       !selectedKeys.has(tokenKey(normalizedValue))
     ) {
-      matches.push({ value: normalizedValue, meta: "新建", kind: "create" });
+      matches.push({ value: normalizedValue, meta: t("token.new"), kind: "create" });
     }
     return matches;
-  }, [query, selectedKeys, suggestions, normalizeValue, pinnedKey]);
+  }, [query, selectedKeys, suggestions, normalizeValue, pinnedKey, t]);
   const recommendedGroups = (recommendationGroups ?? [{ label: recommendationLabel, items: recommendations }])
     .map((group) => ({
       ...group,
@@ -170,7 +172,7 @@ export function TokenPicker({
             tokenKey(normalizeValue(option.value)) === tokenKey(normalizeValue(query))
           }
           label={label}
-          placeholder={values.length ? "继续添加" : placeholder}
+          placeholder={values.length ? t("token.more") : placeholder}
           descriptionId={error || atLimit ? `${id}-feedback` : undefined}
           getKey={(option) => `${option.kind}:${tokenKey(option.value)}`}
           getText={(option) => option.value}
@@ -199,7 +201,7 @@ export function TokenPicker({
                   size="sm"
                   disabled={disabled}
                   className={tokenDragHandleClassName}
-                  aria-label={`拖动排序 ${value}，也可按 Alt 加方向键调整`}
+                  aria-label={t("token.reorder", { value })}
                 >
                   {value}
                 </Button>
@@ -222,7 +224,7 @@ export function TokenPicker({
           id={`${id}-feedback`}
           role="status"
         >
-          {error ?? `最多选择 ${maxValues} 项`}
+          {error ?? t("token.limit", { count: maxValues ?? 0 })}
         </p>
       ) : null}
       {showHelp ? (
@@ -232,8 +234,8 @@ export function TokenPicker({
             showSelectionCount && "justify-between",
           )}
         >
-          {showSelectionCount ? <span>已选 {values.length} 项</span> : null}
-          <span>输入后按 Enter 添加</span>
+          {showSelectionCount ? <span>{t("token.selected", { count: values.length })}</span> : null}
+          <span>{t("token.addHint")}</span>
         </div>
       ) : null}
       {showRecommendations ? recommendedGroups.map((group, index) => (

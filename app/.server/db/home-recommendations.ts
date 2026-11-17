@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
@@ -19,18 +20,18 @@ export async function readHomeRecommendations(runtime: AppRuntime): Promise<Home
 
 export async function saveHomeRecommendations(runtime: AppRuntime, actor: ArchiveUser, workIds: unknown) {
   if (actor.status !== "active" || !actor.isBootstrapAdmin)
-    throw new HttpError(403, "只有超级管理员可以配置站长推荐。");
+    throw new HttpError(403, translate(runtime.uiLocale, "admin.recommendations.denied"));
   if (!Array.isArray(workIds) ||
     workIds.some((id) => !Number.isSafeInteger(id) || id <= 0) ||
     new Set(workIds).size !== workIds.length)
-    throw new HttpError(400, "请选择不重复的游戏。");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.recommendations.duplicates"));
 
   const database = getD1(runtime);
   const idsJson = JSON.stringify(workIds);
   const publicWorks = await database.prepare(`SELECT id FROM member_works
     WHERE show_on_home=1 AND id IN (SELECT value FROM json_each(?))`).bind(idsJson).all<{ id: number }>();
   if (publicWorks.results.length !== workIds.length)
-    throw new HttpError(400, "推荐中有不允许首页展示或已不可访问的游戏，请移除后保存。");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.recommendations.unavailable"));
 
   // The audit and full ordered replacement commit together; failed saves retain the old list.
   const beforeIds = `SELECT json_group_array(work_id) FROM

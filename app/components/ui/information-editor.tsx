@@ -1,4 +1,5 @@
 import { Button } from "@/app/components/ui/button";
+import { useMessages } from "@/lib/i18n/react";
 import type { ReactNode } from "react";
 
 /** Label/selector, value and remove action stay together even on narrow screens. */
@@ -15,6 +16,7 @@ export function InformationRow({
   details?: ReactNode;
   error?: { id: string; message: string };
 }) {
+  const t = useMessages();
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,0.85fr)_minmax(0,1.5fr)_auto] items-start gap-1.5 sm:grid-cols-[9rem_minmax(0,1fr)_auto] sm:gap-2">
       <div className="min-w-0">{label}</div>
@@ -24,7 +26,7 @@ export function InformationRow({
         disabled={disabled} aria-label={removeLabel} onClick={() => {
           onRemove();
           if (removeFocusId) focusField(removeFocusId);
-        }}>移除</Button>
+        }}>{t("core.action.remove")}</Button>
       {details ? <div className="col-span-full min-w-0">{details}</div> : null}
       {error ? <p className="col-span-full text-xs text-red-600 dark:text-red-300" id={error.id} role="alert">{error.message}</p> : null}
     </div>

@@ -17,9 +17,13 @@ import {
   type IconProps,
 } from "react-toastify/unstyled";
 import { Button } from "./button";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 
 type ToastTone = "success" | "error" | "info";
-type ToastApi = Record<ToastTone, (message: string) => void>;
+type ToastApi = Record<"success" | "info", (message: string) => void> & {
+  error: (message: string | Error) => void;
+};
 
 const ToastContext = createContext<ToastApi | null>(null);
 // Keep Toastify's progress animation as the single auto-close clock.
@@ -48,14 +52,15 @@ function ToastIcon({ type }: IconProps) {
 }
 
 function ToastClose({ closeToast }: CloseButtonProps) {
+  const label = useMessages()("core.toast.dismiss");
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon"
       className="absolute top-2.5 right-2 size-8"
-      aria-label="关闭通知"
-      title="关闭通知"
+      aria-label={label}
+      title={label}
       onClick={closeToast}
     >
       <X aria-hidden />
@@ -64,6 +69,8 @@ function ToastClose({ closeToast }: CloseButtonProps) {
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const locale = useUiLocale();
+  const t = useMessages();
   const host = useRef<HTMLDivElement>(null);
   const sequence = useRef(0);
   useEffect(() => {
@@ -102,10 +109,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const toast = useMemo<ToastApi>(
     () => ({
       success: (message) => show("success", message),
-      error: (message) => show("error", message),
+      error: (message) => show("error", formatFeedbackError(message, locale, typeof message === "string" ? message : message.message)),
       info: (message) => show("info", message),
     }),
-    [show],
+    [locale, show],
   );
 
   return (
@@ -144,7 +151,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             closeButton={ToastClose}
             icon={ToastIcon}
             hotKeys={disableContainerHotkey}
-            aria-label="通知（Alt+T 聚焦，Escape 关闭）"
+            aria-label={t("core.toast.region")}
           />
         </div>
       </Portal.Root>

@@ -8,6 +8,7 @@ import { emojiText } from "@/lib/face-emojis";
 import { hasPermission } from "@/lib/authz/permissions";
 import type { PushNotificationContent } from "@/lib/push";
 import { HttpError } from "@/lib/http";
+import { DEFAULT_UI_LOCALE } from "@/lib/i18n/locale";
 
 export async function webPushContent(runtime: AppRuntime, user: ArchiveUser, kind: "inbox" | "messages", id: number,
   includeActions = true): Promise<PushNotificationContent | null> {
@@ -28,7 +29,7 @@ export async function webPushContent(runtime: AppRuntime, user: ArchiveUser, kin
       .bind(message.sender_user_id).first()) content.actions.push({ action: "reply", title: "回复", url: `${content.url}?pushReply=1` });
   } else {
     let item;
-    try { item = await getInboxItemForUser(runtime, id, user); }
+    try { item = await getInboxItemForUser(runtime, id, user, DEFAULT_UI_LOCALE); }
     catch (error) { if (error instanceof HttpError && error.status === 404) return null; throw error; }
     const actor = item.interaction ?? item.timelineNotification ?? item.commentNotification ?? item.friendNotification;
     const source = item.interaction ?? item.timelineNotification ?? item.commentNotification;

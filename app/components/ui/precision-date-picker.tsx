@@ -1,8 +1,13 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import type { MessageKey } from "@/lib/i18n/core";
+import type { UiLocale } from "@/lib/i18n/locale";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import type { OriginalReleasePrecision } from "@/lib/original-release-date";
 import { parseOriginalReleaseDate } from "@/lib/original-release-date";
 import { parsePastedReleaseDates } from "@/lib/pasted-release-date";
+import { enUS } from "date-fns/locale/en-US";
+import { ja } from "date-fns/locale/ja";
 import { zhCN } from "date-fns/locale/zh-CN";
 import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { InputHTMLAttributes } from "react";
@@ -39,6 +44,11 @@ const DATE_FORMATS: Record<DatePrecision, string> = {
   month: "yyyy年M月",
   day: "yyyy年M月d日",
 };
+const ISO_DATE_FORMATS: Record<DatePrecision, string> = {
+  year: "yyyy",
+  month: "yyyy-MM",
+  day: "yyyy-MM-dd",
+};
 const DATE_PARTS = ["year", "month", "day"] as const;
 const DATE_UNITS = ["年", "月", "日"];
 const MIN_DATE = new Date("0001-01-01T00:00:00");
@@ -48,7 +58,7 @@ export function PrecisionDatePicker({
   id,
   value,
   onChange,
-  placeholder = "选择或粘贴日期",
+  placeholder,
   disabled = false,
   required = false,
 }: {
@@ -59,14 +69,20 @@ export function PrecisionDatePicker({
   disabled?: boolean;
   required?: boolean;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const parsed = parseOriginalReleaseDate(value);
   const pickerRef = useRef<DatePicker>(null);
   const [precision, setPrecision] = useState<DatePrecision>("year");
-  const [pasteError, setPasteError] = useState<string | null>(null);
+  const [pasteError, setPasteError] = useState<MessageKey | null>(null);
   const [pasteCandidates, setPasteCandidates] = useState<string[]>([]);
   const pasteGenerationRef = useRef(0);
+  const currentValueRef = useRef(value);
+  useLayoutEffect(() => {
+    currentValueRef.current = value;
+  }, [value]);
   const selected = parsed?.value ? toLocalDate(parsed.value) : null;
-  const displayValue = parsed?.value ? displayDateValue(parsed.value) : "";
+  const displayValue = parsed?.value ? displayDateValue(parsed.value, locale) : "";
 
   function applyPastedDate(next: string) {
     const pasted = parseOriginalReleaseDate(next);
@@ -85,7 +101,7 @@ export function PrecisionDatePicker({
         ariaDescribedBy={pasteError ? `${id}-paste-error` : undefined}
         autoComplete="off"
         calendarClassName={calendarClassName}
-        chooseDayAriaLabelPrefix="选择"
+        chooseDayAriaLabelPrefix={t("core.ui.date.choose")}
         customInput={
           <DateSegmentInput
             className="cursor-pointer pr-10 caret-transparent selection:bg-primary selection:text-primary-foreground"
@@ -93,7 +109,7 @@ export function PrecisionDatePicker({
               event.preventDefault();
               if (disabled) return;
               const input = event.currentTarget;
-              const previousValue = input.value;
+              const previousValue = currentValueRef.current;
               const text = event.clipboardData.getData("text/plain");
               const generation = ++pasteGenerationRef.current;
               setPasteError(null);
@@ -104,7 +120,7 @@ export function PrecisionDatePicker({
                   generation !== pasteGenerationRef.current ||
                   input.disabled ||
                   !input.isConnected ||
-                  input.value !== previousValue
+                  currentValueRef.current !== previousValue
                 ) return;
                 if (candidates.length === 1) {
                   applyPastedDate(candidates[0]);
@@ -112,13 +128,12 @@ export function PrecisionDatePicker({
                   pickerRef.current?.setOpen(false);
                   setPasteCandidates(candidates);
                 } else {
-                  setPasteError(
-                    "未识别到有效日期，请包含年份，或使用“今天”等相对日期。",
-                  );
+                  setPasteError("core.ui.date.invalid");
                 }
               } catch {
-                if (generation === pasteGenerationRef.current && input.isConnected) {
-                  setPasteError("日期识别暂时不可用，请重试或使用日历选择。");
+                if (generation === pasteGenerationRef.current && input.isConnected &&
+                  !input.disabled && currentValueRef.current === previousValue) {
+                  setPasteError("core.ui.date.pasteFailed");
                 }
               }
             }}
@@ -129,11 +144,11 @@ export function PrecisionDatePicker({
             precision={precision}
           />
         }
-        dateFormat={DATE_FORMATS[precision]}
+        dateFormat={(locale === "en" ? ISO_DATE_FORMATS : DATE_FORMATS)[precision]}
         disabled={disabled}
-        disabledDayAriaLabelPrefix="不可选择"
+        disabledDayAriaLabelPrefix={t("core.ui.date.disabled")}
         id={id}
-        locale={zhCN}
+        locale={locale === "ja" ? ja : locale === "en" ? enUS : zhCN}
         maxDate={MAX_DATE}
         minDate={MIN_DATE}
         onChangeRaw={(event, selection) => {
@@ -152,7 +167,7 @@ export function PrecisionDatePicker({
           }
         }}
         openToDate={selected ?? undefined}
-        placeholderText={placeholder}
+        placeholderText={placeholder ?? t("core.ui.date.placeholder")}
         popperClassName="z-50"
         popperPlacement="bottom-start"
         portalId={`${id}-calendar`}
@@ -163,10 +178,10 @@ export function PrecisionDatePicker({
               <Button
                 aria-label={
                   precision === "day"
-                    ? "上个月"
+                    ? t("core.ui.date.previousMonth")
                     : precision === "month"
-                      ? "上一年"
-                      : "前一组年份"
+                      ? t("core.ui.date.previousYear")
+                      : t("core.ui.date.previousRange")
                 }
                 className="size-8"
                 disabled={
@@ -188,15 +203,15 @@ export function PrecisionDatePicker({
               <span aria-live="polite" className="text-sm font-medium">
                 {precision === "year" && header.visibleYearsRange
                   ? `${header.visibleYearsRange.startYear} – ${header.visibleYearsRange.endYear}`
-                  : `${header.date.getFullYear()}年${precision === "day" ? ` ${header.date.getMonth() + 1}月` : ""}`}
+                  : new Intl.DateTimeFormat(locale, { year: "numeric", month: precision === "day" ? "long" : undefined }).format(header.date)}
               </span>
               <Button
                 aria-label={
                   precision === "day"
-                    ? "下个月"
+                    ? t("core.ui.date.nextMonth")
                     : precision === "month"
-                      ? "下一年"
-                      : "后一组年份"
+                      ? t("core.ui.date.nextYear")
+                      : t("core.ui.date.nextRange")
                 }
                 className="size-8"
                 disabled={
@@ -230,7 +245,7 @@ export function PrecisionDatePicker({
       />
       {!required && value ? (
         <Button
-          aria-label="清除日期"
+          aria-label={t("core.ui.date.clear")}
           className="absolute right-1 top-1 size-8 text-muted"
           disabled={disabled}
           onClick={() => {
@@ -259,13 +274,13 @@ export function PrecisionDatePicker({
           id={`${id}-paste-error`}
           role="alert"
         >
-          {pasteError}
+          {t(pasteError)}
         </p>
       ) : null}
       {pasteCandidates.length ? (
-        <div aria-label="选择识别到的日期" className="mt-2 grid gap-2" role="group">
+        <div aria-label={t("core.ui.date.candidates")} className="mt-2 grid gap-2" role="group">
           <p className="text-sm text-muted" role="status">
-            识别到多个可能的日期，请选择：
+            {t("core.ui.date.ambiguous")}
           </p>
           <div className="flex flex-wrap gap-2">
             {pasteCandidates.map((candidate) => (
@@ -277,7 +292,7 @@ export function PrecisionDatePicker({
                 type="button"
                 variant="outline"
               >
-                {displayDateValue(candidate)}
+                {displayDateValue(candidate, locale)}
               </Button>
             ))}
           </div>
@@ -377,7 +392,7 @@ function clickedDatePart(
   input: HTMLInputElement,
   clientX?: number,
 ): DatePrecision {
-  const parts = [...input.value.matchAll(/\d+[年月日]/g)];
+  const parts = [...input.value.matchAll(/\d+\D*/g)];
   let index = -1;
   const context =
     clientX === undefined
@@ -393,7 +408,7 @@ function clickedDatePart(
       parseFloat(style.paddingLeft) +
       input.scrollLeft;
     const letterSpacing = parseFloat(style.letterSpacing) || 0;
-    // Measure the whole number-and-unit segment: caret positions round both sides of a character.
+    // Include the separator or unit in the clickable segment.
     index = parts.findIndex((part) => {
       const end = part.index + part[0].length;
       return (
@@ -460,7 +475,8 @@ function formatDateValue(date: Date, precision: DatePrecision): string {
       : `${year}-${month}-${day}`;
 }
 
-function displayDateValue(value: string): string {
+function displayDateValue(value: string, locale: UiLocale): string {
+  if (locale === "en") return value;
   return value.split("-").map((part, index) =>
     `${index === 0 ? part : Number(part)}${DATE_UNITS[index]}`,
   ).join("");

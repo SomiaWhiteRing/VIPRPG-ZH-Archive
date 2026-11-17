@@ -10,15 +10,17 @@ import { Pane } from "@/app/components/ui/pane";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import {
   formatBytes,
   formatNullableDuration,
-  formatNumber,
 } from "@/lib/format";
 import { importTaskStageLabel } from "@/lib/labels";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -36,12 +38,12 @@ export async function loader(args: LoaderFunctionArgs) {
   const canRunMaintenance = hasPermission(adminUser, "system.maintenance.run");
 
   const metrics = [
-    ["用户", formatNumber(summary.users)],
-    ["作品", formatNumber(summary.works)],
-    ["文件版本", formatNumber(summary.archiveVersions)],
-    ["对象存储", formatBytes(summary.blobs.sizeBytes)],
-    ["公共文件", formatBytes(summary.corePacks.sizeBytes)],
-    ["导入任务", formatNumber(summary.importJobs)],
+    [translate(runtime.uiLocale, "admin.nav.users"), summary.users.toLocaleString(runtime.uiLocale)],
+    [translate(runtime.uiLocale, "admin.works.game"), summary.works.toLocaleString(runtime.uiLocale)],
+    [translate(runtime.uiLocale, "admin.archives.version"), summary.archiveVersions.toLocaleString(runtime.uiLocale)],
+    [translate(runtime.uiLocale, "admin.dashboard.objectStorage"), formatBytes(summary.blobs.sizeBytes)],
+    [translate(runtime.uiLocale, "admin.dashboard.shared"), formatBytes(summary.corePacks.sizeBytes)],
+    [translate(runtime.uiLocale, "admin.dashboard.importJobs"), summary.importJobs.toLocaleString(runtime.uiLocale)],
   ];
 
   const importStatus = observability.imports.statusCounts;
@@ -71,13 +73,18 @@ export async function loader(args: LoaderFunctionArgs) {
     metrics,
     failedImports,
     totalPending,
+    locale: runtime.uiLocale,
   };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: "控制台" }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "admin.characterIndex.console") }, error, locale);
+};
 
 export default function AdminPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const {
     adminUser,
     observability,
@@ -91,17 +98,17 @@ export default function AdminPage() {
     <main>
       <PageHeader
         compact
-        title="管理控制台"
-        subtitle="处理异常、检查近期任务并进入站点治理。"
+        title={t("admin.dashboard.title")}
+        subtitle={t("admin.dashboard.subtitle")}
       />
 
-      <Pane heading="待办与告警">
+      <Pane heading={t("admin.dashboard.alerts")}>
         <div className="grid gap-2 sm:grid-cols-2">
           <Link
             className="grid gap-1 rounded-md border border-border p-3 hover:border-primary/50"
             to="/admin/import-jobs"
           >
-            <strong>导入与版本</strong>
+            <strong>{t("admin.dashboard.imports")}</strong>
             <span
               className={
                 failedImports?.count
@@ -109,15 +116,14 @@ export default function AdminPage() {
                   : "text-sm text-muted"
               }
             >
-              进行中 {formatNumber(totalPending)} · 失败{" "}
-              {formatNumber(failedImports?.count ?? 0)}
+              {t("admin.dashboard.importCounts", { pending: totalPending, failed: failedImports?.count ?? 0 })}
             </span>
           </Link>
           <Link
             className="grid gap-1 rounded-md border border-border p-3 hover:border-primary/50"
             to="/admin/maintenance"
           >
-            <strong>下载观测</strong>
+            <strong>{t("admin.dashboard.downloads")}</strong>
             <span
               className={
                 observability.downloads.currentServerFailureBuildCount
@@ -125,10 +131,11 @@ export default function AdminPage() {
                   : "text-sm text-muted"
               }
             >
-              当前版本最近请求出错{" "}
-              {formatNumber(observability.downloads.currentServerFailureBuildCount)}
-              {" · "}累计连接中断 {formatNumber(observability.downloads.interruptedCount)}
-              {" · "}历史未分类 {formatNumber(observability.downloads.unclassifiedFailureCount)}
+              {t("admin.dashboard.downloadCounts", {
+                failed: observability.downloads.currentServerFailureBuildCount,
+                interrupted: observability.downloads.interruptedCount,
+                unknown: observability.downloads.unclassifiedFailureCount,
+              })}
             </span>
           </Link>
         </div>
@@ -136,22 +143,22 @@ export default function AdminPage() {
         !totalPending &&
         !observability.downloads.currentServerFailureBuildCount ? (
           <EmptyState
-            title="当前没有待处理任务或已识别的服务端错误。"
+            title={t("admin.dashboard.emptyAlerts")}
             variant="plain"
             className="mt-3"
           />
         ) : null}
       </Pane>
 
-      <Pane heading="近期导入">
+      <Pane heading={t("admin.dashboard.recent")}>
         {observability.imports.recent.length > 0 ? (
-          <TableWrap compact label="近期导入" minWidth={760}>
+          <TableWrap compact label={t("admin.dashboard.recent")} minWidth={760}>
             <thead>
               <tr>
-                <th>任务</th>
-                <th>状态</th>
-                <th>新增对象</th>
-                <th>耗时</th>
+                <th>{t("admin.imports.task")}</th>
+                <th>{t("admin.list.status")}</th>
+                <th>{t("admin.dashboard.objects")}</th>
+                <th>{t("admin.dashboard.duration")}</th>
               </tr>
             </thead>
             <tbody>
@@ -159,19 +166,19 @@ export default function AdminPage() {
                 <tr key={job.id}>
                   <td>
                     <Link to={`/admin/import-jobs/${job.id}`}>
-                      #{job.id} {job.sourceName ?? "未知来源"}
+                      #{job.id} {job.sourceName ?? t("admin.imports.unknown")}
                     </Link>
                   </td>
                   <td>
                     <StatusBadge kind="import-task" value={job.status} />
                     {job.failedStage ? (
                       <span className="admin-cell-meta">
-                        {importTaskStageLabel(job.failedStage)}
+                        {importTaskStageLabel(job.failedStage, locale)}
                       </span>
                     ) : null}
                   </td>
                   <td>
-                    {formatNumber(job.uploadedBlobCount)} 个文件对象
+                    {t("admin.dashboard.fileObjects", { count: job.uploadedBlobCount })}
                     <span className="admin-cell-meta">
                       {formatBytes(
                         job.uploadedBlobSizeBytes +
@@ -180,9 +187,9 @@ export default function AdminPage() {
                     </span>
                   </td>
                   <td>
-                    检查 {formatNullableDuration(job.preflightDurationMs)}
+                    {t("admin.dashboard.checkDuration", { duration: formatNullableDuration(job.preflightDurationMs) })}
                     <span className="admin-cell-meta">
-                      入库 {formatNullableDuration(job.commitDurationMs)}
+                      {t("admin.dashboard.commitDuration", { duration: formatNullableDuration(job.commitDurationMs) })}
                     </span>
                   </td>
                 </tr>
@@ -190,11 +197,11 @@ export default function AdminPage() {
             </tbody>
           </TableWrap>
         ) : (
-          <EmptyState title="暂无导入任务。" />
+          <EmptyState title={t("admin.dashboard.emptyImports")} />
         )}
       </Pane>
 
-      <section className="border-y border-border py-3" aria-label="关键摘要">
+      <section className="border-y border-border py-3" aria-label={t("admin.dashboard.summary")}>
         <dl className="grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
           {metrics.map(([label, value]) => (
             <div key={label}>
@@ -207,17 +214,17 @@ export default function AdminPage() {
         </dl>
       </section>
 
-      <Pane heading="系统治理" compact>
+      <Pane heading={t("admin.dashboard.governance")} compact>
         <div className="flex flex-wrap items-center gap-2">
           {hasPermission(adminUser, "sea.message.moderate_any") || hasPermission(adminUser, "sea.user.mute_any") ? (
-            <Link className={buttonVariants({ variant: "outline" })} to="/admin/sea">永恒之海</Link>
+            <Link className={buttonVariants({ variant: "outline" })} to="/admin/sea">{t("admin.dashboard.sea")}</Link>
           ) : null}
           {adminUser.isBootstrapAdmin ? (
             <Link
               className={buttonVariants({ variant: "outline" })}
               to="/admin/home-recommendations"
             >
-              站长推荐
+              {t("admin.dashboard.recommendations")}
             </Link>
           ) : null}
           {adminUser.isBootstrapAdmin ? (
@@ -225,7 +232,7 @@ export default function AdminPage() {
               className={buttonVariants({ variant: "outline" })}
               to="/admin/permissions"
             >
-              角色与权限
+              {t("admin.dashboard.roles")}
             </Link>
           ) : null}
           {canRunMaintenance ? (
@@ -234,13 +241,13 @@ export default function AdminPage() {
                 className={buttonVariants({ variant: "outline" })}
                 to="/admin/netplay-spaces"
               >
-                联机空间
+                {t("admin.works.space")}
               </Link>
               <Link
                 className={buttonVariants({ variant: "outline" })}
                 to="/admin/maintenance"
               >
-                维护与一致性
+                {t("admin.dashboard.maintenance")}
               </Link>
             </>
           ) : null}
@@ -249,7 +256,7 @@ export default function AdminPage() {
               className={buttonVariants({ variant: "outline" })}
               to="/admin/audit"
             >
-              查看审计日志
+              {t("admin.dashboard.audit")}
             </Link>
           ) : null}
           {hasPermission(adminUser, "emoji.defaults.manage") ? (
@@ -257,7 +264,7 @@ export default function AdminPage() {
               className={buttonVariants({ variant: "outline" })}
               to="/admin/emojis"
             >
-              默认表情
+              {t("admin.nav.defaultEmojis")}
             </Link>
           ) : null}
         </div>

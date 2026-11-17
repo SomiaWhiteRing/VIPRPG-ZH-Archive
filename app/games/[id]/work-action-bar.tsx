@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { useSyncExternalStore } from "react";
 import { isAndroidClient } from "@/lib/browser/client-environment";
 const subscribeEnvironment = () => () => {};
@@ -42,8 +43,9 @@ export function WorkActionBar({
     reportWorkPlayed(workId);
     trackDownloadClick(workId, archive?.id ?? null, sizeBytes, !archive);
   };
+  const t = useMessages();
   return (
-    <div className="grid gap-3.5" aria-label="主操作">
+    <div className="grid gap-3.5" aria-label={t("work.sidebar.primary")}>
       {archive ? (
         <>
           <div className="grid gap-2.5">
@@ -55,9 +57,9 @@ export function WorkActionBar({
               onAuxClick={(event) => { if (event.button === 1) reportDownload(); }}
             >
               <Download aria-hidden />
-              下载 ZIP
+              {t("work.download.zip")}
               <span className="text-xs text-muted">
-                {sizeBytes === null ? "共享播放器暂不可用" : formatBytes(sizeBytes)}
+                {sizeBytes === null ? t("work.download.unavailable") : formatBytes(sizeBytes)}
               </span>
             </a>}
             {!restricted && ["rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac"].includes(engineFamily) &&
@@ -68,7 +70,7 @@ export function WorkActionBar({
         </>
       ) : externalDownload ? (
         <a
-          aria-label="外部下载：前往下载页"
+          aria-label={t("work.sidebar.externalDownload")}
           className={`${buttonVariants({ variant: "rm2k" })} min-h-12.5 w-full text-base`}
           href={externalDownload.url}
           onClick={reportDownload}
@@ -77,11 +79,11 @@ export function WorkActionBar({
           target="_blank"
         >
           <ExternalLink aria-hidden="true" size={16} />
-          前往下载页
+          {t("work.download.external")}
         </a>
       ) : (
         <span className="font-mono text-xs leading-[1.6] text-muted">
-          该作品目前暂无可用的下载来源。
+          {t("work.sidebar.noDownload")}
         </span>
       )}
     </div>

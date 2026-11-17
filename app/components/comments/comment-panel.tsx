@@ -1,3 +1,5 @@
+import { useMessages } from "@/lib/i18n/react";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { ApiResponseError, requestJson, requestOk } from "@/lib/ui/api-response";
 import { scrollElementIntoView } from "@/lib/ui/scroll.js";
 
@@ -26,7 +28,7 @@ import { COMMENT_REPLY_PREVIEW_SIZE } from "@/lib/comment-pagination";
 import type { CommentBodySegment, CommentDto, RootCommentPage, CommentReplyPage } from "@/lib/dto/db/work-community";
 import { MessageCircle, Pencil, ThumbsUp, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useRouteLoaderData } from "react-router";
+import { useLocation, useRouteLoaderData } from "react-router";
 
 type Props = {
   target: CommentTarget;
@@ -52,13 +54,14 @@ export function CommentPanel(props: Props) {
 function CommentPanelContent({
   target,
   canPin = false,
-  placeholder = "写下你的评论……",
+  placeholder,
   currentUserId,
   initialComments,
   initialTotal,
   hideDeletedContent,
   onChanged,
 }: Props & { hideDeletedContent: boolean }) {
+  const t = useMessages();
   const endpoint = commentEndpoint(target);
   const isPostAuthorHidden = useIsPostAuthorHidden();
   const [comments, setComments] = useState(initialComments);
@@ -120,7 +123,7 @@ function CommentPanelContent({
           likeCount: comment.likeCount,
         },
       }));
-      toast.error("点赞操作失败。");
+      toast.error(t("comment.likeFailed"));
     } finally {
       pendingLikes.current.delete(comment.id);
     }
@@ -132,8 +135,8 @@ function CommentPanelContent({
       comment.author?.id !== currentUserId
     )
       return false;
-    return confirm(`确定删除${comment.rootCommentId ? "这条回复" : "这条评论"}吗？${comment.images.length ? "附带图片也将一并移除。" : ""}`, {
-      title: "删除评论", confirmLabel: "删除", destructive: true,
+    return confirm(t("comment.confirmDelete", { kind: comment.rootCommentId ? "reply" : "comment", images: comment.images.length ? "yes" : "no" }), {
+      title: t("comment.deleteTitle"), confirmLabel: t("comment.delete"), destructive: true,
       action: async () => {
         await requestOk(`/api/comments/${comment.id}`, {
           method: "DELETE",
@@ -148,7 +151,7 @@ function CommentPanelContent({
             status: "deleted",
             author: null,
             replyTo: null,
-            body: [{ type: "text", text: comment.rootCommentId ? "该回复已删除。" : "该评论已删除。" }],
+            body: [],
             bodySource: null,
             images: [],
             pinned: false,
@@ -177,9 +180,9 @@ function CommentPanelContent({
       setTotal(result.total);
       setPageSize(result.pageSize);
       setPage(result.page);
-      toast.success(comment.pinned ? "已取消置顶。" : "评论已置顶。");
+      toast.success(comment.pinned ? t("comment.unpinned") : t("comment.pinnedDone"));
     } catch (error) {
-      toast.error(error instanceof ApiResponseError ? error.message : "置顶操作或列表刷新失败，请重试。");
+      toast.error(error instanceof ApiResponseError ? error : t("comment.pinFailed"));
     } finally {
       setBusy(false);
     }
@@ -197,7 +200,7 @@ function CommentPanelContent({
       setPage(result.page);
       if (result.page !== page && panelRef.current) scrollElementIntoView(panelRef.current, { block: "start" });
     } catch (error) {
-      toast.error(error instanceof ApiResponseError ? error.message : "评论加载失败。");
+      toast.error(error instanceof ApiResponseError ? error : t("comment.loadFailed"));
     } finally {
       setBusy(false);
     }
@@ -226,14 +229,14 @@ function CommentPanelContent({
   return (
     <div className="@container/comments grid scroll-mt-24 gap-4" id="comments" ref={panelRef}>
       {currentUserId ? (
-        <CommentComposer endpoint={endpoint} target={target} placeholder={placeholder}
+        <CommentComposer endpoint={endpoint} target={target} placeholder={placeholder ?? t("comment.placeholder")}
           onCreated={() => {
             // The server clamps the requested page to the current last page for ascending lists.
             void loadPage(target.kind === "work" || target.kind === "catalog" ? 1 : Number.MAX_SAFE_INTEGER);
             onChanged?.();
           }} />
       ) : (
-        <p className="text-sm text-muted">登录后可以评论、回复和点赞。</p>
+        <p className="text-sm text-muted">{t("comment.login")}</p>
       )}
 
       <div className="grid">
@@ -244,7 +247,7 @@ function CommentPanelContent({
               notificationReply={notificationReply?.root.id === comment.id ? notificationReply.reply : null}
               notificationItemId={notificationReply?.root.id === comment.id ? notificationReply.itemId : undefined}
               openNotificationReply={notificationReply?.root.id === comment.id && notificationReply.open}
-              pinControl={canPin && (comment.pinned || !hasPinnedComment) ? <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void togglePin(comment)}>{comment.pinned ? "取消置顶" : "置顶"}</Button> : null}
+              pinControl={canPin && (comment.pinned || !hasPinnedComment) ? <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void togglePin(comment)}>{comment.pinned ? t("comment.unpin") : t("comment.pin")}</Button> : null}
               commentUpdates={commentUpdates}
               currentUserId={currentUserId}
               hideDeletedContent={hideDeletedContent}
@@ -265,10 +268,10 @@ function CommentPanelContent({
             />
           ))
         ) : (
-          <EmptyState title={comments.length ? "没有可显示的评论。" : "还没有评论。"} variant="plain" />
+          <EmptyState title={comments.length ? t("comment.hidden") : t("comment.empty")} variant="plain" />
         )}
       </div>
-      <PaginationLinks ariaLabel="主评论分页" page={page} pageSize={pageSize} total={total}
+      <PaginationLinks ariaLabel={t("comment.pagination")} page={page} pageSize={pageSize} total={total}
         disabled={busy} onPageChange={nextPage => void loadPage(nextPage)} />
     </div>
   );
@@ -310,6 +313,7 @@ function CommentCard({
   onDelete: (comment: CommentDto) => Promise<boolean>;
   onUpdated: (comment: CommentDto) => void;
 }) {
+  const t = useMessages();
   const isPostAuthorHidden = useIsPostAuthorHidden();
   const hideRoot = isPostAuthorHidden(comment.author?.id);
   const notificationReply = isPostAuthorHidden(linkedReply?.author?.id) ? null : linkedReply;
@@ -339,11 +343,11 @@ function CommentCard({
       disabled={!!editTarget || !!replyTarget || loading} onClick={(event) => {
         editTrigger.current = event.currentTarget;
         setEditTarget(entry);
-      }}><Pencil aria-hidden />编辑</Button>;
+      }}><Pencil aria-hidden />{t("core.action.edit")}</Button>;
   }
   function editEditor(entry: CommentDto) {
     if (editTarget?.id !== entry.id) return null;
-    return <div className="mt-3 grid min-w-0 gap-2" role="group" aria-label={entry.rootCommentId ? "编辑回复" : "编辑评论"}>
+    return <div className="mt-3 grid min-w-0 gap-2" role="group" aria-label={entry.rootCommentId ? t("comment.editReply") : t("comment.editComment")}>
       <CommentComposer key={editTarget.id} endpoint={`/api/comments/${editTarget.id}`} target={editTarget.target}
         editing={editTarget} inputId={`comment-edit-input-${editTarget.id}`} onCancel={closeEdit}
         onCreated={(updated) => { onUpdated(updated); closeEdit(); }} />
@@ -355,7 +359,7 @@ function CommentCard({
   const [replies, setReplies] = useState<CommentReplyPage | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [replyLoadFailed, setReplyLoadFailed] = useState(false);
   const [focusedReplyId, setFocusedReplyId] = useState<number | null>(null);
   const requestId = useRef(0);
   const lastRequest = useRef<{ page: number; commentId?: number }>({ page: 1 });
@@ -365,7 +369,7 @@ function CommentCard({
       const id = ++requestId.current;
       lastRequest.current = { page, commentId };
       setLoading(true);
-      setError(null);
+      setReplyLoadFailed(false);
       try {
         const params = new URLSearchParams({ page: String(page) });
         if (commentId) params.set("comment", String(commentId));
@@ -379,7 +383,7 @@ function CommentCard({
         setExpanded(true);
         setFocusedReplyId(commentId ?? null);
       } catch {
-        if (requestId.current === id) setError("回复加载失败，请重试。");
+        if (requestId.current === id) setReplyLoadFailed(true);
       } finally {
         if (requestId.current === id) setLoading(false);
       }
@@ -418,7 +422,7 @@ function CommentCard({
     >
       {hideRoot || currentComment.status === "deleted" ? <div aria-hidden /> : currentComment.author ? (
         <Link
-          aria-label={`查看${currentComment.author.displayName}的主页`}
+          aria-label={t("comment.profile", { name: currentComment.author.displayName })}
           to={`/users/${currentComment.author.id}`}
         >
           <UserAvatar
@@ -431,13 +435,13 @@ function CommentCard({
       ) : (
         <UserAvatar
           className="size-9.5 opacity-60"
-          displayName="已删除用户"
+          displayName={t("comment.deletedUser")}
           size={38}
         />
       )}
       <div className="min-w-0">
-        {hideRoot ? <span className="font-mono text-xs text-muted">{comment.floorNumber} 楼</span> : <>
-          {currentComment.pinned ? <span className="text-xs font-bold text-primary">置顶</span> : null}
+        {hideRoot ? <span className="font-mono text-xs text-muted">{comment.floorNumber == null ? null : t("comment.floor", { floor: comment.floorNumber })}</span> : <>
+          {currentComment.pinned ? <span className="text-xs font-bold text-primary">{t("comment.pinned")}</span> : null}
           <CommentLine comment={currentComment} />
           <div className="mt-1 flex flex-wrap items-center gap-1">
             <CommentControls
@@ -455,9 +459,9 @@ function CommentCard({
           </div>
           {editEditor(currentComment)}
         </>}
-        {visibleReplies.length > 0 || replyCount > COMMENT_REPLY_PREVIEW_SIZE || loading || error || replyTarget ? (
+        {visibleReplies.length > 0 || replyCount > COMMENT_REPLY_PREVIEW_SIZE || loading || replyLoadFailed || replyTarget ? (
           <section
-            aria-label={`${comment.floorNumber} 楼的回复`}
+            aria-label={comment.floorNumber == null ? t("comment.nestedReply") : t("comment.replies", { floor: comment.floorNumber })}
             aria-busy={loading}
             className={nestedRepliesClassName}
             id={`comment-replies-${comment.id}`}
@@ -496,7 +500,7 @@ function CommentCard({
                   if (expanded) {
                     setExpanded(false);
                     setFocusedReplyId(null);
-                    setError(null);
+                    setReplyLoadFailed(false);
                   } else void loadReplies(replies?.page ?? 1);
                 }}
                 size="sm"
@@ -504,15 +508,15 @@ function CommentCard({
                 variant="ghost"
               >
                 {loading
-                  ? "正在加载…"
+                  ? t("comment.loading")
                   : expanded
-                    ? "收起回复"
-                    : `展开剩余 ${replyCount - previewCount} 条回复`}
+                    ? t("comment.collapse")
+                    : t("comment.expand", { count: replyCount - previewCount })}
               </Button>
             ) : null}
             {expanded && replies && replies.total > replies.pageSize ? (
               <PaginationLinks
-                ariaLabel={`${comment.floorNumber} 楼的回复分页`}
+                ariaLabel={comment.floorNumber == null ? t("pagination.label") : t("comment.repliesPagination", { floor: comment.floorNumber })}
                 className="my-2"
                 page={replies.page}
                 pageSize={replies.pageSize}
@@ -521,12 +525,12 @@ function CommentCard({
                 onPageChange={(page) => void loadReplies(page)}
               />
             ) : null}
-            {error ? (
+            {replyLoadFailed ? (
               <div
                 className="flex flex-wrap items-center gap-2 text-sm text-muted"
                 role="status"
               >
-                {error}
+                {t("comment.loadRepliesFailed")}
                 <Button
                   disabled={loading || !!editTarget}
                   onClick={() =>
@@ -539,7 +543,7 @@ function CommentCard({
                   type="button"
                   variant="ghost"
                 >
-                  重试
+                  {t("core.action.retry")}
                 </Button>
               </div>
             ) : null}
@@ -585,9 +589,10 @@ function CommentNestedReply({
   editor: React.ReactNode;
   editing: boolean;
 }) {
+  const t = useMessages();
   if (comment.status === "deleted") return (
     <NestedReply id={`comment-${comment.id}`} metadata={<Timestamp value={comment.createdAt} />} actions={null}>
-      <span className="text-muted">该回复已删除。</span>
+      <span className="text-muted">{t("comment.deletedReply")}</span>
     </NestedReply>
   );
   return (
@@ -595,13 +600,13 @@ function CommentNestedReply({
       id={`comment-${comment.id}`}
       metadata={<>
         <Timestamp value={comment.createdAt} />
-        {comment.editedAt ? " · 已编辑" : ""}
+        {comment.editedAt ? ` · ${t("comment.edited")}` : ""}
       </>}
       actions={<>
         {editControl}
         {currentUserId && !comment.rootDeleted ? (
           <Button className="min-h-10 px-2" size="sm" variant="ghost" type="button" disabled={editing} onClick={() => onReply(comment)}>
-            回复
+            {t("comment.reply")}
           </Button>
         ) : null}
         <Button
@@ -609,7 +614,7 @@ function CommentNestedReply({
           size="sm" variant="ghost" type="button"
           disabled={!currentUserId}
           aria-pressed={comment.likedByMe}
-          aria-label={`${comment.likedByMe ? "取消赞" : "赞"}，${comment.likeCount} 个赞`}
+          aria-label={t("comment.likeCount", { state: comment.likedByMe ? "unlike" : "like", count: comment.likeCount })}
           onClick={() => onLike(comment)}
         >
           <ThumbsUp aria-hidden fill={comment.likedByMe ? "currentColor" : "none"} className={comment.likedByMe ? "text-primary" : undefined} />
@@ -617,7 +622,7 @@ function CommentNestedReply({
         </Button>
         {currentUserId === comment.author?.id ? (
           <Button className="min-h-10 px-2" size="sm" variant="ghost" type="button" disabled={editing} onClick={() => onDelete(comment)}>
-            删除
+            {t("comment.delete")}
           </Button>
         ) : null}
       </>}
@@ -626,9 +631,9 @@ function CommentNestedReply({
           <Link className="break-all text-primary hover:underline" to={`/users/${comment.author.id}`}>
             {comment.author.displayName}
           </Link>
-        ) : "已删除用户"}
-        {comment.replyTo ? <span className="text-muted"> 回复 {comment.replyTo.displayName ?? "一条已不可用的回复"}</span> : null}
-        ：<span className="whitespace-pre-wrap"><CommentBody body={comment.body} /></span>
+        ) : t("comment.deletedUser")}
+        {comment.replyTo ? <span className="text-muted"> {t("comment.replyTo", { name: comment.replyTo.displayName ?? t("comment.unavailableReply") })}</span> : null}
+        {" "}<span className="whitespace-pre-wrap"><CommentBody body={comment.body} /></span>
         <CommentImages images={comment.images} />
         {editor}
     </NestedReply>
@@ -636,13 +641,14 @@ function CommentNestedReply({
 }
 
 function CommentLine({ comment }: { comment: CommentDto }) {
+  const t = useMessages();
   if (comment.status === "deleted") return (
     <div>
       <div className="flex items-baseline gap-2.5 font-mono text-xs text-muted">
         <Timestamp value={comment.createdAt} />
-        <span className="ml-auto">{comment.floorNumber} 楼</span>
+        <span className="ml-auto">{comment.floorNumber == null ? null : t("comment.floor", { floor: comment.floorNumber })}</span>
       </div>
-      <p className="m-0 mt-1 text-sm text-muted">该评论已删除。</p>
+      <p className="m-0 mt-1 text-sm text-muted">{t("comment.deletedComment")}</p>
     </div>
   );
   return (
@@ -656,22 +662,22 @@ function CommentLine({ comment }: { comment: CommentDto }) {
             {comment.author.displayName}
           </Link>
         ) : (
-          <strong className="text-sm">已删除用户</strong>
+          <strong className="text-sm">{t("comment.deletedUser")}</strong>
         )}
         <span className="font-mono text-xs text-muted">
           <Timestamp value={comment.createdAt} />
         </span>
         {comment.editedAt ? (
-          <span className="font-mono text-xs text-muted">已编辑</span>
+          <span className="font-mono text-xs text-muted">{t("comment.edited")}</span>
         ) : null}
         <span className="ml-auto font-mono text-xs text-muted">
-          {comment.floorNumber} 楼
+          {comment.floorNumber == null ? null : t("comment.floor", { floor: comment.floorNumber })}
         </span>
       </div>
       <p className="m-0 mt-1 text-[15px] leading-[1.7] wrap-anywhere whitespace-pre-wrap">
         {comment.replyTo ? (
           <span className="text-muted">
-            回复 {comment.replyTo.displayName ? `@${comment.replyTo.displayName}` : "一条已不可用的回复"}：
+            {t("comment.replyTo", { name: comment.replyTo.displayName ? `@${comment.replyTo.displayName}` : t("comment.unavailableReply") })}
           </span>
         ) : null}
         <CommentBody body={comment.body} />
@@ -706,6 +712,7 @@ function CommentControls({
   onDelete: (comment: CommentDto) => void;
   editing: boolean;
 }) {
+  const t = useMessages();
   if (comment.status === "deleted") return null;
   return (
     <>
@@ -719,15 +726,11 @@ function CommentControls({
           variant="ghost"
         >
           <MessageCircle aria-hidden />
-          回复
+          {t("comment.reply")}
         </Button>
       ) : null}
       <Button
-        aria-label={
-          comment.likedByMe
-            ? `取消赞，${comment.likeCount} 个赞`
-            : `赞，${comment.likeCount} 个赞`
-        }
+        aria-label={t("comment.likeCount", { state: comment.likedByMe ? "unlike" : "like", count: comment.likeCount })}
         aria-pressed={comment.likedByMe}
         className="text-xs text-muted disabled:opacity-100"
         disabled={!currentUserId}
@@ -749,7 +752,7 @@ function CommentControls({
           variant="ghost"
         >
           <Trash2 aria-hidden />
-          删除
+          {t("comment.delete")}
         </Button>
       ) : null}
     </>

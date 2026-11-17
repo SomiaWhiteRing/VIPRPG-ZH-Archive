@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Check,
@@ -40,6 +41,7 @@ export function EmojiSourcePicker({
   disabled?: boolean;
   id?: string;
 }) {
+  const t = useMessages();
   const endpoint = sourceEndpoint ??
     (mode === "showcase" ? "/api/account/showcase" : "/api/emojis");
   const [open, setOpen] = useState(false);
@@ -255,7 +257,7 @@ export function EmojiSourcePicker({
               .map((item) => item.element)}
             {branch?.loading ? (
               <p className="px-6 py-2 text-xs text-muted" role="status">
-                加载中…
+                {t("admin.portraits.loading")}
               </p>
             ) : null}
             {branch?.error || branch?.more ? (
@@ -267,7 +269,7 @@ export function EmojiSourcePicker({
                 className="ml-6"
                 onClick={() => void loadBranch(category.id, !branch.error)}
               >
-                {branch.error ? "重试加载角色" : "更多角色"}
+                {branch.error ? t("emoji.source.retry") : t("emoji.source.moreCharacters")}
               </Button>
             ) : null}
             {branch &&
@@ -276,7 +278,7 @@ export function EmojiSourcePicker({
             !branch.items.length &&
             !children.length ? (
               <p className="px-6 py-2 text-xs text-muted">
-                {mode === "showcase" ? "暂无角色" : "暂无可用脸图"}
+                {mode === "showcase" ? t("emoji.source.empty") : t("upload.portrait.empty")}
               </p>
             ) : null}
           </div>
@@ -294,7 +296,7 @@ export function EmojiSourcePicker({
           disabled={disabled}
           variant="outline"
           className="w-full justify-between font-normal"
-          aria-label={onHot ? "选择角色或全站热门" : "选择角色"}
+          aria-label={onHot ? t("emoji.source.chooseOrPopular") : t("sea.avatar.character")}
         >
           {hot ? (
             <Flame aria-hidden className="text-muted" />
@@ -320,8 +322,8 @@ export function EmojiSourcePicker({
               className="absolute left-3 top-3 size-4 text-muted"
             />
             <Input
-              aria-label="搜索角色"
-              placeholder="搜索中文名、日文名或别名"
+              aria-label={t("emoji.source.search")}
+              placeholder={t("emoji.source.placeholder")}
               enterKeyHint="search"
               className="pl-9"
               value={query}
@@ -351,7 +353,7 @@ export function EmojiSourcePicker({
           <div
             ref={tree}
             role="tree"
-            aria-label="角色分类"
+            aria-label={t("admin.characterIndex.title")}
             className="emoji-scroll-viewport min-h-0 max-h-[min(24rem,50dvh)] shrink overflow-y-auto overscroll-contain"
             onScroll={(event) => {
               scrollTop.current = event.currentTarget.scrollTop;
@@ -406,7 +408,7 @@ export function EmojiSourcePicker({
                   }}
                 >
                   <Flame aria-hidden />
-                  <span className="flex-1">全站热门</span>
+                  <span className="flex-1">{t("emoji.source.popular")}</span>
                   {hot ? <Check aria-hidden /> : null}
                 </Button>
                 <div className="mb-1 border-t border-border" />
@@ -425,7 +427,7 @@ export function EmojiSourcePicker({
                   ? categoryRows({
                       id: "",
                       parentId: null,
-                      label: "未分类",
+                      label: t("character.uncategorized"),
                       sortOrder: 0,
                     })
                   : null}
@@ -435,7 +437,7 @@ export function EmojiSourcePicker({
           {(!searchQuery && !categories && !error) ||
           (searchQuery && (searching || results.query !== searchQuery) && !error) ? (
             <p role="status" className="p-2 text-sm text-muted">
-              加载中…
+              {t("admin.portraits.loading")}
             </p>
           ) : null}
           {searchQuery &&
@@ -443,7 +445,7 @@ export function EmojiSourcePicker({
           !searching &&
           !results.items.length ? (
             <p role="status" className="p-2 text-sm text-muted">
-              没有匹配的角色
+              {t("emoji.source.noMatches")}
             </p>
           ) : null}
           {searchQuery && results.query === searchQuery && results.more ? (
@@ -453,7 +455,7 @@ export function EmojiSourcePicker({
               disabled={searching}
               onClick={() => setOffset(results.items.length)}
             >
-              更多结果
+              {t("emoji.source.moreResults")}
             </Button>
           ) : null}
           {error ? (
@@ -464,7 +466,7 @@ export function EmojiSourcePicker({
                 variant="ghost"
                 onClick={() => setRetry((current) => current + 1)}
               >
-                重试
+                {t("core.action.retry")}
               </Button>
             </div>
           ) : null}

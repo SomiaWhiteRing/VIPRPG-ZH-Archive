@@ -9,7 +9,7 @@ export async function GET(runtime: AppRuntime, request: Request, context: { para
   try {
     const workId = parsePositiveId(context.params.workId, "work id");
     if (!await canReadWork(runtime, workId))
-      throw new HttpError(404, "作品不存在");
+      throw new HttpError(404, "作品不存在", undefined, "comment.error.workMissing");
     const params = new URL(request.url).searchParams;
     const page = parseAccountPage(params.get("page") ?? undefined);
     return json({ ok: true, collections: await listWorkCollections(runtime, workId, page, params.get("notes") === "1") });

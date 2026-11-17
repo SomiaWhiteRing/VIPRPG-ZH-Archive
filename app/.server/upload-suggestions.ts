@@ -6,6 +6,7 @@ import {
 } from "@/app/.server/db/taxonomy-library";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { UploadSuggestions } from "@/app/upload/upload-types";
+import { translate } from "@/lib/i18n/core";
 
 export async function loadUploadSuggestions(runtime: AppRuntime): Promise<UploadSuggestions> {
   const [tags, characters, creators, characterIndex] = await Promise.all([
@@ -17,7 +18,7 @@ export async function loadUploadSuggestions(runtime: AppRuntime): Promise<Upload
   return {
     tags: tags.map((tag) => ({
       value: tag.name,
-      meta: `${tag.workCount} 部作品`,
+      meta: translate(runtime.uiLocale, "upload.staff.works", { count: tag.workCount }),
     })),
     characters,
     characterIndex,

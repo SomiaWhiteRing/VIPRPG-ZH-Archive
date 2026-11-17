@@ -1,10 +1,13 @@
+import { useMessages } from "@/lib/i18n/react";
 import { useState } from "react";
 import { Button } from "@/app/components/ui/button";
 import { ImageLightbox } from "@/app/components/media/image-lightbox";
 import type { CommentImage } from "@/lib/comment-images";
 
-export function CommentImages({ images, imageLabel = "评论图片" }: { images: CommentImage[]; imageLabel?: string }) {
+export function CommentImages({ images, imageLabel: providedImageLabel }: { images: CommentImage[]; imageLabel?: string }) {
+  const t = useMessages();
   const [active, setActive] = useState(-1);
+  const imageLabel = providedImageLabel ?? t("image.comment");
   if (!images.length) return null;
   return (
     <div className="mt-2">
@@ -19,7 +22,7 @@ export function CommentImages({ images, imageLabel = "评论图片" }: { images:
               className={images.length === 1
                 ? "relative block h-auto min-h-0 max-w-full overflow-hidden rounded-md p-0"
                 : "relative block aspect-square h-auto min-h-0 w-[min(28%,120px)] overflow-hidden rounded-md bg-muted/10 p-0"}
-              aria-label={`查看图片 ${index + 1}，共 ${images.length} 张${remaining > 0 ? `，另有 ${remaining} 张图片` : ""}`}
+              aria-label={t("image.view", { index: index + 1, total: images.length, remaining })}
               onClick={() => setActive(index)}
             >
               <img src={image.url} alt={`${imageLabel} ${index + 1}`} width={image.width} height={image.height} loading="lazy"

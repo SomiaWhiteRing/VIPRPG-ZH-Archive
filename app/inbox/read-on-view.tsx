@@ -1,10 +1,11 @@
+import { useMessages } from "@/lib/i18n/react";
 import { requestJson } from "@/lib/ui/api-response";
 
 import { Button } from "@/app/components/ui/button";
 import { notifyInboxChanged } from "@/lib/inbox-events";
 import type { InboxReadTarget } from "@/lib/dto/db/inbox";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export function InboxReadOnView({
   itemId,
@@ -12,6 +13,7 @@ export function InboxReadOnView({
 }: {
   itemId: number;
 } & InboxReadTarget) {
+  const t = useMessages();
   const targetId = "eventId" in target
     ? target.replyId === null ? `timeline-event-${target.eventId}` : `timeline-reply-item-${target.replyId}`
     : target.commentId ? `comment-${target.commentId}` : `post-${target.postNumber}`;
@@ -61,7 +63,7 @@ export function InboxReadOnView({
       role="alert"
       className="mx-auto flex w-[min(1280px,calc(100%-2rem))] flex-wrap items-center gap-3 pt-4 text-sm"
     >
-      <span>未能标记已读，请重试。</span>
+      <span>{t("inbox.ui.markFailed")}</span>
       <Button
         size="sm"
         variant="outline"
@@ -70,10 +72,10 @@ export function InboxReadOnView({
           setAttempt((value) => value + 1);
         }}
       >
-        重试
+        {t("core.action.retry")}
       </Button>
       <Link to={`/inbox/${itemId}`} className="text-primary hover:underline">
-        查看提醒
+        {t("inbox.ui.view")}
       </Link>
     </div>
   );

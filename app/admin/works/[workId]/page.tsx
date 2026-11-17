@@ -26,8 +26,11 @@ import {
   canMergeWorks,
   hasPermission,
 } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { type LoaderFunctionArgs, type MetaFunction, Link, useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { type LoaderFunctionArgs, type MetaFunction, useLoaderData } from "react-router";
 
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -64,22 +67,17 @@ export async function loader(args: LoaderFunctionArgs) {
     maintainers,
     relationCapabilities,
     netplay,
+    locale: runtime.uiLocale,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    {
-      title: [
-        loaderData?.work.chineseTitle || loaderData?.work.originalTitle || "作品",
-        "作品维护",
-        "控制台",
-      ],
-    },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [loaderData?.work.chineseTitle || loaderData?.work.originalTitle || translate(locale, "admin.works.game"), translate(locale, "admin.works.detail"), translate(locale, "admin.characterIndex.console")] }, error, locale);
+};
 
 export default function AdminWorkEditPage() {
+  const t = useMessages();
   const {
     workId,
     adminUser,
@@ -96,9 +94,9 @@ export default function AdminWorkEditPage() {
       <PageHeader
         compact
         title={work.chineseTitle || work.originalTitle}
-        actions={<BackLink href="/admin/works" label="返回游戏维护" />}
+        actions={<BackLink href="/admin/works" label={t("admin.works.back")} />}
       />
-      {netplay ? <RedirectForm id={netplayFormId} action={`/api/admin/works/${workId}/netplay-space`} /> : null}
+      {netplay ? <RedirectForm id={netplayFormId} action={`/api/admin/works/${workId}/netplay-space`} preserveLanguage /> : null}
       <WorkEditForm
         work={work}
         currentUser={adminUser}
@@ -106,27 +104,27 @@ export default function AdminWorkEditPage() {
         canUpdateStatus={canUpdateStatus}
         netplaySpace={netplay ? (
           <fieldset className="rounded-md border border-border p-3">
-            <legend className="px-1 text-sm font-semibold">联机空间</legend>
+            <legend className="px-1 text-sm font-semibold">{t("admin.works.space")}</legend>
             <div className="flex flex-wrap items-end gap-3">
-              <SelectField name="space_id" form={netplayFormId} aria-label="联机空间"
+              <SelectField name="space_id" form={netplayFormId} aria-label={t("admin.works.space")}
                 defaultValue={netplay.spaceId === null ? "none" : String(netplay.spaceId)}
-                options={[{ value: "none", label: "不加入联机空间" }, ...netplay.spaces.map((space) => ({ value: String(space.id), label: space.name }))]} />
-              <Button type="submit" form={netplayFormId}>保存联机空间</Button>
+                options={[{ value: "none", label: t("admin.works.noSpace") }, ...netplay.spaces.map((space) => ({ value: String(space.id), label: space.name }))]} />
+              <Button type="submit" form={netplayFormId}>{t("admin.works.saveSpace")}</Button>
               {hasPermission(adminUser, "system.maintenance.run") ? (
-                <Link to="/admin/netplay-spaces" className={buttonVariants({ variant: "outline" })}>管理空间</Link>
+                <Link to="/admin/netplay-spaces" className={buttonVariants({ variant: "outline" })}>{t("admin.works.manageSpace")}</Link>
               ) : null}
             </div>
           </fieldset>
         ) : null}
       >
-        {!work.hasUsableDistribution ? <p className="text-sm text-muted">缺少可用下载来源。已发布的作品资料仍按可见性展示，恢复来源后可重新下载。</p> : null}
+        {!work.hasUsableDistribution ? <p className="text-sm text-muted">{t("admin.works.noDistribution")}</p> : null}
         <StickySaveBar>
           {work.status === "published" && work.hasUsableDistribution ? (
             <Link
               className={buttonVariants({ variant: "outline" })}
               to={`/games/${work.id}`}
             >
-              查看作品页
+              {t("admin.works.view")}
             </Link>
           ) : null}
           {hasPermission(adminUser, "archive_version.read_private") ? (
@@ -134,20 +132,20 @@ export default function AdminWorkEditPage() {
               className={buttonVariants({ variant: "outline" })}
               to="/admin/archive-versions"
             >
-              查看归档历史
+              {t("admin.works.archives")}
             </Link>
           ) : null}
         </StickySaveBar>
       </WorkEditForm>
       {canUpdateStatus ? (
-        <Pane heading="作品管理">
+        <Pane heading={t("admin.works.management")}>
           <ConfirmingForm action={`/api/admin/works/${workId}/lifecycle`} confirmField="operation"
-            title={work.status === "deleted" ? "确认恢复作品？" : "确认删除作品？"}
-            description={work.status === "deleted" ? "恢复后沿用保存的可见性；未完成上传的作品仍保持处理中。" : "作品将停止展示，资料与归档保留，可在后台恢复。"}>
+            title={work.status === "deleted" ? t("admin.works.restoreConfirm") : t("upload.own.deleteWorkConfirm")}
+            description={work.status === "deleted" ? t("admin.works.restoreDescription") : t("admin.works.deleteDescription")}>
             <input type="hidden" name="operation" value={work.status === "deleted" ? "restore" : "delete"} />
             <input type="hidden" name="expected_status" value={work.status} />
             <Button type="submit" variant={work.status === "deleted" ? "outline" : "destructive"}>
-              {work.status === "deleted" ? "恢复作品" : "删除作品"}
+              {work.status === "deleted" ? t("admin.works.restore") : t("upload.own.deleteWork")}
             </Button>
           </ConfirmingForm>
         </Pane>
@@ -156,16 +154,16 @@ export default function AdminWorkEditPage() {
         <WorkMaintainerEditor workId={workId} initialMaintainers={maintainers} canRemove />
       ) : null}
       {canMergeWorks(adminUser) ? (
-        <Pane heading="合并重复作品" tone="danger">
+        <Pane heading={t("admin.works.merge")} tone="danger">
           <ConfirmingForm
             action={`/api/admin/works/${workId}/merge`}
             confirmField="target_id"
-            title="确认合并作品？"
-            description="保留目标作品资料和下载入口，将归档、评论、收藏与关联转移至目标，当前作品设为已删除。此操作无法撤销；浏览器存档仍按原 Work ID 保存，不会自动转移。"
+            title={t("admin.works.mergeConfirm")}
+            description={t("admin.works.mergeDescription")}
           >
             <FormField
               controlId="admin-works-workId--field-10"
-              label="目标作品 ID"
+              label={t("admin.works.targetId")}
             >
               <Input
                 id="admin-works-workId--field-10"
@@ -176,14 +174,14 @@ export default function AdminWorkEditPage() {
               />
             </FormField>
             <Button className="mt-3" type="submit" variant="destructive">
-              合并到目标作品
+              {t("admin.works.mergeSubmit")}
             </Button>
           </ConfirmingForm>
         </Pane>
       ) : null}
-      <Pane heading="关系资料">
+      <Pane heading={t("admin.works.relations")}>
         <p className="text-sm text-muted">
-          普通关联、原版/译版关联和目录成员在上传完成后单独维护，不与游戏资料保存混在一起。
+          {t("admin.works.relationHelp")}
         </p>
         <RelationEditor
           {...relationCapabilities}

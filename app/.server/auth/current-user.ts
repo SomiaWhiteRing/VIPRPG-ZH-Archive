@@ -4,6 +4,7 @@ import { memoizeRequest } from "../runtime";
 import { findActiveSessionByHash } from "./request-auth";
 import type { SessionIdentity } from "./session";
 import { getSessionTokenFromCookieHeader, hashSessionToken } from "./session-token";
+import { requestUiLocale } from "@/lib/i18n/locale";
 export type AuthContext = {
   session: SessionIdentity;
   user: ArchiveUser;
@@ -22,6 +23,7 @@ export function getAuthContext(
     if (!match) return null;
     runtime.sessionCookieRefresh = { token, sessionId: match.sessionId, expiresAt: match.expiresAt };
     const user = match.user;
+    runtime.uiLocale = requestUiLocale(runtime.request, user.preferences.uiLanguage);
     return {
       session: { id: match.sessionId, userId: user.id },
       user,

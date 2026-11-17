@@ -1,3 +1,6 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { getD1 } from "@/app/.server/db/d1";
 import { forumImageCleanupSql } from "@/app/.server/forum/image-storage";
@@ -10,9 +13,9 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { BackLink } from "@/app/components/ui/back-link";
 import { formatDate } from "@/lib/format";
 import { forumPage } from "@/lib/forum";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 import { ImageCleanupButton } from "./cleanup-button";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 export async function loader(args: LoaderFunctionArgs) {
@@ -39,19 +42,23 @@ export async function loader(args: LoaderFunctionArgs) {
       post_number: number | null;
     }>();
 
-  return { page, rows };
+  return { page, rows, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["讨论图片清理", "控制台"], page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.discussions.imageTitle"), translate(locale, "admin.characterIndex.console")], page: loaderData?.page }, error, locale);
+};
 
 export default function ForumImageCleanup() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { page, rows } = useLoaderData<typeof loader>();
   return (
     <main>
-      <PageHeader compact title="讨论图片清理" actions={<BackLink href="/admin/discussions" label="返回讨论管理" />} />
+      <PageHeader compact title={t("admin.discussions.imageTitle")} actions={<BackLink href="/admin/discussions" label={t("admin.discussions.back")} />} />
       <p className="text-sm text-muted">
-        仅清理未关联图片，或所属帖子、主题已隐藏或删除的图片。仅账户停用不满足清理条件。
+        {t("admin.discussions.imageRules")}
       </p>
       <ul className="admin-panel divide-y divide-border">
         {rows.results.slice(0, 50).map((row) => (
@@ -62,23 +69,23 @@ export default function ForumImageCleanup() {
             <div className="min-w-0 text-sm">
               <p>
                 <strong className="admin-cell-title">{row.author}</strong>
-                <span className="admin-cell-meta">{formatDate(row.created_at)}</span>
+                <span className="admin-cell-meta">{formatDate(row.created_at, { locale })}</span>
               </p>
               <p className="break-all font-mono text-xs text-muted">{row.id}</p>
               {row.topic_id ? (
                 <p>
-                  主题 {row.topic_id} · #{row.post_number}
+                  {t("admin.discussions.imagePost", { id: row.topic_id, post: row.post_number ?? "" })}
                 </p>
               ) : (
-                <p>未关联帖子</p>
+                <p>{t("admin.discussions.imageUnlinked")}</p>
               )}
             </div>
             {row.status === "uploading" || row.status === "uncertain" ? (
-              <RedirectForm action="/api/admin/discussions/images" method="post">
+              <RedirectForm action="/api/admin/discussions/images" method="post" preserveLanguage>
                 <Input type="hidden" name="id" value={row.id} />
                 <Input type="hidden" name="op" value="reconcile" />
                 <Button type="submit" variant="outline">
-                  核对上传状态
+                  {t("admin.discussions.reconcile")}
                 </Button>
               </RedirectForm>
             ) : (
@@ -93,14 +100,14 @@ export default function ForumImageCleanup() {
           </li>
         ))}
       </ul>
-      {!rows.results.length ? <EmptyState title="暂无待清理图片。" /> : null}
+      {!rows.results.length ? <EmptyState title={t("admin.discussions.imageEmpty")} /> : null}
       <nav
         className="flex gap-4 text-sm text-primary"
-        aria-label="图片清理分页"
+        aria-label={t("admin.discussions.imagePages")}
       >
-        {page > 1 ? <Link to={`?page=${page - 1}`}>上一页</Link> : null}
+        {page > 1 ? <Link to={`/admin/discussions/images?page=${page - 1}`}>{t("pagination.previous")}</Link> : null}
         {rows.results.length > 50 ? (
-          <Link to={`?page=${page + 1}`}>下一页</Link>
+          <Link to={`/admin/discussions/images?page=${page + 1}`}>{t("pagination.next")}</Link>
         ) : null}
       </nav>
     </main>

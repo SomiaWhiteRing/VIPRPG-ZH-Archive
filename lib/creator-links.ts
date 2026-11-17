@@ -11,25 +11,25 @@ export function parseCreatorLinks(value: string): CreatorLink[] {
   try {
     parsed = JSON.parse(value);
   } catch {
-    throw new HttpError(400, "网站格式不正确");
+    throw new HttpError(400, "网站格式不正确", undefined, "creator.edit.error.linkFormat");
   }
   return normalizeCreatorLinks(parsed);
 }
 
 export function normalizeCreatorLinks(value: unknown): CreatorLink[] {
-  if (!Array.isArray(value)) throw new HttpError(400, "网站格式不正确");
+  if (!Array.isArray(value)) throw new HttpError(400, "网站格式不正确", undefined, "creator.edit.error.linkFormat");
   return value.flatMap((item: unknown) => {
     if (!item || typeof item !== "object" || !("label" in item) || !("url" in item) || typeof item.label !== "string" || typeof item.url !== "string") {
-      throw new HttpError(400, "网站格式不正确");
+      throw new HttpError(400, "网站格式不正确", undefined, "creator.edit.error.linkFormat");
     }
     const label = normalizeEntityName(item.label);
     const url = item.url.trim();
     if (!label && !url) return [];
-    if (!label || !url) throw new HttpError(400, "请补全网站名称和网址，或移除该行");
-    if (label.length > CREATOR_LINK_LIMITS.label || url.length > CREATOR_LINK_LIMITS.url) throw new HttpError(400, "网站名称或网址过长");
+    if (!label || !url) throw new HttpError(400, "请补全网站名称和网址，或移除该行", undefined, "creator.edit.error.linkIncomplete");
+    if (label.length > CREATOR_LINK_LIMITS.label || url.length > CREATOR_LINK_LIMITS.url) throw new HttpError(400, "网站名称或网址过长", undefined, "creator.edit.error.linkLength");
     let protocol: string;
-    try { protocol = new URL(url).protocol; } catch { throw new HttpError(400, "网站网址格式不正确"); }
-    if (protocol !== "http:" && protocol !== "https:") throw new HttpError(400, "网站网址只支持 http 或 https");
+    try { protocol = new URL(url).protocol; } catch { throw new HttpError(400, "网站网址格式不正确", undefined, "creator.edit.error.linkUrl"); }
+    if (protocol !== "http:" && protocol !== "https:") throw new HttpError(400, "网站网址只支持 http 或 https", undefined, "creator.edit.error.linkProtocol");
     return [{ label, url }];
   });
 }

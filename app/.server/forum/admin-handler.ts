@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { type UiLocale } from "@/lib/i18n/locale";
 import { json as jsonResponse, HttpError, jsonError } from "@/lib/http";
 import {
   adminForumDetail,
@@ -16,9 +18,9 @@ const permissions = [
   "forum.topic.sage_any",
   "forum.tag.manage",
 ] as const;
-export async function GET(ctx: ForumRequestRuntime, request: Request) {
+export async function GET(ctx: ForumRequestRuntime, request: Request, locale: UiLocale) {
   try {
-    const auth = await requireForumUser(ctx, request, permissions);
+    const auth = await requireForumUser(ctx, request, permissions, locale);
     const params = new URL(request.url).searchParams,
       op = params.get("op");
     const data =
@@ -54,22 +56,22 @@ export async function GET(ctx: ForumRequestRuntime, request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    return jsonError("管理数据加载失败。", error);
+    return jsonError(translate(locale, "admin.discussions.loadFailed"), error);
   }
 }
-export async function POST(ctx: ForumRequestRuntime, request: Request) {
+export async function POST(ctx: ForumRequestRuntime, request: Request, locale: UiLocale) {
   try {
-    const auth = await requireForumUser(ctx, request, permissions);
-    const input = await readForumJson(request);
-    if (input.op === "tag") await manageForumTag(ctx, auth.user, input);
+    const auth = await requireForumUser(ctx, request, permissions, locale);
+    const input = await readForumJson(request, locale);
+    if (input.op === "tag") await manageForumTag(ctx, auth.user, input, locale);
     else if (input.op === "moderate")
-      await moderateForum(ctx, auth.user, input);
-    else throw new HttpError(400, "管理动作无效。");
+      await moderateForum(ctx, auth.user, input, locale);
+    else throw new HttpError(400, translate(locale, "admin.discussions.invalidAction"));
     return jsonResponse(
       { ok: true },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    return jsonError("管理操作失败。", error);
+    return jsonError(translate(locale, "admin.discussions.operationFailed"), error);
   }
 }

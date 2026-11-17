@@ -1,3 +1,6 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
 import { useDocumentNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import { ApiResponseError } from "@/lib/ui/api-response";
 import { Timestamp } from "@/app/components/ui/timestamp";
@@ -21,7 +24,7 @@ import { interactiveContent } from "@/lib/forum-state";
 import { cn } from "@/lib/ui/cn";
 import { MessageSquare, ThumbsUp, UserRound } from "lucide-react";
 import { Fragment, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
-import { Link, useLocation, useNavigate, useNavigationType, useRevalidator, useRouteLoaderData } from "react-router";
+import { useLocation, useNavigate, useNavigationType, useRevalidator, useRouteLoaderData } from "react-router";
 import { type ForumDialogAction, type ForumMenuItem, ForumActionDialog, ForumMenu } from "./actions";
 import { ForumHistoryDialog } from "./history";
 
@@ -94,6 +97,9 @@ export function DiscussionWorkspace({
   returnTo,
   initialReply,
 }: Props) {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const navigationLocale = useNavigationLocale();
   const root = useRouteLoaderData<typeof rootLoader>("root");
   const isPostAuthorHidden = useIsPostAuthorHidden();
   const hideDeletedContent = root?.session?.preferences.hideDeletedContent ?? false;
@@ -172,11 +178,13 @@ export function DiscussionWorkspace({
   const navigateAccepted = navigate;
   const restoreSequence = useRef(0);
   const cacheErrorShown = useRef(false);
+  const draftFeedback = useRef({ toast, t });
+  draftFeedback.current = { toast, t };
   const reportCacheError = useCallback(() => {
     if (cacheErrorShown.current) return;
     cacheErrorShown.current = true;
-    toast.error("无法读写本地草稿，请检查浏览器存储空间或权限。");
-  }, [toast]);
+    draftFeedback.current.toast.error(draftFeedback.current.t("forum.draftStorage"));
+  }, []);
   const topicId = initialDetail?.topic.id;
   useEffect(() => {
     if (userId === undefined) return;
@@ -353,7 +361,7 @@ export function DiscussionWorkspace({
       if (e instanceof ApiResponseError && e.status === 404) {
         if (removed) removalFocus.current = { targetId: null };
         setUnavailable(true);
-      } else toast.error(e instanceof Error ? e.message : "加载失败。");
+      } else toast.error(e instanceof Error ? e.message : t("forum.loadFailed"));
     }
   }
   async function switchDraft(next: ForumDraft | null) {
@@ -412,7 +420,7 @@ export function DiscussionWorkspace({
       setError("");
       setRequestError(null);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "读取失败。");
+      toast.error(e instanceof Error ? e.message : t("forum.readFailed"));
     }
   }
   async function submitDraft(draft: ForumDraft) {
@@ -433,6 +441,7 @@ export function DiscussionWorkspace({
           setDraft((current) => (current ? { ...current, images } : current));
           setUploadProgress(progress);
         },
+        locale,
       );
       setUploadProgress("");
       const result = await forumRequest<{ href: string; topicId: number }>(
@@ -463,14 +472,16 @@ export function DiscussionWorkspace({
       setDraft(null);
       toast.success(
         draft.target
-          ? "修改已保存。"
+          ? t("comment.saved")
           : draft.mode === "topic"
-            ? "主题已发布。"
-            : "回复已发表。",
+            ? t("forum.topicPosted")
+            : t("forum.replyPosted"),
       );
       const destination = new URL(result.href, window.location.origin);
       if (listReturn && listReturn !== "/discussions")
         destination.searchParams.set("from", listReturn);
+      if (navigationLocale && destination.origin === window.location.origin)
+        destination.searchParams.set(UI_LOCALE_PARAM, navigationLocale);
       if (detail?.topic.id === result.topicId) {
         const href = destination.pathname + destination.search + destination.hash;
         if (destination.pathname + destination.search !== location.pathname + location.search) {
@@ -488,10 +499,10 @@ export function DiscussionWorkspace({
     } catch (e) {
       const message =
         e instanceof ApiResponseError && e.status === 0
-          ? "网络连接失败，内容已保留，请重试。"
+          ? t("forum.connectionDraft")
           : e instanceof Error
             ? e.message
-            : "发布失败，请重试。";
+            : t("forum.postFailed");
       toast.error(message);
       if (e instanceof ApiResponseError && (e.status === 401 || e.status === 409))
         setError(message);
@@ -514,27 +525,27 @@ export function DiscussionWorkspace({
         : { kind: content.kind, id: content.id };
     const base = {
       target,
-      summary: `${detail.topic.title} · #${content.postNumber}${content.kind === "comment" ? " 楼中楼" : ""}`,
+      summary: `${detail.topic.title} · #${content.postNumber}${content.kind === "comment" ? ` ${t("forum.nestedSuffix")}` : ""}`,
       topicRevision: detail.topic.revision,
     };
     const items: ForumMenuItem[] = [];
-    if (viewer?.moderate) items.push({ label: "编辑历史", run: () => setSelectedHistory(target) });
+    if (viewer?.moderate) items.push({ label: t("work.sidebar.history"), run: () => setSelectedHistory(target) });
     if (content.capabilities.edit)
-      items.push({ label: "编辑", run: () => void edit(content) });
+      items.push({ label: t("core.action.edit"), run: () => void edit(content) });
     if (content.capabilities.delete)
       items.push({
-        label: "删除",
+        label: t("comment.delete"),
         danger: true,
         run: () => void openAction({ ...base, kind: "delete" }),
       });
     if (content.capabilities.report)
       items.push({
-        label: "举报",
+        label: t("forum.report"),
         run: () => void openAction({ ...base, kind: "report" }),
       });
     if (content.capabilities.moderate)
       items.push({
-        label: content.state === "hidden" ? "恢复" : "隐藏",
+        label: content.state === "hidden" ? t("forum.restore") : t("forum.hide"),
         run: () =>
           void openAction({
             ...base,
@@ -547,11 +558,11 @@ export function DiscussionWorkspace({
   const topic = detail?.topic;
   const topicMenu: ForumMenuItem[] = topic
     ? [
-        ...(viewer?.moderate ? [{ label: "编辑历史", run: () => setSelectedHistory({ kind: "topic", id: topic.id }) }] : []),
+        ...(viewer?.moderate ? [{ label: t("work.sidebar.history"), run: () => setSelectedHistory({ kind: "topic", id: topic.id }) }] : []),
         ...(topic.capabilities.edit
           ? [
               {
-                label: "编辑主题",
+                label: t("forum.editTopic"),
                 run: () => void edit({ kind: "topic", id: topic.id }),
               },
             ]
@@ -559,7 +570,7 @@ export function DiscussionWorkspace({
         ...(topic.capabilities.report
           ? [
               {
-                label: "请求处理",
+                label: t("forum.requestReview"),
                 run: () =>
                   void openAction({
                     kind: "report",
@@ -574,7 +585,7 @@ export function DiscussionWorkspace({
         ...(topic.capabilities.delete
           ? [
               {
-                label: "删除主题",
+                label: t("forum.deleteTopic"),
                 danger: true,
                 run: () =>
                   void openAction({
@@ -589,10 +600,10 @@ export function DiscussionWorkspace({
         ...(topic.capabilities.moderate
           ? (
               [
-                { label: topic.pinned ? "取消置顶" : "置顶", action: topic.pinned ? "unpin" : "pin" },
-                { label: "隐藏主题", action: "hide" },
+                { label: topic.pinned ? t("comment.unpin") : t("comment.pin"), action: topic.pinned ? "unpin" : "pin" },
+                { label: t("forum.hideTopic"), action: "hide" },
                 {
-                  label: topic.locked ? "解锁" : "锁定",
+                  label: topic.locked ? t("forum.unlock") : t("forum.lock"),
                   action: topic.locked ? "unlock" : "lock",
                 },
               ] as const
@@ -611,7 +622,7 @@ export function DiscussionWorkspace({
         ...(topic.capabilities.sage
           ? [
               {
-                label: topic.saged ? "取消 SAGE" : "SAGE",
+                label: topic.saged ? t("forum.unsage") : "SAGE",
                 run: () =>
                   void openAction({
                     kind: "moderate",
@@ -627,10 +638,10 @@ export function DiscussionWorkspace({
           ? (
               [
                 {
-                  label: topic.featured ? "取消加精" : "加精",
+                  label: topic.featured ? t("forum.unfeature") : t("forum.feature"),
                   action: topic.featured ? "unfeature" : "feature",
                 },
-                { label: "调整 TAG", action: "tags" },
+                { label: t("forum.editTags"), action: "tags" },
               ] as const
             ).map((item) => ({
               label: item.label,
@@ -660,7 +671,7 @@ export function DiscussionWorkspace({
             disabled
             aria-busy="true"
           >
-            正在打开回复框……
+            {t("forum.openingReply")}
           </Button>
         ) : null
       }
@@ -717,7 +728,7 @@ export function DiscussionWorkspace({
       }}
     >
       <UserRound aria-hidden className="size-4" />
-      {detail.onlyAuthor ? "取消只看楼主" : "只看楼主"}
+      {detail.onlyAuthor ? t("forum.allAuthors") : t("forum.onlyAuthor")}
     </Button>
   ) : null;
   const replyBar =
@@ -740,7 +751,7 @@ export function DiscussionWorkspace({
           editor
         ) : detail.topic.locked ? (
           <p className="py-2 text-sm text-muted">
-            主题已锁定，不能继续回复。
+            {t("forum.lockedReply")}
           </p>
         ) : viewer?.use ? (
           <Button
@@ -751,11 +762,11 @@ export function DiscussionWorkspace({
             disabled={busy || !detail.topic.capabilities.reply}
           >
             {detail.topic.capabilities.reply
-              ? "回复主题……"
-              : "当前主题不可回复"}
+              ? t("forum.replyPlaceholder")
+              : t("forum.cannotReply")}
           </Button>
         ) : viewer ? (
-          <p className="py-2 text-sm text-muted">没有使用讨论版的权限。</p>
+          <p className="py-2 text-sm text-muted">{t("forum.forumDenied")}</p>
         ) : (
           <Link
             className={forumReplyLauncherClass}
@@ -773,7 +784,7 @@ export function DiscussionWorkspace({
               }),
             )}`}
           >
-            登录后发表回复
+            {t("forum.loginReply")}
           </Link>
         )}
       </ForumReplyBar>
@@ -787,6 +798,7 @@ export function DiscussionWorkspace({
         forumHref("/discussions", {
           view: nextFeatured ? "featured" : null,
           tag: tags.map((t) => t.id).sort((a, b) => a - b),
+          [UI_LOCALE_PARAM]: navigationLocale,
         }),
       ),
     );
@@ -805,15 +817,15 @@ export function DiscussionWorkspace({
     >
       {unavailable ? (
         <>
-          <PageHeader compact title="内容不可用" />
-          <Link to={returnTo ?? "/discussions"}>返回讨论版</Link>
+          <PageHeader compact title={t("forum.unavailable")} />
+          <Link to={returnTo ?? "/discussions"}>{t("forum.back")}</Link>
         </>
       ) : detail ? (
         <>
           <BackLink
             className="mb-4"
             href={returnTo ?? "/discussions"}
-            label="返回讨论版"
+            label={t("forum.back")}
             variant="text"
           />
           {!hideTopic && <div className="mb-2 text-sm leading-relaxed">
@@ -828,7 +840,7 @@ export function DiscussionWorkspace({
             </h1>
             <div className="mt-1.5 flex items-center justify-between gap-4">
               <div className="min-w-0 text-sm text-muted">
-                由 <ForumAuthorName author={detail.topic.author} /> 发布 ·{" "}
+                {t("forum.by")}<ForumAuthorName author={detail.topic.author} /> ·{" "}
                 <Timestamp value={detail.topic.createdAt} />
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -838,7 +850,7 @@ export function DiscussionWorkspace({
             </div>
           </header>}
           {detail.posts.page > 1 ? topicPagination : null}
-          <section aria-label="帖子流">
+          <section aria-label={t("forum.postStream")}>
             {visiblePosts.map((post, index) => (
               <Fragment key={post.id}>
                 <ForumFloorView
@@ -853,6 +865,11 @@ export function DiscussionWorkspace({
                   authorFilter={post.postNumber === 1 ? authorFilter : null}
                   returnTo={returnTo}
                   onLocationChange={(href, replace, targetId) => {
+                    if (navigationLocale) {
+                      const destination = new URL(href, window.location.origin);
+                      destination.searchParams.set(UI_LOCALE_PARAM, navigationLocale);
+                      href = destination.pathname + destination.search + destination.hash;
+                    }
                     localNavigation.current = {
                       href: normalizedLocation(href),
                       targetId: targetId ?? null,
@@ -882,8 +899,8 @@ export function DiscussionWorkspace({
       ) : (
         <div className="min-w-0 lg:flex lg:gap-6">
           <aside className="hidden w-[192px] shrink-0 self-start lg:sticky lg:top-20 lg:block lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto">
-            <h2 className="mb-4 font-bold">讨论版</h2>
-            <nav className="grid gap-2" aria-label="讨论版导航">
+            <h2 className="mb-4 font-bold">{t("core.nav.discussions")}</h2>
+            <nav className="grid gap-2" aria-label={t("forum.nav")}>
               {[false, true].map((value) => (
                 <Link
                   key={String(value)}
@@ -894,11 +911,11 @@ export function DiscussionWorkspace({
                     tag: selected.map((t) => t.id),
                   })}
                 >
-                  {value ? "精品" : "最新"}
+                  {value ? t("forum.featured") : t("forum.latest")}
                 </Link>
               ))}
             </nav>
-            <h3 className="mb-2 mt-6 text-sm font-bold">常用 TAG</h3>
+            <h3 className="mb-2 mt-6 text-sm font-bold">{t("forum.popularTags")}</h3>
             <PopularTagFilter
               popular={popular}
               selected={selected}
@@ -914,18 +931,18 @@ export function DiscussionWorkspace({
           </aside>
           <div className="min-w-0 flex-1">
             <span className="sr-only" role="status">
-              {pending ? "正在更新讨论…" : ""}
+              {pending ? t("forum.updating") : ""}
             </span>
             <PageHeader
               compact
-              title="讨论版"
+              title={t("core.nav.discussions")}
               actions={
                 viewer?.use ? (
                   <Button type="button" onClick={() => newDraft("topic")}>
-                    发布主题
+                    {t("forum.publish")}
                   </Button>
                 ) : viewer ? null : (
-                  <Link to="/login?next=%2Fdiscussions">登录后发布</Link>
+                  <Link to="/login?next=%2Fdiscussions">{t("forum.loginToPost")}</Link>
                 )
               }
             />
@@ -939,7 +956,7 @@ export function DiscussionWorkspace({
                   aria-current={featured === value ? "page" : undefined}
                   onClick={() => listNavigate(value, selected)}
                 >
-                  {value ? "精品" : "最新"}
+                  {value ? t("forum.featured") : t("forum.latest")}
                 </Button>
               ))}
             </div>
@@ -985,12 +1002,12 @@ export function DiscussionWorkspace({
                 {filterError}
               </p>
             ) : visibleTopics.length ? (
-              <section aria-label="讨论主题" aria-busy={pending}>
+              <section aria-label={t("forum.topics")} aria-busy={pending}>
                 <div className="hidden gap-2 border-b border-border py-2 text-right text-xs text-muted md:grid md:grid-cols-[minmax(0,1fr)_72px_96px] lg:grid-cols-[minmax(0,1fr)_72px_72px_96px]">
                   <span className="min-w-0 flex-1" />
-                  <span className="w-[72px] shrink-0">回复</span>
-                  <span className="hidden w-[72px] shrink-0 lg:block">浏览</span>
-                  <span className="w-[96px] shrink-0">活跃</span>
+                  <span className="w-[72px] shrink-0">{t("forum.replyHeading")}</span>
+                  <span className="hidden w-[72px] shrink-0 lg:block">{t("work.stats.viewsShort")}</span>
+                  <span className="w-[96px] shrink-0">{t("forum.active")}</span>
                 </div>
                 {visibleTopics.map((item) => (
                   <article
@@ -1020,13 +1037,13 @@ export function DiscussionWorkspace({
                         <ForumAuthorName author={item.author} />
                         <span className="md:hidden">
                           {" "}
-                          · {item.replies} 回复 ·{" "}
+                          · {t("forum.replyCount", { count: item.replies })} ·{" "}
                           <Timestamp value={item.activeAt} format="duration" />
                         </span>
                         {item.lastAuthor && !isPostAuthorHidden(item.lastAuthor.id) ? (
                           <span className="hidden md:inline">
                             {" "}
-                            · 最后回复：
+                            · {t("forum.lastReply")}
                             <ForumAuthorName author={item.lastAuthor} />
                           </span>
                         ) : null}
@@ -1048,10 +1065,10 @@ export function DiscussionWorkspace({
               <EmptyState
                 title={
                   selected.length
-                    ? "这个 TAG 下还没有主题。"
+                    ? t("forum.emptyTag")
                     : featured
-                      ? "还没有精品主题。"
-                      : "还没有主题。"
+                      ? t("forum.emptyFeatured")
+                      : t("forum.empty")
                 }
               />
             )}
@@ -1086,8 +1103,8 @@ export function DiscussionWorkspace({
           onSuccess={() => {
             toast.success(
               action.kind === "report"
-                ? "已提交，处理结果不会公开显示。"
-                : "操作已保存。",
+                ? t("forum.reportSent")
+                : t("forum.actionSaved"),
             );
             if (action.kind !== "report") void refreshDetail(
               action.kind === "delete" || action.action === "hide"
@@ -1133,6 +1150,7 @@ function ForumFloorView({
   editor: React.ReactNode;
   onLocationChange: (href: string, replace?: boolean, targetId?: string) => void;
 }) {
+  const t = useMessages();
   const location = useLocation();
   const toast = useToast();
   const isPostAuthorHidden = useIsPostAuthorHidden();
@@ -1209,7 +1227,7 @@ function ForumFloorView({
         `floor-comments-${post.id}`,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "加载失败。");
+      setError(e instanceof Error ? e.message : t("forum.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -1230,7 +1248,7 @@ function ForumFloorView({
     } catch (e) {
       setLiked(!next);
       setLikes((n) => n + (next ? -1 : 1));
-      toast.error(e instanceof Error ? e.message : "点赞失败。");
+      toast.error(e instanceof Error ? e.message : t("forum.likeFailed"));
     } finally {
       setLiking(false);
     }
@@ -1257,10 +1275,10 @@ function ForumFloorView({
         { op: "like", target: { kind: "comment", id: comment.id }, liked: next },
       );
       updateCommentLike(comment.id, { liked: result.liked, likes: result.likes });
-      setCommentLikeStatus(`${result.liked ? "已赞这条回复" : "已取消赞"}，${result.likes} 个赞。`);
+      setCommentLikeStatus(t("forum.likeStatus", { liked: result.liked ? "yes" : "no", count: result.likes }));
     } catch (e) {
       updateCommentLike(comment.id, { liked: comment.liked, likes: comment.likes });
-      toast.error(e instanceof Error ? e.message : "点赞失败。");
+      toast.error(e instanceof Error ? e.message : t("forum.likeFailed"));
     } finally {
       pendingCommentLikes.current.delete(comment.id);
       setLikingComments([...pendingCommentLikes.current]);
@@ -1295,7 +1313,7 @@ function ForumFloorView({
           <>
             <ForumImages
               diceKey={`${topic.id}/${post.postNumber}`}
-              body={post.body || (post.images.length ? "" : "图片已移除。")}
+              body={post.body || (post.images.length ? "" : t("forum.imagesRemoved"))}
               images={post.images}
               emojis={emojis}
             />
@@ -1303,10 +1321,10 @@ function ForumFloorView({
         ) : (
           <p className="text-sm text-muted">
             {post.state === "deleted"
-              ? "该回复已删除。"
+              ? t("comment.deletedReply")
               : post.state === "hidden"
-                ? "该回复已由管理员隐藏。"
-                : "内容不可用。"}
+                ? t("forum.replyHidden")
+                : t("forum.contentUnavailable")}
           </p>
         ))}
         {!hidePost && <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-muted">
@@ -1323,7 +1341,7 @@ function ForumFloorView({
             </Link>
             <span>·</span>
             <Timestamp value={post.createdAt} />
-            {post.editedAt ? " · 已编辑" : ""}
+            {post.editedAt ? ` · ${t("comment.edited")}` : ""}
           </span>
           <div className="ml-auto flex items-center gap-0">
             {post.capabilities.like || post.body !== null ? (
@@ -1337,7 +1355,7 @@ function ForumFloorView({
                 type="button"
                 disabled={!post.capabilities.like || liking}
                 aria-label={
-                  liked ? `取消赞，${likes} 个赞` : `赞，${likes} 个赞`
+                  t("comment.likeCount", { state: liked ? "unlike" : "like", count: likes })
                 }
                 aria-pressed={liked}
                 onClick={() => void toggleLike()}
@@ -1362,7 +1380,7 @@ function ForumFloorView({
                 onClick={() => onReply(post)}
               >
                 <MessageSquare className="size-4" />
-                回复
+                {t("comment.reply")}
               </Button>
             ) : null}
             {!viewer && post.postNumber > 1 && post.body !== null && !topic.locked ? (
@@ -1379,7 +1397,7 @@ function ForumFloorView({
                   }) + `#post-${post.postNumber}`,
                 )}`}
               >
-                登录后回复
+                {t("forum.loginShortReply")}
               </Link>
             ) : null}
             <ForumMenu items={menu(post)} />
@@ -1388,7 +1406,7 @@ function ForumFloorView({
         {post.postNumber > 1 && post.commentsAvailable && (visibleComments.length > 0 || post.comments.total > FORUM_PREVIEW_SIZE || editor) ? (
           <section
             id={`floor-comments-${post.id}`}
-            aria-label={`#${post.postNumber}的回复`}
+            aria-label={t("comment.replies", { floor: post.postNumber })}
             tabIndex={-1}
             className={nestedRepliesClassName}
           >
@@ -1398,7 +1416,7 @@ function ForumFloorView({
                 id={`comment-${comment.id}`}
                 metadata={<>
                     <Timestamp value={comment.createdAt} />
-                    {comment.editedAt ? " · 已编辑" : ""}
+                    {comment.editedAt ? ` · ${t("comment.edited")}` : ""}
                 </>}
                 actions={<>
                   {comment.body !== null ? (
@@ -1408,7 +1426,7 @@ function ForumFloorView({
                       variant="ghost"
                       type="button"
                       disabled={!comment.capabilities.like || loading || likingComments.includes(comment.id)}
-                      aria-label={`${comment.liked ? "取消赞" : "赞"}，${comment.likes} 个赞`}
+                      aria-label={t("comment.likeCount", { state: comment.liked ? "unlike" : "like", count: comment.likes })}
                       aria-pressed={comment.liked}
                       onClick={() => void toggleCommentLike(comment)}
                     >
@@ -1428,7 +1446,7 @@ function ForumFloorView({
                       type="button"
                       onClick={() => onReply(post, comment)}
                     >
-                      回复
+                      {t("comment.reply")}
                     </Button>
                   ) : null}
                   <ForumMenu items={menu(comment)} />
@@ -1440,15 +1458,15 @@ function ForumFloorView({
                       {comment.replyTo && !isPostAuthorHidden(comment.replyTo.author?.id) ? (
                         <>
                           {" "}
-                          回复{" "}
+                          {t("forum.replyPrefix")}
                           {comment.replyTo.author ? (
                             <ForumAuthorName author={comment.replyTo.author} />
                           ) : (
-                            "一条已不可用的回复"
+                            t("comment.unavailableReply")
                           )}
                         </>
                       ) : null}
-                      ：
+                      {" · "}
                       <ForumBody
                         body={comment.body!}
                         emojis={commentEmojis}
@@ -1458,10 +1476,10 @@ function ForumFloorView({
                   ) : (
                     <span className="text-muted">
                       {comment.state === "deleted"
-                        ? "该回复已删除。"
+                        ? t("comment.deletedReply")
                         : comment.state === "hidden"
-                          ? "该回复已由管理员隐藏。"
-                          : "内容不可用。"}
+                          ? t("forum.replyHidden")
+                          : t("forum.contentUnavailable")}
                     </span>
                   )}
               </NestedReply>
@@ -1491,15 +1509,15 @@ function ForumFloorView({
                 }}
               >
                 {loading
-                  ? "正在加载…"
+                  ? t("comment.loading")
                   : expanded
-                    ? "收起回复"
-                    : `展开剩余 ${post.comments.total - preview.length} 条回复`}
+                    ? t("comment.collapse")
+                    : t("comment.expand", { count: post.comments.total - preview.length })}
               </Button>
             ) : null}
             {expanded && comments.total > comments.pageSize ? (
               <PaginationLinks
-                ariaLabel={`#${post.postNumber} 楼中楼分页`}
+                ariaLabel={t("comment.repliesPagination", { floor: post.postNumber })}
                 className="my-2"
                 page={comments.page}
                 pageSize={comments.pageSize}
@@ -1520,7 +1538,7 @@ function ForumFloorView({
               variant="ghost"
               onClick={() => void load(comments.page)}
             >
-              重试
+              {t("core.action.retry")}
             </Button>
           </p>
         ) : null}

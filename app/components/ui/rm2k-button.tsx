@@ -5,7 +5,7 @@ import type {
   MouseEventHandler,
   ReactNode,
 } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 type Rm2kButtonProps = {
   [attribute: `data-${string}`]: string | number | boolean | undefined;

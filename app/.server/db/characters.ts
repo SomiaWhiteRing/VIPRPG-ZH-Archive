@@ -26,16 +26,16 @@ type FaceSheetChoice = {
 
 export function parseCharacterSelection(value: unknown): CharacterSelection {
   if (!isRecord(value) || (value.kind !== "existing" && value.kind !== "new")) {
-    throw new HttpError(400, "角色选择格式不合法");
+    throw new HttpError(400, "角色选择格式不合法", undefined, "upload.character.error.selection");
   }
-  const originalName = requiredName(value.originalName, "角色日语名");
-  const displayName = requiredName(value.displayName, "角色登场名称");
+  const originalName = requiredName(value.originalName, "original");
+  const displayName = requiredName(value.displayName, "display");
   if (value.kind === "existing") {
     if (
       !Number.isSafeInteger(value.characterId) ||
       Number(value.characterId) <= 0
     ) {
-      throw new HttpError(400, "角色 ID 不合法");
+      throw new HttpError(400, "角色 ID 不合法", undefined, "admin.portraits.error.characterId");
     }
     return {
       kind: "existing",
@@ -47,7 +47,7 @@ export function parseCharacterSelection(value: unknown): CharacterSelection {
   return {
     kind: "new",
     originalName,
-    primaryName: requiredName(value.primaryName, "角色中文名"),
+    primaryName: requiredName(value.primaryName, "primary"),
     displayName,
   };
 }
@@ -55,9 +55,9 @@ export function parseCharacterSelection(value: unknown): CharacterSelection {
 export function parseCharacterCreditSelection(
   value: unknown,
 ): CharacterCreditSelection {
-  if (!isRecord(value)) throw new HttpError(400, "角色关联格式不合法");
+  if (!isRecord(value)) throw new HttpError(400, "角色关联格式不合法", undefined, "upload.character.error.credit");
   if (!isCharacterRoleKey(value.roleKey))
-    throw new HttpError(400, "角色身份不合法");
+    throw new HttpError(400, "角色身份不合法", undefined, "upload.character.error.identity");
   return {
     selection: parseCharacterSelection(value.selection),
     roleKey: value.roleKey,
@@ -74,9 +74,9 @@ export function parseCharacterSelectionsJson(
   try {
     parsed = JSON.parse(value);
   } catch {
-    throw new HttpError(400, "角色关联不是有效的 JSON");
+    throw new HttpError(400, "角色关联不是有效的 JSON", undefined, "upload.character.error.json");
   }
-  if (!Array.isArray(parsed)) throw new HttpError(400, "角色关联必须是数组");
+  if (!Array.isArray(parsed)) throw new HttpError(400, "角色关联必须是数组", undefined, "upload.character.error.list");
   return parsed.map(parseCharacterCreditSelection);
 }
 
@@ -293,6 +293,9 @@ async function resolveExistingCharacters(
       throw new HttpError(
         409,
         `角色“${credits[index].selection.originalName}”已不存在，请重新选择`,
+        undefined,
+        "upload.character.error.selectionGone",
+        { name: credits[index].selection.originalName },
       );
     }
     return row;
@@ -331,6 +334,9 @@ async function resolveNewCharacters(
       throw new HttpError(
         409,
         `日语名“${credits[index].selection.originalName}”对应多个角色，请从已有结果中选择`,
+        undefined,
+        "upload.character.error.nameAmbiguous",
+        { name: credits[index].selection.originalName },
       );
     }
     return rows[0] ?? null;
@@ -374,7 +380,7 @@ async function loadFaceSheetChoices(
     if (row.character_id !== null) sheet.characterIds.add(row.character_id);
   }
   if (hashes.some((hash) => !sheets.has(hash))) {
-    throw new HttpError(409, "角色头像尚未登记为脸图，请重新上传或重新选择");
+    throw new HttpError(409, "角色头像尚未登记为脸图，请重新上传或重新选择", undefined, "upload.character.error.portraitUnregistered");
   }
   return sheets;
 }
@@ -387,21 +393,21 @@ function validatePortraitChoice(
 ): FaceSheetChoice | null {
   if (!credit.portrait) return null;
   const sheet = sheets.get(credit.portrait.blobSha256);
-  if (!sheet) throw new HttpError(409, "角色头像对应的脸图不存在");
+  if (!sheet) throw new HttpError(409, "角色头像对应的脸图不存在", undefined, "upload.character.error.portraitGone");
   if (
     credit.portrait.row * 48 >= sheet.height_px ||
     credit.portrait.column * 48 >= sheet.width_px
   ) {
-    throw new HttpError(400, "角色头像坐标超出脸图范围");
+    throw new HttpError(400, "角色头像坐标超出脸图范围", undefined, "upload.character.error.portraitOutside");
   }
   if (sheet.library_status === "rejected") {
-    throw new HttpError(409, "这张脸图已被拒绝使用，请重新选择");
+    throw new HttpError(409, "这张脸图已被拒绝使用，请重新选择", undefined, "upload.character.error.portraitRejected");
   }
   if (character && sheet.characterIds.has(character.id)) return sheet;
   const mayBind =
     input.source === "admin" ||
     sheet.uploaded_by_actor === 1;
-  if (!mayBind) throw new HttpError(409, "这张脸图没有绑定到所选角色");
+  if (!mayBind) throw new HttpError(409, "这张脸图没有绑定到所选角色", undefined, "upload.character.error.portraitNotLinked");
   return sheet;
 }
 
@@ -413,16 +419,16 @@ function validateFaceSheetBindings(
 ): void {
   for (const hash of credit.faceSheetBlobSha256s) {
     const sheet = sheets.get(hash);
-    if (!sheet) throw new HttpError(409, "角色素材表尚未登记，请重新上传");
+    if (!sheet) throw new HttpError(409, "角色素材表尚未登记，请重新上传", undefined, "upload.character.error.sheetUnregistered");
     if (sheet.library_status === "rejected") {
-      throw new HttpError(409, "这张角色素材表已被拒绝使用，请重新选择");
+      throw new HttpError(409, "这张角色素材表已被拒绝使用，请重新选择", undefined, "upload.character.error.sheetRejected");
     }
     if (character && sheet.characterIds.has(character.id)) continue;
     if (
       input.source !== "admin" &&
       sheet.uploaded_by_actor !== 1
     ) {
-      throw new HttpError(409, "这张素材表不能绑定到所选角色");
+      throw new HttpError(409, "这张素材表不能绑定到所选角色", undefined, "upload.character.error.sheetCannotLink");
     }
   }
 }
@@ -624,21 +630,22 @@ function insertNewCharacterRelation(
     );
 }
 
-function requiredName(value: unknown, label: string): string {
-  if (typeof value !== "string") throw new HttpError(400, `${label}格式不合法`);
+function requiredName(value: unknown, field: "original" | "display" | "primary"): string {
+  const label = field === "original" ? "角色日语名" : field === "display" ? "角色登场名称" : "角色中文名";
+  if (typeof value !== "string") throw new HttpError(400, `${label}格式不合法`, undefined, "upload.character.error.nameFormat", { field });
   const normalized = normalizeEntityName(value);
-  if (!normalized) throw new HttpError(400, `${label}不能为空`);
+  if (!normalized) throw new HttpError(400, `${label}不能为空`, undefined, "upload.character.error.nameRequired", { field });
   return normalized;
 }
 
 function parsePortraitChoice(value: unknown): CharacterPortraitChoice | null {
   if (value === undefined || value === null || value === "") return null;
-  if (!isRecord(value)) throw new HttpError(400, "角色头像选择格式不合法");
+  if (!isRecord(value)) throw new HttpError(400, "角色头像选择格式不合法", undefined, "upload.character.error.portraitFormat");
   let blobSha256: string;
   try {
     blobSha256 = normalizeSha256(String(value.blobSha256 ?? ""));
   } catch {
-    throw new HttpError(400, "角色头像哈希格式不合法");
+    throw new HttpError(400, "角色头像哈希格式不合法", undefined, "upload.character.error.portraitHash");
   }
   const row = Number(value.row);
   const column = Number(value.column);
@@ -648,18 +655,18 @@ function parsePortraitChoice(value: unknown): CharacterPortraitChoice | null {
     !Number.isSafeInteger(column) ||
     column < 0
   ) {
-    throw new HttpError(400, "角色头像坐标不合法");
+    throw new HttpError(400, "角色头像坐标不合法", undefined, "upload.character.error.portraitCoordinates");
   }
   return { blobSha256, row, column };
 }
 
 function parseFaceSheetHashes(value: unknown): string[] {
   if (!Array.isArray(value))
-    throw new HttpError(400, "角色素材表列表格式不合法");
+    throw new HttpError(400, "角色素材表列表格式不合法", undefined, "upload.character.error.sheetList");
   try {
     return [...new Set(value.map((hash) => normalizeSha256(String(hash))))];
   } catch {
-    throw new HttpError(400, "角色素材表哈希格式不合法");
+    throw new HttpError(400, "角色素材表哈希格式不合法", undefined, "upload.character.error.sheetHash");
   }
 }
 

@@ -1,3 +1,6 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { searchCatalogsForOwner } from "@/app/.server/db/catalogs";
 import {
@@ -27,11 +30,11 @@ import {
   canPublishWork,
   hasPermission,
 } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { RecentCommentList } from "@/app/components/profile/recent-comment-list";
 import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -57,11 +60,12 @@ export async function loader(args: LoaderFunctionArgs) {
       showUploads
         ? searchUploadedWorks(runtime, { userId: user.id, pageSize: 3 })
         : Promise.resolve(null),
-      ownUserDiscussions(getForumRuntime(runtime), user, { pageSize: 3 }),
+      ownUserDiscussions(getForumRuntime(runtime), user, { pageSize: 3, locale: runtime.uiLocale }),
       listOwnUserFollows(runtime, user, "following", null, 15),
     ]);
 
   return {
+    locale: runtime.uiLocale,
     user: pickPageFields(user, [
       "profileVisibility",
       "avatarBlobSha256",
@@ -81,10 +85,13 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: "个人中心" }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "header.me") }, error, locale);
+};
 
 export default function MePage() {
+  const t = useMessages();
   const {
     user,
     played,
@@ -100,21 +107,21 @@ export default function MePage() {
       <AccountPageHeader
         actions={
           <Button asChild size="sm" variant="outline">
-            <Link to={`/users/${user.id}`}>查看访客页</Link>
+            <Link to={`/users/${user.id}`}>{t("account.overview.visitor")}</Link>
           </Button>
         }
-        title="个人中心"
+        title={t("header.me")}
       />
       <AccountSection
         href="/me/profile"
         divided={false}
         status={
           !user.profileVisibility.bio ? (
-            <Badge variant="outline">简介未在个人主页展示</Badge>
+            <Badge variant="outline">{t("account.overview.bioPrivate")}</Badge>
           ) : undefined
         }
-        title="资料摘要"
-        linkText="编辑个人资料 →"
+        title={t("account.overview.summary")}
+        linkText={t("account.overview.edit")}
       >
         <div className="flex items-center gap-4">
           <UserAvatar
@@ -133,7 +140,7 @@ export default function MePage() {
               </span>
             </div>
             <p className="mt-1 line-clamp-2 whitespace-pre-wrap wrap-anywhere text-sm text-muted">
-              {user.bio || "还没有填写简介。"}
+              {user.bio || t("account.overview.noBio")}
             </p>
           </div>
         </div>
@@ -142,16 +149,16 @@ export default function MePage() {
         href="/me/history"
         status={
           !user.profileVisibility.history ? (
-            <Badge variant="outline">未在个人主页展示</Badge>
+            <Badge variant="outline">{t("account.overview.private")}</Badge>
           ) : undefined
         }
-        title="最近游玩"
+        title={t("publicProfile.history")}
       >
         {played.items.length ? (
           <AccountWorkGrid items={played.items} showPlayedAt />
         ) : (
           <AccountEmpty>
-            暂无游玩记录
+            {t("account.overview.noHistory")}
           </AccountEmpty>
         )}
       </AccountSection>
@@ -159,16 +166,16 @@ export default function MePage() {
         href="/me/favorites"
         status={
           !user.profileVisibility.favorites ? (
-            <Badge variant="outline">未在个人主页展示</Badge>
+            <Badge variant="outline">{t("account.overview.private")}</Badge>
           ) : undefined
         }
-        title="最近收藏"
+        title={t("publicProfile.favorites")}
       >
         {favorites.items.length ? (
           <AccountWorkGrid items={favorites.items} />
         ) : (
           <AccountEmpty>
-            暂无收藏
+            {t("account.overview.noFavorites")}
           </AccountEmpty>
         )}
       </AccountSection>
@@ -176,45 +183,45 @@ export default function MePage() {
         href="/me/catalogs"
         status={
           !user.profileVisibility.catalogs ? (
-            <Badge variant="outline">未在个人主页展示</Badge>
+            <Badge variant="outline">{t("account.overview.private")}</Badge>
           ) : undefined
         }
-        title="我的目录"
+        title={t("account.nav.catalogs")}
       >
         {catalogs.items.length ? (
           <CatalogSummaryList items={catalogs.items} preview />
         ) : (
-          <AccountEmpty>暂无目录</AccountEmpty>
+          <AccountEmpty>{t("account.activity.noCatalogs")}</AccountEmpty>
         )}
       </AccountSection>
       <AccountSection
         href="/me/comments"
         status={
           !user.profileVisibility.comments ? (
-            <Badge variant="outline">未在个人主页展示</Badge>
+            <Badge variant="outline">{t("account.overview.private")}</Badge>
           ) : undefined
         }
-        title="我的评论"
+        title={t("account.nav.comments")}
       >
         {comments.items.length ? (
           <RecentCommentList items={comments.items} />
         ) : (
-          <AccountEmpty>浏览作品或作者资料并留下第一条评论。</AccountEmpty>
+          <AccountEmpty>{t("account.overview.firstComment")}</AccountEmpty>
         )}
       </AccountSection>
       <AccountSection
         href="/me/discussions"
         status={
           !user.profileVisibility.discussions ? (
-            <Badge variant="outline">未在个人主页展示</Badge>
+            <Badge variant="outline">{t("account.overview.private")}</Badge>
           ) : undefined
         }
-        title="最近讨论"
+        title={t("publicProfile.discussions")}
       >
         <DiscussionList items={discussions.items} compact />
       </AccountSection>
       {uploads ? (
-        <AccountSection href="/me/uploads" title="最近上传">
+        <AccountSection href="/me/uploads" title={t("account.overview.uploads")}>
           {uploads.items.length ? (
             <ul className="divide-y divide-border border-t border-border">
               {uploads.items.map((work, index) => (
@@ -242,10 +249,10 @@ export default function MePage() {
             <AccountEmpty>
               {canPublishWork(user) ? (
                 <>
-                  暂无上传 · <Link to="/upload">发布作品</Link>
+                  {t("account.overview.noUploads")} · <Link to="/upload">{t("account.overview.publish")}</Link>
                 </>
               ) : (
-                "还没有负责维护的作品。"
+                t("account.overview.noMaintained")
               )}
             </AccountEmpty>
           )}
@@ -254,7 +261,7 @@ export default function MePage() {
       <FriendSection
         href="/me/connections?view=following"
         users={friends.items}
-        status={!user.profileVisibility.friends ? <Badge variant="outline">未在个人主页展示</Badge> : undefined}
+        status={!user.profileVisibility.friends ? <Badge variant="outline">{t("account.overview.private")}</Badge> : undefined}
       />
     </div>
   );
