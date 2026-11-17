@@ -23,38 +23,42 @@ export async function listCatalogs(
   return (rows.results ?? []).map(mapSummary);
 }
 
-export async function searchCatalogsForOwner(
-  runtime: AppRuntime,
-  input: {
-    userId: number;
-    query?: string;
-    page?: number;
-    pageSize?: number;
-  },
-): Promise<{
+type CatalogSearch = {
+  userId: number;
+  query?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export function searchCatalogsForOwner(runtime: AppRuntime, input: CatalogSearch, mode: "preview"): Promise<CatalogSummary[]>;
+export function searchCatalogsForOwner(runtime: AppRuntime, input: CatalogSearch): Promise<{
   items: CatalogSummary[];
   total: number;
   page: number;
   pageSize: number;
-}> {
+}>;
+export async function searchCatalogsForOwner(runtime: AppRuntime, input: CatalogSearch, mode?: "preview") {
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const database = getD1(runtime);
   const like = `%${(input.query ?? "").trim().replace(/[\\%_]/g, "\\$&")}%`;
-  const [countResult, rowsResult] = await database.batch([
+  const rowsQuery = database
+    .prepare(
+      `${CATALOG_SUMMARY_SELECT} AND c.owner_user_id=? AND c.title LIKE ? ESCAPE '\\' ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
+    )
+    .bind(input.userId, like, pageSize, (page - 1) * pageSize);
+  const [rowsResult, countResult] = mode === "preview" ? [await rowsQuery.all()] : await database.batch([
+    rowsQuery,
     database
       .prepare(
         `SELECT COUNT(*) AS count FROM catalogs WHERE owner_user_id=? AND status='published' AND title LIKE ? ESCAPE '\\'`,
       )
       .bind(input.userId, like),
-    database
-      .prepare(
-        `${CATALOG_SUMMARY_SELECT} AND c.owner_user_id=? AND c.title LIKE ? ESCAPE '\\' ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
-      )
-      .bind(input.userId, like, pageSize, (page - 1) * pageSize),
   ]);
+  const items = ((rowsResult.results ?? []) as Row[]).map(mapSummary);
+  if (!countResult) return items;
   return {
-    items: ((rowsResult.results ?? []) as Row[]).map(mapSummary),
+    items,
     total: Number(
       (countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0,
     ),

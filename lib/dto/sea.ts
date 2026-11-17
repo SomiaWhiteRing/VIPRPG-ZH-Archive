@@ -22,6 +22,7 @@ export type SeaMessage = {
 export type SeaWindow = { revision: number; font: SeaFont; messages: SeaMessage[] };
 export type SeaEvent =
   | ({ type: "snapshot" } & Omit<SeaWindow, "font">)
+  | { type: "sync"; revision: number; fontId: string }
   | { type: "message"; revision: number; message: SeaMessage };
 export type SeaSubmission = {
   clientMessageId: string;

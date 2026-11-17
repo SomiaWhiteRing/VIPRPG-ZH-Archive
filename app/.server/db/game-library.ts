@@ -340,22 +340,23 @@ export async function getPublicGameWorkSummaries(
   return hydrate(runtime, rows);
 }
 
-export async function searchUserWorks(
-  runtime: AppRuntime,
-  input: {
-    userId: number;
-    kind: "favorite" | "played";
-    publicOnly?: boolean;
-    tag?: string;
-    page?: number;
-    pageSize?: number;
-  },
-): Promise<{
+type UserWorksSearch = {
+  userId: number;
+  kind: "favorite" | "played";
+  publicOnly?: boolean;
+  tag?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export function searchUserWorks(runtime: AppRuntime, input: UserWorksSearch, mode: "preview"): Promise<UserWorkListItem[]>;
+export function searchUserWorks(runtime: AppRuntime, input: UserWorksSearch): Promise<{
   items: UserWorkListItem[];
   total: number;
   page: number;
   pageSize: number;
-}> {
+}>;
+export async function searchUserWorks(runtime: AppRuntime, input: UserWorksSearch, mode?: "preview") {
   const pageSize = clamp(input.pageSize ?? 20, 1, 100);
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const column = input.kind === "favorite" ? "favorited_at" : "last_played_at";
@@ -365,17 +366,18 @@ export async function searchUserWorks(
   const access = workReadCondition(input.publicOnly === false && viewer?.id === input.userId ? viewer : null);
   const binds: Array<string | number> = [input.userId, ...access.binds, ...(tag ? [tag] : [])];
   const database = getD1(runtime);
-  const [countResult, rowsResult] = await database.batch([
+  const rowsQuery = database
+    .prepare(
+      `SELECT ${summarySql()},e.${column} AS occurred_at,${input.kind === "favorite" ? "e.favorite_note" : "''"} AS favorite_note FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND ${access.sql} ${tagFilter} GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`,
+    )
+    .bind(...binds, pageSize, (page - 1) * pageSize);
+  const [rowsResult, countResult] = mode === "preview" ? [await rowsQuery.all()] : await database.batch([
+    rowsQuery,
     database
       .prepare(
         `SELECT COUNT(*) AS count FROM user_work_entries e JOIN works w ON w.id=e.work_id WHERE e.user_id=? AND e.${column} IS NOT NULL AND ${access.sql} ${tagFilter}`,
       )
       .bind(...binds),
-    database
-      .prepare(
-        `SELECT ${summarySql()},e.${column} AS occurred_at,${input.kind === "favorite" ? "e.favorite_note" : "''"} AS favorite_note FROM user_work_entries e JOIN works w ON w.id=e.work_id LEFT JOIN archive_versions av ON av.work_id=w.id AND av.status='published' AND av.is_current=1 WHERE e.user_id=? AND e.${column} IS NOT NULL AND ${access.sql} ${tagFilter} GROUP BY w.id ORDER BY e.${column} DESC,w.id DESC LIMIT ? OFFSET ?`,
-      )
-      .bind(...binds, pageSize, (page - 1) * pageSize),
   ]);
   const rows = (rowsResult.results ?? []) as Array<
     SummaryRow & { occurred_at: string; favorite_note: string }
@@ -393,12 +395,14 @@ export async function searchUserWorks(
     tags.push(row.name);
     tagsByWork.set(row.work_id, tags);
   }
+  const items = works.map((work, index) => ({
+    work,
+    occurredAt: rows[index].occurred_at,
+    favorite: input.kind === "favorite" ? { tags: tagsByWork.get(work.id) ?? [], note: rows[index].favorite_note } : null,
+  }));
+  if (!countResult) return items;
   return {
-    items: works.map((work, index) => ({
-      work,
-      occurredAt: rows[index].occurred_at,
-      favorite: input.kind === "favorite" ? { tags: tagsByWork.get(work.id) ?? [], note: rows[index].favorite_note } : null,
-    })),
+    items,
     total: Number(
       (countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0,
     ),

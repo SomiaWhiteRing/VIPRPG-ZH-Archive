@@ -29,18 +29,20 @@ export function crawlerResponse(request: Request): Response | null {
   const cf = (request as Request & { cf?: { verifiedBotCategory?: string } }).cf;
   const bulkCrawler = (request.method === "GET" || request.method === "HEAD") &&
     bulkCrawlerCategories.has(cf?.verifiedBotCategory ?? "");
-  if (!metaCrawler && !bulkCrawler) return null;
+  const metaWebIndexer = request.method === "GET" && cf?.verifiedBotCategory === "Page Preview" &&
+    /\bmeta-webindexer\b/i.test(request.headers.get("user-agent") ?? "");
+  if (!metaCrawler && !bulkCrawler && !metaWebIndexer) return null;
   const url = new URL(request.url);
   const games = /^\/games(?:\.data)?\/?$/.test(url.pathname);
   if ((metaCrawler && url.pathname !== "/robots.txt") ||
-      /^\/api\/archive-versions\/\d+\/(?:download|kai-import)\/?$/.test(url.pathname) ||
+      (bulkCrawler && /^\/api\/archive-versions\/\d+\/(?:download|kai-import)\/?$/.test(url.pathname)) ||
       (games && isFilteredGameList(url.searchParams))) {
     return new Response(request.method === "HEAD" ? null : "This endpoint is not available for automated crawling.", {
       status: 403,
       headers: { "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow" },
     });
   }
-  if (games && !url.pathname.endsWith(".data")) {
+  if (bulkCrawler && games && !url.pathname.endsWith(".data")) {
     const destination = new URL(gameListCanonicalPath(url.searchParams), url.origin);
     const locale = parseUiLocale(url.searchParams.get(UI_LOCALE_PARAM));
     if (locale) destination.searchParams.set(UI_LOCALE_PARAM, locale);

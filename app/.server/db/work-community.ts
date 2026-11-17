@@ -516,21 +516,22 @@ function replyRowsStatement(
     );
 }
 
-export async function searchUserComments(
-  runtime: AppRuntime,
-  input: {
-    userId: number;
-    publicOnly?: boolean;
-    kind?: CommentTarget["kind"];
-    page?: number;
-    pageSize?: number;
-  },
-): Promise<{
+type UserCommentsSearch = {
+  userId: number;
+  publicOnly?: boolean;
+  kind?: CommentTarget["kind"];
+  page?: number;
+  pageSize?: number;
+};
+
+export function searchUserComments(runtime: AppRuntime, input: UserCommentsSearch, mode: "preview"): Promise<UserCommentSummary[]>;
+export function searchUserComments(runtime: AppRuntime, input: UserCommentsSearch): Promise<{
   items: UserCommentSummary[];
   total: number;
   page: number;
   pageSize: number;
-}> {
+}>;
+export async function searchUserComments(runtime: AppRuntime, input: UserCommentsSearch, mode?: "preview") {
   const pageSize = Math.max(1, Math.min(100, Math.floor(input.pageSize ?? 20)));
   const page = Math.max(1, Math.floor(input.page ?? 1));
   const access = commentTargetReadCondition(await getCurrentUser(runtime));
@@ -544,18 +545,19 @@ export async function searchUserComments(
   const from = `${base} LEFT JOIN works w ON w.id=c.work_id LEFT JOIN creators cr ON cr.id=c.creator_id LEFT JOIN characters ch ON ch.id=c.character_id LEFT JOIN catalogs catalog ON catalog.id=c.catalog_id
     ${DEFAULT_CHARACTER_PORTRAIT_JOINS} AND ${PUBLIC_CHARACTER_PORTRAIT_CONDITION} ${where}`;
   const database = getD1(runtime);
-  const [countResult, rowsResult] = await database.batch([
+  const rowsQuery = database
+    .prepare(
+      `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.catalog_id,CASE WHEN c.work_id IS NOT NULL THEN COALESCE(w.chinese_title,w.original_title) WHEN c.creator_id IS NOT NULL THEN cr.name WHEN c.catalog_id IS NOT NULL THEN catalog.title ELSE ch.primary_name END AS target_title,
+      COALESCE(catalog.cover_blob_sha256,(SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id WHERE wma.work_id=COALESCE(w.id,
+        (SELECT ci.work_id FROM catalog_items ci JOIN public_works cw ON cw.id=ci.work_id WHERE ci.catalog_id=c.catalog_id ORDER BY ci.sort_order,ci.work_id DESC LIMIT 1))
+        AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1)) AS cover_blob_sha256,
+      cr.avatar_blob_sha256,${CHARACTER_PORTRAIT_COLUMNS},
+      COALESCE(c.body,'') AS body,(SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count,c.status,c.updated_at,(SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
+    )
+    .bind(...binds, pageSize, (page - 1) * pageSize);
+  const [rowsResult, countResult] = mode === "preview" ? [await rowsQuery.all()] : await database.batch([
+    rowsQuery,
     database.prepare(`SELECT COUNT(*) AS count ${base} ${where}`).bind(...binds),
-    database
-      .prepare(
-        `SELECT c.id,c.work_id,c.creator_id,c.character_id,c.catalog_id,CASE WHEN c.work_id IS NOT NULL THEN COALESCE(w.chinese_title,w.original_title) WHEN c.creator_id IS NOT NULL THEN cr.name WHEN c.catalog_id IS NOT NULL THEN catalog.title ELSE ch.primary_name END AS target_title,
-        COALESCE(catalog.cover_blob_sha256,(SELECT ma.blob_sha256 FROM work_media_assets wma JOIN media_assets ma ON ma.id=wma.media_asset_id WHERE wma.work_id=COALESCE(w.id,
-          (SELECT ci.work_id FROM catalog_items ci JOIN public_works cw ON cw.id=ci.work_id WHERE ci.catalog_id=c.catalog_id ORDER BY ci.sort_order,ci.work_id DESC LIMIT 1))
-          AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1)) AS cover_blob_sha256,
-        cr.avatar_blob_sha256,${CHARACTER_PORTRAIT_COLUMNS},
-        COALESCE(c.body,'') AS body,(SELECT COUNT(*) FROM comment_images ci WHERE ci.comment_id=c.id AND ci.status='ready') AS image_count,c.status,c.updated_at,(SELECT COUNT(*) FROM comment_likes l WHERE l.comment_id=c.id) AS like_count ${from} ORDER BY c.updated_at DESC,c.id DESC LIMIT ? OFFSET ?`,
-      )
-      .bind(...binds, pageSize, (page - 1) * pageSize),
   ]);
   const rows = (rowsResult.results ?? []) as Array<{
     id: number;
@@ -572,20 +574,22 @@ export async function searchUserComments(
     updated_at: string;
     like_count: number;
   } & CharacterPortraitRow>;
+  const items = rows.map((row) => ({
+    id: row.id,
+    target: commentTarget(row),
+    targetTitle: row.target_title,
+    coverBlobSha256: row.cover_blob_sha256,
+    avatarBlobSha256: row.avatar_blob_sha256,
+    portrait: mapCharacterPortrait(row),
+    body: emojiText(row.body, runtime.uiLocale),
+    imageCount: row.image_count,
+    status: row.status,
+    likeCount: row.like_count,
+    updatedAt: row.updated_at,
+  }));
+  if (!countResult) return items;
   return {
-    items: rows.map((row) => ({
-      id: row.id,
-      target: commentTarget(row),
-      targetTitle: row.target_title,
-      coverBlobSha256: row.cover_blob_sha256,
-      avatarBlobSha256: row.avatar_blob_sha256,
-      portrait: mapCharacterPortrait(row),
-      body: emojiText(row.body, runtime.uiLocale),
-      imageCount: row.image_count,
-      status: row.status,
-      likeCount: row.like_count,
-      updatedAt: row.updated_at,
-    })),
+    items,
     total: Number(
       (countResult.results?.[0] as { count?: number } | undefined)?.count ?? 0,
     ),

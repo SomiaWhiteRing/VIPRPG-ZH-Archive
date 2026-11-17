@@ -37,17 +37,8 @@ function cachedInterval(object, cache, maxBytes) {
 
 export async function readDownloadCache(bucket, cache, method, rangeHeader, parseRange) {
   const start = /^bytes=(\d+)-/.exec(rangeHeader ?? "")?.[1];
-  const hash = Number.parseInt(cache.digest.slice(0, 2), 16);
-  // Existing v3 objects remain useful during the seven-day transition/rollback
-  // window. New writes use only v4; the existing sweep retires old slots.
-  const slots = [downloadCacheSegment(cache, Number(start ?? 0)),
-    { objectKey: `download-cache/v3/slots/small/${(hash % 32).toString(16).padStart(2, "0")}.zip`, maxBytes: 64 * 1024 * 1024 },
-    { objectKey: `download-cache/v3/slots/large/${(hash % 8).toString(16)}.zip`, maxBytes: 256 * 1024 * 1024 }];
-  for (const slot of slots) {
-    const result = await readSlot(bucket, { digest: cache.digest, ...slot }, method, rangeHeader, parseRange);
-    if (result) return result;
-  }
-  return null;
+  const slot = downloadCacheSegment(cache, Number(start ?? 0));
+  return readSlot(bucket, { digest: cache.digest, ...slot }, method, rangeHeader, parseRange);
 }
 
 async function readSlot(bucket, cache, method, rangeHeader, parseRange, prepared) {

@@ -7,7 +7,7 @@ import { readShowcase } from "@/app/.server/db/showcase";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { Showcase } from "@/app/components/profile/showcase";
 import { getForumRuntime } from "@/app/.server/forum/context";
-import { publicUserDiscussions } from "@/app/.server/forum/user-discussions";
+import { previewPublicUserDiscussions } from "@/app/.server/forum/user-discussions";
 import { requirePublicUser } from "@/app/.server/public-user";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -44,30 +44,27 @@ export async function loader(args: LoaderFunctionArgs) {
             userId: user.id,
             kind: "played",
             pageSize: 4,
-          })
+          }, "preview")
         : null,
       visibility.favorites
         ? searchUserWorks(runtime, {
             userId: user.id,
             kind: "favorite",
             pageSize: 4,
-          })
+          }, "preview")
         : null,
       visibility.catalogs
-        ? searchCatalogsForOwner(runtime, { userId: user.id, pageSize: 3 })
+        ? searchCatalogsForOwner(runtime, { userId: user.id, pageSize: 3 }, "preview")
         : null,
       visibility.comments
         ? searchUserComments(runtime, {
             userId: user.id,
             publicOnly: true,
             pageSize: 3,
-          })
+          }, "preview")
         : null,
       visibility.discussions
-        ? publicUserDiscussions(getForumRuntime(runtime), user.id, {
-            pageSize: 3,
-            locale: runtime.uiLocale,
-          })
+        ? previewPublicUserDiscussions(getForumRuntime(runtime), user.id, 3, runtime.uiLocale)
         : null,
     ]);
   const hasVisibleSections =
@@ -124,8 +121,8 @@ export default function PublicUserPage() {
       />
       {played ? (
         <AccountSection href={`${base}/history`} title={t("publicProfile.history")}>
-          {played.items.length ? (
-            <AccountWorkGrid items={played.items} showPlayedAt />
+          {played.length ? (
+            <AccountWorkGrid items={played} showPlayedAt />
           ) : (
             <AccountEmpty>{t("publicProfile.noHistory")}</AccountEmpty>
           )}
@@ -133,8 +130,8 @@ export default function PublicUserPage() {
       ) : null}
       {favorites ? (
         <AccountSection href={`${base}/favorites`} title={t("publicProfile.favorites")}>
-          {favorites.items.length ? (
-            <AccountWorkGrid items={favorites.items} />
+          {favorites.length ? (
+            <AccountWorkGrid items={favorites} />
           ) : (
             <AccountEmpty>{t("publicProfile.noFavorites")}</AccountEmpty>
           )}
@@ -142,8 +139,8 @@ export default function PublicUserPage() {
       ) : null}
       {catalogs ? (
         <AccountSection href={`${base}/catalogs`} title={t("publicProfile.catalogs")}>
-          {catalogs.items.length ? (
-            <CatalogSummaryList items={catalogs.items} preview />
+          {catalogs.length ? (
+            <CatalogSummaryList items={catalogs} preview />
           ) : (
             <AccountEmpty>{t("publicProfile.noCatalogs")}</AccountEmpty>
           )}
@@ -151,8 +148,8 @@ export default function PublicUserPage() {
       ) : null}
       {comments && !hidePosts ? (
         <AccountSection href={`${base}/comments`} title={t("publicProfile.comments")}>
-          {comments.items.length ? (
-            <RecentCommentList items={comments.items} />
+          {comments.length ? (
+            <RecentCommentList items={comments} />
           ) : (
             <AccountEmpty>{t("publicProfile.noComments")}</AccountEmpty>
           )}
@@ -160,7 +157,7 @@ export default function PublicUserPage() {
       ) : null}
       {discussions && !hidePosts ? (
         <AccountSection href={`${base}/discussions`} title={t("publicProfile.discussions")}>
-          <DiscussionList items={discussions.items} compact />
+          <DiscussionList items={discussions} compact />
         </AccountSection>
       ) : null}
       {!hasVisibleSections ? (

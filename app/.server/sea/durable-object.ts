@@ -89,7 +89,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     return codec?.bytes() ?? null;
   }
   async alarm() {
-    this.broadcast(await this.socketSnapshot());
+    await this.syncSockets(this.ctx.getWebSockets());
   }
   private advance() {
     return this.ctx.storage.sql.exec<{ revision: number }>("UPDATE meta SET revision=revision+1 WHERE id=1 RETURNING revision").one().revision;
@@ -122,9 +122,18 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     const rows = this.ctx.storage.sql.exec<Row>("SELECT * FROM messages WHERE hidden_at IS NULL ORDER BY id DESC LIMIT ?", SEA_ROOM_LIMIT).toArray().reverse();
     return { revision, font: current.font, messages: this.decorate(rows).map(message => current.message(message)) };
   }
-  private async socketSnapshot() {
-    const { revision, messages } = await this.snapshot();
-    return { type: "snapshot" as const, revision, messages };
+  private async syncSockets(sockets: WebSocket[]) {
+    const { current } = await this.fonts();
+    const sync = JSON.stringify({ type: "sync", revision: this.revision(), fontId: current.font.id } satisfies SeaEvent);
+    let snapshot: string | undefined;
+    for (const socket of sockets) {
+      const versioned = this.ctx.getTags(socket).includes("sync-v1");
+      if (!versioned && snapshot === undefined) {
+        const { revision, messages } = await this.snapshot();
+        snapshot = JSON.stringify({ type: "snapshot", revision, messages } satisfies SeaEvent);
+      }
+      try { socket.send(versioned ? sync : snapshot!); } catch { this.close(socket, 1011, "连接已失效"); }
+    }
   }
   async moderation(requestedPage = 1): Promise<SeaModeration> {
     const revision = this.revision();
@@ -202,7 +211,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       }
       return true;
     });
-    if (found) this.broadcast(await this.socketSnapshot());
+    if (found) await this.syncSockets(this.ctx.getWebSockets());
     return found;
   }
   mute(id: number, minutes: number | null, operatorId: number, scope: SeaMuteScope = "identity", reason = "") {
@@ -235,8 +244,9 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
     if (this.ctx.getWebSockets(ip).length >= 20 || this.ctx.getWebSockets().length >= 1000)
       return new Response("连接过多", { status: 429 });
     const pair = new WebSocketPair();
-    this.ctx.acceptWebSocket(pair[1], [ip]);
-    this.ctx.waitUntil(this.socketSnapshot().then(snapshot => pair[1].send(JSON.stringify(snapshot))).catch(() => this.close(pair[1], 1011, "同步失败")));
+    const versioned = new URL(request.url).searchParams.get("sync") === "1";
+    this.ctx.acceptWebSocket(pair[1], versioned ? [ip, "sync-v1"] : [ip]);
+    this.ctx.waitUntil(this.syncSockets([pair[1]]).catch(() => this.close(pair[1], 1011, "同步失败")));
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
   webSocketMessage(socket: WebSocket) { this.close(socket, 1008, "请通过发言接口提交"); }

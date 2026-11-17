@@ -9,10 +9,16 @@ export function useSeaRoom(initial: SeaWindow, locale: UiLocale) {
   const [window, setWindow] = useState(initial);
   const current = useRef(initial);
   const apply = useCallback(async (next: SeaWindow) => {
-    if (next.revision < current.current.revision || next.font.expiresAt < current.current.font.expiresAt) return;
+    const previous = current.current;
+    if (next.revision < previous.revision || next.font.expiresAt < previous.font.expiresAt) return;
     const target = { revision: next.revision, font: next.font, messages: next.messages.slice(-SEA_ROOM_LIMIT) };
     current.current = target;
-    await loadSeaFont(next.font);
+    try {
+      await loadSeaFont(next.font);
+    } catch (error) {
+      if (current.current === target) current.current = previous;
+      throw error;
+    }
     if (current.current === target) setWindow(target);
   }, []);
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -30,27 +36,37 @@ export function useSeaRoom(initial: SeaWindow, locale: UiLocale) {
     let receivedAt = Date.now();
     let syncing = false;
     const controller = new AbortController();
+    function finishSync() {
+      initializing = false;
+      const pending = buffered;
+      buffered = [];
+      for (const item of pending.sort((a, b) => a.revision - b.revision)) receive(item);
+    }
     function resync() {
       if (syncing || !active) return;
       syncing = true;
       initializing = true;
+      const connection = socket;
       void refresh(controller.signal).then(() => {
+        if (!active || connection !== socket) return;
         syncing = false;
-        initializing = false;
-        const pending = buffered;
-        buffered = [];
-        for (const item of pending.sort((a, b) => a.revision - b.revision)) receive(item);
-      }).catch(() => { syncing = false; socket?.close(); });
+        finishSync();
+      }).catch(() => { if (connection === socket) { syncing = false; connection?.close(); } });
     }
     function receive(event: SeaEvent) {
       receivedAt = Date.now();
-      if (syncing || (initializing && event.type !== "snapshot")) {
+      if (syncing || (initializing && event.type === "message")) {
         if (buffered.length >= SEA_ROOM_LIMIT) { buffered = []; socket?.close(); return; }
         buffered.push(event);
         return;
       }
       if (event.type === "snapshot") { resync(); return; }
       const previous = current.current;
+      if (event.type === "sync") {
+        if (event.revision === previous.revision && event.fontId === previous.font.id) finishSync();
+        else resync();
+        return;
+      }
       if (event.revision <= previous.revision) return;
       if (event.revision !== previous.revision + 1) { resync(); return; }
       const messages = [...previous.messages.filter(message => message.id !== event.message.id), event.message].sort((a, b) => a.id - b.id);
@@ -59,8 +75,10 @@ export function useSeaRoom(initial: SeaWindow, locale: UiLocale) {
     function connect() {
       if (!active) return;
       initializing = true;
+      syncing = false;
       buffered = [];
       const url = new URL("/api/sea/socket", location.href);
+      url.searchParams.set("sync", "1");
       url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
       const connection = new WebSocket(url);
       socket = connection;
@@ -70,8 +88,8 @@ export function useSeaRoom(initial: SeaWindow, locale: UiLocale) {
         if (event.data === "pong") { receivedAt = Date.now(); return; }
         try {
           const value = JSON.parse(String(event.data)) as SeaEvent;
-          if (!Number.isSafeInteger(value.revision) || (value.type !== "snapshot" && value.type !== "message")) return;
-          if (value.type === "snapshot") { clearTimeout(bootstrap); attempt = 0; }
+          if (!Number.isSafeInteger(value.revision) || !["snapshot", "sync", "message"].includes(value.type)) return;
+          if (value.type !== "message") { clearTimeout(bootstrap); attempt = 0; }
           receive(value);
         } catch { connection.close(); }
       };
