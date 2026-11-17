@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { workReadCondition } from "@/app/.server/db/work-visibility";
 import { parsePositiveId } from "@/app/.server/http/request";
 import { HttpError } from "@/lib/http";
+import { translate } from "@/lib/i18n/core";
 
 export async function listNetplaySpaces(runtime: AppRuntime) {
   const { results } = await runtime.db.prepare(
@@ -29,37 +30,37 @@ export async function isCloudflareSpaceReadable(runtime: AppRuntime, spaceId: nu
 
 export async function saveNetplaySpace(runtime: AppRuntime, form: FormData) {
   const name = String(form.get("name") ?? "").trim();
-  if (!name || name.length > 80) throw new HttpError(400, "请输入 1 至 80 个字符的空间名称");
+  if (!name || name.length > 80) throw new HttpError(400, translate(runtime.uiLocale, "admin.netplay.invalidName"), undefined, "admin.netplay.invalidName");
   const provider = form.get("provider");
   let endpoint: string | null = null;
   if (provider === "external") {
     const raw = String(form.get("external_endpoint") ?? "").trim();
     const url = raw.length <= 2048 && URL.canParse(raw) ? new URL(raw) : null;
     if (!url || url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
-      throw new HttpError(400, "请输入不含账号、参数或片段的 HTTPS 联机地址");
+      throw new HttpError(400, translate(runtime.uiLocale, "admin.netplay.invalidEndpoint"), undefined, "admin.netplay.invalidEndpoint");
     }
     if (!url.pathname.endsWith("/")) url.pathname += "/";
     endpoint = url.href;
   } else if (provider !== "cloudflare") {
-    throw new HttpError(400, "联机托管方式无效");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.netplay.invalidProvider"), undefined, "admin.netplay.invalidProvider");
   }
   const rawId = form.get("space_id");
   if (rawId === null) {
     await runtime.db.prepare("INSERT INTO netplay_spaces(name,external_endpoint) VALUES (?,?)")
       .bind(name, endpoint).run();
   } else {
-    const id = parsePositiveId(String(rawId));
+    const id = parsePositiveId(String(rawId), undefined, undefined, undefined, "admin.netplay.invalidSpaceId");
     const result = await runtime.db.prepare("UPDATE netplay_spaces SET name=?,external_endpoint=? WHERE id=?")
       .bind(name, endpoint, id).run();
-    if (!result.meta.changes) throw new HttpError(404, "联机空间不存在");
+    if (!result.meta.changes) throw new HttpError(404, translate(runtime.uiLocale, "admin.netplay.notFound"), undefined, "admin.netplay.notFound");
   }
 }
 
 export async function setWorkNetplaySpace(runtime: AppRuntime, workId: number, spaceId: number | null) {
   if (spaceId !== null && !await runtime.db.prepare("SELECT 1 FROM netplay_spaces WHERE id=?").bind(spaceId).first()) {
-    throw new HttpError(404, "联机空间不存在");
+    throw new HttpError(404, translate(runtime.uiLocale, "admin.netplay.notFound"), undefined, "admin.netplay.notFound");
   }
   const result = await runtime.db.prepare("UPDATE works SET netplay_space_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status<>'deleted'")
     .bind(spaceId, workId).run();
-  if (!result.meta.changes) throw new HttpError(404, "作品不存在");
+  if (!result.meta.changes) throw new HttpError(404, translate(runtime.uiLocale, "admin.netplay.workNotFound"), undefined, "admin.netplay.workNotFound");
 }

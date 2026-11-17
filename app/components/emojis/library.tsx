@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, memo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -36,8 +37,6 @@ import { EmojiGroupManager } from "./group-manager";
 import { EmojiGroupEditor } from "./group-editor";
 import { useEmojiGroupSelection } from "./group-selection";
 
-const failure = (error: unknown) =>
-  error instanceof Error ? error.message : "表情操作失败。";
 type EmojiDrag = {
   activeId: string;
   emoji: FaceEmoji;
@@ -79,6 +78,7 @@ export function EmojiLibrary({
   initialCharacter?: EmojiCharacter;
   initialSheet?: EmojiSheet;
 }) {
+  const t = useMessages();
   const [source, setSource] = useState<EmojiSource>(() =>
     initialCharacter
       ? {
@@ -175,7 +175,7 @@ export function EmojiLibrary({
   const hasPreview = !!preview;
   const character = source.kind === "character" ? source.character : undefined;
   const sourceLabel =
-    source.kind === "hot" ? "全站热门" : (character?.name ?? "所选脸图");
+    source.kind === "hot" ? t("emoji.source.popular") : (character?.name ?? t("emoji.library.source"));
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
@@ -195,10 +195,10 @@ export function EmojiLibrary({
       setReady(true);
       setLoadError("");
     })().catch((error) => {
-      if (!controller.signal.aborted) setLoadError(failure(error));
+      if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : t("emoji.library.failed"));
     });
     return () => controller.abort();
-  }, [admin, retry, syncGroups]);
+  }, [admin, retry, syncGroups, t]);
   useLayoutEffect(() => {
     if (mineViewport.current) mineViewport.current.scrollTop = groupScroll.current.get(groupId) ?? 0;
   }, [groupId]);
@@ -233,7 +233,7 @@ export function EmojiLibrary({
     { showBusy = true } = {},
   ) {
     if (mutation.current) {
-      toast.info("正在保存，请稍后再操作。");
+      toast.info(t("emoji.library.busy"));
       return false;
     }
     mutation.current = true;
@@ -243,14 +243,14 @@ export function EmojiLibrary({
       await action();
       return true;
     } catch (error) {
-      toast.error(failure(error));
+      toast.error(error instanceof Error ? error.message : t("emoji.library.failed"));
       return false;
     } finally {
       mutation.current = false;
       if (showBusy) setBusy(false);
       else setSavingOrder(false);
     }
-  }, [toast]);
+  }, [t, toast]);
   function toggleMultiSelect(from: EmojiDrag["from"]) {
     setMultiSelect((current) => (current === from ? null : from));
     setSelected([]);
@@ -270,7 +270,7 @@ export function EmojiLibrary({
     if (!additions.length) return true;
     if (admin) {
       if (mine.length + additions.length > 256) {
-        toast.error("默认清单最多保留 256 个表情。");
+        toast.error(t("emoji.library.defaultLimit"));
         return false;
       }
       setMine((current) => [...current, ...additions]);
@@ -432,7 +432,7 @@ export function EmojiLibrary({
             : { ...related, originalName: related.name },
         focus: emoji.blobSha256,
       });
-      if (!emoji.available) toast.info("表情不可用");
+      if (!emoji.available) toast.info(t("emoji.library.unavailable"));
     } else if (emoji.available) {
       setSource({
         kind: "sheet",
@@ -443,8 +443,8 @@ export function EmojiLibrary({
           height: emoji.height,
         },
       });
-    } else toast.info("表情不可用");
-  }, [character, toast]);
+    } else toast.info(t("emoji.library.unavailable"));
+  }, [character, t, toast]);
   const select = useCallback((emoji: FaceEmoji, from: EmojiDrag["from"], additive = false) => {
     if (multiSelect === from || additive) {
       const key = emojiCellKey(emoji);
@@ -452,14 +452,14 @@ export function EmojiLibrary({
       if (additive) setMultiSelect(from);
       if (from === "source") setActive(null);
       if (current.some((item) => emojiCellKey(item) === key)) setSelected(current.filter((item) => emojiCellKey(item) !== key));
-      else if (current.length >= 256) toast.info("每次最多选择 256 个表情。");
+      else if (current.length >= 256) toast.info(t("emoji.library.selectionLimit"));
       else setSelected([...current, emoji]);
       return;
     }
     setActiveFrom(from);
     if (from === "library") { locate(emoji); return; }
     setSelected([]); setActive(mineByCell.get(emojiCellKey(emoji)) ?? emoji);
-  }, [multiSelect, activeFrom, active, toast, locate, mineByCell]);
+  }, [multiSelect, activeFrom, active, t, toast, locate, mineByCell]);
   const selectSource = useCallback((emoji: FaceEmoji, additive = false) => select(emoji, "source", additive), [select]);
   const selectLibrary = useCallback((emoji: FaceEmoji, additive = false) => select(emoji, "library", additive), [select]);
   const removeLibrary = useCallback((emoji: FaceEmoji) => { void remove([emoji], groupId); }, [remove, groupId]);
@@ -511,7 +511,7 @@ export function EmojiLibrary({
         saved = await reorder({ ...value, order: next });
       }
     } catch (error) {
-      toast.error(failure(error));
+      toast.error(error instanceof Error ? error.message : t("emoji.library.failed"));
     } finally {
       if (snapshot) { setLanding({ snapshot, targets: saved ? targets : original }); setLandingPending(false); }
     }
@@ -541,7 +541,7 @@ export function EmojiLibrary({
       );
       setMine(result.emojis);
       setDirty(false);
-      toast.success("默认表情已保存。");
+      toast.success(t("emoji.library.saved"));
     });
   }
 
@@ -551,12 +551,12 @@ export function EmojiLibrary({
       sensors={sensors}
       collisionDetection={collisionDetection}
       accessibility={{
-        screenReaderInstructions: { draggable: "按空格或 Enter 开始拖动，方向键移动，空格或 Enter 确认，Escape 取消。" },
+        screenReaderInstructions: { draggable: t("emoji.library.dragInstructions") },
         announcements: {
-          onDragStart: () => "开始拖动表情。",
-          onDragOver: ({ over }) => !over ? "已离开投放区域。" : over.id === "source" ? !admin && dragRef.current?.groupId != null ? "松开将从当前分组移除。" : "松开将从表情库移除。" : "目标：表情库。",
-          onDragEnd: ({ over }) => over ? "拖动结束。" : "已取消拖动。",
-          onDragCancel: () => "已取消拖动。",
+          onDragStart: () => t("emoji.library.dragStart"),
+          onDragOver: ({ over }) => !over ? t("emoji.library.dragOutside") : over.id === "source" ? !admin && dragRef.current?.groupId != null ? t("emoji.library.dragGroup") : t("emoji.library.dragLibrary") : t("emoji.library.dragTarget"),
+          onDragEnd: ({ over }) => over ? t("emoji.group.dropped") : t("emoji.group.canceled"),
+          onDragCancel: () => t("emoji.group.canceled"),
         },
       }}
       measuring={measuring}
@@ -594,7 +594,7 @@ export function EmojiLibrary({
     >
       <div className="grid min-w-0 overflow-hidden rounded-md border border-border bg-card sm:h-[min(660px,75dvh)] sm:min-h-[440px] sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <EmojiDropZone zone="source"
-          aria-label="查找脸图" data-drag-fallback="source"
+          aria-label={t("emoji.library.find")} data-drag-fallback="source"
           onClick={() => {
             if (multiSelect === "library") setSelected([]);
           }}
@@ -627,8 +627,8 @@ export function EmojiLibrary({
               size="icon"
               variant={multiSelect === "source" ? "default" : "outline"}
               disabled={busy || savingOrder || !ready}
-              aria-label={multiSelect === "source" ? "关闭左栏多选" : "开启左栏多选"}
-              title={multiSelect === "source" ? "关闭多选" : "开启多选"}
+              aria-label={multiSelect === "source" ? t("emoji.library.leftOff") : t("emoji.library.leftOn")}
+              title={multiSelect === "source" ? t("emoji.library.off") : t("emoji.library.on")}
               aria-pressed={multiSelect === "source"}
               onClick={() => toggleMultiSelect("source")}
             >
@@ -660,7 +660,7 @@ export function EmojiLibrary({
           ) : null}
         </EmojiDropZone>
         <EmojiDropZone zone="library"
-          aria-label={admin ? "默认清单" : "我的表情"} data-drag-fallback="emoji-library"
+          aria-label={admin ? t("emoji.library.defaultList") : t("emoji.library.mine")} data-drag-fallback="emoji-library"
           onClick={() => {
             if (multiSelect === "source") setSelected([]);
           }}
@@ -672,13 +672,13 @@ export function EmojiLibrary({
           <header className="flex min-h-[65px] items-center gap-2 border-b border-border p-3">
             <div className="mr-auto">
               <strong className="text-sm">
-                {admin ? "默认清单" : "我的表情"}
+                {admin ? t("emoji.library.defaultList") : t("emoji.library.mine")}
               </strong>
               <span className="ml-2 text-xs tabular-nums text-muted">
                 {mine.length}
               </span>
               <span role="status" className="ml-2 text-xs text-muted">
-                {savingOrder ? "正在保存顺序…" : ""}
+                {savingOrder ? t("emoji.library.savingOrder") : ""}
               </span>
             </div>
             <Button
@@ -686,14 +686,14 @@ export function EmojiLibrary({
               size="icon"
               variant={multiSelect === "library" ? "default" : "outline"}
               disabled={busy || savingOrder || !ready}
-              aria-label={multiSelect === "library" ? "关闭右栏多选" : "开启右栏多选"}
-              title={multiSelect === "library" ? "关闭多选" : "开启多选"}
+              aria-label={multiSelect === "library" ? t("emoji.library.rightOff") : t("emoji.library.rightOn")}
+              title={multiSelect === "library" ? t("emoji.library.off") : t("emoji.library.on")}
               aria-pressed={multiSelect === "library"}
               onClick={() => toggleMultiSelect("library")}
             >
               {multiSelect === "library" ? <ListX aria-hidden /> : <ListChecks aria-hidden />}
             </Button>
-            {!admin ? <Button type="button" size="icon" variant="ghost" disabled={busy || savingOrder || !ready} aria-label="分组管理" title="分组管理" onClick={() => setManageGroups(true)}><FolderCog aria-hidden /></Button> : null}
+            {!admin ? <Button type="button" size="icon" variant="ghost" disabled={busy || savingOrder || !ready} aria-label={t("emoji.group.manage")} title={t("emoji.group.manage")} onClick={() => setManageGroups(true)}><FolderCog aria-hidden /></Button> : null}
           </header>
           {!admin ? <EmojiGroupTabs management droppable groups={groups} emojis={mine} value={groupId} onSelect={chooseGroup} onCreate={() => void createGroup()} canAdd={(id) => !!drag && (drag.from === "library" && drag.groupId !== null ? id !== drag.groupId : hasAddition(drag.emojis, id))} disabled={busy || savingOrder || !ready} /> : null}
           <div
@@ -710,17 +710,17 @@ export function EmojiLibrary({
                   disabled={busy}
                   onClick={() => setRetry((current) => current + 1)}
                 >
-                  重试
+                  {t("core.action.retry")}
                 </Button>
               </div>
             ) : !ready ? (
               <p role="status" className="text-sm text-muted">
-                正在加载表情库…
+                {t("emoji.library.loading")}
               </p>
             ) : null}
             {ready && !visibleMine.length && !slotId ? (
               <div className="grid min-h-48 place-content-center gap-2 text-center text-sm text-muted">
-                <p className="m-0">{groupId === null ? "还没有表情" : "这个分组还没有表情"}</p>
+                <p className="m-0">{groupId === null ? t("emoji.library.empty") : t("emoji.library.emptyGroup")}</p>
               </div>
             ) : null}
             <SortableContext items={sortableIds} strategy={dragSortingStrategy}>
@@ -753,7 +753,7 @@ export function EmojiLibrary({
             {preview ? (
               <div
                 ref={previewBar}
-                aria-label="表情预览"
+                aria-label={t("emoji.picker.preview")}
                 className="fixed inset-x-0 bottom-0 z-[65] grid gap-2 border-t border-border bg-card p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] text-card-foreground shadow-surface sm:static sm:z-auto sm:pb-3 sm:shadow-none"
               >
                 <div className="flex items-center gap-3">
@@ -781,11 +781,11 @@ export function EmojiLibrary({
                         )}
                         {isRemoval
                           ? admin
-                            ? "从默认清单移除"
-                            : "从表情库移除"
+                            ? t("emoji.library.removeDefault")
+                            : t("emoji.library.removeLibrary")
                           : admin
-                            ? "加入默认清单"
-                            : "加入我的表情"}
+                            ? t("emoji.library.addDefault")
+                            : t("emoji.library.addMine")}
                       </Button>
                       {!admin && isRemoval ? <Button type="button" size="sm" variant="outline" disabled={busy || savingOrder || !ready} onClick={() => {
                         const favorites = (hasSelection ? selected : [preview]).flatMap((emoji) => {
@@ -793,13 +793,13 @@ export function EmojiLibrary({
                           return favorite ? [favorite] : [];
                         });
                         if (favorites.length) setEditingGroups(favorites);
-                      }}><FolderCog aria-hidden />编辑分组</Button> : null}
+                      }}><FolderCog aria-hidden />{t("emoji.group.edit")}</Button> : null}
                       <Button
                         type="button"
                         size="icon"
                         variant="ghost"
                         className="ml-auto shrink-0"
-                        aria-label="关闭表情预览"
+                        aria-label={t("emoji.library.closePreview")}
                         onClick={() => {
                           setSelected([]);
                           setActive(null);
@@ -810,12 +810,12 @@ export function EmojiLibrary({
                     </div>
                     {hasSelection ? (
                       <p role="status" className="m-0 text-xs text-muted">
-                        已选 {selected.length} 个表情
+                        {t("emoji.group.selected", { count: selected.length })}
                       </p>
                     ) : preview.sources.length ? (
                       <div
                         className="emoji-scroll-viewport flex max-h-14 flex-wrap gap-1 overflow-y-auto"
-                        aria-label="相关角色"
+                        aria-label={t("emoji.picker.characters")}
                       >
                         {preview.sources.map((item) => (
                           <Button
@@ -837,7 +837,7 @@ export function EmojiLibrary({
                       </div>
                     ) : (
                       <p className="m-0 text-xs text-muted">
-                        {preview.available ? "暂无关联角色" : "表情不可用"}
+                        {preview.available ? t("emoji.picker.noCharacters") : t("emoji.library.unavailable")}
                       </p>
                     )}
                     {admin && !hasSelection && activeIndex >= 0 ? (
@@ -847,7 +847,7 @@ export function EmojiLibrary({
                           size="icon"
                           variant="ghost"
                           disabled={busy || activeIndex === 0}
-                          aria-label="表情前移"
+                          aria-label={t("emoji.library.moveEarlier")}
                           onClick={() => move(-1)}
                         >
                           <ArrowLeft />
@@ -857,7 +857,7 @@ export function EmojiLibrary({
                           size="icon"
                           variant="ghost"
                           disabled={busy || activeIndex === mine.length - 1}
-                          aria-label="表情后移"
+                          aria-label={t("emoji.library.moveLater")}
                           onClick={() => move(1)}
                         >
                           <ArrowRight />
@@ -871,7 +871,7 @@ export function EmojiLibrary({
             {admin ? (
               <div className="flex items-center justify-end gap-2 border-t border-border p-3">
                 <span className="mr-auto text-xs text-muted">
-                  {dirty ? "尚未保存" : ""}
+                  {dirty ? t("emoji.library.unsaved") : ""}
                 </span>
                 <Button
                   type="button"
@@ -879,7 +879,7 @@ export function EmojiLibrary({
                   disabled={busy || !ready || !dirty}
                   onClick={() => void save()}
                 >
-                  保存默认表情
+                  {t("emoji.library.saveDefault")}
                 </Button>
               </div>
             ) : null}
@@ -899,13 +899,14 @@ const LibraryEmojiContent = memo(function LibraryEmojiContent({ emoji, attribute
   emoji: FaceEmoji; multiple: boolean; selected: boolean; busy: boolean; savingOrder: boolean; admin: boolean; groupId: number | null; dragging: boolean;
   onSelect: (emoji: FaceEmoji, additive?: boolean) => void; onRemove: (emoji: FaceEmoji) => void;
 }) {
+  const t = useMessages();
   const image = useMemo(() => <FaceEmojiImage emoji={emoji} />, [emoji]);
   return <>
-    <Button variant="ghost" size="icon" type="button" aria-label={multiple ? `选择${emoji.sources[0]?.name ?? "表情"}` : `定位${emoji.sources[0]?.name ?? "表情"}的来源脸图`} disabled={busy}
+    <Button variant="ghost" size="icon" type="button" aria-label={multiple ? t("emoji.library.select", { name: emoji.sources[0]?.name ?? t("emoji.picker.emoji") }) : t("emoji.library.locate", { name: emoji.sources[0]?.name ?? t("emoji.picker.emoji") })} disabled={busy}
       {...attributes} aria-pressed={selected} {...listeners} ref={setActivatorNodeRef} onContextMenu={(event) => event.preventDefault()}
       className={cn("relative inline-flex size-14 cursor-pointer items-center justify-center rounded border border-transparent hover:border-primary focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default", selected && "border-primary bg-primary/5 ring-1 ring-primary")}
       onClick={(event) => { event.stopPropagation(); onSelect(emoji, event.ctrlKey); }}>{image}</Button>
-    <Button variant="ghost" size="icon" type="button" aria-label={admin ? "从默认清单移除表情" : groupId === null ? "从表情库移除表情" : "从当前分组移除表情"} title={!admin && groupId !== null ? "移出当前分组" : "移除表情"} disabled={busy || savingOrder}
+    <Button variant="ghost" size="icon" type="button" aria-label={admin ? t("emoji.library.removeDefault") : groupId === null ? t("emoji.library.removeLibrary") : t("emoji.library.removeGroup")} title={!admin && groupId !== null ? t("emoji.library.removeGroup") : t("emoji.library.removeEmoji")} disabled={busy || savingOrder}
       onClick={(event) => { event.stopPropagation(); onRemove(emoji); }}
       className={cn("absolute -right-0.5 -top-0.5 z-10 hidden size-4 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground opacity-0 shadow-sm hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-default disabled:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:inline-flex [&_svg]:size-2.5", dragging && "invisible")}><X aria-hidden size={10} /></Button>
   </>;

@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { requireBootstrapAdminPage } from "@/app/.server/auth/authorize";
 import { listPermissions, listRoles } from "@/app/.server/db/permissions";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -16,20 +18,23 @@ export async function loader(args: LoaderFunctionArgs) {
     listPermissions(),
   ]);
 
-  return { roles, permissions };
+  return { roles, permissions, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["角色与权限", "控制台"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.dashboard.roles"), translate(locale, "admin.characterIndex.console")] }, error, locale);
+};
 
 export default function AdminPermissionsPage() {
+  const t = useMessages();
   const { roles, permissions } = useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
         compact
-        title="角色与权限"
-        subtitle="管理角色说明、开放申请与全员开放；自定义角色的资料与功能权限分别保存。"
+        title={t("admin.dashboard.roles")}
+        subtitle={t("admin.permissions.subtitle")}
       />
       <PermissionMatrix permissions={permissions} roles={roles} />
     </main>

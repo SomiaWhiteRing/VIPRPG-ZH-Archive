@@ -1,5 +1,10 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { inboxClosureReason, inboxItemBody, inboxItemTitle, maintainerOutcomeCopy, notificationExcerpt } from "./notification-copy";
+import { translate } from "@/lib/i18n/core";
+import { preserveUiLocale } from "@/lib/i18n/locale";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { Timestamp } from "@/app/components/ui/timestamp";
-import { getCurrentUser } from "@/app/.server/auth/current-user";
+import { requireAccountUser } from "@/app/.server/auth/account-user";
 import {
   canResolveInboxRequests,
   listInboxItemsForUser,
@@ -14,7 +19,7 @@ import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type { InboxItem } from "@/lib/dto/db/inbox";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { formatUnreadCount } from "@/lib/format";
 import { forumPage } from "@/lib/forum";
 import type { InboxCategory } from "@/lib/inbox";
@@ -22,7 +27,7 @@ import { inboxCategory, inboxHref } from "@/lib/inbox";
 import { Bell, MessageCircle, ShieldCheck, ThumbsUp } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 import { InboxActions } from "./actions";
 import { InboxControls } from "./controls";
 import { useInboxAutoRead } from "./use-auto-read";
@@ -39,29 +44,34 @@ export async function loader(args: LoaderFunctionArgs) {
   const params = await searchParams;
   const category = inboxCategory(params.category);
   const page = forumPage(params.page);
-  const currentUser = await getCurrentUser(runtime);
-  if (!currentUser)
-    redirectPage(
-      `/login?next=${encodeURIComponent(inboxHref(category, page))}`,
-    );
+  const currentUser = await requireAccountUser(runtime, inboxHref(category, page));
+  const source = new URL(args.request.url);
   const canResolve = canResolveInboxRequests(currentUser) || hasPermission(currentUser, "forum.content.moderate_any") || await canReviewWorkMaintainerRequests(runtime, currentUser);
   if (category === "pending" && !canResolve)
-    redirectPage(inboxHref("all"));
+    redirectToInbox(source, "all");
   const result = await listInboxItemsForUser(runtime, currentUser, {
     category,
     page,
   });
   if (page !== result.page)
-    redirectPage(inboxHref(category, result.page));
+    redirectToInbox(source, category, result.page);
 
-  return { category, canResolve, result, userId: currentUser.id, preferences: currentUser.preferences,
+  return { locale: runtime.uiLocale, category, canResolve, result, userId: currentUser.id, preferences: currentUser.preferences,
     pushPublicKey: webPushConfiguration(runtime.env)?.publicKey ?? null };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: "提醒", page: loaderData?.result.page }, error);
+function redirectToInbox(source: URL, category: InboxCategory, page?: number): never {
+  const target = preserveUiLocale(new URL(inboxHref(category, page), source), source);
+  return redirectPage(target.pathname + target.search);
+}
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "header.inbox"), page: loaderData?.result.page }, error, locale);
+};
 
 export default function InboxPage() {
+  const t = useMessages();
   const { category, canResolve, result, userId, preferences, pushPublicKey } =
     useLoaderData<typeof loader>();
   const [autoRead, setAutoRead] = useState({ result, ids: new Set<number>() });
@@ -90,10 +100,10 @@ export default function InboxPage() {
         compact
         title={
           <span>
-            提醒
+            {t("header.inbox")}
             {unreadCount > 0 ? (
               <span className="ml-3 align-middle font-sans text-sm font-normal text-muted">
-                {formatUnreadCount(unreadCount)} 未读
+                {t("inbox.unreadCount", { count: formatUnreadCount(unreadCount) })}
               </span>
             ) : null}
           </span>
@@ -113,7 +123,7 @@ export default function InboxPage() {
       />
       {result.items.length ? (
         <ul
-          aria-label="提醒列表"
+          aria-label={t("inbox.list")}
           className="divide-y divide-border border-b border-border"
         >
           {result.items.map((item) => (
@@ -122,7 +132,7 @@ export default function InboxPage() {
         </ul>
       ) : (
         <EmptyState
-          title={emptyLabel(category)}
+          title={t(`inbox.empty.${category}`)}
         />
       )}
       <PaginationLinks
@@ -144,7 +154,13 @@ function InboxRow({
   item: InboxItem;
   onRead: (itemId: number) => void;
 }) {
+  const t = useMessages();
   const rowRef = useRef<HTMLLIElement>(null);
+  const locale = useUiLocale();
+  const outcome = maintainerOutcomeCopy(item, locale);
+  const title = outcome?.title ?? inboxItemTitle(item, locale);
+  const body = outcome?.body ?? inboxItemBody(item, locale);
+  const closedReason = inboxClosureReason(item, locale);
   const { readAt, error } = useInboxAutoRead(item, rowRef, onRead);
   const interaction = item.interaction;
   const contentNotification = item.timelineNotification ?? item.commentNotification;
@@ -159,11 +175,11 @@ function InboxRow({
           ? ShieldCheck
           : Bell;
   const approvalLabels = {
-    pending: "待审核",
-    approved: "已通过",
-    rejected: "已驳回",
-    open: "待审核",
-    archived: "已关闭",
+    pending: t("inbox.review"),
+    approved: t("inbox.approved"),
+    rejected: t("inbox.rejected"),
+    open: t("inbox.review"),
+    archived: t("inbox.closed"),
   };
   return (
     <li
@@ -185,7 +201,7 @@ function InboxRow({
         )}
         {!readAt ? (
           <span className="absolute -left-1 -top-1 size-2 rounded-full bg-primary">
-            <span className="sr-only">未读</span>
+            <span className="sr-only">{t("inbox.unread")}</span>
           </span>
         ) : null}
       </div>
@@ -203,9 +219,9 @@ function InboxRow({
               ) : (
                 <span className="text-primary">{actor.actorName}</span>
               )}
-              <span>{actor.action}</span>
+              <span>{actor.actionKey ? t(actor.actionKey) : actor.action}</span>
             </>
-          ) : item.title}
+          ) : item.contentUnavailable ? t("inbox.contentUnavailable") : title}
         </p>
         {interaction ? (
           <>
@@ -218,8 +234,8 @@ function InboxRow({
                 {interaction.topicTitle}
               </span>
               <span className="mt-1 block text-xs text-muted">
-                第 {interaction.postNumber} 楼
-                {interaction.commentId ? " · 楼中楼" : ""}
+                {t("comment.floor", { floor: interaction.postNumber })}
+                {interaction.commentId ? ` · ${t("forum.nestedSuffix")}` : ""}
               </span>
               {interaction.excerpt ? (
                 <span className="mt-2 line-clamp-2 text-foreground">
@@ -232,8 +248,8 @@ function InboxRow({
           <>
             {contentNotification ? (
               <Link to={`/inbox/${item.id}`} prefetch="none" className="mt-1 block rounded-sm text-sm focus-visible:outline-2 focus-visible:outline-primary">
-                <span className="line-clamp-2 font-semibold text-primary hover:underline">{contentNotification.targetTitle}</span>
-                <span className="mt-2 line-clamp-2 text-foreground">{contentNotification.excerpt}</span>
+                <span className="line-clamp-2 font-semibold text-primary hover:underline">{item.timelineNotification ? t("inbox.event.timelineTarget") : contentNotification.targetTitle}</span>
+                <span className="mt-2 line-clamp-2 text-foreground">{notificationExcerpt(contentNotification, locale)}</span>
               </Link>
             ) : null}
             {item.type === "role_change_request" ? (
@@ -245,12 +261,12 @@ function InboxRow({
               </div>
             ) : null}
             {item.maintainerRequest ? <MaintainerRequestDetails request={item.maintainerRequest} /> : null}
-            {item.report ? <Link className="mt-1 block text-sm text-primary hover:underline" to={item.report.kind === "message" ? `/admin/discussions/messages/${item.report.id}` : `/admin/discussions?view=reports&q=${item.report.targetId ?? ""}`}>查看举报</Link> : null}
-            {item.body ? (
-              <p className="mt-2 whitespace-pre-wrap text-sm">{item.body}</p>
+            {item.report ? <Link className="mt-1 block text-sm text-primary hover:underline" to={item.report.kind === "message" ? `/admin/discussions/messages/${item.report.id}` : `/admin/discussions?view=reports&q=${item.report.targetId ?? ""}`}>{t("inbox.report")}</Link> : null}
+            {body ? (
+              <p className="mt-2 whitespace-pre-wrap text-sm">{body}</p>
             ) : null}
-            {item.closedReason ? <p className="mt-2 text-sm text-muted">{item.closedReason}</p> : null}
-            {item.rejectionReason ? <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm"><span className="font-semibold">驳回理由：</span>{item.rejectionReason}</p> : null}
+            {closedReason ? <p className="mt-2 text-sm text-muted">{closedReason}</p> : null}
+            {item.rejectionReason ? <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm"><span className="font-semibold">{t("inbox.rejectionReason")}</span>{item.rejectionReason}</p> : null}
           </>
         )}
       </div>
@@ -267,31 +283,16 @@ function InboxRow({
             canReject: item.canReject,
             maintainerRequest: item.maintainerRequest,
             friendNotification: item.friendNotification,
-            title: item.title,
+            title,
             targetDisplayName: item.targetDisplayName,
           }}
         />
         {error ? (
           <p role="alert" className="mt-2 text-sm text-destructive">
-            自动标记已读失败，请手动标记已读。
+            {t("inbox.autoReadError")}
           </p>
         ) : null}
       </div>
     </li>
   );
 }
-
-function emptyLabel(category: InboxCategory) {
-  return {
-    all: "暂无提醒",
-    comments: "还没有收到评论",
-    replies: "还没有收到回复",
-    forum: "还没有收到讨论版回复",
-    likes: "还没有收到赞",
-    friends: "还没有收到好友提醒",
-    system: "暂无系统通知",
-    pending: "暂无待处理事项",
-  }[category];
-}
-
-export { default as ErrorBoundary } from "@/app/inbox/error";

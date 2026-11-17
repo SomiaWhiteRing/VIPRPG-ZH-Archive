@@ -1,13 +1,15 @@
 import { CommentTargetImage } from "@/app/components/profile/comment-target-image";
 import { commentTargetHref } from "@/lib/comment-target";
 import type { UserCommentSummary } from "@/lib/dto/db/work-community";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages } from "@/lib/i18n/react";
 
 export function RecentCommentList({
   items,
 }: {
   items: UserCommentSummary[];
 }) {
+  const t = useMessages();
   return (
     <ul className="divide-y divide-border border-t border-border">
       {items.map((comment, index) => (
@@ -24,7 +26,7 @@ export function RecentCommentList({
               {comment.targetTitle}
             </Link>
             <p className="mt-1 line-clamp-2 text-[15px] text-muted">
-              {comment.body}{comment.imageCount > 0 ? ` ［${comment.imageCount} 张图片］` : ""}
+              {comment.body}{comment.imageCount > 0 ? ` ${t("publicProfile.imageCount", { count: comment.imageCount })}` : ""}
             </p>
           </div>
         </li>

@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type {
   PublicResource,
@@ -16,7 +17,7 @@ export async function getResource(runtime: AppRuntime, id: string) {
     .prepare("SELECT * FROM resources WHERE id=?")
     .bind(id)
     .first<ResourceRecord>();
-  if (!row) throw new HttpError(404, "链接不存在");
+  if (!row) throw new HttpError(404, translate(runtime.uiLocale, "admin.resources.error.linkMissing"), undefined, "admin.resources.error.linkMissing");
   return row;
 }
 export async function getEditor(
@@ -93,6 +94,6 @@ export async function getArtifact(runtime: AppRuntime, id: string) {
         published_at: string | null;
       }
     >();
-  if (!row) throw new HttpError(404, "安装包不存在");
+  if (!row) throw new HttpError(404, translate(runtime.uiLocale, "admin.resources.error.packageMissing"), undefined, "admin.resources.error.packageMissing");
   return row;
 }

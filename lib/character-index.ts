@@ -1,4 +1,6 @@
 import { characterNameKey, type CharacterAliasSuggestion, type CharacterNameLanguage, type CharacterPortrait } from "@/lib/character-names";
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALES, type UiLocale } from "@/lib/i18n/locale";
 
 export type CharacterCategory = {
   id: string; parentId: string | null; label: string; originalName: string | null;
@@ -12,6 +14,9 @@ export type CharacterIndexEntry = {
 };
 export type CharacterIndexData = { categories: CharacterCategory[]; memberships: CharacterMembership[]; characters: CharacterIndexEntry[] };
 export const UNCLASSIFIED_GROUP_ID = "group:unclassified";
+export const UNCLASSIFIED_SEARCH_LABELS = (Object.keys(UI_LOCALES) as UiLocale[])
+  .map((locale) => translate(locale, "character.uncategorized"))
+  .join(" ");
 // These are render rows, derived from categories and actual characters; never stored as another identity.
 export type CharacterBrowseNode = {
   id: string; kind: "category"; label: string; sourceUrl: string | null; sortOrder: number; children: CharacterBrowseNode[];
@@ -96,7 +101,7 @@ export function buildCharacterBrowseTree(data: CharacterIndexData, query: string
     const classified = new Set(data.memberships.map((member) => member.characterId));
     const unclassified: CharacterBrowseNode[] = [];
     data.characters.forEach((character, index) => {
-      if (classified.has(character.id) || !matches(`未分类 ${character.primaryName} ${character.originalName} ${character.aliases.map((alias) => alias.name).join(" ")}`)) return;
+      if (classified.has(character.id) || !matches(`${UNCLASSIFIED_SEARCH_LABELS} ${character.primaryName} ${character.originalName} ${character.aliases.map((alias) => alias.name).join(" ")}`)) return;
       matched.add(character.id);
       unclassified.push({ id: character.key, kind: "character", categoryId: null, label: character.primaryName, originalName: character.originalName, sortOrder: index, character, children: [] });
     });

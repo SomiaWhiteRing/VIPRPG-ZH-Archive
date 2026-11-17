@@ -1,3 +1,5 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 
@@ -16,6 +18,7 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 export function CatalogCreateForm() {
+  const t = useMessages();
   const createButtonRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -37,7 +40,7 @@ export function CatalogCreateForm() {
           }}
           type="button"
         >
-          创建目录
+          {t("catalog.create")}
         </Button>
       </div>
       <Dialog.Portal>
@@ -52,12 +55,12 @@ export function CatalogCreateForm() {
               createButtonRef.current.focus();
           }}
         >
-          <Dialog.Title>创建目录</Dialog.Title>
+          <Dialog.Title>{t("catalog.create")}</Dialog.Title>
           <Dialog.Description
             className="sr-only"
             id="catalog-create-description"
           >
-            填写目录标题和说明。
+            {t("catalog.createHint")}
           </Dialog.Description>
           <CatalogCreateFields
             busy={busy}
@@ -80,6 +83,8 @@ export function CatalogSummaryEditor({
   canEdit?: boolean;
   canDelete?: boolean;
 }) {
+  const t = useMessages();
+  const locale = useNavigationLocale();
   const navigate = useNavigate();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -126,10 +131,10 @@ export function CatalogSummaryEditor({
       })) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
 
       setOpen(false);
-      toast.success("目录资料已保存。");
+      toast.success(t("catalog.detailsSaved"));
       onSaved(body.catalog);
     } catch (error) {
-      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
+      toast.error(error instanceof ApiResponseError ? error : t("relation.edit.network"));
     } finally {
       setBusy(false);
     }
@@ -143,10 +148,10 @@ export function CatalogSummaryEditor({
         credentials: "same-origin",
       });
 
-      toast.success("目录已删除。");
-      navigate("/catalogs");
+      toast.success(t("catalog.deleted"));
+      navigate({ pathname: "/catalogs", search: locale ? new URLSearchParams({ [UI_LOCALE_PARAM]: locale }).toString() : "" });
     } catch (error) {
-      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
+      toast.error(error instanceof ApiResponseError ? error : t("relation.edit.network"));
     } finally {
       setBusy(false);
     }
@@ -155,7 +160,7 @@ export function CatalogSummaryEditor({
     <Dialog.Root open={open} onOpenChange={changeOpen}>
       <Dialog.Trigger asChild>
         <Button size="sm" type="button" variant="outline">
-          {canEdit ? "编辑资料" : "管理目录"}
+          {canEdit ? t("catalog.editDetails") : t("catalog.manage")}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -164,12 +169,12 @@ export function CatalogSummaryEditor({
           aria-describedby="catalog-summary-edit-description"
           className="left-1/2 top-1/2 grid max-h-[85dvh] w-[min(92vw,560px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg p-5"
         >
-          <Dialog.Title>编辑目录资料</Dialog.Title>
+          <Dialog.Title>{t("catalog.editTitle")}</Dialog.Title>
           <Dialog.Description
             className="sr-only"
             id="catalog-summary-edit-description"
           >
-            修改目录封面、标题和说明，或删除目录。
+            {t("catalog.editHint")}
           </Dialog.Description>
           <div className="grid gap-4">
             {canEdit ? (
@@ -192,7 +197,7 @@ export function CatalogSummaryEditor({
                 />
               </div>
             ) : null}
-            <FormField controlId="catalog-title" label="标题">
+            <FormField controlId="catalog-title" label={t("library.title")}>
               <Input
                 id="catalog-title"
                 readOnly={!canEdit}
@@ -200,7 +205,7 @@ export function CatalogSummaryEditor({
                 onChange={(event) => setTitle(event.target.value)}
               />
             </FormField>
-            <FormField controlId="catalog-description" label="说明">
+            <FormField controlId="catalog-description" label={t("forum.action.explain")}>
               <Textarea
                 id="catalog-description"
                 readOnly={!canEdit}
@@ -215,20 +220,20 @@ export function CatalogSummaryEditor({
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button disabled={busy} type="button" variant="destructive">
-                    删除目录
+                    {t("catalog.delete")}
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent className="z-[60]">
                   <AlertDialogTitle className="m-0 text-lg font-bold">
-                    删除这个目录？
+                    {t("catalog.deleteQuestion")}
                   </AlertDialogTitle>
                   <AlertDialogDescription className="m-0 text-sm leading-6 text-muted">
-                    删除后，目录及其中的收录关系将不再公开显示。
+                    {t("catalog.deleteWarning")}
                   </AlertDialogDescription>
                   <AlertDialogFooter>
                     <AlertDialogCancel asChild>
                       <Button type="button" variant="outline">
-                        取消
+                        {t("relation.edit.cancel")}
                       </Button>
                     </AlertDialogCancel>
                     <AlertDialogAction asChild>
@@ -238,7 +243,7 @@ export function CatalogSummaryEditor({
                         type="button"
                         variant="destructive"
                       >
-                        确认删除
+                        {t("relation.edit.confirm")}
                       </Button>
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -248,7 +253,7 @@ export function CatalogSummaryEditor({
             <div className="ml-auto flex gap-2">
               <Dialog.Close asChild>
                 <Button disabled={busy} type="button" variant="outline">
-                  取消
+                  {t("relation.edit.cancel")}
                 </Button>
               </Dialog.Close>
               {canEdit ? (
@@ -257,7 +262,7 @@ export function CatalogSummaryEditor({
                   onClick={() => void save()}
                   type="button"
                 >
-                  {busy ? "正在保存…" : "保存资料"}
+                  {busy ? t("forum.editor.saving") : t("profile.save")}
                 </Button>
               ) : null}
             </div>

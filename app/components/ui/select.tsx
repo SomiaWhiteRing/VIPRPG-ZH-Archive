@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { cn } from "@/lib/ui/cn";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { Select as SelectPrimitive } from "radix-ui";
@@ -119,7 +120,7 @@ export function SelectField({
   value,
   defaultValue = "",
   options,
-  placeholder = "请选择",
+  placeholder,
   required = false,
   disabled = false,
   className,
@@ -127,6 +128,7 @@ export function SelectField({
   onValueChange,
   ...triggerProps
 }: SelectFieldProps) {
+  const t = useMessages();
   const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue);
   const selectedValue = value ?? uncontrolledValue;
 
@@ -148,7 +150,7 @@ export function SelectField({
         value={selectedValue}
       >
         <SelectTrigger className={triggerClassName} {...triggerProps}>
-          <SelectValue placeholder={placeholder} />
+          <SelectValue placeholder={placeholder ?? t("core.select.placeholder")} />
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (

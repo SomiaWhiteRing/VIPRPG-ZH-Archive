@@ -1,3 +1,6 @@
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 
@@ -14,7 +17,7 @@ import { WorkFavoriteButton } from "@/app/components/work/work-favorite-button";
 import type { WorkFavoriteUpdate } from "@/lib/user-tags";
 import type { CatalogSummary } from "@/lib/dto/db/catalogs";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 
 export function WorkEngagementActions({
   onSaved,
@@ -47,6 +50,9 @@ export function CatalogAddDialog({
   catalogs: { items: CatalogSummary[]; total: number; page: number; pageSize: number };
   workId: number;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const navigationLocale = useNavigationLocale();
   const navigate = useNavigate();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -59,10 +65,13 @@ export function CatalogAddDialog({
     setLoading(true);
     setMessage(null);
     try {
-      const payload = await requestJson<typeof catalogs>(`/api/catalogs?${new URLSearchParams({owner:"me",q:search,page:String(page)})}`, {credentials:"same-origin"}, "目录加载失败");
+      const payload = await requestJson<typeof catalogs>(`/api/catalogs?${new URLSearchParams({owner:"me",q:search,page:String(page)})}`, {credentials:"same-origin"}, t("catalog.loadFailed"));
       setResult(payload);
       setActiveQuery(search);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "目录加载失败。"); }
+    } catch (error) {
+      setMessage(error instanceof ApiResponseError ? error.messageFor(locale)
+        : error instanceof Error ? error.message : t("catalog.loadError"));
+    }
     finally { setLoading(false); }
   }
 
@@ -90,11 +99,14 @@ export function CatalogAddDialog({
         body: JSON.stringify({ workId }),
       });
 
-      toast.success("已添加到目录。");
+      toast.success(t("catalog.added"));
       setOpen(false);
-      navigate(`/catalogs/${catalogId}`);
+      navigate({
+        pathname: `/catalogs/${catalogId}`,
+        search: navigationLocale ? new URLSearchParams({ [UI_LOCALE_PARAM]: navigationLocale }).toString() : "",
+      });
     } catch (error) {
-      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败，请检查连接后重试。");
+      toast.error(error instanceof ApiResponseError ? error : t("relation.edit.network"));
     } finally {
       setBusy(false);
       setAddingCatalogId(null);
@@ -110,7 +122,7 @@ export function CatalogAddDialog({
           type="button"
           variant="ghost"
         >
-          添加到目录
+          {t("catalog.add")}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -119,25 +131,25 @@ export function CatalogAddDialog({
           aria-describedby="catalog-add-work-description"
           className="left-1/2 top-1/2 grid max-h-[90dvh] w-[min(92vw,760px)] overflow-y-auto -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg p-5"
         >
-          <Dialog.Title>添加到目录</Dialog.Title>
+          <Dialog.Title>{t("catalog.add")}</Dialog.Title>
           <Dialog.Description
             className="sr-only"
             id="catalog-add-work-description"
           >
-            选择已有目录或创建新目录，将当前游戏添加到其中。
+            {t("catalog.addHint")}
           </Dialog.Description>
           <Tabs defaultValue="existing">
-            <TabsList aria-label="添加到目录方式">
-              <TabsTrigger disabled={busy} value="existing">加入已有目录</TabsTrigger>
-              <TabsTrigger disabled={busy} value="create">创建并加入新目录</TabsTrigger>
+            <TabsList aria-label={t("catalog.addMethod")}>
+              <TabsTrigger disabled={busy} value="existing">{t("catalog.existing")}</TabsTrigger>
+              <TabsTrigger disabled={busy} value="create">{t("catalog.createAndAdd")}</TabsTrigger>
             </TabsList>
             <TabsContent value="existing" className="grid gap-4 pb-0 data-[state=inactive]:hidden">
               <form className="flex gap-2" onSubmit={(event) => {event.preventDefault(); void loadCatalogs(1, query);}}>
-                <Input aria-label="搜索我的目录" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索我的目录" />
-                <Button type="submit" variant="outline" disabled={loading || busy}>搜索</Button>
+                <Input aria-label={t("catalog.searchMine")} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("catalog.searchMine")} />
+                <Button type="submit" variant="outline" disabled={loading || busy}>{t("search.submit")}</Button>
               </form>
               {message ? <Notice>{message}</Notice> : null}
-              {loading ? <p role="status" className="text-sm text-muted">正在加载目录…</p> : null}
+              {loading ? <p role="status" className="text-sm text-muted">{t("catalog.loading")}</p> : null}
               {result.items.length ? (
                 <>
                   <div className="max-h-[45dvh] overflow-y-auto">
@@ -151,24 +163,24 @@ export function CatalogAddDialog({
                           size="sm"
                           type="button"
                         >
-                          {addingCatalogId === catalog.id ? "正在添加…" : "添加到目录"}
+                          {addingCatalogId === catalog.id ? t("relation.edit.adding") : t("catalog.add")}
                         </Button>
                       )}
                     />
                   </div>
                   <div className="flex items-center justify-between gap-2 text-sm">
-                    <Button type="button" variant="ghost" disabled={loading || busy || result.page <= 1} onClick={() => void loadCatalogs(result.page - 1)}>上一页</Button>
-                    <span>{result.page} / {Math.max(1, Math.ceil(result.total / result.pageSize))} 页，共 {result.total} 个目录</span>
-                    <Button type="button" variant="ghost" disabled={loading || busy || result.page * result.pageSize >= result.total} onClick={() => void loadCatalogs(result.page + 1)}>下一页</Button>
+                    <Button type="button" variant="ghost" disabled={loading || busy || result.page <= 1} onClick={() => void loadCatalogs(result.page - 1)}>{t("pagination.previous")}</Button>
+                    <span>{t("catalog.paging", { page: result.page, pages: Math.max(1, Math.ceil(result.total / result.pageSize)), count: result.total })}</span>
+                    <Button type="button" variant="ghost" disabled={loading || busy || result.page * result.pageSize >= result.total} onClick={() => void loadCatalogs(result.page + 1)}>{t("pagination.next")}</Button>
                   </div>
                 </>
               ) : (
-                !loading && !message ? <EmptyState title={activeQuery ? "没有匹配的目录。" : "你还没有可用的目录。"} variant="plain" /> : null
+                !loading && !message ? <EmptyState title={activeQuery ? t("catalog.noMatch") : t("catalog.noneAvailable")} variant="plain" /> : null
               )}
               <div className="flex justify-end gap-2 border-t border-border pt-4">
                 <Dialog.Close asChild>
                   <Button disabled={busy} type="button" variant="outline">
-                    关闭
+                    {t("core.action.close")}
                   </Button>
                 </Dialog.Close>
                 <Button asChild>
@@ -177,7 +189,7 @@ export function CatalogAddDialog({
                     onClick={(event) => { if (busy) event.preventDefault(); }}
                     to="/me/catalogs"
                   >
-                    管理我的目录
+                    {t("catalog.manageMine")}
                   </Link>
                 </Button>
               </div>

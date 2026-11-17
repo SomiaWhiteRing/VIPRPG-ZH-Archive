@@ -1,5 +1,5 @@
 import { Badge } from "@/app/components/ui/badge";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 type ChipListProps = {
   compact?: boolean;

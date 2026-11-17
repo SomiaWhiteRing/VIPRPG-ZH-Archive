@@ -27,7 +27,7 @@ export async function PUT(
         ?.toLowerCase()
         .startsWith("image/png")
     ) {
-      throw new HttpError(415, "头像必须是 PNG 文件");
+      throw new HttpError(415, "头像必须是 PNG 文件", undefined, "avatar.error.png");
     }
     const creatorId = parsePositiveId(
       (await context.params).creatorId,

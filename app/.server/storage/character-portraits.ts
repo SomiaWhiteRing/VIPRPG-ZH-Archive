@@ -19,14 +19,15 @@ export function readCharacterFaceSheet(
   value: FormDataEntryValue | null,
   field = "脸图素材表",
 ): File {
+  const values = { name: field, kind: field === "脸图素材表" ? "sheet" : "file" };
   if (!(value instanceof File) || value.size <= 0) {
-    throw new HttpError(400, `${field}必须是 PNG 文件`);
+    throw new HttpError(400, `${field}必须是 PNG 文件`, undefined, "upload.faces.error.png", values);
   }
   if (value.type.toLowerCase() !== "image/png") {
-    throw new HttpError(415, `${field}只支持 PNG 文件`);
+    throw new HttpError(415, `${field}只支持 PNG 文件`, undefined, "upload.faces.error.png", values);
   }
   if (value.size > MAX_CHARACTER_FACE_SHEET_BYTES) {
-    throw new HttpError(413, `${field}不能超过 256 KiB`);
+    throw new HttpError(413, `${field}不能超过 256 KiB`, undefined, "upload.faces.error.size", values);
   }
   return value;
 }
@@ -139,10 +140,13 @@ export async function validateCharacterFaceSheetHashes(
       throw new HttpError(
         400,
         "脸图素材表必须是宽 48 至 192 像素、宽高均为 48 倍数的 PNG 文件",
+        undefined,
+        "upload.faces.error.dimensions",
+        { name: "脸图素材表", kind: "sheet" },
       );
     }
     const object = await getBlob(runtime, hash);
-    if (!object) throw new HttpError(409, "脸图素材表文件缺失，请重新上传");
+    if (!object) throw new HttpError(409, "脸图素材表文件缺失，请重新上传", undefined, "upload.faces.error.missing");
     const dimensions = assertCharacterFaceSheetPng(
       await object.arrayBuffer(),
       "脸图素材表",
@@ -156,17 +160,18 @@ export function assertCharacterFaceSheetPng(
   buffer: ArrayBuffer,
   field = "脸图素材表",
 ): { width: number; height: number } {
+  const values = { name: field, kind: field === "脸图素材表" ? "sheet" : "file" };
   if (buffer.byteLength > MAX_CHARACTER_FACE_SHEET_BYTES) {
-    throw new HttpError(413, `${field}不能超过 256 KiB`);
+    throw new HttpError(413, `${field}不能超过 256 KiB`, undefined, "upload.faces.error.size", values);
   }
-  if (buffer.byteLength < 24) throw new HttpError(400, `${field}文件不完整`);
+  if (buffer.byteLength < 24) throw new HttpError(400, `${field}文件不完整`, undefined, "upload.faces.error.incomplete", values);
   const bytes = new Uint8Array(buffer);
   const signature = [137, 80, 78, 71, 13, 10, 26, 10];
   if (!signature.every((value, index) => bytes[index] === value)) {
-    throw new HttpError(400, `${field}的 PNG 签名不正确`);
+    throw new HttpError(400, `${field}的 PNG 签名不正确`, undefined, "upload.faces.error.signature", values);
   }
   if (String.fromCharCode(...bytes.slice(12, 16)) !== "IHDR") {
-    throw new HttpError(400, `${field}缺少 PNG 尺寸信息`);
+    throw new HttpError(400, `${field}缺少 PNG 尺寸信息`, undefined, "upload.faces.error.dimensionsMissing", values);
   }
   const view = new DataView(buffer);
   const width = view.getUint32(16);
@@ -181,6 +186,9 @@ export function assertCharacterFaceSheetPng(
     throw new HttpError(
       400,
       `${field}宽度必须为 48 至 192 像素，且宽高均为 48 的倍数`,
+      undefined,
+      "upload.faces.error.dimensions",
+      values,
     );
   }
   return { width, height };

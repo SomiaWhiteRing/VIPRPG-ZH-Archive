@@ -1,5 +1,5 @@
 import { TZDateMini } from "@date-fns/tz/date/mini";
-import { Link, useLoaderData, useLocation, type LoaderFunctionArgs, type MetaFunction } from "react-router";
+import { useLoaderData, useLocation, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { requireAdministratorPage } from "@/app/.server/auth/authorize";
 import { listAdminNetplayMatches } from "@/app/.server/db/admin-netplay-matches";
 import { routeInput } from "@/app/.server/route-input";
@@ -14,7 +14,11 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { SelectField } from "@/app/components/ui/select";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { DISPLAY_TIME_ZONE, formatExactTimestamp } from "@/lib/format";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM, withoutUiLocale } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
 import { END_REASONS, MATCHES_PATH, endReasonLabel } from "./labels";
 
 const PAGE_SIZE = 30;
@@ -44,66 +48,71 @@ export async function loader(args: LoaderFunctionArgs) {
     player, from: fromMs, until: toMs === undefined ? undefined : toMs + 60_000, reason,
     page: parseAdminPage(params.page), pageSize: PAGE_SIZE,
   });
-  return { player, from: fromMs === undefined ? "" : from, to: toMs === undefined ? "" : to, reason, ...result };
+  return { player, from: fromMs === undefined ? "" : from, to: toMs === undefined ? "" : to, reason, ...result, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["对局记录", "控制台"], page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.netplay.matches"), translate(locale, "admin.characterIndex.console")], page: loaderData?.page }, error, locale);
+};
 
 export default function AdminNetplayMatchesPage() {
+  const t = useMessages();
+  const navigationLocale = useNavigationLocale();
   const { player, from, to, reason, matches, total, page } = useLoaderData<typeof loader>();
   const { search } = useLocation();
   return (
     <main>
-      <PageHeader compact title="对局记录" actions={
-        <Link className={buttonVariants({ variant: "outline" })} to="/admin/netplay-spaces">返回联机空间</Link>
+      <PageHeader compact title={t("admin.netplay.matches")} actions={
+        <Link className={buttonVariants({ variant: "outline" })} to="/admin/netplay-spaces">{t("admin.netplay.back")}</Link>
       } />
-      <form key={search} action={MATCHES_PATH} className="admin-filters" aria-label="对局记录筛选" method="get">
+      <form key={withoutUiLocale(search).toString()} action={MATCHES_PATH} className="admin-filters" aria-label={t("admin.netplay.filters")} method="get">
+        {navigationLocale ? <input type="hidden" name={UI_LOCALE_PARAM} value={navigationLocale} /> : null}
         <div className="admin-filter-row">
           <Label className="admin-field admin-field-search">
-            玩家
-            <Input type="search" name="q" defaultValue={player} maxLength={80} placeholder="昵称或用户 ID" />
+            {t("admin.netplay.player")}
+            <Input type="search" name="q" defaultValue={player} maxLength={80} placeholder={t("admin.netplay.playerHint")} />
           </Label>
           <Label className="admin-field">
-            起始时间（北京时间）
+            {t("admin.netplay.from")}
             <Input type="datetime-local" name="from" defaultValue={from} max={to || undefined} />
           </Label>
           <Label className="admin-field">
-            截止时间
+            {t("admin.netplay.to")}
             <Input type="datetime-local" name="to" defaultValue={to} min={from || undefined} />
           </Label>
           <Label className="admin-field">
-            结束原因
-            <SelectField aria-label="结束原因" name="reason" defaultValue={reason || "all"}
-              options={[{ value: "all", label: "全部原因" }, ...Object.entries(END_REASONS).map(([value, label]) => ({ value, label }))]} />
+            {t("admin.netplay.reason")}
+            <SelectField aria-label={t("admin.netplay.reason")} name="reason" defaultValue={reason || "all"}
+              options={[{ value: "all", label: t("admin.netplay.allReasons") }, ...Object.entries(END_REASONS).map(([value, key]) => ({ value, label: t(key) }))]} />
           </Label>
           <div className="admin-filter-actions">
-            <Button type="submit">应用筛选</Button>
-            {player || from || to || reason ? <Link className={buttonVariants({ variant: "ghost" })} to={MATCHES_PATH}>清除</Link> : null}
+            <Button type="submit">{t("admin.list.apply")}</Button>
+            {player || from || to || reason ? <Link className={buttonVariants({ variant: "ghost" })} to={MATCHES_PATH}>{t("admin.list.clear")}</Link> : null}
           </div>
         </div>
       </form>
-      <AdminListMeta total={total} noun="对局" pageSize={PAGE_SIZE} />
+      <AdminListMeta total={total} noun={t("admin.netplay.match")} pageSize={PAGE_SIZE} />
       {matches.length ? (
-        <TableWrap compact label="对局记录" minWidth={660}>
-          <thead><tr><th scope="col">对局</th><th scope="col">玩家</th><th scope="col">开局时间</th><th scope="col">结束原因</th></tr></thead>
+        <TableWrap compact label={t("admin.netplay.matches")} minWidth={660}>
+          <thead><tr><th scope="col">{t("admin.netplay.match")}</th><th scope="col">{t("admin.netplay.player")}</th><th scope="col">{t("admin.netplay.started")}</th><th scope="col">{t("admin.netplay.reason")}</th></tr></thead>
           <tbody>
             {matches.map(match => (
               <tr key={match.id}>
                 <td>
                   <Link className="admin-cell-title" to={`${MATCHES_PATH}/${match.id}${search}`}>
-                    房间 #{match.room.roomId}
+                    {t("admin.netplay.room", { id: match.room.roomId })}
                   </Link>
                   <span className="admin-cell-meta font-mono">{match.id.slice(0, 8)}</span>
                 </td>
                 <td>{match.seats.map(seat => seat.display_name).join(" / ")}</td>
                 <td className="whitespace-nowrap tabular-nums">{formatExactTimestamp(new Date(match.startedAt).toISOString())}</td>
-                <td>{[...new Set(match.seats.map(seat => endReasonLabel(seat.end_reason)))].join(" / ")}</td>
+                <td>{[...new Set(match.seats.map(seat => endReasonLabel(seat.end_reason, t)))].join(" / ")}</td>
               </tr>
             ))}
           </tbody>
         </TableWrap>
-      ) : <EmptyState title="没有符合条件的对局。" />}
+      ) : <EmptyState title={t("admin.netplay.empty")} />}
       <PaginationLinks basePath={MATCHES_PATH} page={page} pageSize={PAGE_SIZE} total={total}
         params={{ q: player || undefined, from: from || undefined, to: to || undefined, reason: reason || undefined }} />
     </main>

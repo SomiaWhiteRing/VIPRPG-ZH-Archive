@@ -14,7 +14,7 @@ export async function POST(runtime: AppRuntime, request: Request, context: { par
     const expectedStatus = form.get("expected_status");
     if ((operation !== "delete" && operation !== "restore") ||
       (expectedStatus !== "processing" && expectedStatus !== "published" && expectedStatus !== "deleted"))
-      throw new HttpError(400, "作品管理操作不合法");
+      throw new HttpError(400, "作品管理操作不合法", undefined, "admin.works.invalidLifecycle");
     await changeWorkLifecycle(runtime, workId, auth.user, operation, expectedStatus);
     return json({ ok: true, redirectTo: `/admin/works/${workId}` });
   } catch (error) {

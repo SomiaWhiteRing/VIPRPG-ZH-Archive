@@ -3,6 +3,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import { hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
+import type { MessageKey } from "@/lib/i18n/core";
 
 export type ImportJobStatus =
   | "created"
@@ -103,7 +104,7 @@ export async function createImportJob(
       error instanceof Error &&
       error.message.includes("UNIQUE constraint failed")
     ) {
-      throw new HttpError(409, "这款作品已有一个正在进行的新版本上传");
+      throw new HttpError(409, "这款作品已有一个正在进行的新版本上传", undefined, "upload.error.concurrentVersion");
     }
     throw error;
   }
@@ -143,10 +144,10 @@ export async function assertWorkCanReceiveArchive(
 
   const canAdminEdit = hasPermission(user, "work.distribution.update_any");
   if (!row || (row.status === "deleted" && !(canAdminEdit && hasPermission(user, "work.status.update_any")))) {
-    throw new HttpError(404, "作品不存在");
+    throw new HttpError(404, "作品不存在", undefined, "comment.error.workMissing");
   }
   if (!canAdminEdit && !(hasPermission(user, "work.update_own") && row.is_uploader === 1)) {
-    throw new HttpError(403, "无权更新这款作品");
+    throw new HttpError(403, "无权更新这款作品", undefined, "upload.error.targetPermission");
   }
   // The commit validates the selected 2k engine and atomically replaces the download source.
   return row;
@@ -199,7 +200,7 @@ export async function requiredOwnedImportJob(
         .bind(job.work_id)
         .first()))
   ) {
-    throw new HttpError(404, "Import job not found");
+    throw new HttpError(404, "Import job not found", undefined, "upload.error.jobMissing");
   }
   return job;
 }
@@ -220,7 +221,7 @@ export async function resumeOwnedImportJob(
       .run();
     return requiredImportJob(runtime, id);
   }
-  throw new HttpError(409, "上传草稿已经完成、失败、取消或过期");
+  throw new HttpError(409, "上传草稿已经完成、失败、取消或过期", undefined, "upload.error.draftClosed");
 }
 
 export async function markImportJobPreflighted(
@@ -253,7 +254,7 @@ export async function markImportJobPreflighted(
       input.id,
     )
     .run();
-  assertChanged(result, "Import job is no longer ready for preflight");
+  assertChanged(result, "Import job is no longer ready for preflight", "upload.error.preflightClosed");
 }
 
 export function recordImportObjectUploadStatement(
@@ -309,7 +310,7 @@ export async function markImportJobSourceReady(
     )
     .bind(sourceManifestSha256, id)
     .run();
-  assertChanged(result, "Import job source is no longer active");
+  assertChanged(result, "Import job source is no longer active", "upload.error.sourceClosed");
 }
 
 export async function markImportJobMetadataReady(
@@ -324,7 +325,7 @@ export async function markImportJobMetadataReady(
     )
     .bind(id)
     .run();
-  assertChanged(result, "Import job metadata state can no longer be changed");
+  assertChanged(result, "Import job metadata state can no longer be changed", "upload.error.metadataClosed");
 }
 
 export async function claimOwnedImportJobCommit(
@@ -357,8 +358,8 @@ export async function claimOwnedImportJobCommit(
       .bind(id, user.id),
   ]);
   const job = jobResult.results?.[0] as ImportJobRow | undefined;
-  if (!job) throw new HttpError(404, "Import job not found");
-  assertChanged(updateResult, "Import job is not ready to commit");
+  if (!job) throw new HttpError(404, "Import job not found", undefined, "upload.error.jobMissing");
+  assertChanged(updateResult, "Import job is not ready to commit", "upload.error.notReadyToCommit");
   return { ...job, status: "committing" };
 }
 
@@ -403,7 +404,7 @@ export async function markImportJobFailed(
     )
     .bind(message.slice(0, 1000), failedStage, id)
     .run();
-  assertChanged(result, "Import job can no longer be marked as failed");
+  assertChanged(result, "Import job can no longer be marked as failed", "upload.error.failureClosed");
 }
 
 export async function markImportJobCommitFailed(
@@ -420,7 +421,7 @@ export async function markImportJobCommitFailed(
     )
     .bind(message.slice(0, 1000), id)
     .run();
-  assertChanged(result, "Import job commit is no longer active");
+  assertChanged(result, "Import job commit is no longer active", "upload.error.commitClosed");
 }
 
 export async function markImportJobCanceled(
@@ -440,14 +441,14 @@ export async function markImportJobCanceled(
     )
     .bind(id)
     .run();
-  assertChanged(result, "Import job can no longer be canceled");
+  assertChanged(result, "Import job can no longer be canceled", "upload.error.cancelClosed");
 }
 
 export function parseImportJobId(value: string): number {
   return parsePositiveId(value, "import job id");
 }
 
-function assertChanged(result: D1Result, message: string): void {
-  if ((result.meta.changes ?? 0) === 0) throw new HttpError(409, message);
+function assertChanged(result: D1Result, message: string, messageKey: MessageKey): void {
+  if ((result.meta.changes ?? 0) === 0) throw new HttpError(409, message, undefined, messageKey);
 }
 import { parsePositiveId } from "@/app/.server/http/request";

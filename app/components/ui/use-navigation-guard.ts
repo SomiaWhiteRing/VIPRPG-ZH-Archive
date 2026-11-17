@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { withoutUiLocale } from "@/lib/i18n/locale";
 import { type BlockerFunction, type NavigateOptions, type To, useBlocker, useNavigate } from "react-router";
 
 
@@ -9,7 +10,8 @@ export function useNavigationGuard(
 ) {
   const navigate = useRouterNavigationGuard(
     ({ currentLocation, nextLocation }) => enabled &&
-      (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search),
+      (currentLocation.pathname !== nextLocation.pathname ||
+        withoutUiLocale(currentLocation.search).toString() !== withoutUiLocale(nextLocation.search).toString()),
     confirm,
   );
   useDocumentNavigationGuard(enabled);

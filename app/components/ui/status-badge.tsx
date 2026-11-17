@@ -1,6 +1,9 @@
 import { archiveStatusLabel, importTaskStatusLabel, inboxStatusLabel, installStatusLabel, userStatusLabel, workStatusLabel } from "@/lib/labels";
 import type { WebPlayInstallStatus } from "@/app/play/[workId]/web-play-types";
 import { Badge } from "@/app/components/ui/badge";
+import type { UiLocale } from "@/lib/i18n/locale";
+import { useUiLocale } from "@/lib/i18n/react";
+import { translate } from "@/lib/i18n/core";
 
 type StatusBadgeProps =
   | {
@@ -27,46 +30,46 @@ type BadgeMeta = {
 };
 
 export function StatusBadge(props: StatusBadgeProps) {
-  const meta = badgeMeta(props);
+  const meta = badgeMeta(props, useUiLocale());
 
   return <Badge variant={meta.tone}>{meta.label}</Badge>;
 }
 
-function badgeMeta(props: StatusBadgeProps): BadgeMeta {
+function badgeMeta(props: StatusBadgeProps, locale: UiLocale): BadgeMeta {
   switch (props.kind) {
     case "publication":
       return {
-        label: workStatusLabel(props.value),
+        label: workStatusLabel(props.value, locale),
         tone: publicationTone(props.value),
       };
     case "archive":
       return {
-        label: archiveStatusLabel(props.value, props.purgedAt ?? null),
+        label: archiveStatusLabel(props.value, props.purgedAt ?? null, locale),
         tone: archiveTone(props.value, props.purgedAt ?? null),
       };
     case "import-task":
       return {
-        label: importTaskStatusLabel(props.value),
+        label: importTaskStatusLabel(props.value, locale),
         tone: importTaskTone(props.value),
       };
     case "browser-install":
       return {
-        label: installStatusLabel(props.value),
+        label: installStatusLabel(props.value, locale),
         tone: browserInstallTone(props.value),
       };
     case "player":
       return {
-        label: props.value === "running" ? "运行中" : props.value === "starting" ? "启动中" : "待机",
+        label: translate(locale, `play.install.${props.value}`),
         tone: props.value === "running" ? "positive" : "pending",
       };
     case "approval":
       return {
-        label: inboxStatusLabel(props.value),
+        label: inboxStatusLabel(props.value, locale),
         tone: approvalTone(props.value),
       };
     case "account":
       return {
-        label: userStatusLabel(props.value),
+        label: userStatusLabel(props.value, locale),
         tone: props.value === "active" ? "positive" : "negative",
       };
   }

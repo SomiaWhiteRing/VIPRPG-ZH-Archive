@@ -1,3 +1,5 @@
+import { UiFeedbackError, formatFeedbackError } from "@/lib/i18n/feedback";
+import { translate } from "@/lib/i18n/core";
 import { assertSameOrigin } from "@/app/.server/auth/origin";
 import { hashPassword } from "@/app/.server/auth/password";
 import { queuePublicEmailChallenge } from "@/app/.server/auth/public-email-challenge";
@@ -13,10 +15,10 @@ export async function POST(runtime: AppRuntime, request: Request) {
   const nextPath = sanitizeRedirectPath(formData.get("next"));
   try {
     assertSameOrigin(runtime, request);
-    const email = normalizeEmail(readRequiredFormString(formData, "email"));
+    const email = normalizeEmail(readRequiredFormString(formData, "email", "auth.error.emailRequired"));
     const displayName = normalizeDisplayName(String(formData.get("displayName") ?? ""));
     if (formData.get("password") !== formData.get("confirmPassword")) {
-      throw new Error("两次输入的密码不一致");
+      throw new UiFeedbackError("auth.password.mismatch");
     }
     await assertAuthSourceRateLimit(runtime, "register");
     await assertAuthEmailRateLimit(runtime, `register:${email}`);
@@ -29,7 +31,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     return redirectWithParams(request, "/register", {
       next: nextPath,
       email: typeof formData.get("email") === "string" ? String(formData.get("email")) : null,
-      error: error instanceof Error ? error.message : "注册验证码发送失败",
+      error: formatFeedbackError(error, runtime.uiLocale, translate(runtime.uiLocale, "auth.error.registerSendFailed")),
       displayName: typeof formData.get("displayName") === "string" ? String(formData.get("displayName")) : null,
     });
   }

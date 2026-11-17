@@ -6,19 +6,21 @@ import {
   VerificationCodeInput,
 } from "@/app/components/auth/auth-input";
 import { AuthPageShell } from "@/app/components/auth/auth-page-shell";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { getCurrentUser } from "@/app/.server/auth/current-user";
-import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
+import { authReturnUrl, sanitizeRedirectPath } from "@/app/.server/auth/redirect";
 import { redirectPage } from "@/app/.server/http/page-response";
 import { Button } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
 import { Input } from "@/app/components/ui/input";
 import { Notice } from "@/app/components/ui/notice";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -35,24 +37,28 @@ export async function loader(args: LoaderFunctionArgs) {
   const currentUser = await getCurrentUser(runtime);
 
   if (currentUser) {
-    redirectPage(nextPath);
+    const target = authReturnUrl(nextPath, args.request.url);
+    redirectPage(target.pathname + target.search + target.hash);
   }
 
-  return { params, nextPath };
+  return { params, nextPath, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: "注册" }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "auth.signUp") }, error, locale);
+};
 
 export default function RegisterPage() {
   const { params, nextPath } = useLoaderData<typeof loader>();
+  const t = useMessages();
   return (
     <AuthPageShell
-      title="注册"
+      title={t("auth.signUp")}
       footer={
         <>
           <Link to={`/login?next=${encodeURIComponent(nextPath)}`}>
-            返回登录
+            {t("auth.backToLogin")}
           </Link>
         </>
       }
@@ -76,9 +82,11 @@ function RegisterStartForm({ nextPath, email, displayName }: {
   email: string;
   displayName: string;
 }) {
+  const t = useMessages();
   return (
     <RedirectForm
       action="/api/auth/register/start"
+      preserveLanguage
       method="post"
       className="grid gap-4"
       onInput={(event) => {
@@ -88,13 +96,13 @@ function RegisterStartForm({ nextPath, email, displayName }: {
         if (password instanceof HTMLInputElement && confirmation instanceof HTMLInputElement) {
           confirmation.setCustomValidity(
             confirmation.value && confirmation.value !== password.value
-              ? "两次输入的密码不一致" : "",
+              ? t("auth.password.mismatch") : "",
           );
         }
       }}
     >
       <input type="hidden" name="next" value={nextPath} />
-      <FormField controlId="register-display-name" label="显示名">
+      <FormField controlId="register-display-name" label={t("auth.displayName")}>
         <Input
           id="register-display-name"
           name="displayName"
@@ -104,7 +112,7 @@ function RegisterStartForm({ nextPath, email, displayName }: {
           required
         />
       </FormField>
-      <FormField controlId="register-field-1" label="邮箱">
+      <FormField controlId="register-field-1" label={t("auth.email")}>
         <EmailInput
           id="register-field-1"
           name="email"
@@ -113,16 +121,16 @@ function RegisterStartForm({ nextPath, email, displayName }: {
           required
         />
       </FormField>
-      <FormField controlId="register-field-2" label="密码">
+      <FormField controlId="register-field-2" label={t("auth.password")}>
         <PasswordInput
           id="register-field-2"
           purpose="new"
           name="password"
-          placeholder="8到20位的数字、字母或符号"
+          placeholder={t("auth.password.hint")}
           required
         />
       </FormField>
-      <FormField controlId="register-confirm-password" label="确认密码">
+      <FormField controlId="register-confirm-password" label={t("auth.password.confirm")}>
         <PasswordInput
           id="register-confirm-password"
           purpose="new"
@@ -130,7 +138,7 @@ function RegisterStartForm({ nextPath, email, displayName }: {
           required
         />
       </FormField>
-      <Button type="submit">发送验证码</Button>
+      <Button type="submit">{t("auth.code.send")}</Button>
     </RedirectForm>
   );
 }
@@ -142,21 +150,24 @@ function VerificationForm({
   email: string;
   nextPath: string;
 }) {
+  const t = useMessages();
   return (
     <RedirectForm
       action="/api/auth/register/verify"
+      responseType="json"
+      preserveLanguage
       method="post"
       className="grid gap-4"
     >
       <Notice tone="success" className="mb-4 rounded-md border p-3">
-        请查收 {email} 的验证码，10 分钟内有效。未收到请检查垃圾邮件或稍后重试。
+        {t("auth.register.sent", { email })}
       </Notice>
       <input type="hidden" name="next" value={nextPath} />
       <input type="hidden" name="email" value={email} />
-      <FormField controlId="register-field-3" label="验证码">
+      <FormField controlId="register-field-3" label={t("auth.code.label")}>
         <VerificationCodeInput id="register-field-3" name="code" required />
       </FormField>
-      <Button type="submit">完成注册</Button>
+      <Button type="submit">{t("auth.register.finish")}</Button>
     </RedirectForm>
   );
 }

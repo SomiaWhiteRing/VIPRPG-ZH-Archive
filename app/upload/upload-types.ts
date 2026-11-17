@@ -10,6 +10,7 @@ import type { ResourceCleanupReport } from "@/lib/archive/resource-cleanup";
 import type { MissingResourceReport } from "@/lib/archive/missing-resources";
 import type { SharedPlayerReplacement } from "@/lib/archive/shared-player";
 import type { EasyRpgConfig } from "@/lib/archive/easyrpg-config";
+import type { MessageKey } from "@/lib/i18n/core";
 import type { StaffRow } from "./staff-editor";
 import type { MoreInfoRow } from "@/app/components/work/work-more-info-editor";
 import type { WorkVisibility } from "@/lib/work-visibility";
@@ -66,6 +67,7 @@ export type UploadFormDraft = {
   characterFaceSheetFiles: Record<number, File[]>;
   sourceFaceSheetFiles?: File[];
   sourceFaceSheetWarnings?: string[];
+  sourceFaceSheetWarningDetails?: SourceFaceSheetWarning[];
   adminSettings?: ArchiveCommitMetadata["admin"];
   coverBlobSha256?: string;
 };
@@ -93,13 +95,19 @@ export type UploadTaskPhase =
 
 export type UploadSourceKind = "folder" | "zip" | "7z";
 
+export type SourceFaceSheetWarning = string | {
+  name: string;
+  detail: string;
+  feedback?: { key: MessageKey; values?: Record<string, string | number> };
+};
+
 export type UploadSourcePrefill = {
   hasUltimateRuntime: boolean;
   hasManiacPatch: boolean;
   gameTitle: string | null;
   titleImages: File[];
   faceSheetFiles: File[];
-  faceSheetWarnings: string[];
+  faceSheetWarnings: SourceFaceSheetWarning[];
 };
 
 export type UploadSourceFile = {
@@ -165,11 +173,17 @@ export type BrowserUploadTaskSnapshot = {
   extrasBusy?: boolean;
   extrasProgress?: { completed: number; total: number };
   extrasError?: string | null;
+  extrasErrorMessage?: { key: MessageKey; values?: Record<string, string | number> } | null;
   extras?: Array<{ path: string; size: number }>;
   createdAt: string;
   progress: UploadTaskProgress;
   stats: UploadTaskStats;
   error: string | null;
+  errorMessage?: { key: MessageKey; values?: Record<string, string | number> } | null;
+  terminalPending?: {
+    key: "upload.worker.terminalPendingDraft" | "upload.worker.terminalPendingCancel";
+    reason: string;
+  } | null;
   result: UploadTaskCommitResult | null;
 };
 
@@ -240,7 +254,7 @@ export type UploadWorkerOutput =
   | { type: "task"; task: BrowserUploadTaskSnapshot }
   | { type: "source_prefill"; prefill: UploadSourcePrefill }
   | { type: "draft_saved"; draft: UploadRecoveryDraft }
-  | { type: "draft_save_error"; message: string }
+  | { type: "draft_save_error"; message: string; messageKey?: MessageKey }
   | {
       type: "settled";
       task: BrowserUploadTaskSnapshot;

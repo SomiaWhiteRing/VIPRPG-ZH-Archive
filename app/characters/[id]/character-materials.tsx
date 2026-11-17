@@ -1,4 +1,5 @@
 import { EmojiDialog } from "@/app/components/emojis/dialog";
+import { useMessages } from "@/lib/i18n/react";
 import { EmojiLibrary } from "@/app/components/emojis/library";
 import { ImageLightbox } from "@/app/components/media/image-lightbox";
 import { Button } from "@/app/components/ui/button";
@@ -23,13 +24,14 @@ export function CharacterMaterials({
   characterId: number;
   canCollect?: boolean;
 }) {
+  const t = useMessages();
   const [collect, setCollect] = useState<CharacterMaterial | null>(null);
   const [active, setActive] = useState(-1);
   const [quickCopy, setQuickCopy] = useState(false);
   const [faceScale, setFaceScale] = useState(2);
-  const groups = CHARACTER_MATERIAL_CATEGORIES.map(({ kind, label }) => ({
+  const groups = CHARACTER_MATERIAL_CATEGORIES.map(({ kind }) => ({
     kind,
-    label,
+    label: t(`character.material.${kind}`),
     items: materials.filter((material) => material.kind === kind),
   })).filter(({ items }) => items.length);
   const ordered = groups.flatMap(({ items }) => items);
@@ -48,13 +50,13 @@ export function CharacterMaterials({
   }, []);
 
   if (!materials.length)
-    return <EmptyState title="暂无公开素材。" variant="plain" />;
+    return <EmptyState title={t("character.emptyMaterials")} variant="plain" />;
 
   return (
     <>
       <div className="grid gap-6">
         {groups.map(({ kind, label: category, items }) => (
-          <section aria-label={category} key={category}>
+          <section aria-label={category} key={kind}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold">{category}</h2>
               {kind === "faceset" ? (
@@ -78,7 +80,7 @@ export function CharacterMaterials({
               {items.map((material) => {
                 const index = indices.get(material.id)!;
                 const src = `/api/media/blobs/${material.blobSha256}`;
-                const label = `${name} · ${category} ${index + 1}`;
+                const label = t("character.materialLabel", { name, category, index: index + 1 });
                 return (
                   <li className="min-w-0 max-w-full" key={material.id}>
                     {kind === "faceset" ? (
@@ -92,7 +94,7 @@ export function CharacterMaterials({
                       />
                     ) : (
                       <Button
-                        aria-label={`查看${label}`}
+                        aria-label={t("character.preview", { label })}
                         className="block h-auto min-h-0 max-w-full rounded-none p-0 hover:bg-transparent"
                         onClick={() => setActive(index)}
                         type="button"
@@ -120,7 +122,7 @@ export function CharacterMaterials({
         onOpenChange={(open) => {
           if (!open) setCollect(null);
         }}
-        title={`${name} · 收藏为表情`}
+        title={t("character.collectEmojiNamed", { name })}
       >
         {collect ? (
           <EmojiLibrary
@@ -156,7 +158,7 @@ export function CharacterMaterials({
                         setActive(-1);
                       }}
                     >
-                      收藏为表情
+                      {t("character.collectEmoji")}
                     </Button>,
                   ]
                 : []),
@@ -171,7 +173,7 @@ export function CharacterMaterials({
           }))}
           plugins={[Download]}
           pixelated
-          labels={{ Download: "下载原图" }}
+          labels={{ Download: t("character.downloadOriginal") }}
         />
       ) : null}
     </>

@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { useMessages } from "@/lib/i18n/react";
+import { translate } from "@/lib/i18n/core";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -26,44 +28,47 @@ export async function loader(args: LoaderFunctionArgs) {
   const user = await requireAccountUser(runtime, "/me/profile/email");
   const params = await searchParams;
 
-  return { user: pickPageFields(user, ["email"]), params };
+  return { locale: runtime.uiLocale, user: pickPageFields(user, ["email"]), params };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["修改登录邮箱", "个人中心"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "profile.changeLoginEmail"), translate(locale, "header.me")] }, error, locale);
+};
 
 export default function EmailPage() {
+  const t = useMessages();
   const { user, params } = useLoaderData<typeof loader>();
   return (
     <div>
-      <AccountPageHeader parentTitle="个人资料" title="修改登录邮箱" />
-      <RedirectFeedback success={{ emailUpdated: "邮箱已更新，其他设备已登出。" }} />
+      <AccountPageHeader parentTitle={t("account.nav.profile")} title={t("profile.changeLoginEmail")} />
+      <RedirectFeedback success={{ emailUpdated: t("profile.emailUpdated") }} />
       {params.emailSent ? (
         <Notice
           tone="success"
           className="mb-4 rounded-md px-4 py-3 text-sm"
           role="status"
         >
-          验证码已发送到新邮箱。
+          {t("profile.emailCodeSent")}
         </Notice>
       ) : null}
 
       <div className="max-w-2xl">
         <p className="mb-5 text-sm text-muted">
-          当前登录邮箱：
+          {t("profile.currentEmail")}
           <span className="font-semibold text-foreground">{user.email}</span>
         </p>
         {params.emailSent && params.newEmail ? (
           <RedirectForm
-            action="/api/account/email/confirm"
+            action="/api/account/email/confirm" preserveLanguage
             className="grid gap-4"
             method="post"
           >
             <Input name="newEmail" type="hidden" value={params.newEmail} />
-            <AccountField htmlFor="email-change-new" label="新邮箱">
+            <AccountField htmlFor="email-change-new" label={t("profile.newEmail")}>
               <Input disabled id="email-change-new" value={params.newEmail} />
             </AccountField>
-            <AccountField htmlFor="email-change-code" label="验证码">
+            <AccountField htmlFor="email-change-code" label={t("auth.code.label")}>
               <VerificationCodeInput
                 id="email-change-code"
                 name="code"
@@ -71,16 +76,16 @@ export default function EmailPage() {
               />
             </AccountField>
             <div className="flex justify-end">
-              <Rm2kButton type="submit">确认修改邮箱</Rm2kButton>
+              <Rm2kButton type="submit">{t("profile.confirmEmail")}</Rm2kButton>
             </div>
           </RedirectForm>
         ) : (
           <RedirectForm
-            action="/api/account/email/start"
+            action="/api/account/email/start" preserveLanguage
             className="grid gap-4"
             method="post"
           >
-            <AccountField htmlFor="email-change-address" label="新邮箱">
+            <AccountField htmlFor="email-change-address" label={t("profile.newEmail")}>
               <EmailInput
                 defaultValue={params.newEmail}
                 id="email-change-address"
@@ -88,7 +93,7 @@ export default function EmailPage() {
                 required
               />
             </AccountField>
-            <AccountField htmlFor="email-change-password" label="当前密码">
+            <AccountField htmlFor="email-change-password" label={t("profile.currentPassword")}>
               <PasswordInput
                 id="email-change-password"
                 name="currentPassword"
@@ -96,7 +101,7 @@ export default function EmailPage() {
               />
             </AccountField>
             <div className="flex justify-end">
-              <Rm2kButton type="submit">发送验证码</Rm2kButton>
+              <Rm2kButton type="submit">{t("auth.code.send")}</Rm2kButton>
             </div>
           </RedirectForm>
         )}

@@ -5,6 +5,7 @@ import {
 } from "./alert-dialog";
 import { Button } from "./button";
 import { useToast } from "./toast";
+import { useMessages } from "@/lib/i18n/react";
 
 type ConfirmOptions = {
   content?: ReactNode;
@@ -24,6 +25,7 @@ type Request = ConfirmOptions & {
 const ConfirmContext = createContext<((description: string, options: ConfirmOptions, signal: AbortSignal) => Promise<boolean>) | null>(null);
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const t = useMessages();
   const toast = useToast();
   const [request, setRequest] = useState<Request | null>(null);
   const current = useRef<Request | null>(null);
@@ -73,7 +75,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       await pending.action();
       if (current.current === pending) finish(true);
     } catch (cause) {
-      if (current.current === pending) toast.error(cause instanceof Error ? cause.message : "操作失败，请重试。");
+      if (current.current === pending) toast.error(cause instanceof Error ? cause : t("core.confirm.failed"));
     } finally {
       if (current.current === pending) { submitting.current = false; setBusy(false); }
     }
@@ -86,13 +88,13 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         <AlertDialogContent aria-busy={busy}
           onEscapeKeyDown={(event) => { if (submitting.current) event.preventDefault(); }}
           onCloseAutoFocus={(event) => { event.preventDefault(); if (focus.current?.isConnected) focus.current.focus(); }}>
-          <AlertDialogTitle className="text-lg font-bold">{request?.title ?? "确认操作"}</AlertDialogTitle>
+          <AlertDialogTitle className="text-lg font-bold">{request?.title ?? t("core.confirm.title")}</AlertDialogTitle>
           <AlertDialogDescription className="empty:hidden whitespace-pre-wrap break-words text-sm leading-relaxed text-muted">{request?.description}</AlertDialogDescription>
           {request?.content}
           <AlertDialogFooter>
-            <AlertDialogCancel asChild><Button type="button" variant="outline" disabled={busy}>取消</Button></AlertDialogCancel>
+            <AlertDialogCancel asChild><Button type="button" variant="outline" disabled={busy}>{t("relation.edit.cancel")}</Button></AlertDialogCancel>
             <Button type="button" variant={request?.destructive ? "destructive" : "default"} disabled={busy} onClick={() => void accept()}>
-              {busy ? "正在处理…" : request?.confirmLabel ?? "继续"}
+              {busy ? t("core.confirm.working") : request?.confirmLabel ?? t("core.confirm.continue")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

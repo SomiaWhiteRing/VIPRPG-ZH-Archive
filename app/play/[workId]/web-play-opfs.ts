@@ -1,3 +1,4 @@
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 import { deleteGameBucket, openGameBucket, validatePlayKey } from "./web-play-storage";
 import type { WebPlayInstallation } from "./web-play-types";
 import { observeInstallTask } from "./web-play-install-observer";
@@ -26,16 +27,16 @@ export async function readGamePackages(
       !("manifestSha256" in index) || index.manifestSha256 !== manifestSha256 ||
       !("packs" in index) || !Array.isArray(index.packs) ||
       !("files" in index) || !index.files || typeof index.files !== "object" || Array.isArray(index.files)) {
-    throw new Error("本地游戏索引不匹配，请重新安装游戏。");
+    throw new UiFeedbackError("play.diagnostic.indexMismatch");
   }
   const packsRoot = await root.getDirectoryHandle("packs");
   const packages = new Map<string, WebPlayPackage>();
   for (const pack of index.packs) {
     signal.throwIfAborted();
     if (!pack || typeof pack.name !== "string" || !Number.isSafeInteger(pack.size) || pack.size < 0 || packages.has(pack.name))
-      throw new Error("本地资源包索引无效。");
+      throw new UiFeedbackError("play.diagnostic.packIndex");
     const blob = await (await packsRoot.getFileHandle(normalizePackName(pack.name))).getFile();
-    if (blob.size !== pack.size) throw new Error(`本地资源包不完整：${pack.name}`);
+    if (blob.size !== pack.size) throw new UiFeedbackError("play.diagnostic.packIncomplete", { name: pack.name });
     packages.set(pack.name, { blob, metadata: { files: [] } });
   }
   const paths = new Set<string>();
@@ -43,22 +44,22 @@ export async function readGamePackages(
   for (const record of Object.values(index.files)) {
     if (!record || typeof record.path !== "string" || typeof record.pack !== "string" ||
         !Number.isSafeInteger(record.offset) || !Number.isSafeInteger(record.length) ||
-        record.offset < 0 || record.length < 0) throw new Error("本地游戏文件索引无效。");
+        record.offset < 0 || record.length < 0) throw new UiFeedbackError("play.diagnostic.fileIndex");
     // WORKERFS builds a directory tree using ordinary JS objects.
     if (record.path.includes("\\") || record.path.includes("\0") ||
         record.path.split("/").some((part: string) => !part || part === "." || part === ".." ||
           Object.prototype.hasOwnProperty.call(Object.prototype, part)) ||
-        paths.has(record.path) || directories.has(record.path)) throw new Error(`非法本地游戏路径：${record.path}`);
+        paths.has(record.path) || directories.has(record.path)) throw new UiFeedbackError("play.diagnostic.invalidPath", { path: record.path });
     const parts = record.path.split("/");
     for (let i = 1; i < parts.length; i++) {
       const directory = parts.slice(0, i).join("/");
-      if (paths.has(directory)) throw new Error(`本地游戏路径冲突：${record.path}`);
+      if (paths.has(directory)) throw new UiFeedbackError("play.diagnostic.pathConflict", { path: record.path });
       directories.add(directory);
     }
     const pack = packages.get(record.pack);
     const end = record.offset + record.length;
     if (!pack || !Number.isSafeInteger(end) || end > pack.blob.size)
-      throw new Error(`本地游戏文件范围无效：${record.path}`);
+      throw new UiFeedbackError("play.diagnostic.fileRange", { path: record.path });
     paths.add(record.path);
     const crc32 = typeof record.crc32 === "number" && Number.isInteger(record.crc32) &&
       record.crc32 >= 0 && record.crc32 <= 0xffffffff ? record.crc32 : undefined;
@@ -74,7 +75,7 @@ export async function ensureOpfsSupported(): Promise<void> {
   };
 
   if (!storage.getDirectory) {
-    throw new Error("当前浏览器不支持所需的本地存储，无法安装游戏。");
+    throw new UiFeedbackError("play.storage.error.installUnsupported");
   }
 }
 
@@ -166,7 +167,7 @@ export async function hasGameResources(installation: WebPlayInstallation, requir
 
 function normalizePackName(name: string): string {
   if (!/^[a-z0-9][a-z0-9._-]*\.pack$/.test(name)) {
-    throw new Error(`非法 pack 文件名：${name}`);
+    throw new UiFeedbackError("play.diagnostic.packName", { name });
   }
 
   return name;

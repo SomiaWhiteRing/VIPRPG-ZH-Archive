@@ -5,8 +5,10 @@ import type { CharacterIndexData } from "@/lib/character-index";
 import {
   characterMembershipNames,
   sortCharacterNodes,
+  UNCLASSIFIED_SEARCH_LABELS,
 } from "@/lib/character-index";
 import { characterNameKey } from "@/lib/character-names";
+import { useMessages } from "@/lib/i18n/react";
 import { cn } from "@/lib/ui/cn";
 import { Check, ChevronRight, Folder, ListTree, Search, X } from "lucide-react";
 import * as Popover from "@/app/components/ui/popover";
@@ -40,6 +42,8 @@ export function CharacterTreeSearch({
   disabled: boolean;
   onSelect: (id: number) => void;
 }) {
+  const t = useMessages();
+  const unclassifiedLabel = t("character.uncategorized");
   const treeId = useId();
   const input = useRef<HTMLInputElement>(null);
   const tree = useRef<HTMLDivElement>(null);
@@ -50,7 +54,7 @@ export function CharacterTreeSearch({
   const composing = useRef(false);
   const [expanded, setExpanded] = useState<Set<Key>>(new Set());
   const searching = Boolean(submittedQuery);
-  const roots = useMemo(() => buildTree(data, submittedQuery), [data, submittedQuery]);
+  const roots = useMemo(() => buildTree(data, submittedQuery, unclassifiedLabel), [data, submittedQuery, unclassifiedLabel]);
   const searchExpanded = new Set<Key>();
   function collect(nodes: Node[]) {
     for (const node of nodes) {
@@ -118,7 +122,7 @@ export function CharacterTreeSearch({
                   <>
                     <TreeButton
                       slot="chevron"
-                      aria-label={`${isExpanded ? "收起" : "展开"}${node.label}`}
+                      aria-label={t(isExpanded ? "character.collapseGroup" : "character.expandGroup", { label: node.label })}
                       isDisabled={searching}
                       className="flex size-5 shrink-0 items-center justify-center rounded outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
@@ -189,11 +193,11 @@ export function CharacterTreeSearch({
           />
           <Input
             ref={input}
-            aria-label="搜索角色或分类"
+            aria-label={t("admin.portraits.searchTree")}
             type="search"
             disabled={disabled}
             aria-controls={open ? treeId : undefined}
-            placeholder="回车搜索角色、别名、#ID 或分类"
+            placeholder={t("admin.portraits.searchTreeHint")}
             enterKeyHint="search"
             value={query}
             onChange={(event) => {
@@ -226,7 +230,7 @@ export function CharacterTreeSearch({
           />
           {query || submittedQuery ? (
             <Button
-              aria-label="清空角色搜索"
+              aria-label={t("character.manager.clearSearch")}
               className="absolute right-9 top-1 size-8 min-h-0"
               size="icon"
               type="button"
@@ -242,7 +246,7 @@ export function CharacterTreeSearch({
             </Button>
           ) : null}
           <Button
-            aria-label="角色分类树"
+            aria-label={t("admin.portraits.categoryTree")}
             aria-expanded={open && !disabled}
             aria-controls={treeId}
             className="absolute right-1 top-1 size-8 min-h-0"
@@ -263,7 +267,7 @@ export function CharacterTreeSearch({
         <Popover.Content
           align="end"
           sideOffset={4}
-          aria-label="角色分类搜索"
+          aria-label={t("admin.portraits.categorySearch")}
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={() => input.current?.focus()}
@@ -279,7 +283,7 @@ export function CharacterTreeSearch({
           <Tree
             ref={tree}
             id={treeId}
-            aria-label="角色分类"
+            aria-label={t("admin.characterIndex.title")}
             items={roots}
             selectionMode="none"
             expandedKeys={searching ? searchExpanded : expanded}
@@ -288,7 +292,7 @@ export function CharacterTreeSearch({
             }}
             renderEmptyState={() => (
               <p role="status" className="p-3 text-sm text-muted">
-                没有匹配的角色或分类
+                {t("admin.portraits.noTreeResults")}
               </p>
             )}
             className="min-w-0 outline-none"
@@ -301,7 +305,7 @@ export function CharacterTreeSearch({
   );
 }
 
-function buildTree(data: CharacterIndexData, query: string): Node[] {
+function buildTree(data: CharacterIndexData, query: string, unclassifiedLabel: string): Node[] {
   const terms = characterNameKey(query.replace(/[/／]/g, " "))
     .split(/\s+/)
     .filter(Boolean);
@@ -375,11 +379,11 @@ function buildTree(data: CharacterIndexData, query: string): Node[] {
   );
   const unclassified = data.characters
     .filter((character) => !classified.has(character.id))
-    .flatMap((character) => characterNode(character.id, "未分类"));
+    .flatMap((character) => characterNode(character.id, UNCLASSIFIED_SEARCH_LABELS));
   if (unclassified.length)
     roots.push({
       id: "unclassified",
-      label: "未分类",
+      label: unclassifiedLabel,
       children: unclassified,
       sortOrder: roots.length,
     });

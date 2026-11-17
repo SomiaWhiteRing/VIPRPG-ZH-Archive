@@ -2,6 +2,8 @@ import type { CharacterNameInput } from "@/app/components/characters/character-c
 import { CharacterCreateDialog } from "@/app/components/characters/character-create-dialog";
 import { Button } from "@/app/components/ui/button";
 import type { ApiResponsePayload } from "@/lib/ui/api-response";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
 import { requestJson } from "@/lib/ui/api-response";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
@@ -15,6 +17,8 @@ export function CharacterCreateButton({
 }: {
   disabled?: boolean;
 }) {
+  const t = useMessages();
+  const locale = useNavigationLocale();
   const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
@@ -32,15 +36,16 @@ export function CharacterCreateButton({
         },
         method: "POST",
       },
-      "角色创建失败",
+      t("admin.characterList.createFailed"),
     );
     const characterId = payload.character?.id;
     if (!Number.isSafeInteger(characterId) || Number(characterId) <= 0) {
       throw new Error(
-        "角色已创建，但服务器没有返回角色 ID。请刷新列表后查找该角色。",
+        t("admin.characterList.missingId"),
       );
     }
-    navigate(`/admin/characters/${characterId}`);
+    const search = locale ? `?${new URLSearchParams({ [UI_LOCALE_PARAM]: locale })}` : "";
+    navigate(`/admin/characters/${characterId}${search}`);
   }
 
   return (
@@ -51,17 +56,17 @@ export function CharacterCreateButton({
         ref={triggerRef}
         type="button"
       >
-        创建角色
+        {t("admin.characterList.create")}
       </Button>
       <CharacterCreateDialog
-        description="若日语名已存在，将打开已有角色，不修改已有资料；否则创建新角色。"
+        description={t("admin.characterList.createHint")}
         onCreate={createCharacter}
         onOpenChange={setOpen}
         open={open}
         returnFocus={() => triggerRef.current}
-        submitLabel="创建角色"
-        submittingLabel="创建中…"
-        title="创建角色"
+        submitLabel={t("admin.characterList.create")}
+        submittingLabel={t("admin.characterList.creating")}
+        title={t("admin.characterList.create")}
       />
     </>
   );

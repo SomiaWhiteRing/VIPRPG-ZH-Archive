@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { formatFeedbackError, UiFeedbackError } from "@/lib/i18n/feedback";
 import { getAuthContext } from "@/app/.server/auth/current-user";
 import { assertSameOrigin } from "@/app/.server/auth/origin";
 import { changeOwnPassword } from "@/app/.server/db/users";
@@ -15,7 +17,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     const form = await request.formData();
     const newPassword = String(form.get("newPassword") ?? "");
     if (newPassword !== String(form.get("confirmPassword") ?? ""))
-      throw new Error("两次输入的新密码不一致");
+      throw new UiFeedbackError("profile.passwordMismatch");
     await changeOwnPassword(runtime, {
       user: auth.user,
       currentSessionId: auth.session.id,
@@ -27,7 +29,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     });
   } catch (error) {
     return redirectWithParams(request, "/me/profile/password", {
-      error: error instanceof Error ? error.message : "密码更新失败",
+      error: formatFeedbackError(error, runtime.uiLocale, translate(runtime.uiLocale, "profile.passwordFailed")),
     });
   }
 }

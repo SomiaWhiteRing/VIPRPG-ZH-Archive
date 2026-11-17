@@ -1,4 +1,5 @@
 import { Button } from "@/app/components/ui/button";
+import { useMessages } from "@/lib/i18n/react";
 import { InfoTooltip } from "@/app/components/ui/info-tooltip";
 import { Label } from "@/app/components/ui/label";
 import { SelectField } from "@/app/components/ui/select";
@@ -18,12 +19,13 @@ export function FaceQuickCopyControls({ enabled, onEnabledChange, scale, onScale
   scale: number;
   onScaleChange: (scale: number) => void;
 }) {
+  const t = useMessages();
   const switchId = useId();
   return (
     <div className="ml-auto flex min-h-8 items-center gap-2">
       {enabled ? (
         <SelectField
-          aria-label="缩放倍率"
+          aria-label={t("character.faceScale")}
           value={String(scale)}
           onValueChange={(value) => onScaleChange(Number(value))}
           options={SCALES}
@@ -31,10 +33,10 @@ export function FaceQuickCopyControls({ enabled, onEnabledChange, scale, onScale
         />
       ) : null}
       <div className="flex shrink-0 items-center gap-1">
-        <InfoTooltip label="脸图快取用法" className="whitespace-pre-line">
-          {"可以快捷在网站外使用脸图的功能。\n启用后，PC端可以点击复制到剪贴板或拖动到聊天窗口。移动端可以长按后保存或分享。"}
+        <InfoTooltip label={t("character.faceCopyHelp")} className="whitespace-pre-line">
+          {t("character.faceCopyInstructions")}
         </InfoTooltip>
-        <Label htmlFor={switchId} className="cursor-pointer whitespace-nowrap text-sm">脸图快取</Label>
+        <Label htmlFor={switchId} className="cursor-pointer whitespace-nowrap text-sm">{t("character.faceQuickCopy")}</Label>
       </div>
       <Switch.Root
         id={switchId}
@@ -55,6 +57,7 @@ export function FaceMaterial({ sheet, label, quickCopy, scale, onPreview }: {
   scale: number;
   onPreview: () => void;
 }) {
+  const t = useMessages();
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const captureLoadedImage = useCallback((node: HTMLImageElement | null) => {
     if (node?.complete && node.naturalWidth) setImage(node);
@@ -64,7 +67,7 @@ export function FaceMaterial({ sheet, label, quickCopy, scale, onPreview }: {
     <div className="relative w-fit max-w-full">
       {quickCopy ? <FaceQuickCopyGrid key={scale} image={image} sheet={sheet} label={label} scale={scale} /> : null}
       <Button
-        aria-label={`查看${label}`}
+        aria-label={t("character.preview", { label })}
         className="block h-auto min-h-0 max-w-full rounded-none p-0 hover:bg-transparent peer-data-[ready=true]:invisible"
         inert={quickCopy}
         onClick={onPreview}
@@ -92,6 +95,7 @@ function FaceQuickCopyGrid({ image, sheet, label, scale }: {
   label: string;
   scale: number;
 }) {
+  const t = useMessages();
   const toast = useToast();
   const [cells, setCells] = useState<{ png: Blob; url: string }[]>();
   const [ready, setReady] = useState(false);
@@ -148,13 +152,13 @@ function FaceQuickCopyGrid({ image, sheet, label, scale }: {
         return (
           <Button
             key={index}
-            aria-label={`复制第 ${row} 行第 ${column} 列脸图`}
+            aria-label={t("character.copyFaceAt", { row, column })}
             className="relative min-h-0 min-w-0 cursor-copy rounded-none p-0 hover:bg-transparent focus-visible:ring-0 after:pointer-events-none after:absolute after:inset-0 after:z-10 after:border-2 after:border-transparent hover:after:border-emerald-500 focus-visible:after:border-emerald-500"
             onClick={(event) => {
               if (event.nativeEvent instanceof PointerEvent && event.nativeEvent.pointerType === "touch") return;
               if (!cell || !navigator.clipboard?.write || typeof ClipboardItem !== "function") return;
               void navigator.clipboard.write([new ClipboardItem({ "image/png": cell.png })])
-                .then(() => toast.success("已复制到剪贴板。"))
+                .then(() => toast.success(t("character.faceCopied")))
                 .catch(console.error);
             }}
             type="button"

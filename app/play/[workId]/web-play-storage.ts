@@ -1,3 +1,4 @@
+import { UiFeedbackDOMException, UiFeedbackError } from "@/lib/i18n/feedback";
 import { sha256Hex } from "@/lib/sha256";
 import type { WebPlayInstallation, WebPlayStorageKind } from "./web-play-types";
 import { readGameRetentionDays, type GameRetentionDays } from "./web-play-retention";
@@ -40,7 +41,7 @@ export function gameResourceExpiresAt(installation: WebPlayInstallation, retenti
 }
 
 export function validatePlayKey(playKey: string): void {
-  if (!/^av-\d+-[a-z0-9-]+$/.test(playKey)) throw new Error("非法游戏安装标识。");
+  if (!/^av-\d+-[a-z0-9-]+$/.test(playKey)) throw new UiFeedbackError("play.storage.error.invalidInstallId");
 }
 
 async function bucketName(playKey: string): Promise<string> {
@@ -51,19 +52,19 @@ async function bucketName(playKey: string): Promise<string> {
 
 export async function openGameBucket(installation: WebPlayInstallation, create: boolean, retention?: GameRetentionDays): Promise<GameBucket> {
   const manager = buckets();
-  if (!manager) throw new Error("当前浏览器无法读取已安装的游戏资源。");
+  if (!manager) throw new UiFeedbackError("play.storage.error.readUnsupported");
   const name = await bucketName(installation.playKey);
   const expires = gameResourceExpiresAt(installation, retention ?? await readGameRetentionDays());
-  if (expires !== null && expires <= Date.now()) throw new DOMException("游戏资源已过期。", "NotFoundError");
+  if (expires !== null && expires <= Date.now()) throw new UiFeedbackDOMException("NotFoundError", "play.storage.error.expired");
   // Opening an absent bucket would silently create it. Check first when reading.
-  if (!create && !(await manager.keys()).includes(name)) throw new DOMException("游戏资源已被清理。", "NotFoundError");
+  if (!create && !(await manager.keys()).includes(name)) throw new UiFeedbackDOMException("NotFoundError", "play.storage.error.removed");
   // Always supply the existing deadline: opening a bucket must not renew it just by browsing.
   return manager.open(name, { expires: expires ?? noAutomaticExpiry, persisted: false });
 }
 
 export async function deleteGameBucket(playKey: string): Promise<void> {
   const manager = buckets();
-  if (!manager) throw new Error("当前浏览器无法清理已安装的游戏资源。");
+  if (!manager) throw new UiFeedbackError("play.storage.error.removeUnsupported");
   await manager.delete(await bucketName(playKey));
 }
 

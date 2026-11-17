@@ -12,7 +12,6 @@ import { AccountEmpty } from "@/app/components/profile/account-content";
 import { AccountPageHeader } from "@/app/me/account-page-header";
 import { Button } from "@/app/components/ui/button";
 import { ConfirmingForm } from "@/app/components/ui/confirming-form";
-import { Rm2kButton } from "@/app/components/ui/rm2k-button";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { Badge } from '@/app/components/ui/badge';
 import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
@@ -21,11 +20,14 @@ import {
   canPublishWork,
   hasPermission,
 } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { formatDate, parseTimestamp } from "@/lib/format";
 import { engineLabel, languageLabel } from "@/lib/labels";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -45,26 +47,31 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return {
     page,
+    locale: runtime.uiLocale,
     user: pickPageFields(user, ["id", "status", "permissionKeys"]),
     result,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: "我的上传", page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "account.nav.uploads"), page: loaderData?.page }, error, locale);
+};
 
 export default function UploadsPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { page, user, result } = useLoaderData<typeof loader>();
   return (
     <div>
       <AccountPageHeader
         actions={
           canPublishWork(user) ? (
-            <Rm2kButton href="/upload">发布新作品</Rm2kButton>
+            <Button asChild variant="rm2k"><Link to="/upload">{t("upload.own.new")}</Link></Button>
           ) : undefined
         }
-        subtitle={`共 ${result.total} 部作品`}
-        title="我的上传"
+        subtitle={t("upload.own.count", { count: result.total })}
+        title={t("account.nav.uploads")}
       />
       {result.items.length ? (
         <ul className="divide-y divide-border border-b border-border">
@@ -74,7 +81,7 @@ export default function UploadsPage() {
               key={work.id}
             >
               <Link
-                aria-label={`${work.status === "processing" ? "编辑作品" : "查看作品"}：${work.chineseTitle || work.originalTitle}`}
+                aria-label={t(work.status === "processing" ? "upload.own.editNamed" : "upload.own.viewNamed", { title: work.chineseTitle || work.originalTitle })}
                 className="row-span-2 block aspect-4/3 w-26 self-start overflow-hidden rounded-md border border-border bg-muted/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:row-span-1 sm:w-32"
                 to={work.status === "processing" ? `/me/uploads/${work.id}` : `/games/${work.id}`}
               >
@@ -82,7 +89,7 @@ export default function UploadsPage() {
                   blobSha256={work.coverBlobSha256}
                   width={128}
                   height={96}
-                  fallback="暂无封面"
+                  fallback={t("work.noCover")}
                   fallbackClassName="flex h-full items-center justify-center px-1 text-center font-mono text-xs text-muted"
                 />
               </Link>
@@ -96,7 +103,7 @@ export default function UploadsPage() {
                   </Link>
                   <StatusBadge kind="publication" value={work.status} />
                   {hasPermission(user, 'work.update_own') && work.pendingMaintainerRequests > 0 ? (
-                    <Link to="/inbox?category=pending" className="hover:underline"><Badge variant="outline">{work.pendingMaintainerRequests} 条维护申请</Badge></Link>
+                    <Link to="/inbox?category=pending" className="hover:underline"><Badge variant="outline">{t("upload.own.pending", { count: work.pendingMaintainerRequests })}</Badge></Link>
                   ) : null}
                 </div>
                 {work.chineseTitle ? (
@@ -105,17 +112,17 @@ export default function UploadsPage() {
                   </p>
                 ) : null}
                 <p className="mt-1 text-sm text-muted">
-                  {engineLabel(work.engineFamily)} ·{" "}
-                  {languageLabel(work.language)}
+                  {engineLabel(work.engineFamily, locale)} ·{" "}
+                  {languageLabel(work.language, locale)}
                 </p>
                 <p className="mt-1 text-sm text-muted">
                   {work.publishedAt
-                    ? `发布于 ${formatDate(work.publishedAt)}`
+                    ? t("upload.own.publishedAt", { date: formatDate(work.publishedAt, { locale }) })
                     : ""}
                   {!work.publishedAt ||
                   parseTimestamp(work.updatedAt).getTime() !==
                     parseTimestamp(work.publishedAt).getTime()
-                    ? `${work.publishedAt ? " · " : ""}最近更新：${formatDate(work.updatedAt)}`
+                    ? `${work.publishedAt ? " · " : ""}${t("upload.own.updatedAt", { date: formatDate(work.updatedAt, { locale }) })}`
                     : ""}
                 </p>
               </div>
@@ -127,19 +134,19 @@ export default function UploadsPage() {
                     size="sm"
                     className="px-3 text-xs"
                   >
-                    <Link to={`/me/uploads/${work.id}`}>编辑信息</Link>
+                    <Link to={`/me/uploads/${work.id}`}>{t("upload.own.editDetails")}</Link>
                   </Button>
                 ) : null}
                 {work.status === "processing" && hasPermission(user, "work.update_own") ? (
                   <ConfirmingForm
                     action={`/api/works/${work.id}/delete`}
                     confirmField="confirm"
-                    title="确认删除上传记录？"
-                    description="删除后，这条未完成的上传将从“我的上传”中移除，只有管理员可以恢复。"
+                    title={t("upload.own.deleteRecordConfirm")}
+                    description={t("upload.own.deleteRecordDescription")}
                   >
                     <input name="confirm" type="hidden" value="delete" />
                     <Button type="submit" variant="destructive" size="sm" className="px-3 text-xs">
-                      删除记录
+                      {t("upload.own.deleteRecord")}
                     </Button>
                   </ConfirmingForm>
                 ) : null}
@@ -148,7 +155,7 @@ export default function UploadsPage() {
           ))}
         </ul>
       ) : (
-        <AccountEmpty>还没有上传作品。</AccountEmpty>
+        <AccountEmpty>{t("upload.own.empty")}</AccountEmpty>
       )}
       <PaginationLinks
         basePath="/me/uploads"

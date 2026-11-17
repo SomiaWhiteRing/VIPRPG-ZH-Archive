@@ -1,7 +1,8 @@
 import { Badge } from "@/app/components/ui/badge";
 import { WorkListRow } from "@/app/components/work/work-list-row";
 import { useVisibleWorkItems } from "@/app/components/work/use-visible-work-items";
-import { CHARACTER_ROLE_LABELS } from "@/lib/character-names";
+import { isCharacterRoleKey } from "@/lib/character-names";
+import { useMessages } from "@/lib/i18n/react";
 import type {
   CharacterWork,
   CharacterWorkCredit,
@@ -16,6 +17,7 @@ export function CharacterWorkList({
   characterName: string;
   standalone?: boolean;
 }) {
+  const t = useMessages();
   const visibleWorks = useVisibleWorkItems(works);
   return (
     <ul className={`m-0 list-none divide-y divide-border p-0 ${standalone ? "border-b border-border" : ""}`}>
@@ -35,7 +37,7 @@ export function CharacterWorkList({
               credit.spoilerLevel > 0 ? (
                 <details className="mt-1.5 text-sm" key={credit.creditId}>
                   <summary className="cursor-pointer text-muted">
-                    登场信息（含剧透）
+                    {t("character.spoilers")}
                   </summary>
                   <CharacterCredit work={credit} characterName={characterName} />
                 </details>
@@ -54,9 +56,11 @@ function CharacterCredit({ work, characterName }: {
   work: CharacterWorkCredit;
   characterName: string;
 }) {
+  const t = useMessages();
+  const role = isCharacterRoleKey(work.roleKey) ? work.roleKey : "other";
   return (
     <div className="mt-1.5 text-sm">
-      <Badge variant="credit">{CHARACTER_ROLE_LABELS[work.roleKey]}</Badge>
+      <Badge variant="credit">{t(`work.role.${role}`)}</Badge>
       {work.displayName !== characterName ? (
         <span className="ml-2 text-muted">{work.displayName}</span>
       ) : null}

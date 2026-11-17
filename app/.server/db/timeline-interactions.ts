@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { interactionSuppressedSql } from "./user-blocks";
 import { assertInteractionAllowed, interactionRestrictedSql } from "./interaction-restrictions";
@@ -13,10 +14,10 @@ import type { TimelineReplyPage } from "@/lib/dto/db/timeline";
 import { HttpError } from "@/lib/http";
 import { parseCommentImageIds, timelineImageGuard, timelineImageStatement, timelineImagesById } from "@/app/.server/comments/images";
 
-async function requirePublicStatus(db: D1Database, eventId: number) {
+async function requirePublicStatus(db: D1Database, eventId: number, locale: AppRuntime["uiLocale"]) {
   const row = await db.prepare(`SELECT user_id FROM timeline_events WHERE id IN (${PUBLIC_STATUS})`)
     .bind(eventId).first<{ user_id: number }>();
-  if (!row) throw new HttpError(404, "吐槽不存在或已隐藏");
+  if (!row) throw new HttpError(404, translate(locale, "timeline.error.postMissing"), undefined, "timeline.error.postMissing");
   return row.user_id;
 }
 
@@ -24,10 +25,10 @@ export async function setTimelineLike(runtime: AppRuntime, eventId: number, user
   const db = getD1(runtime);
   await assertTimelinePermission(runtime, userId, ["timeline.status.like"]);
   if (liked) {
-    const recipientId = await requirePublicStatus(db, eventId);
+    const recipientId = await requirePublicStatus(db, eventId, runtime.uiLocale);
     if (await db.prepare(`SELECT 1 WHERE ${interactionRestrictedSql("?", "?", "like")}
       AND NOT EXISTS(SELECT 1 FROM timeline_status_likes WHERE event_id=? AND user_id=?)`)
-      .bind(recipientId, userId, eventId, userId).first()) throw new HttpError(403, "Permission denied");
+      .bind(recipientId, userId, eventId, userId).first()) throw new HttpError(403, "Permission denied", undefined, "core.request.forbidden");
     await db.batch([
       db.prepare(`INSERT INTO timeline_status_likes(event_id,user_id)
       SELECT ?,id FROM users WHERE id=? AND status='active' AND ${userPermissionSql("users.id", "timeline.status.like")}
@@ -48,9 +49,9 @@ export async function setTimelineLike(runtime: AppRuntime, eventId: number, user
 
 export async function listTimelineReplies(runtime: AppRuntime, eventId: number, cursor: string | null = null): Promise<TimelineReplyPage> {
   const db = getD1(runtime);
-  await requirePublicStatus(db, eventId);
+  await requirePublicStatus(db, eventId, runtime.uiLocale);
   const after = cursor === null ? 0 : Number(cursor);
-  if (cursor !== null && (!/^[1-9]\d{0,15}$/.test(cursor) || !Number.isSafeInteger(after))) throw new HttpError(400, "回复分页位置无效");
+  if (cursor !== null && (!/^[1-9]\d{0,15}$/.test(cursor) || !Number.isSafeInteger(after))) throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.replyCursor"), undefined, "timeline.error.replyCursor");
   const viewer = await getCurrentUser(runtime);
   const rows = await db.prepare(`SELECT r.id,r.user_id,r.body,r.created_at,u.display_name,u.avatar_blob_sha256
     FROM timeline_status_replies r JOIN users u ON u.id=r.user_id
@@ -69,15 +70,15 @@ export async function listTimelineReplies(runtime: AppRuntime, eventId: number, 
 
 export async function createTimelineReply(runtime: AppRuntime, eventId: number, userId: number, input: Record<string, unknown>) {
   await assertTimelinePermission(runtime, userId, ["timeline.reply.create"]);
-  const body = statusBody(input), db = getD1(runtime);
+  const body = statusBody(input, runtime.uiLocale), db = getD1(runtime);
   const ids = parseCommentImageIds(input.imageIds);
-  if (typeof input.requestKey !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(input.requestKey)) throw new HttpError(400, "回复发布标识无效");
+  if (typeof input.requestKey !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(input.requestKey)) throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.replyKey"), undefined, "timeline.error.replyKey");
   const key = input.requestKey, hash = await sha256Hex(new TextEncoder().encode(ids.length ? JSON.stringify({ body, ids }) : body).buffer);
-  const recipientId = await requirePublicStatus(db, eventId);
+  const recipientId = await requirePublicStatus(db, eventId, runtime.uiLocale);
   const previous = await db.prepare("SELECT id,request_hash FROM timeline_status_replies WHERE event_id=? AND user_id=? AND request_key=?")
     .bind(eventId, userId, key).first<{ id: number; request_hash: string }>();
   if (previous) {
-    if (previous.request_hash !== hash) throw new HttpError(409, "回复发布标识对应的内容已改变");
+    if (previous.request_hash !== hash) throw new HttpError(409, translate(runtime.uiLocale, "timeline.error.replyChanged"), undefined, "timeline.error.replyChanged");
     return previous.id;
   }
   await assertInteractionAllowed(db, recipientId, userId, "reply");
@@ -107,11 +108,11 @@ export async function createTimelineReply(runtime: AppRuntime, eventId: number, 
     .bind(eventId, userId, key).first<{ id: number; request_hash: string }>();
   if (!saved) {
     await assertTimelinePermission(runtime, userId, ["timeline.reply.create"]);
-    await requirePublicStatus(db, eventId);
-    if (!await db.prepare(`SELECT 1 WHERE ${guard.sql}`).bind(...guard.args).first()) throw new HttpError(400, "配图不可用，请移除后重新上传");
-    throw new HttpError(429, "回复过于频繁，请稍后再试");
+    await requirePublicStatus(db, eventId, runtime.uiLocale);
+    if (!await db.prepare(`SELECT 1 WHERE ${guard.sql}`).bind(...guard.args).first()) throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.image"), undefined, "timeline.error.image");
+    throw new HttpError(429, translate(runtime.uiLocale, "timeline.error.replyRate"), undefined, "timeline.error.replyRate");
   }
-  if (saved.request_hash !== hash) throw new HttpError(409, "回复发布标识对应的内容已改变");
+  if (saved.request_hash !== hash) throw new HttpError(409, translate(runtime.uiLocale, "timeline.error.replyChanged"), undefined, "timeline.error.replyChanged");
   return saved.id;
 }
 
@@ -128,5 +129,5 @@ export async function deleteTimelineReply(runtime: AppRuntime, replyId: number, 
          OR ${userPermissionSql("actor.id", "timeline.reply.moderate_any")}))`).bind(replyId, userId),
     db.prepare("DELETE FROM timeline_reply_face_emojis WHERE content_id=? AND EXISTS(SELECT 1 FROM timeline_status_replies WHERE id=? AND hidden_at IS NOT NULL)").bind(replyId, replyId),
   ]);
-  if (!result.meta.changes) throw new HttpError(404, "回复不存在或无权删除");
+  if (!result.meta.changes) throw new HttpError(404, translate(runtime.uiLocale, "timeline.error.replyDelete"), undefined, "timeline.error.replyDelete");
 }

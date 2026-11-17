@@ -1,3 +1,7 @@
+import { RichMessage } from "@/app/components/ui/rich-message";
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
 import { browsePublicCreators } from "@/app/.server/db/creator-library";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -9,13 +13,13 @@ import { Label } from "@/app/components/ui/label";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { CreatorCard } from "@/app/creators/creator-card";
-import { formatNumber } from "@/lib/format";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { stringParam } from "@/lib/params";
 import { cn } from "@/lib/ui/cn";
 import { Search } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, useLoaderData } from "react-router";
+import { Form, useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 const PAGE_SIZE = 30;
 
@@ -34,21 +38,18 @@ export async function loader(args: LoaderFunctionArgs) {
     pageSize: PAGE_SIZE,
   });
 
-  return { query, sort, result };
+  return { locale: runtime.uiLocale, query, sort, result };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    {
-      title: loaderData?.query
-        ? [`“${loaderData.query}”的搜索结果`, "作者与制作人员"]
-        : "作者与制作人员",
-      page: loaderData?.result.page,
-    },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "creator.title");
+  return pageMetaDescriptors({ title: loaderData?.query ? [translate(locale, "search.titleQuery", { query: loaderData.query }), title] : title, page: loaderData?.result.page }, error, locale);
+};
 
 export default function CreatorsPage() {
+  const t = useMessages();
+  const locale = useNavigationLocale();
   const { query, sort, result } = useLoaderData<typeof loader>();
   const activeParams = {
     q: query || undefined,
@@ -59,14 +60,10 @@ export default function CreatorsPage() {
     <PageContainer>
       <PageHeader
         compact
-        title="作者与制作人员"
+        title={t("creator.title")}
         actions={
           <span className="text-sm text-muted">
-            {query ? "找到 " : "共 "}
-            <strong className="tabular-nums text-foreground">
-              {formatNumber(result.total)}
-            </strong>{" "}
-            位
+            <RichMessage id={query ? "creator.found" : "creator.count"} values={{ count: result.total }} components={{ emphasis: children => <strong key="count" className="tabular-nums text-foreground">{children}</strong> }} />
           </span>
         }
       />
@@ -77,10 +74,10 @@ export default function CreatorsPage() {
           className="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:flex-1 sm:max-w-lg"
           method="get"
           role="search"
-          aria-label="搜索作者"
+          aria-label={t("creator.search")}
         >
           <Label className="sr-only" htmlFor="creator-search">
-            作者名或别名
+            {t("creator.nameAlias")}
           </Label>
           <div className="relative min-w-0 flex-1">
             <Search
@@ -94,29 +91,30 @@ export default function CreatorsPage() {
               id="creator-search"
               key={query}
               name="q"
-              placeholder="搜索作者名或别名……"
+              placeholder={t("creator.placeholder")}
               type="search"
             />
           </div>
           {sort === "works" ? (
             <input name="sort" type="hidden" value={sort} />
           ) : null}
-          <Button type="submit">搜索</Button>
+          {locale && <input name={UI_LOCALE_PARAM} type="hidden" value={locale} />}
+          <Button type="submit">{t("search.submit")}</Button>
           {query ? (
             <Link
               className={buttonVariants({ variant: "ghost" })}
               to={creatorsHref("", sort)}
             >
-              清除
+              {t("creator.clear")}
             </Link>
           ) : null}
         </Form>
 
         <nav
-          aria-label="作者排序"
+          aria-label={t("creator.sort")}
           className="flex items-center gap-4 text-sm text-muted"
         >
-          <span className="text-xs">排序</span>
+          <span className="text-xs">{t("library.sort")}</span>
           {(["name", "works"] as const).map((value) => (
             <Link
               aria-current={sort === value ? "page" : undefined}
@@ -127,14 +125,14 @@ export default function CreatorsPage() {
               key={value}
               to={creatorsHref(query, value)}
             >
-              {value === "name" ? "名称" : "作品数"}
+              {value === "name" ? t("creator.name") : t("creator.worksCount")}
             </Link>
           ))}
         </nav>
       </div>
 
       {result.items.length ? (
-        <section aria-label="作者列表">
+        <section aria-label={t("creator.list")}>
           <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2 md:gap-4">
             {result.items.map((creator) => (
               <li className="min-w-0" key={creator.id}>
@@ -148,8 +146,8 @@ export default function CreatorsPage() {
           className="border-y border-border py-8"
           title={
             query
-              ? "没有找到匹配的作者，试试其他名字或别名。"
-              : "还没有收录公开作品的作者。"
+              ? t("creator.searchEmpty")
+              : t("creator.empty")
           }
           variant="plain"
         />

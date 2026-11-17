@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -17,7 +18,7 @@ export async function readFollowSummary(runtime: AppRuntime, userId: number, vie
     EXISTS(SELECT 1 FROM user_follows f WHERE f.follower_user_id=u.id AND f.followed_user_id=?) AS is_followed_by
     FROM users u WHERE u.id=? AND u.status IN ('active','deleted')`).bind(viewer?.id ?? 0, viewer?.id ?? 0, userId)
     .first<{ status: "active" | "deleted"; following_count: number; follower_count: number; is_following: number; is_followed_by: number }>();
-  if (!row) throw new HttpError(404, "用户不存在");
+  if (!row) throw new HttpError(404, translate(runtime.uiLocale, "timeline.error.userNotFound"), undefined, "timeline.error.userNotFound");
   if (row.status === "deleted") return null;
   const other = !!viewer && viewer.id !== userId;
   return { followingCount: row.following_count, followerCount: row.follower_count, isFollowing: row.is_following === 1, isFollowedBy: row.is_followed_by === 1,
@@ -27,12 +28,12 @@ export async function readFollowSummary(runtime: AppRuntime, userId: number, vie
 
 async function assertFollowPermission(runtime: AppRuntime, userId: number, permission: PermissionKey) {
   const allowed = await getD1(runtime).prepare(`SELECT 1 FROM users WHERE id=? AND ${userPermissionSql("users.id", permission)}`).bind(userId).first();
-  if (!allowed) throw new HttpError(403, "没有执行此好友操作的权限");
+  if (!allowed) throw new HttpError(403, translate(runtime.uiLocale, "friends.denied"), undefined, "friends.denied");
 }
 
 export async function setUserFollow(runtime: AppRuntime, actorId: number, targetId: number, following: boolean): Promise<void> {
-  if (!Number.isSafeInteger(targetId) || targetId < 1) throw new HttpError(400, "用户编号无效");
-  if (actorId === targetId) throw new HttpError(400, "不能把自己加为好友");
+  if (!Number.isSafeInteger(targetId) || targetId < 1) throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.userId"), undefined, "timeline.error.userId");
+  if (actorId === targetId) throw new HttpError(400, translate(runtime.uiLocale, "friends.self"), undefined, "friends.self");
   const permission = following ? "timeline.follow.create" : "timeline.follow.delete_own";
   await assertFollowPermission(runtime, actorId, permission);
   const db = getD1(runtime);
@@ -69,7 +70,7 @@ export async function setUserFollow(runtime: AppRuntime, actorId: number, target
     ]);
     if (!result.meta.changes) {
       await assertFollowPermission(runtime, actorId, permission);
-      if (!await db.prepare("SELECT 1 FROM users WHERE id=? AND status='active'").bind(targetId).first()) throw new HttpError(404, "用户不存在");
+      if (!await db.prepare("SELECT 1 FROM users WHERE id=? AND status='active'").bind(targetId).first()) throw new HttpError(404, translate(runtime.uiLocale, "timeline.error.userNotFound"), undefined, "timeline.error.userNotFound");
       if (!await db.prepare("SELECT 1 FROM user_follows WHERE follower_user_id=? AND followed_user_id=?").bind(actorId, targetId).first())
         await assertInteractionAllowed(db, targetId, actorId, "friend");
     }
@@ -89,9 +90,9 @@ export async function listOwnUserFollows(runtime: AppRuntime, user: ArchiveUser,
 }
 
 async function listFollows(runtime: AppRuntime, userId: number, direction: FollowDirection, publicOnly: boolean, cursor?: string | null, limit = 30): Promise<FollowPage> {
-  if (direction !== "following" && direction !== "followers") throw new HttpError(400, "好友列表类型无效");
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 30) throw new HttpError(400, "好友列表数量无效");
-  if (!await getD1(runtime).prepare(`SELECT 1 FROM users WHERE id=? AND status='active'${publicOnly ? " AND profile_show_friends=1" : ""}`).bind(userId).first()) throw new HttpError(404, "好友列表不存在");
+  if (direction !== "following" && direction !== "followers") throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.followType"), undefined, "timeline.error.followType");
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 30) throw new HttpError(400, translate(runtime.uiLocale, "friends.limit"), undefined, "friends.limit");
+  if (!await getD1(runtime).prepare(`SELECT 1 FROM users WHERE id=? AND status='active'${publicOnly ? " AND profile_show_friends=1" : ""}`).bind(userId).first()) throw new HttpError(404, translate(runtime.uiLocale, "friends.missing"), undefined, "friends.missing");
   const owner = direction === "following" ? "follower_user_id" : "followed_user_id";
   const other = direction === "following" ? "followed_user_id" : "follower_user_id";
   let position: { at: string; id: number; userId: number; direction: FollowDirection } | null = null;
@@ -100,7 +101,7 @@ async function listFollows(runtime: AppRuntime, userId: number, direction: Follo
       if (cursor.length > 300) throw new Error();
       position = JSON.parse(atob(cursor));
       if (!position || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(position.at) || !Number.isSafeInteger(position.id) || position.id < 1 || position.userId !== userId || position.direction !== direction) throw new Error();
-    } catch { throw new HttpError(400, "好友分页位置无效，请返回最新列表"); }
+    } catch { throw new HttpError(400, translate(runtime.uiLocale, "friends.cursor"), undefined, "friends.cursor"); }
   }
   const args: (number | string)[] = [userId];
   if (position) args.push(position.at, position.id);

@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { getD1 } from "@/app/.server/db/d1";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -51,6 +52,7 @@ export class RoleConflictError extends HttpError {
       409,
       "此角色已在其他页面修改。请核对最新配置后重新编辑。",
       "role_conflict",
+      "admin.roles.error.editConflict",
     );
   }
 }
@@ -181,7 +183,7 @@ export async function setUserPermissionBlocked(
   requireBootstrapAdmin(input.actor);
   if (!Number.isSafeInteger(input.targetUserId) || input.targetUserId <= 0 ||
     !isPermissionKey(input.permissionKey) || typeof input.blocked !== "boolean")
-    throw new HttpError(400, "用户或权限设置无效");
+    throw new HttpError(400, "用户或权限设置无效", undefined, "admin.roles.error.invalidUserPermission");
   const database = getD1(runtime);
   const eventKey = crypto.randomUUID();
   const authorized = `EXISTS (SELECT 1 FROM auth_audit_logs WHERE user_id=?
@@ -205,7 +207,7 @@ export async function setUserPermissionBlocked(
         .bind(input.targetUserId, input.permissionKey, input.actor.id, eventKey),
   ]);
   if (!audit.results.length)
-    throw new HttpError(403, "当前无权修改此用户的单独权限设置");
+    throw new HttpError(403, "当前无权修改此用户的单独权限设置", undefined, "admin.roles.error.userPermissionDenied");
 }
 
 export async function listAccountRoleOptions(
@@ -248,11 +250,11 @@ export async function requestRole(
   actor: ArchiveUser,
   input: { roleId: number; reason?: string },
 ): Promise<RoleRequestSummary> {
-  if (actor.status !== "active") throw new HttpError(401, "账户不可用");
+  if (actor.status !== "active") throw new HttpError(401, "账户不可用", undefined, "admin.roles.error.accountUnavailable");
   if (!Number.isSafeInteger(input.roleId) || input.roleId <= 0)
-    throw new HttpError(400, "请选择要申请的权限");
+    throw new HttpError(400, translate(runtime.uiLocale, "account.permissions.error.noRole"));
   const reason = input.reason?.trim() ?? "";
-  if (reason.length > 2000) throw new HttpError(400, "申请理由不能超过 2000 字");
+  if (reason.length > 2000) throw new HttpError(400, translate(runtime.uiLocale, "account.permissions.error.tooLong"));
   const database = getD1(runtime);
   const eventKey = crypto.randomUUID();
   await database.batch([
@@ -280,7 +282,7 @@ export async function requestRole(
       id: number; status: RoleRequestSummary["status"]; role_id: number;
       role_key: string; role_name: string; closed_reason: string | null; rejection_reason: string | null;
     }>();
-  if (!request) throw new HttpError(409, "当前权限已拥有或不再开放申请，请刷新后查看。");
+  if (!request) throw new HttpError(409, translate(runtime.uiLocale, "account.permissions.error.changed"));
   return {
     id: request.id, status: request.status, closedReason: request.closed_reason, rejectionReason: request.rejection_reason,
     requestedRole: { id: request.role_id, key: request.role_key, name: request.role_name },
@@ -302,7 +304,7 @@ export async function createRole(
   const key = normalizeRoleKey(input.key);
   const name = normalizeRoleName(input.name);
   if (!isCustomRolePriority(input.priority))
-    throw new HttpError(400, "自定义角色优先级必须在 101 到 699 之间");
+    throw new HttpError(400, "自定义角色优先级必须在 101 到 699 之间", undefined, "admin.roles.error.priorityRange");
   const database = getD1(runtime);
   const grants = input.template
     ? ROLE_TEMPLATES[input.template].permissionKeys
@@ -340,7 +342,7 @@ export async function createRole(
     ),
   ]);
   if (Number(result.meta.changes) !== 1)
-    throw new HttpError(403, "当前账户已无权创建角色");
+    throw new HttpError(403, "当前账户已无权创建角色", undefined, "admin.roles.error.createDenied");
   const roleId = Number(result.meta.last_row_id);
   if (!Number.isSafeInteger(roleId) || roleId <= 0)
     throw new Error("创建角色失败");
@@ -364,15 +366,15 @@ export async function updateRole(
   requireBootstrapAdmin(input.actor);
   const database = getD1(runtime);
   const role = (await listRoles(runtime)).find((item) => item.id === input.roleId);
-  if (!role) throw new HttpError(404, "角色不存在");
+  if (!role) throw new HttpError(404, "角色不存在", undefined, "admin.roles.error.missing");
   if (role.kind === "custom" && !isCustomRolePriority(input.priority))
-    throw new HttpError(400, "自定义角色优先级必须在 101 到 699 之间");
+    throw new HttpError(400, "自定义角色优先级必须在 101 到 699 之间", undefined, "admin.roles.error.priorityRange");
   if (role.kind !== "custom" && (input.name !== role.name || input.priority !== role.priority || input.status !== role.status))
-    throw new HttpError(403, "系统角色的名称、优先级和状态不可修改");
+    throw new HttpError(403, "系统角色的名称、优先级和状态不可修改", undefined, "admin.roles.error.systemFields");
   if (!roleSupportsApplications(role) && input.applicationEnabled)
-    throw new HttpError(400, "此角色不能开放申请");
+    throw new HttpError(400, "此角色不能开放申请", undefined, "admin.roles.error.applicationUnavailable");
   if (!roleSupportsGlobalAccess(role) && input.availableToAll)
-    throw new HttpError(400, "此角色不能向所有用户开放");
+    throw new HttpError(400, "此角色不能向所有用户开放", undefined, "admin.roles.error.publicUnavailable");
   const eventKey = crypto.randomUUID();
   const closedReason = input.status === "disabled" ? "该角色已停用，申请已关闭。"
     : input.availableToAll ? "此权限已向所有用户开放，无需申请。"
@@ -449,7 +451,7 @@ export async function replaceRolePermissions(
   try {
     permissions = parsePermissionKeys(input.permissionKeys);
   } catch {
-    throw new HttpError(400, "权限清单包含未知 key");
+    throw new HttpError(400, "权限清单包含未知 key", undefined, "admin.roles.error.unknownPermission");
   }
   const role = await requiredCustomRole(runtime, input.roleId);
   const database = getD1(runtime);
@@ -533,7 +535,7 @@ export async function resolveRoleRequest(
     !hasPermission(input.actor, "inbox.role_request.resolve") ||
     !hasPermission(input.actor, "user.role.assign")
   ) {
-    throw new HttpError(403, "没有处理角色申请的权限");
+    throw new HttpError(403, translate(runtime.uiLocale, "account.permissions.error.resolveDenied"));
   }
   const database = getD1(runtime);
   const request = await database
@@ -552,7 +554,7 @@ export async function resolveRoleRequest(
     !request.target_user_id ||
     !request.requested_role_id
   ) {
-    throw new HttpError(409, "这条申请已经处理或不是有效的角色申请");
+    throw new HttpError(409, translate(runtime.uiLocale, "account.permissions.error.notPending"));
   }
 
   if (input.decision === "approve") {
@@ -625,7 +627,7 @@ export async function resolveRoleRequest(
     resolvedInboxReadStatement(database, input.itemId, input.actor.id),
   ]);
   if (Number(results[0]?.meta.changes ?? 0) !== 1) {
-    throw new HttpError(409, "这条申请已经被其他操作处理");
+    throw new HttpError(409, translate(runtime.uiLocale, "account.permissions.error.alreadyHandled"));
   }
 }
 
@@ -642,7 +644,7 @@ export function canManageUser(
 
 function requireBootstrapAdmin(actor: ArchiveUser): void {
   if (!actor.isBootstrapAdmin || actor.status !== "active")
-    throw new HttpError(403, "只有当前超级管理员可修改角色策略");
+    throw new HttpError(403, "只有当前超级管理员可修改角色策略", undefined, "admin.roles.error.policyDenied");
 }
 
 async function changeUserRole(
@@ -657,7 +659,7 @@ async function changeUserRole(
   },
 ): Promise<void> {
   if (!hasPermission(input.actor, "user.role.assign"))
-    throw new HttpError(403, "没有分配用户角色的权限");
+    throw new HttpError(403, "没有分配用户角色的权限", undefined, "admin.roles.error.assignDenied");
   const database = getD1(runtime);
   const sourceInboxItemId = input.sourceInboxItemId ?? null;
   const validationStatements = [
@@ -704,14 +706,14 @@ async function changeUserRole(
       sourceRequest.target_user_id !== input.targetUserId ||
       sourceRequest.requested_role_id !== input.roleId)
   ) {
-    throw new HttpError(409, "角色申请来源无效或已经处理");
+    throw new HttpError(409, "角色申请来源无效或已经处理", undefined, "admin.roles.error.requestInvalid");
   }
   if (input.action === "assigned" && membership)
-    throw new HttpError(409, "目标用户已有该角色");
+    throw new HttpError(409, "目标用户已有该角色", undefined, "admin.roles.error.alreadyAssigned");
   if (input.action === "removed" && role!.key === "user")
-    throw new HttpError(403, "基础 user 角色不可移除");
+    throw new HttpError(403, "基础 user 角色不可移除", undefined, "admin.roles.error.baseRole");
   if (input.action === "removed" && !membership)
-    throw new HttpError(409, "目标用户没有该角色");
+    throw new HttpError(409, "目标用户没有该角色", undefined, "admin.roles.error.notAssigned");
 
   const actionLabel = input.action === "assigned" ? "分配" : "移除";
   const eventKey = crypto.randomUUID();
@@ -810,7 +812,7 @@ async function changeUserRole(
   const results = await database.batch(statements);
   const mutationResult = results[sourceInboxItemId ? 2 : 1];
   if (Number(mutationResult?.meta.changes ?? 0) !== 1) {
-    throw new HttpError(409, "账户、角色或申请状态已变化，请刷新后重试。");
+    throw new HttpError(409, "账户、角色或申请状态已变化，请刷新后重试。", undefined, "admin.roles.error.stateChanged");
   }
 }
 
@@ -850,23 +852,23 @@ function assertManageableRoleChange(
   role: RoleTarget | null,
   requireActiveRole = false,
 ): void {
-  if (actor.id === targetUserId) throw new HttpError(403, "不能调整自己的角色");
+  if (actor.id === targetUserId) throw new HttpError(403, "不能调整自己的角色", undefined, "admin.roles.error.selfChange");
   if (!target || target.status !== "active")
-    throw new HttpError(404, "目标用户不存在或不可用");
-  if (!role) throw new HttpError(404, "目标角色不存在");
+    throw new HttpError(404, "目标用户不存在或不可用", undefined, "admin.roles.error.userMissing");
+  if (!role) throw new HttpError(404, "目标角色不存在", undefined, "admin.roles.error.targetMissing");
   if (requireActiveRole && role.status !== "active")
-    throw new HttpError(409, "目标角色已停用");
+    throw new HttpError(409, "目标角色已停用", undefined, "admin.roles.error.targetDisabled");
   if (!isRoleKind(role.kind))
     throw new Error(`Unknown role kind: ${String(role.kind)}`);
   if (role.kind === "bootstrap_admin")
-    throw new HttpError(403, "超级管理员不能通过网页授予");
+    throw new HttpError(403, "超级管理员不能通过网页授予", undefined, "admin.roles.error.superGrant");
   if (role.key === "admin" && !actor.isBootstrapAdmin)
-    throw new HttpError(403, "只有超级管理员可以授予或收回管理员角色");
+    throw new HttpError(403, "只有超级管理员可以授予或收回管理员角色", undefined, "admin.roles.error.adminGrant");
   if (
     actor.maxRolePriority <= Number(target.priority) ||
     actor.maxRolePriority <= role.priority
   ) {
-    throw new HttpError(403, "只能调整低于自己优先级的用户和角色");
+    throw new HttpError(403, "只能调整低于自己优先级的用户和角色", undefined, "admin.roles.error.priorityDenied");
   }
 }
 
@@ -969,8 +971,8 @@ async function requiredCustomRole(
     )
     .bind(roleId)
     .first<RoleTarget>();
-  if (!role) throw new HttpError(404, "角色不存在");
-  if (role.kind !== "custom") throw new HttpError(403, "系统角色不可修改");
+  if (!role) throw new HttpError(404, "角色不存在", undefined, "admin.roles.error.missing");
+  if (role.kind !== "custom") throw new HttpError(403, "系统角色不可修改", undefined, "admin.roles.error.systemRole");
   return role;
 }
 
@@ -980,13 +982,13 @@ function normalizeRoleKey(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9_]+/g, "_")
     .replace(/^_+|_+$/g, "");
-  if (!key || key.length > 64) throw new HttpError(400, "角色 key 格式不正确");
+  if (!key || key.length > 64) throw new HttpError(400, "角色 key 格式不正确", undefined, "admin.roles.error.invalidKey");
   return key;
 }
 
 function normalizeRoleName(value: string): string {
   const name = value.trim();
-  if (!name || name.length > 80) throw new HttpError(400, "角色名称格式不正确");
+  if (!name || name.length > 80) throw new HttpError(400, "角色名称格式不正确", undefined, "admin.roles.error.invalidName");
   return name;
 }
 

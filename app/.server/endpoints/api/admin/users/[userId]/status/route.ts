@@ -1,7 +1,7 @@
 import { parsePositiveId } from "@/app/.server/http/request";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { setUserStatusForAdmin } from "@/app/.server/db/users";
-import { redirectResponse } from "@/app/.server/http/form";
+import { redirectWithParams } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { UserStatus } from "@/lib/dto/db/user-access";
 import { json, jsonError } from "@/lib/http";
@@ -46,7 +46,7 @@ export async function POST(
       });
     }
 
-    return redirectResponse(new URL("/admin/users", request.url));
+    return redirectWithParams(request, "/admin/users", {});
   } catch (error) {
     return jsonError("User status update failed", error);
   }

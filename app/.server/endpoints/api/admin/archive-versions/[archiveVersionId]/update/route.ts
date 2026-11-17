@@ -4,8 +4,8 @@ import {
   parseArchiveVersionEditForm,
   updateArchiveVersionForAdmin,
 } from "@/app/.server/db/game-library";
-import { redirectResponse } from "@/app/.server/http/form";
-import { parsePositiveId } from "@/app/.server/http/request";
+import { redirectWithParams } from "@/app/.server/http/form";
+import { parseArchiveVersionId } from "@/app/.server/db/archive-downloads";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
 
@@ -32,10 +32,7 @@ export async function POST(
 
   try {
     const { archiveVersionId: rawArchiveVersionId } = await context.params;
-    const archiveVersionId = parsePositiveId(
-      rawArchiveVersionId,
-      "archive version id",
-    );
+    const archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
     const formData = await request.formData();
     const input = parseArchiveVersionEditForm(formData);
 
@@ -63,9 +60,7 @@ export async function POST(
       });
     }
 
-    return redirectResponse(
-      new URL(`/admin/archive-versions/${archiveVersion.id}`, request.url),
-    );
+    return redirectWithParams(request, `/admin/archive-versions/${archiveVersion.id}`, {});
   } catch (error) {
     return jsonError("ArchiveVersion update failed", error);
   }

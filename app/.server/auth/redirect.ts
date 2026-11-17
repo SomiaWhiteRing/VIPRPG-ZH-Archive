@@ -1,3 +1,13 @@
+import { parseUiLocale, UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+
+export function authReturnUrl(safePath: string, requestUrl: string): URL {
+  const source = new URL(requestUrl);
+  const target = new URL(safePath, source);
+  const locale = parseUiLocale(source.searchParams.get(UI_LOCALE_PARAM));
+  if (locale) target.searchParams.set(UI_LOCALE_PARAM, locale);
+  return target;
+}
+
 export function sanitizeRedirectPath(
   value: FormDataEntryValue | string | null | undefined,
   fallback = "/",

@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { getPublicCharacterDetail } from "@/app/.server/db/character-detail";
 import { listRootComments } from "@/app/.server/db/work-community";
@@ -21,11 +22,11 @@ import {
   CHARACTER_EDIT_PERMISSIONS,
   hasPermission,
 } from "@/lib/authz/permissions";
-import { formatNumber } from "@/lib/format";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { ExternalLink, Pencil } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 const readCharacter = async (runtime: AppRuntime, rawId: string) => {
   const id = Number(rawId);
@@ -54,6 +55,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
   const pageMetadata = { title: character.primaryName };
   return {
+    locale: runtime.uiLocale,
     character,
     user: pickPageFields(user, ["id"]),
     canEdit,
@@ -62,26 +64,29 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(loaderData?.pageMetadata, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors(loaderData?.pageMetadata, error, locale);
+};
 
 export default function CharacterDetailPage() {
+  const t = useMessages();
   const { character, user, canEdit, comments } = useLoaderData<typeof loader>();
   return (
     <DetailPageShell>
       <header className="pb-4 pt-4">
-        <BackLink href="/characters" label="角色索引" variant="text" />
+        <BackLink href="/characters" label={t("character.index")} variant="text" />
         <div className="mt-2 flex items-start gap-2">
             <h1 className="min-w-0 wrap-anywhere font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
             {character.primaryName}
           </h1>
           {canEdit ? (
             <Link
-              aria-label={`编辑 ${character.primaryName}`}
+              aria-label={t("character.editNamed", { name: character.primaryName })}
               className={buttonVariants({ variant: "ghost", size: "icon" })}
               to={`/admin/characters/${character.id}`}
               prefetch="none"
-              title="编辑角色"
+              title={t("character.edit")}
             >
               <Pencil aria-hidden />
             </Link>
@@ -97,7 +102,7 @@ export default function CharacterDetailPage() {
         materialCount={character.materials.length}
         intro={character.description ? (
           <section aria-labelledby="character-intro-title" className="scroll-mt-20 py-4.5" id="sec-intro">
-            <h2 className="mb-3.5 text-base font-bold" id="character-intro-title">简介</h2>
+            <h2 className="mb-3.5 text-base font-bold" id="character-intro-title">{t("work.intro")}</h2>
             <p className="m-0 whitespace-pre-wrap leading-[1.85] wrap-anywhere">
               {character.description}
             </p>
@@ -107,21 +112,21 @@ export default function CharacterDetailPage() {
           <section aria-labelledby="works-title" className={`scroll-mt-20 py-4.5 ${character.description ? "border-t border-border" : ""}`} id="sec-works">
             <div className="mb-3.5 flex items-baseline justify-between gap-4">
               <h2 className="m-0 text-base font-bold" id="works-title">
-                登场作品
+                {t("character.works")}
               </h2>
               {character.works.length ? (
                 <Link
-                  aria-label="查看全部登场作品"
+                  aria-label={t("character.allWorks")}
                   className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline"
                   to={`/characters/${character.id}/works`}
                 >
-                  更多
+                  {t("work.more")}
                 </Link>
               ) : null}
             </div>
             {character.works.length ? (
               <CharacterWorkList works={character.works} characterName={character.primaryName} />
-            ) : <EmptyState title="暂无登场作品。" variant="plain" />}
+            ) : <EmptyState title={t("character.emptyWorks")} variant="plain" />}
           </section>
         }
         materials={
@@ -144,7 +149,7 @@ export default function CharacterDetailPage() {
               {character.primaryName}
             </h2>
             <dl className="mt-4">
-              <InfoRow label="日文名">
+              <InfoRow label={t("character.nameJa")}>
                 <span lang="ja">{character.originalName}</span>
               </InfoRow>
               {(["zh", "ja"] as const).map((language) => {
@@ -154,20 +159,20 @@ export default function CharacterDetailPage() {
                 return names.length ? (
                   <InfoRow
                     key={language}
-                    label={language === "zh" ? "中文别名" : "日文别名"}
+                    label={language === "zh" ? t("character.aliasesZh") : t("character.aliasesJa")}
                   >
                     <span lang={language}>{names.join("、")}</span>
                   </InfoRow>
                 ) : null;
               })}
-              <InfoRow label="登场作品">
-                {formatNumber(character.workCount)} 部
+              <InfoRow label={t("character.works")}>
+                {t("favorite.workCount", { count: character.workCount })}
               </InfoRow>
-              <InfoRow label="素材">
-                {formatNumber(character.materials.length)} 张
+              <InfoRow label={t("character.materials")}>
+                {t("character.materialCount", { count: character.materials.length })}
               </InfoRow>
               {character.categories.length ? (
-                <InfoRow label="所属分类">
+                <InfoRow label={t("character.categories")}>
                   <ul className="m-0 grid list-none gap-2 p-0">
                     {character.categories.map((category) => (
                       <li key={category.id}>{category.path}</li>
@@ -185,7 +190,7 @@ export default function CharacterDetailPage() {
                       to={`/history/character/${character.id}`}
                       prefetch="none"
                     >
-                      编辑历史
+                      {t("work.sidebar.history")}
                     </Link>
                   </li>
                 ) : null}
@@ -197,7 +202,7 @@ export default function CharacterDetailPage() {
                       rel="noreferrer"
                       target="_blank"
                     >
-                      来源资料
+                      {t("character.sources")}
                       {character.sourceUrls.length > 1 ? ` ${index + 1}` : ""}
                       <ExternalLink aria-hidden size={14} />
                     </a>
@@ -215,14 +220,14 @@ export default function CharacterDetailPage() {
         >
           <div className="mb-3.5 flex items-baseline justify-between gap-4">
             <h2 className="m-0 text-base font-bold" id="comments-title">
-              评论
+              {t("work.stats.commentsShort")}
             </h2>
           </div>
           <CommentPanel
             currentUserId={user?.id ?? null}
             initialComments={comments.items}
             initialTotal={comments.total}
-            placeholder="聊聊这位角色的故事、登场表现或素材……"
+            placeholder={t("character.commentPlaceholder")}
             target={{ kind: "character", id: character.id }}
           />
         </section>

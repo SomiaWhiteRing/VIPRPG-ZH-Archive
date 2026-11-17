@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
 import { getAuthContext } from "@/app/.server/auth/current-user";
 import { assertSameOrigin } from "@/app/.server/auth/origin";
 import { updateOwnProfile } from "@/app/.server/db/users";
@@ -21,7 +23,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     return redirectWithParams(request, "/me/profile", { profileUpdated: "1" });
   } catch (error) {
     return redirectWithParams(request, "/me/profile", {
-      error: error instanceof Error ? error.message : "资料更新失败",
+      error: formatFeedbackError(error, runtime.uiLocale, translate(runtime.uiLocale, "profile.saveFailed")),
     });
   }
 }

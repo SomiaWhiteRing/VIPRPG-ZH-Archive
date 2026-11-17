@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Smartphone } from "lucide-react";
+import { LocaleLink } from "@/app/components/ui/locale-link";
+import { useMessages } from "@/lib/i18n/react";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import {
   AlertDialog,
@@ -27,6 +29,7 @@ function kaiImportOrigin() {
 }
 
 export function KaiImportLink({ archiveVersionId }: { archiveVersionId: number }) {
+  const t = useMessages();
   const origin = useSyncExternalStore(subscribe, kaiImportOrigin, serverOrigin);
   const [failed, setFailed] = useState(false);
   const [launching, setLaunching] = useState(false);
@@ -94,20 +97,20 @@ export function KaiImportLink({ archiveVersionId }: { archiveVersionId: number }
         aria-busy={launching}
       >
         <Smartphone aria-hidden />
-        导入 EasyRPG Player Kai
+        {t("work.kai.import")}
       </Button>
       <AlertDialog open={failed} onOpenChange={setFailed}>
         <AlertDialogContent onCloseAutoFocus={(event) => {
           event.preventDefault();
           buttonRef.current?.focus();
         }}>
-          <AlertDialogTitle className="text-lg font-bold">未能打开 EasyRPG Player Kai</AlertDialogTitle>
+          <AlertDialogTitle className="text-lg font-bold">{t("work.kai.failed")}</AlertDialogTitle>
           <AlertDialogDescription className="text-sm text-muted">
-            如果EasyRPG没有打开，请通过右上角菜单选择“在浏览器中打开”后重试，或下载并安装最新版EasyRPG Player Kai。
+            {t("work.kai.help")}
           </AlertDialogDescription>
           <AlertDialogFooter>
-            <AlertDialogCancel className={buttonVariants({ variant: "outline" })}>关闭</AlertDialogCancel>
-            <a className={buttonVariants()} href="/resources#easyrpg-kai">下载最新版</a>
+            <AlertDialogCancel className={buttonVariants({ variant: "outline" })}>{t("core.action.close")}</AlertDialogCancel>
+            <LocaleLink className={buttonVariants()} to="/resources#easyrpg-kai">{t("work.kai.download")}</LocaleLink>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

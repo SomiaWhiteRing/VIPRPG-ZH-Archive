@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
 import { getAuthContext } from "@/app/.server/auth/current-user";
 import { assertSameOrigin } from "@/app/.server/auth/origin";
 import { hashVerificationCode } from "@/app/.server/auth/tokens";
@@ -41,7 +43,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     return redirectWithParams(request, "/me/profile/email", {
       newEmail,
       emailSent: "1",
-      error: error instanceof Error ? error.message : "邮箱更新失败",
+      error: formatFeedbackError(error, runtime.uiLocale, translate(runtime.uiLocale, "profile.emailFailed")),
     });
   }
 }

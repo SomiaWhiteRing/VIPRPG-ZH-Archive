@@ -1,4 +1,6 @@
 import { requestJsonValue } from "@/lib/ui/api-response";
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, parseUiLocale, UI_LOCALE_PARAM } from "@/lib/i18n/locale";
 
 import { type FaceEmoji, type FaceEmojiCell, emojiToken } from "@/lib/face-emojis";
 
@@ -42,11 +44,17 @@ export async function emojiRequest<T>(
   body?: object,
   signal?: AbortSignal,
 ): Promise<T> {
+  const locale = parseUiLocale(document.documentElement.lang) ?? DEFAULT_UI_LOCALE;
+  const target = new URL(url, window.location.origin);
+  if (target.origin === window.location.origin && !target.searchParams.has(UI_LOCALE_PARAM)
+    && (locale !== DEFAULT_UI_LOCALE || new URLSearchParams(window.location.search).has(UI_LOCALE_PARAM))) {
+    target.searchParams.set(UI_LOCALE_PARAM, locale);
+  }
   // The shared character picker also reads showcase pages without an ok envelope.
-  return requestJsonValue<T>(url, {
+  return requestJsonValue<T>(target.href, {
     credentials: "same-origin", signal,
     ...(body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
-  }, "表情加载失败");
+  }, translate(locale, "emoji.source.failed"));
 }
 export async function resolveEmojis(
   ids: number[],

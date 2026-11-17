@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 import { hasPermission } from "@/lib/authz/permissions";
 import type {
   AdminForumTag,
@@ -178,11 +180,12 @@ export async function manageForumTag(
   ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ) {
-  checkPermission(actor, "forum.tag.manage");
+  checkPermission(actor, "forum.tag.manage", locale);
   const id = Number(input.id);
   if (!Number.isSafeInteger(id) || id < 1)
-    throw new HttpError(400, "TAG 无效。");
+    throw new HttpError(400, translate(locale, "admin.discussions.invalidTag"));
   const row = await ctx.db
     .prepare("SELECT * FROM forum_tags WHERE id=?")
     .bind(id)
@@ -194,19 +197,19 @@ export async function manageForumTag(
       revision: string;
     }>();
   if (!row) unavailable();
-  if (row.revision !== input.revision) conflict();
-  const reason = forumText(input.reason, 1000, "原因"),
+  if (row.revision !== input.revision) conflict(locale);
+  const reason = forumText(input.reason, 1000, "原因", translate(locale, "admin.discussions.reasonLength")),
     action = input.action;
   if (
     !["rename", "merge", "disable", "hide", "restore"].includes(String(action))
   )
-    throw new HttpError(400, "管理动作无效。");
+    throw new HttpError(400, translate(locale, "admin.discussions.invalidAction"));
   let name = row.name,
     key = row.name_key,
     target: { id: number; revision: string; name: string } | null = null;
   if (action === "rename") {
-    name = forumText(input.name, 200, "TAG 名称");
-    const error = forumTagError(name);
+    name = forumText(input.name, 200, "TAG 名称", translate(locale, "admin.discussions.tagLength"));
+    const error = forumTagError(name, locale);
     if (error) throw new HttpError(400, error);
     name = normalizeForumTag(name);
     key = forumTagKey(name);
@@ -216,7 +219,7 @@ export async function manageForumTag(
         .bind(key, id)
         .first()
     )
-      throw new HttpError(409, "此名称已被使用，请选择合并。");
+      throw new HttpError(409, translate(locale, "admin.discussions.duplicateTag"));
   }
   if (action === "merge") {
     target = await ctx.db
@@ -225,8 +228,8 @@ export async function manageForumTag(
       )
       .bind(Number(input.targetId) || 0, id)
       .first();
-    if (!target) throw new HttpError(400, "请选择另一个启用的目标 TAG。");
-    if (target.revision !== input.targetRevision) conflict();
+    if (!target) throw new HttpError(400, translate(locale, "admin.discussions.invalidTagTarget"));
+    if (target.revision !== input.targetRevision) conflict(locale);
   }
   const token = crypto.randomUUID(),
     db = ctx.db;
@@ -314,5 +317,5 @@ export async function manageForumTag(
         .bind(id, token),
     );
   const results = await db.batch(statements);
-  if (!results[0].meta.changes) conflict();
+  if (!results[0].meta.changes) conflict(locale);
 }

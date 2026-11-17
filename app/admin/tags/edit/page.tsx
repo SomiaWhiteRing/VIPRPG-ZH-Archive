@@ -1,4 +1,7 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { tagHref } from "@/lib/user-tags";
 import { runtimeContext } from "@/app/.server/router-context";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -18,7 +21,6 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { Pane } from "@/app/components/ui/pane";
 import { SelectField } from "@/app/components/ui/select";
 import { Textarea } from "@/app/components/ui/textarea";
-import { Link } from "react-router";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -34,13 +36,18 @@ export async function loader(args: LoaderFunctionArgs) {
     throwNotFound();
   }
 
-  return { tag };
+  return { tag, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: [loaderData?.tag.name || "标签", "公共标签维护", "控制台"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "admin.tags.title");
+  const consoleTitle = translate(locale, "admin.characterIndex.console");
+  return pageMetaDescriptors({ title: loaderData?.tag.name ? [loaderData.tag.name, title, consoleTitle] : [title, consoleTitle] }, error, locale);
+};
 
 export default function AdminTagEditPage() {
+  const t = useMessages();
   const { tag } = useLoaderData<typeof loader>();
   return (
     <main key={tag.name}>
@@ -49,13 +56,13 @@ export default function AdminTagEditPage() {
         title={tag.name}
         actions={
           <>
-            <BackLink href="/admin/tags" label="返回公共标签维护" />
+            <BackLink href="/admin/tags" label={t("admin.tags.back")} />
             {tag.workCount > 0 ? (
               <Link
                 className={buttonVariants({ variant: "outline" })}
                 to={tagHref(tag.name, "public")}
               >
-                查看作品
+                {t("admin.tags.works")}
               </Link>
             ) : null}
           </>
@@ -68,11 +75,12 @@ export default function AdminTagEditPage() {
         action="/api/admin/tags/update"
         className="grid gap-4"
         method="post"
+        preserveLanguage
       >
         <input name="original_name" type="hidden" value={tag.name} />
-        <Pane heading="基础信息">
+        <Pane heading={t("creator.edit.basic")}>
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField controlId="admin-tags-edit--field-1" label="名称">
+            <FormField controlId="admin-tags-edit--field-1" label={t("creator.name")}>
               <Input
                 id="admin-tags-edit--field-1"
                 defaultValue={tag.name}
@@ -80,23 +88,23 @@ export default function AdminTagEditPage() {
                 readOnly
               />
             </FormField>
-            <FormField controlId="admin-tags-edit--field-2" label="命名空间">
+            <FormField controlId="admin-tags-edit--field-2" label={t("admin.tags.namespace")}>
               <SelectField
                 id="admin-tags-edit--field-2"
-                aria-label="命名空间"
+                aria-label={t("admin.tags.namespace")}
                 defaultValue={tag.namespace}
                 name="namespace"
                 options={[
-                  { value: "genre", label: "类型" },
-                  { value: "theme", label: "主题" },
-                  { value: "character", label: "角色相关" },
-                  { value: "technical", label: "技术" },
-                  { value: "content", label: "内容" },
-                  { value: "other", label: "其他" },
+                  { value: "genre", label: t("admin.tags.genre") },
+                  { value: "theme", label: t("admin.tags.theme") },
+                  { value: "character", label: t("admin.tags.character") },
+                  { value: "technical", label: t("admin.tags.technical") },
+                  { value: "content", label: t("admin.tags.content") },
+                  { value: "other", label: t("admin.tags.other") },
                 ]}
               />
             </FormField>
-            <FormField controlId="admin-tags-edit--field-3" label="描述" wide>
+            <FormField controlId="admin-tags-edit--field-3" label={t("admin.tags.description")} wide>
               <Textarea
                 id="admin-tags-edit--field-3"
                 defaultValue={tag.description ?? ""}
@@ -108,7 +116,7 @@ export default function AdminTagEditPage() {
         </Pane>
 
         <StickySaveBar>
-          <Button type="submit">保存标签资料</Button>
+          <Button type="submit">{t("admin.tags.save")}</Button>
         </StickySaveBar>
       </RedirectForm>
     </main>

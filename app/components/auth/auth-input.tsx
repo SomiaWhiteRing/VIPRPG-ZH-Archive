@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { cn } from "@/lib/ui/cn";
+import { useMessages } from "@/lib/i18n/react";
 import {
   PASSWORD_MIN_LENGTH,
   PASSWORD_MAX_LENGTH,
@@ -65,7 +66,8 @@ export function PasswordInput({
   ...props
 }: Props & { purpose?: "current" | "new" }) {
   const [visible, setVisible] = useState(false);
-  const label = visible ? "隐藏密码" : "显示密码";
+  const t = useMessages();
+  const label = t(visible ? "auth.password.hide" : "auth.password.show");
   return (
     <div className="relative min-w-0">
       <Input

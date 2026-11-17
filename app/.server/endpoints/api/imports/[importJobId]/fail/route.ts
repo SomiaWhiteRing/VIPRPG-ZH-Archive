@@ -21,7 +21,7 @@ export async function POST(
     await requiredOwnedImportJob(runtime, id, auth.user);
     const body: unknown = await readJsonObject(request, "请求必须为 JSON 对象").catch(() => null);
     if (!isRecord(body) || typeof body.message !== "string") {
-      throw new HttpError(400, "失败信息格式不合法");
+      throw new HttpError(400, "失败信息格式不合法", undefined, "upload.error.failurePayload");
     }
     const stage = typeof body.stage === "string" ? body.stage : null;
     await markImportJobFailed(runtime, id, body.message, stage);

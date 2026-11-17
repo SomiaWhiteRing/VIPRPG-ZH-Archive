@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { WorkListRow } from "@/app/components/work/work-list-row";
 import { WorkPopularityStats, useShowGameCardInteractionData } from "@/app/components/work/work-popularity-stats";
 import { useArchiveDownload } from "@/app/components/use-archive-download";
@@ -15,6 +16,7 @@ export function GameLibraryListRow({
   children?: ReactNode;
   showDownload?: boolean;
 }) {
+  const t = useMessages();
   const title = work.chineseTitle || work.originalTitle;
   const { downloadUrl, downloadSize } = useArchiveDownload();
   const showInteractionData = useShowGameCardInteractionData();
@@ -26,15 +28,15 @@ export function GameLibraryListRow({
   const download = work.currentArchiveVersionId
     ? {
         href: downloadUrl(work.currentArchiveVersionId),
-        label: "下载 ZIP",
-        detail: sizeBytes === null ? "共享播放器暂不可用" : formatBytes(sizeBytes),
+        label: t("work.download.zip"),
+        detail: sizeBytes === null ? t("work.download.unavailable") : formatBytes(sizeBytes),
         external: false,
       }
     : work.externalDownloadUrl
       ? {
           href: work.externalDownloadUrl,
-          label: "前往下载页",
-          detail: "外部站点",
+          label: t("work.download.external"),
+          detail: t("work.download.externalSite"),
           external: true,
         }
       : null;

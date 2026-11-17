@@ -1,6 +1,8 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages } from "@/lib/i18n/react";
 import { cn } from "@/lib/ui/cn";
 import type { ProfileVisibility } from "@/lib/user-profile";
-import { Link, useLocation } from "react-router";
+import { useLocation } from "react-router";
 
 export function PublicProfileNavigation({
   userId,
@@ -9,33 +11,34 @@ export function PublicProfileNavigation({
   userId: number;
   visibility: ProfileVisibility;
 }) {
+  const t = useMessages();
   const pathname = useLocation().pathname ?? "";
   const base = `/users/${userId}`;
   const links: Array<{ href: string; label: string; exact?: boolean }> = [
-    { href: base, label: "概览", exact: true },
-    { href: `${base}/timeline`, label: "时间线" },
+    { href: base, label: t("account.nav.overview"), exact: true },
+    { href: `${base}/timeline`, label: t("timeline.settings.title") },
     ...(visibility.favorites
-      ? [{ href: `${base}/favorites`, label: "收藏" }]
+      ? [{ href: `${base}/favorites`, label: t("timeline.feed.kind.favorite") }]
       : []),
     ...(visibility.history
-      ? [{ href: `${base}/history`, label: "最近游玩" }]
+      ? [{ href: `${base}/history`, label: t("publicProfile.history") }]
       : []),
     ...(visibility.catalogs
-      ? [{ href: `${base}/catalogs`, label: "目录" }]
+      ? [{ href: `${base}/catalogs`, label: t("timeline.feed.kind.catalog") }]
       : []),
     ...(visibility.comments
-      ? [{ href: `${base}/comments`, label: "评论" }]
+      ? [{ href: `${base}/comments`, label: t("timeline.feed.kind.comment") }]
       : []),
     ...(visibility.discussions
-      ? [{ href: `${base}/discussions`, label: "讨论" }]
+      ? [{ href: `${base}/discussions`, label: t("publicProfile.discussionTab") }]
       : []),
     ...(visibility.friends
-      ? [{ href: `${base}/connections`, label: "好友" }]
+      ? [{ href: `${base}/connections`, label: t("friends.title") }]
       : []),
   ];
   return (
     <nav
-      aria-label="用户公开资料导航"
+      aria-label={t("publicProfile.navigation")}
       className="flex gap-1 overflow-x-auto border-b border-border py-2"
     >
       {links.map((item) => {

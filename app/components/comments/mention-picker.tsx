@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { requestJson } from "@/lib/ui/api-response";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import * as Popover from "@/app/components/ui/popover";
@@ -15,6 +16,7 @@ export function MentionPicker({ container, anchor, inputId, onSelect, onClose }:
   onSelect: (user: MentionUser) => void;
   onClose: (restoreFocus: boolean) => void;
 }) {
+  const t = useMessages();
   const id = useId();
   const search = useRef<HTMLInputElement>(null);
   const anchorRef = useMemo(() => ({ current: anchor }), [anchor]);
@@ -29,20 +31,20 @@ export function MentionPicker({ container, anchor, inputId, onSelect, onClose }:
     const controller = new AbortController();
     if (!query.trim() || composing) return () => controller.abort();
     const timer = setTimeout(() => {
-      void requestJson<{ users?: MentionSearchUser[] }>(`/api/users/mentions?q=${encodeURIComponent(query.trim())}`, { signal: controller.signal, credentials: "same-origin" }, "用户搜索失败")
+      void requestJson<{ users?: MentionSearchUser[] }>(`/api/users/mentions?q=${encodeURIComponent(query.trim())}`, { signal: controller.signal, credentials: "same-origin" }, t("mention.failed"))
         .then((result) => {
-          if (!result.users) throw new Error("服务器未返回用户搜索结果。");
+          if (!result.users) throw new Error(t("mention.missing"));
           if (!controller.signal.aborted) setUsers(result.users);
         }).catch((cause) => {
-          if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "用户搜索失败。");
+          if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : t("mention.failedDetail"));
         }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [query, composing, retry]);
+  }, [query, composing, retry, t]);
   return <Popover.Root open modal={false} onOpenChange={(open) => { if (!open) onClose(false); }}>
     <Popover.Anchor virtualRef={{ current: anchor }} />
     <Popover.Portal anchorRef={anchorRef} container={container}>
-      <Popover.Content aria-label="提及用户" data-mention-picker
+      <Popover.Content aria-label={t("mention.label")} data-mention-picker
         side="bottom" align="start" sideOffset={6} collisionPadding={12}
         onOpenAutoFocus={(event) => { event.preventDefault(); search.current?.focus(); }}
         onCloseAutoFocus={(event) => event.preventDefault()}
@@ -55,8 +57,8 @@ export function MentionPicker({ container, anchor, inputId, onSelect, onClose }:
         onKeyDown={(event) => event.stopPropagation()}
         className="z-[70] flex max-h-[min(24rem,var(--radix-popover-content-available-height))] w-80 max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-lg border border-border bg-card p-2 text-card-foreground shadow-surface">
         <div className="flex shrink-0 items-center gap-1">
-        <Label htmlFor={id} className="sr-only">搜索昵称或用户 UID</Label>
-        <Input ref={search} id={id} value={query} maxLength={80} autoComplete="off" placeholder="搜索昵称或用户 UID"
+        <Label htmlFor={id} className="sr-only">{t("mention.search")}</Label>
+        <Input ref={search} id={id} value={query} maxLength={80} autoComplete="off" placeholder={t("mention.search")}
           onChange={(event) => { setQuery(event.target.value); setUsers([]); setError(""); setLoading(!!event.target.value.trim()); }}
           onCompositionStart={() => { setComposing(true); setUsers([]); }}
           onCompositionEnd={() => setComposing(false)}
@@ -69,13 +71,13 @@ export function MentionPicker({ container, anchor, inputId, onSelect, onClose }:
             }
             if (event.key === "Enter") { event.preventDefault(); if (users[0] && !loading) onSelect(users[0]); }
           }} />
-        <Button type="button" size="icon" variant="ghost" className="shrink-0" aria-label="收起用户搜索" title="收起用户搜索" onClick={() => onClose(true)}><X aria-hidden /></Button>
+        <Button type="button" size="icon" variant="ghost" className="shrink-0" aria-label={t("mention.closeSearch")} title={t("mention.closeSearch")} onClick={() => onClose(true)}><X aria-hidden /></Button>
         </div>
         <div role="status" className="mt-2 text-sm text-muted">
-          {error || (!query.trim() ? "" : loading || composing ? "正在搜索…" : !users.length ? "没有找到用户。" : "")}
+          {error || (!query.trim() ? "" : loading || composing ? t("relation.edit.searching") : !users.length ? t("mention.noMatch") : "")}
         </div>
-        {error ? <Button type="button" variant="ghost" onClick={() => { setError(""); setLoading(true); setRetry((value) => value + 1); }}>重试</Button> : null}
-        <ul ref={results} className="mt-2 min-h-0 overflow-y-auto" aria-label="用户搜索结果">
+        {error ? <Button type="button" variant="ghost" onClick={() => { setError(""); setLoading(true); setRetry((value) => value + 1); }}>{t("core.action.retry")}</Button> : null}
+        <ul ref={results} className="mt-2 min-h-0 overflow-y-auto" aria-label={t("mention.results")}>
           {users.map((user) => <li key={user.id}><Button type="button" variant="ghost" className="h-auto w-full justify-between whitespace-normal py-3 text-left"
             onKeyDown={(event) => {
               if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;

@@ -13,12 +13,14 @@ import {
 } from "@/app/.server/db/taxonomy-library";
 import {
   formOrJsonError,
-  redirectResponse,
+  redirectWithParams,
   requestWantsJson,
 } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError, json } from "@/lib/http";
+import { translate } from "@/lib/i18n/core";
+import { UiHttpError } from "@/lib/i18n/feedback";
 
 type RouteContext = {
   params: {
@@ -76,12 +78,12 @@ export async function POST(
       return json({ ok: false, error: "Permission denied" }, { status: 403 });
     }
     if (!metadataRequested && !portraitRequested && !mergeRequested)
-      throw new HttpError(400, "没有可保存的修改");
+      throw new HttpError(400, "没有可保存的修改", undefined, "admin.characterDetail.error.noChanges");
     const currentCharacter = await getCharacterForAdminEdit(
       runtime,
       characterId,
     );
-    if (!currentCharacter) throw new HttpError(404, "角色不存在");
+    if (!currentCharacter) throw new HttpError(404, "角色不存在", undefined, "comment.error.characterMissing");
     if (!metadataRequested) {
       formData.set("primary_name", currentCharacter.primaryName);
       formData.set("original_name", currentCharacter.originalName);
@@ -110,6 +112,7 @@ export async function POST(
         400,
         "角色 ID 与当前页面不一致，请刷新页面后重试。",
         "character_id_mismatch",
+        "admin.characterDetail.error.idMismatch",
       );
     }
 
@@ -166,7 +169,7 @@ export async function POST(
       });
     }
 
-    return redirectResponse(new URL(redirectTo, request.url));
+    return redirectWithParams(request, redirectTo, {});
   } catch (error) {
     if (
       error instanceof CharacterAliasMergeConflictError &&
@@ -176,27 +179,31 @@ export async function POST(
         request,
         fallbackPath,
         "Character update failed",
-        new HttpError(
-          409,
-          "名称已属于其他角色，请联系有合并权限的维护者处理。",
-        ),
+        new UiHttpError(409, "admin.characterDetail.aliasMergeForbidden"),
+        runtime.uiLocale,
       );
     }
     if (
       requestWantsJson(request) &&
       error instanceof CharacterAliasMergeConflictError
     ) {
-      const aliases = error.aliases.map((alias) => `“${alias}”`).join("、");
+      const locale = runtime.uiLocale;
+      const conflict = {
+        aliases: error.aliases.map((alias) => `“${alias}”`).join(locale === "en" ? ", " : "、"),
+        candidateId: error.candidate.id,
+        candidateName: `${error.candidate.originalName} · ${error.candidate.primaryName}`,
+        currentId: error.currentCharacterId,
+      };
       return json(
         {
           ok: false,
           error: "Character update requires confirmation",
           code: error.code,
-          detail: error.message,
+          detail: translate(locale, "admin.characterDetail.aliasMergeConflict", conflict),
           confirmation: {
-            title: "将重复角色合并到当前角色？",
-            description: `日文别名${aliases}已归属于角色 #${error.candidate.id}“${error.candidate.originalName} · ${error.candidate.primaryName}”。确认后，该角色的作品关联、头像和别名会转移到当前角色 #${error.currentCharacterId}，旧角色记录会被删除，然后继续保存本页内容。此操作不可逆。`,
-            confirmLabel: "合并并保存",
+            title: translate(locale, "admin.characterDetail.aliasMergeTitle"),
+            description: translate(locale, "admin.characterDetail.aliasMergeDescription", conflict),
+            confirmLabel: translate(locale, "admin.characterDetail.aliasMergeConfirm"),
             fieldName: "merge_source_id",
             fieldValue: String(error.candidate.id),
           },
@@ -210,6 +217,7 @@ export async function POST(
       fallbackPath,
       "Character update failed",
       error,
+      runtime.uiLocale,
     );
   }
 }

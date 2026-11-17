@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { CatalogListRow } from "@/app/catalogs/catalog-list-row";
 import { Card } from "@/app/components/ui/card";
 import { WorkCommunityStats } from "@/app/components/work/work-community-stats";
@@ -8,7 +9,7 @@ import { CatalogAddDialog, WorkEngagementActions } from "@/app/games/[id]/work-e
 import type { GameWorkDetail } from "@/lib/dto/db/game-library";
 import type { WorkOverviewSidebarData } from "@/lib/dto/db/work-community";
 import { ExternalLink, Link2 } from "lucide-react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import type { WorkFavoriteUpdate } from "@/lib/user-tags";
 import { MaintainerApplicationButton } from './maintainer-application-button';
 
@@ -17,6 +18,7 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
   onFavoriteSaved: (update: WorkFavoriteUpdate) => void | Promise<void>;
   favoriteSummary?: "counts" | "tags";
 }) {
+  const t = useMessages();
   const { currentUser, community, containingCatalogs, userCatalogs, showRelationEditor, editInfoHref } = data;
   const publicWork = work.status === "published" && work.audience === "public";
   const current = work.archiveVersions[0] ?? null;
@@ -36,28 +38,28 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
       extras={
         <>
           {currentUser ? (
-            <div aria-label="条目补充操作" className="order-2 flex items-center gap-1 px-2 max-[980px]:w-full">
+            <div aria-label={t("work.sidebar.actions")} className="order-2 flex items-center gap-1 px-2 max-[980px]:w-full">
               {publicWork && showRelationEditor ? (
                 <Link className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline" to={`/games/${work.id}/relations`}>
-                  编辑关联
+                  {t("work.sidebar.editRelations")}
                 </Link>
               ) : null}
               {editInfoHref ? (
                 <Link className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline" to={editInfoHref}>
-                  编辑信息
+                  {t("work.sidebar.editInfo")}
                 </Link>
               ) : data.maintainerApplication ? <MaintainerApplicationButton workId={work.id} initialApplication={data.maintainerApplication} /> : null}
               <CatalogAddDialog catalogs={userCatalogs} workId={work.id} />
               {editInfoHref ? <Link className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline"
-                to={`/history/work/${work.id}`} prefetch="none">编辑历史</Link> : null}
+                to={`/history/work/${work.id}`} prefetch="none">{t("work.sidebar.history")}</Link> : null}
             </div>
           ) : null}
           {containingCatalogs.length ? (
             <Card className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full" id="catalog-card">
               <div className="mb-[0.35rem] flex items-baseline justify-between gap-3">
-                <h2 className="m-0 min-w-0 wrap-anywhere font-mono text-xs font-normal tracking-[0.08em] text-muted">收录了本条目的目录</h2>
-                <Link aria-label="查看全部收录了本条目的目录" className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline" to={`/games/${work.id}/catalogs`}>
-                  更多
+                <h2 className="m-0 min-w-0 wrap-anywhere font-mono text-xs font-normal tracking-[0.08em] text-muted">{t("work.sidebar.catalogs")}</h2>
+                <Link aria-label={t("work.sidebar.allCatalogs")} className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline" to={`/games/${work.id}/catalogs`}>
+                  {t("work.more")}
                 </Link>
               </div>
               {containingCatalogs.map((catalog) => (
@@ -69,7 +71,7 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
           ) : null}
           {externalLinks.length ? (
             <Card className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full" id="links-card">
-              <p className="my-[0.65rem] mb-[0.35rem] mt-0 font-mono text-xs tracking-[0.08em] text-muted">外部链接</p>
+              <p className="my-[0.65rem] mb-[0.35rem] mt-0 font-mono text-xs tracking-[0.08em] text-muted">{t("work.sidebar.external")}</p>
               <div className="grid gap-0.5">
                 {externalLinks.map((link) => (
                   <a

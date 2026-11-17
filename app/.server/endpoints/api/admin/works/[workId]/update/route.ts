@@ -6,7 +6,7 @@ import {
   parseWorkEditForm,
   updateWorkForAdmin,
 } from "@/app/.server/db/game-library";
-import { redirectResponse } from "@/app/.server/http/form";
+import { redirectWithParams } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 import {
   ensureCharacterFaceSheets,
@@ -51,10 +51,10 @@ export async function POST(
     }
 
     const current = await getWorkForAdminEdit(runtime, workId);
-    if (!current) throw new HttpError(404, "作品不存在");
+    if (!current) throw new HttpError(404, "作品不存在", undefined, "comment.error.workMissing");
     if (!hasPermission(auth.user, "work.status.update_any") &&
       (current.status === "deleted" || workStatusFromLegacyInput(input.status, current.status) !== current.status)) {
-      throw new HttpError(403, "没有调整作品状态的权限");
+      throw new HttpError(403, "没有调整作品状态的权限", undefined, "upload.error.statusPermission");
     }
     if (hasPermission(auth.user, "work.metadata.update_any")) {
       const characterFaceSheets = formData
@@ -92,7 +92,7 @@ export async function POST(
       });
     }
 
-    return redirectResponse(new URL(`/admin/works/${workId}`, request.url));
+    return redirectWithParams(request, `/admin/works/${workId}`, {});
   } catch (error) {
     return jsonError("Work update failed", error);
   }

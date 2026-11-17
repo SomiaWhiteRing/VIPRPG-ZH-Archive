@@ -14,6 +14,9 @@
 | --- | --- | --- |
 | `npm run check` | 类型、lint、静态架构、安全和 UI 静态规则 | 不证明浏览器交互；按改动需要单独运行 |
 | `npx tsx scripts/ui-self-check.ts` | `app` 下 TSX 控件和样式改动的最小 UI 静态检查 | 仅扫描源码，不启动浏览器；规则独立于 TypeScript 和 ESLint，已包含在 `npm run check` 中 |
+| `npm run check:i18n` | 三语键集合、空值、ICU 语法、参数及富文本标签兼容性 | 仅读取网站 UI 词库，已包含在 `npm run check` 中；不扫描作品介绍和用户内容 |
+| `npm run test:i18n:contract` | 语言优先级、auto、账号跨会话保存及重定向参数／锚点 | 纯函数与独立内存 SQLite，执行真实迁移及偏好接口；不构建、不启动浏览器或访问远端。Deploy、`npm test`、`verify:preprod` 均执行 |
+| `npm run test:i18n -- --hold` | i18n 浏览器专项验收及 TUI | 默认构建并创建隔离 D1/R2；按当前任务授权和影响范围运行，不自动作为每次发布的全量门槛 |
 | [Android 模拟器本地测试](android-local-testing.md) | 在独立调试包内验证未部署的网站改动 | 需要当前任务明确授权构建和模拟器交互；只使用隔离的本地数据 |
 | `npx tsx scripts/shared-boundary-check.ts` | 公共请求、响应、输入解析、对象键、哈希和格式化入口约束 | 仅扫描源码，逐项输出文件、行号和规则；已包含在 `npm run check` 中 |
 | `npm test` | 独立临时 D1/R2 中的稳定 HTTP/API 契约 | 不启动浏览器流程；不依赖开发 seed |
@@ -82,6 +85,15 @@
 - `npm run build` 只在构建配置、路由边界、部署链路变化，或预生产验收时运行；预生产完整入口是 `npm run verify:preprod`。
 - 失败后先分类为产品、测试夹具、环境或调度问题；夹具和环境失败不能作为改造产品代码的依据。有状态 D1、API、Worker 和浏览器检查必须串行运行。
 - 新增测试代码、人工 UI 测试或浏览器交互均需用户明确授权；当前任务已有授权时不重复询问。
+
+### i18n 发布检查
+
+- 网站界面词库统一使用 `lib/i18n/messages/`。作品介绍、用户内容及其原文数据不进入翻译检查。账号语言默认 `auto`，随浏览器语言变化；显式 URL `lang` 优先于账号选择。
+- 每次发布的 `checks` job 必须通过 `npm run check:i18n`（由 `npm run check` 调用）及 `npm run test:i18n:contract`。前者检查词库结构，后者检查稳定语言行为；本地 `npm test` 与 `npm run verify:preprod` 也包含语言契约。
+- 词库检查复用现有 ICU 解析器，遍历所有分支的参数和富文本标签，允许各语言使用不同复数类别、格式及语序。普通缺失／空白词条阻止发布；仅允许检查脚本中附有原因的空白语序片段。错误报告定位到语言、键和参数，不锁定具体译文、DOM 层级或当前条目数量。
+- 浏览器验收按影响范围选择：单页改动验证相关页面的三语和桌面／移动布局；共用组件改动覆盖受影响页面及交互；全局语言机制或大范围布局改造再执行全量。维护脚本的当前用例数量不构成永久门槛。
+- `npm run test:i18n -- --filter <路由片段> --hold` 筛选页面，并继续执行公共语言交互；`--retry-report <report.json>` 只重跑报告中的失败／阻塞项。默认本地夹具使用 `output/easyrpg/testgame.zip`，可用 `--game <ZIP>` 指定现有 EasyRPG 游戏包；准备方式见下节。CI 固定检查不依赖此 ZIP，也不打开 TUI。
+- 浏览器报告中的失败、阻塞和不适用跳过分别计数。缺少夹具、文件占用等问题先修验收环境，不据此改造产品或放宽产品断言。迁移当次的残留扫描与动态调用数量不固化为永久测试。
 
 ### EasyRPG 网页运行包更新
 

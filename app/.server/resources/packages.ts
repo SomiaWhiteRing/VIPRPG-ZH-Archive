@@ -1,6 +1,8 @@
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { ToolArtifact } from "@/lib/resources";
 import { HttpError } from "@/lib/http";
+import { formatFeedbackError, UiFeedbackError } from "@/lib/i18n/feedback";
+import { translate } from "@/lib/i18n/core";
 import { readWindyPackage } from "@/lib/windy-package";
 import { readAndroidPackage } from "@/lib/android-package";
 
@@ -12,11 +14,11 @@ export async function verifyPackageArtifact(runtime: AppRuntime, row: ToolArtifa
   try {
     const info = await reader(row.size_bytes, async (offset, length) => {
       const object = await runtime.bucket.get(row.object_key, { range: { offset, length } });
-      if (!object) throw new Error("文件缺失");
+      if (!object) throw new UiFeedbackError("admin.resources.missingObject");
       return new Uint8Array(await object.arrayBuffer());
     });
-    if (row.target !== info.target || row.format !== (info.target === "windows-x64" ? "zip" : "apk") || row.application_build_id !== info.applicationBuildId) throw new Error("包内身份与登记内容不符");
+    if (row.target !== info.target || row.format !== (info.target === "windows-x64" ? "zip" : "apk") || row.application_build_id !== info.applicationBuildId) throw new UiFeedbackError("admin.package.error.identity");
   } catch (error) {
-    throw new HttpError(400, error instanceof Error ? error.message : "安装包校验失败");
+    throw new HttpError(400, formatFeedbackError(error, runtime.uiLocale, translate(runtime.uiLocale, "admin.package.error.verification")));
   }
 }

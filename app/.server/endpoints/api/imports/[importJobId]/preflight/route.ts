@@ -108,13 +108,13 @@ function normalizeHashInputs(values: HashInput[]): Array<{
   for (const value of values) {
     const rawSha256 = typeof value === "string" ? value : value.sha256;
     if (typeof rawSha256 !== "string") {
-      throw new HttpError(400, "Invalid SHA-256");
+      throw new HttpError(400, "Invalid SHA-256", undefined, "upload.error.invalidHash");
     }
     let sha256: string;
     try {
       sha256 = normalizeSha256(rawSha256);
     } catch {
-      throw new HttpError(400, "Invalid SHA-256");
+      throw new HttpError(400, "Invalid SHA-256", undefined, "upload.error.invalidHash");
     }
     const sizeBytes =
       typeof value === "string" ? 0 : readNonNegativeInteger(value.sizeBytes);
@@ -158,7 +158,7 @@ function summarize(
 function readNonNegativeInteger(value: unknown): number {
   if (value === undefined) return 0;
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    throw new HttpError(400, "Invalid object size");
+    throw new HttpError(400, "Invalid object size", undefined, "upload.error.objectSize");
   }
   return value;
 }
@@ -170,20 +170,20 @@ async function parsePreflightRequest(
   try {
     value = await readJsonObject(request, "请求必须为 JSON 对象");
   } catch {
-    throw new HttpError(400, "Invalid JSON body");
+    throw new HttpError(400, "Invalid JSON body", undefined, "request.invalidJson");
   }
   if (!isRecord(value)) {
-    throw new HttpError(400, "Invalid preflight body");
+    throw new HttpError(400, "Invalid preflight body", undefined, "upload.error.preflightBody");
   }
   for (const key of ["blobs", "corePacks"] as const) {
     if (value[key] !== undefined && !Array.isArray(value[key])) {
-      throw new HttpError(400, `${key} must be an array`);
+      throw new HttpError(400, `${key} must be an array`, undefined, "upload.error.expectedArray", { field: key });
     }
     const values = (value[key] ?? []) as unknown[];
     for (const item of values) {
       if (typeof item === "string") continue;
       if (!isRecord(item) || typeof item.sha256 !== "string") {
-        throw new HttpError(400, "Invalid object reference");
+        throw new HttpError(400, "Invalid object reference", undefined, "upload.error.objectReference");
       }
       if (
         item.sizeBytes !== undefined &&
@@ -191,7 +191,7 @@ async function parsePreflightRequest(
           !Number.isSafeInteger(item.sizeBytes) ||
           item.sizeBytes < 0)
       ) {
-        throw new HttpError(400, "Invalid object size");
+        throw new HttpError(400, "Invalid object size", undefined, "upload.error.objectSize");
       }
     }
   }

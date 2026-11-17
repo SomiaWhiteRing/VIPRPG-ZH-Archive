@@ -2,7 +2,7 @@ import { requireAnyPermission } from "@/app/.server/auth/authorize";
 import { moveArchiveVersionToTrash } from "@/app/.server/db/archive-maintenance";
 import { writeAuthAuditLog } from "@/app/.server/db/auth-audit";
 import { redirectBack } from "@/app/.server/http/form";
-import { parsePositiveId } from "@/app/.server/http/request";
+import { parseArchiveVersionId } from "@/app/.server/db/archive-downloads";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
 
@@ -28,10 +28,7 @@ export async function POST(
 
   try {
     const { archiveVersionId: rawArchiveVersionId } = await context.params;
-    const archiveVersionId = parsePositiveId(
-      rawArchiveVersionId,
-      "archive version id",
-    );
+    const archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
     const archiveVersion = await moveArchiveVersionToTrash(
       runtime,
       archiveVersionId,

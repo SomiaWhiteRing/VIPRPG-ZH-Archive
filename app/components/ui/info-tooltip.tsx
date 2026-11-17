@@ -2,8 +2,10 @@ import { Info } from "lucide-react";
 import { Tooltip as TooltipPrimitive } from "radix-ui";
 import { useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/ui/cn";
+import { useMessages } from "@/lib/i18n/react";
 
-export function InfoTooltip({ children, className, label = "查看说明" }: { children: ReactNode; className?: string; label?: string }) {
+export function InfoTooltip({ children, className, label }: { children: ReactNode; className?: string; label?: string }) {
+  const t = useMessages();
   const [open, setOpen] = useState(false);
   const openOnPointerDown = useRef(false);
 
@@ -13,7 +15,7 @@ export function InfoTooltip({ children, className, label = "查看说明" }: { c
         <TooltipPrimitive.Trigger asChild>
           <button
             aria-expanded={open}
-            aria-label={label}
+            aria-label={label ?? t("core.info.open")}
             className="inline-grid cursor-help size-5 shrink-0 place-items-center rounded-sm text-muted outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/30 pointer-coarse:size-8"
             onPointerDown={() => {
               // Radix closes on pointer down; retain the state before that close.

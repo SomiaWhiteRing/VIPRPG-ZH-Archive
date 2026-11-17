@@ -3,9 +3,12 @@ import { cn } from "@/lib/ui/cn";
 import { Fragment } from "react";
 import { useInboxUnread } from "@/app/components/inbox-indicator";
 import { UnreadBadge } from "@/app/components/ui/unread-badge";
-import { Link, useLocation } from "react-router";
+import { useLocation } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages } from "@/lib/i18n/react";
 
 export function AccountNavigation({ canUpload }: { canUpload: boolean }) {
+  const t = useMessages();
   const pathname = useLocation().pathname ?? "/me";
   const { messagesUnread } = useInboxUnread();
   const items = ACCOUNT_NAVIGATION.filter(
@@ -32,7 +35,7 @@ export function AccountNavigation({ canUpload }: { canUpload: boolean }) {
             )}
             to={item.href}
           >
-            {item.label}
+            {t(item.label)}
             {item.href === "/me/messages" ? <UnreadBadge className="ml-auto" count={messagesUnread} /> : null}
           </Link>
         </Fragment>
@@ -41,7 +44,7 @@ export function AccountNavigation({ canUpload }: { canUpload: boolean }) {
 
   return (
     <>
-      <aside className="hidden md:block" aria-label="个人中心导航">
+      <aside className="hidden md:block" aria-label={t("account.nav.label")}>
         <nav className="grid gap-0.5">{links()}</nav>
       </aside>
     </>

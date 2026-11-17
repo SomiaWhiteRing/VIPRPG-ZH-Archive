@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import * as Dialog from "@/app/components/ui/dialog";
 import type { ReactNode } from "react";
 import { Button } from "@/app/components/ui/button";
@@ -14,6 +15,7 @@ export function EmojiDialog({
   children: ReactNode;
   onClose?: () => void;
 }) {
+  const t = useMessages();
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -33,8 +35,8 @@ export function EmojiDialog({
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2 pt-[max(.5rem,env(safe-area-inset-top))]">
             <Dialog.Title className="text-[length:inherit] font-semibold">{title}</Dialog.Title>
             <Dialog.Close asChild>
-              <Button type="button" variant="ghost" aria-label="关闭表情面板">
-                关闭
+              <Button type="button" variant="ghost" aria-label={t("emoji.picker.close")}>
+                {t("core.action.close")}
               </Button>
             </Dialog.Close>
           </div>

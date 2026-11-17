@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
 import type { ResourceRecord, ToolArtifact, ToolRelease } from "@/lib/resources";
@@ -16,10 +17,10 @@ export async function downloadArtifact(
     )
     .bind(id)
     .first<ToolArtifact & Pick<ToolRelease, "version_label"> & Pick<ResourceRecord, "download_filename_template">>();
-  if (!row) throw new HttpError(404, "安装包不可用");
+  if (!row) throw new HttpError(404, translate(runtime.uiLocale, "admin.resources.error.packageUnavailable"), undefined, "admin.resources.error.packageUnavailable");
   if (["cleanup", "cleaned"].includes(row.storage_status))
-    throw new HttpError(410, "旧安装包已回收，请前往链接页面下载当前版本");
-  if (row.storage_status !== "ready") throw new HttpError(404, "安装包不可用");
+    throw new HttpError(410, translate(runtime.uiLocale, "admin.resources.error.reclaimed"), undefined, "admin.resources.error.reclaimed");
+  if (row.storage_status !== "ready") throw new HttpError(404, translate(runtime.uiLocale, "admin.resources.error.packageUnavailable"), undefined, "admin.resources.error.packageUnavailable");
   const object = await verifyArtifactObject(runtime, row);
   const etag = `"sha256-${row.sha256}"`;
   const filename = resourceDownloadFilename(row.download_filename_template, row, row.version_label);
@@ -87,10 +88,10 @@ export async function downloadArtifact(
     row.object_key,
     status === 206 ? { range: { offset, length } } : undefined,
   );
-  assertArtifactObject(row, body);
+  assertArtifactObject(row, body, runtime.uiLocale);
   // R2 reports full object size/checksum even when body is a byte range.
   if (!body || !("body" in body))
-    throw new HttpError(503, "安装包暂时不可读取");
+    throw new HttpError(503, translate(runtime.uiLocale, "admin.resources.error.storageRead"), undefined, "admin.resources.error.storageRead");
   return new Response(body.body, { status, headers });
 }
 export async function updateManifest(
@@ -100,7 +101,7 @@ export async function updateManifest(
   target: string,
   buildId: string | null,
 ) {
-  if (buildId && buildId.length > 200) throw new HttpError(400, "构建标识过长");
+  if (buildId && buildId.length > 200) throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.buildLength"), undefined, "admin.resources.error.buildLength");
   const selection = await runtime.db
     .prepare(
       `SELECT c.*,p.slug FROM tool_channels c JOIN resources p ON p.id=c.resource_id
@@ -112,7 +113,7 @@ export async function updateManifest(
       artifact_id: string | null;
       revision: number;
     }>();
-  if (!selection) throw new HttpError(404, "工具或平台尚未配置");
+  if (!selection) throw new HttpError(404, translate(runtime.uiLocale, "admin.resources.error.platformUnconfigured"), undefined, "admin.resources.error.platformUnconfigured");
   const base = {
     schemaVersion: 1,
     tool: slug,
@@ -135,7 +136,7 @@ export async function updateManifest(
           "version_label" | "release_sequence" | "published_at" | "notes"
         >
     >();
-  if (!row) throw new HttpError(503, "推荐版本记录不一致");
+  if (!row) throw new HttpError(503, translate(runtime.uiLocale, "admin.resources.error.recommendationMismatch"), undefined, "admin.resources.error.recommendationMismatch");
   await verifyArtifactObject(runtime, row);
   let installedRelease: null | {
     applicationBuildId: string;

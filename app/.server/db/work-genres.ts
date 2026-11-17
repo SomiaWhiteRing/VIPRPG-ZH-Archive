@@ -1,6 +1,7 @@
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
+import { translate } from "@/lib/i18n/core";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { auditedEntityBatch } from "@/app/.server/db/entity-audit";
 
@@ -63,7 +64,7 @@ export async function mergeWorkGenreGroups(runtime: AppRuntime, input: {
   actor: ArchiveUser;
 }) {
   if (input.sourceGroup === input.targetGroup || !input.sourceSnapshot || !input.targetSnapshot) {
-    throw new HttpError(400, "请选择两个不同的类型组。");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.genres.pickDistinct"), undefined, "admin.genres.pickDistinct");
   }
   const database = getD1(runtime);
   try {
@@ -86,7 +87,7 @@ export async function mergeWorkGenreGroups(runtime: AppRuntime, input: {
     });
   } catch (error) {
     if (/malformed JSON/i.test(String(error))) {
-      throw new HttpError(409, "类型组已变化，请重新预览后再合并。");
+      throw new HttpError(409, translate(runtime.uiLocale, "admin.genres.changed"), undefined, "admin.genres.changed");
     }
     throw error;
   }

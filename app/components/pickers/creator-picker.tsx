@@ -3,6 +3,7 @@ import { Button } from "@/app/components/ui/button";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import { creatorNameKey } from "@/lib/creator-names";
 import { normalizeEntityName } from "@/lib/entity-name";
+import { useMessages } from "@/lib/i18n/react";
 import { cn } from "@/lib/ui/cn";
 import { useMemo } from "react";
 
@@ -21,7 +22,7 @@ export function CreatorPicker({
   name,
   onChange,
   placeholder,
-  label = "人物",
+  label,
   suggestions,
   value,
 }: {
@@ -37,6 +38,7 @@ export function CreatorPicker({
   suggestions: CreatorSuggestion[];
   value: CreatorSelection | null;
 }) {
+  const t = useMessages();
   const inputValue = value?.displayName ?? "";
   const identityLocked = value?.kind === "existing";
   const options = useMemo(
@@ -85,7 +87,7 @@ export function CreatorPicker({
       ) : null}
       <SearchComboBox
         id={id}
-        label={label}
+        label={label ?? t("upload.staff.person")}
         query={inputValue}
         onQueryChange={changeDisplayName}
         disabled={disabled}
@@ -106,14 +108,14 @@ export function CreatorPicker({
             <Button
               className="absolute right-1 top-1/2 h-7 -translate-y-1/2 px-1.5 text-xs"
               disabled={disabled}
-              title={`已关联：${value.name}`}
-              aria-label={`更换人物，当前关联：${value.name}`}
+              title={t("upload.staff.linked", { name: value.name })}
+              aria-label={t("upload.staff.replaceNamed", { name: value.name })}
               onClick={unlockIdentity}
               size="sm"
               type="button"
               variant="ghost"
             >
-              更换
+              {t("upload.staff.replace")}
             </Button>
           ) : identityLocked ? (
             <span />
@@ -125,12 +127,12 @@ export function CreatorPicker({
               <strong>{option.matchedName}</strong>
               {option.matchedName !== option.creator.name ? (
                 <span className="block text-xs text-muted">
-                  身份：{option.creator.name}
+                  {t("upload.staff.identity", { name: option.creator.name })}
                 </span>
               ) : null}
             </span>
             <span className="shrink-0 text-xs text-muted">
-              {option.creator.workCount} 部作品
+              {t("upload.staff.works", { count: option.creator.workCount })}
             </span>
           </>
         )}
@@ -139,7 +141,7 @@ export function CreatorPicker({
         <div className="flex min-h-7 flex-wrap items-center justify-between gap-2 text-xs text-muted">
           {value?.kind === "existing" ? (
             <>
-              <span>已关联：{value.name}</span>
+              <span>{t("upload.staff.linked", { name: value.name })}</span>
               <Button
                 disabled={disabled}
                 onClick={unlockIdentity}
@@ -147,13 +149,13 @@ export function CreatorPicker({
                 type="button"
                 variant="ghost"
               >
-                更换身份
+                {t("upload.staff.replaceIdentity")}
               </Button>
             </>
           ) : value?.displayName.trim() ? (
-            <span>保存时关联同名人物，未收录则新建。</span>
+            <span>{t("upload.staff.linkOnSave")}</span>
           ) : (
-            <span>支持别名搜索</span>
+            <span>{t("upload.staff.aliasSearch")}</span>
           )}
         </div>
       ) : null}

@@ -15,7 +15,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     maximumBytes: 60_000,
     verifyBody(body) {
       const expected = createHmac("sha256", key).update("netplay-recording/v1\n").update(body).digest();
-      if (!timingSafeEqual(actual, expected)) throw new HttpError(403, "Invalid recording signature");
+      if (!timingSafeEqual(actual, expected)) throw new HttpError(403, "Invalid recording signature", undefined, "netplay.recording.invalidSignature");
     },
   });
   const ready = await saveNetplayRecording(runtime.env, batch as unknown as RecordingBatch);

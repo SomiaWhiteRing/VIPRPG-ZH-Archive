@@ -29,13 +29,16 @@ import {
 import { WorkSidebarInfo } from "@/app/components/work/work-sidebar-info";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { WebPlayClient } from "@/app/play/[workId]/web-play-client";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { AlertTriangle } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { useSyncExternalStore } from "react";
 import { isAndroidClient } from "@/lib/browser/client-environment";
 import { LocalInstallButton } from "@/app/games/[id]/local-install-button";
+
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 
 const subscribeEnvironment = () => () => {};
 
@@ -80,6 +83,7 @@ export async function loader(args: LoaderFunctionArgs) {
 
   return {
     record,
+    locale: runtime.uiLocale,
     currentUser: pickPageFields(currentUser, ["id"]),
     work,
     community,
@@ -91,13 +95,17 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    { title: [loaderData?.metadata.title || "游戏", "在线游玩"] },
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors(
+    { title: [loaderData?.metadata.title || translate(locale, "work.detail"), translate(locale, "work.play")] },
     error,
+    locale,
   );
+};
 
 export default function WebPlayPage() {
+  const t = useMessages();
   const { record, currentUser, work, community: initialCommunity, comments, canPinComments, collections: initialCollections, current, metadata } =
     useLoaderData<typeof loader>();
   const favorite = useWorkFavorite(initialCommunity);
@@ -111,7 +119,7 @@ export default function WebPlayPage() {
   if (native) return <DetailPageShell>
     <WorkPageHeader chineseTitle={work.chineseTitle} originalTitle={work.originalTitle}
       coverBlobSha256={work.coverBlobSha256} engineFamily={work.engineFamily} language={work.language}
-      tabs={[{ href: `/games/${work.id}`, label: "概览" }]} />
+      tabs={[{ href: `/games/${work.id}`, label: t("work.overview") }]} />
     <div className="mx-auto max-w-md py-8">
       <LocalInstallButton id={record.id} bytes={metadata.installTotalSizeBytes} title={metadata.title} workId={work.id} coverBlobSha256={work.coverBlobSha256} />
     </div>
@@ -128,11 +136,11 @@ export default function WebPlayPage() {
         language={work.language}
         originalTitle={work.originalTitle}
         tabs={[
-          { href: `/games/${work.id}`, label: "概览" },
-          { href: `/play/${work.id}`, label: "在线游玩", active: true },
+          { href: `/games/${work.id}`, label: t("work.overview") },
+          { href: `/play/${work.id}`, label: t("work.play"), active: true },
           {
             href: "#sec-comments",
-            label: "评论与吐槽",
+            label: t("work.comments"),
           },
         ]}
       />
@@ -165,7 +173,7 @@ export default function WebPlayPage() {
                 className="mt-0.5 shrink-0"
                 size={16}
               />
-              <span>该游戏使用了EasyRPG不支持的Maniac语法，可能无法正常在线游玩。</span>
+              <span>{t("work.maniac")}</span>
             </WorkPageNotice>
           ) : null
         }

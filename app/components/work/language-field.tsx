@@ -1,14 +1,11 @@
 import { Label } from "@/app/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import { SelectField } from "@/app/components/ui/select";
-import { LANGUAGE_OPTIONS } from "@/lib/labels";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
 import { useState } from "react";
 
-const primaryOptions = [
-  { value: "zh-CN", label: "简体中文" },
-  { value: "ja", label: "日语" },
-  { value: "other", label: "其他" },
-] as const;
+const primaryOptions = ["zh-CN", "ja", "other"] as const;
 
 export function LanguageField({
   value,
@@ -21,6 +18,8 @@ export function LanguageField({
   name?: string;
   disabled?: boolean;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const primary = value === "zh-CN" || value === "ja" ? value : "other";
   const otherOptions = LANGUAGE_OPTIONS.filter(
     (option) => option.value !== "zh-CN" && option.value !== "ja",
@@ -28,7 +27,7 @@ export function LanguageField({
   return (
     <>
       <RadioGroup
-        aria-label="游戏语言"
+        aria-label={t("upload.language")}
         disabled={disabled}
         onValueChange={(next) =>
           onValueChange(
@@ -42,20 +41,20 @@ export function LanguageField({
         value={primary}
       >
         {primaryOptions.map((option) => (
-          <Label className="flex items-center gap-2" key={option.value}>
-            <RadioGroupItem value={option.value} />
-            {option.label}
+          <Label className="flex items-center gap-2" key={option}>
+            <RadioGroupItem value={option} />
+            {option === "other" ? t("upload.metadata.other") : languageLabel(option, locale)}
           </Label>
         ))}
       </RadioGroup>
       {primary === "other" ? (
         <SelectField
-          aria-label="其他语言"
+          aria-label={t("upload.metadata.otherLanguage")}
           disabled={disabled}
           onValueChange={onValueChange}
           options={otherOptions.map((option) => ({
             value: option.value,
-            label: option.label,
+            label: languageLabel(option.value, locale),
           }))}
           value={value}
         />
@@ -72,11 +71,12 @@ export function AdminLanguageField({
   value: string;
   name?: string;
 }) {
+  const t = useMessages();
   const [language, setLanguage] = useState(value);
 
   return (
     <div className="grid gap-2 text-sm font-semibold">
-      <span>语言</span>
+      <span>{t("upload.metadata.language")}</span>
       <LanguageField name={name} onValueChange={setLanguage} value={language} />
     </div>
   );

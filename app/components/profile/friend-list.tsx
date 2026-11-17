@@ -1,6 +1,6 @@
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import type { FollowPage } from "@/lib/dto/db/user-follows";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export function FriendList({ users }: { users: FollowPage["items"] }) {
   return <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-x-3 gap-y-4 p-0">

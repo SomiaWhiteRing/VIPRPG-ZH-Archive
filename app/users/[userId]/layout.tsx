@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { requirePublicUser } from "@/app/.server/public-user";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -41,17 +43,22 @@ export async function loader(args: LoaderFunctionArgs) {
     viewer && viewer.id !== user.id ? readUserBlockSettings(runtime, viewer.id, user.id) : null,
     viewer && viewer.id !== user.id ? readInteractionRestrictions(runtime.db, viewer.id, user.id) : null,
   ]);
-  return data({ user, viewerId: viewer?.id ?? null, canMessage: !!viewer && viewer.id !== user.id && user.canReceivePrivateMessages && hasPermission(viewer, "message.send"), followSummary, friends, timelineItems: timeline?.items ?? null, isOverview, blockSettings, interactionRestrictions }, { headers: { "Cache-Control": "private, no-store" } });
+  return data({ locale: runtime.uiLocale, user, viewerId: viewer?.id ?? null, canMessage: !!viewer && viewer.id !== user.id && user.canReceivePrivateMessages && hasPermission(viewer, "message.send"), followSummary, friends, timelineItems: timeline?.items ?? null, isOverview, blockSettings, interactionRestrictions }, { headers: { "Cache-Control": "private, no-store" } });
 }
 export function headers() { return { "Cache-Control": "private, no-store" }; }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: [loaderData?.user.displayName || "用户", "个人主页"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "publicProfile.title");
+  const name = loaderData?.user.displayName;
+  return pageMetaDescriptors({ title: name ? [name, title] : title }, error, locale);
+};
 
 export default function PublicUserLayout() {
+  const t = useMessages();
   const { user, viewerId, canMessage, followSummary, friends, timelineItems, isOverview, blockSettings, interactionRestrictions } = useLoaderData<typeof loader>();
   const hasSidebar = isOverview && hasProfileOverviewSections(user.profileVisibility);
-  const timelineSection = timelineItems !== null ? <AccountSection href={`/users/${user.id}/timeline`} title="时间线" divided={false}>
+  const timelineSection = timelineItems !== null ? <AccountSection href={`/users/${user.id}/timeline`} title={t("timeline.settings.title")} divided={false}>
     <TimelineWorkspace page={{ items: timelineItems, nextCursor: null }} viewerId={viewerId} settings={null} basePath={`/users/${user.id}/timeline`} profile showAuthor={false} readOnlyInteractions expandReplies={false} />
   </AccountSection> : null;
   const children = isOverview && !hasSidebar ? timelineSection : <Outlet />;
@@ -80,11 +87,11 @@ export default function PublicUserLayout() {
               <span className="shrink-0 whitespace-nowrap text-xs text-muted">
                 UID：{user.id}
               </span>
-              {viewerId !== null && viewerId !== user.id && followSummary?.isFollowing ? <span className="shrink-0 whitespace-nowrap text-sm text-accent">/是我的好友</span> : null}
+              {viewerId !== null && viewerId !== user.id && followSummary?.isFollowing ? <span className="shrink-0 whitespace-nowrap text-sm text-accent">/{t("publicProfile.friend")}</span> : null}
             </div>
             {user.profileVisibility.bio ? (
               <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm text-muted">
-                {user.bio || "这位用户还没有填写简介。"}
+                {user.bio || t("publicProfile.noBio")}
               </p>
             ) : null}
             <UserFollowControls key={`${user.id}:${viewerId}`} userId={user.id} displayName={user.displayName} viewerId={viewerId} summary={followSummary} canMessage={canMessage} blockSettings={blockSettings} interactionRestrictions={interactionRestrictions} avatarBlobSha256={user.avatarBlobSha256} />
@@ -94,7 +101,7 @@ export default function PublicUserLayout() {
         {hasSidebar ? <DetailPageLayout
           compactSidebar
           stretchSidebar
-          sidebarLabel="个人时间线与好友概览"
+          sidebarLabel={t("publicProfile.sidebar")}
           main={overviewContent}
           sidebar={<div className="hidden min-w-0 gap-7 min-[981px]:grid min-[981px]:h-full min-[981px]:content-start">
             {timelineSection}

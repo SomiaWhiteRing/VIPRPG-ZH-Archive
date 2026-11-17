@@ -1,3 +1,6 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
 import { requestJsonValue } from "@/lib/ui/api-response";
 
 import { useEffect, useState } from "react";
@@ -25,12 +28,13 @@ export function ShowcasePortraitPicker({
   disabled,
   onChoose,
 }: PickerProps) {
+  const t = useMessages();
   const [open, setOpen] = useState(false);
   return (
     <Dialog.Root open={open && !disabled} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
         <Button type="button" variant="outline" size="sm" disabled={disabled}>
-          选择头像
+          {t("showcase.picker.portrait")}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -38,7 +42,7 @@ export function ShowcasePortraitPicker({
         <Dialog.Content className="left-1/2 top-1/2 flex max-h-[calc(100dvh-2rem)] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg">
           <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div className="min-w-0">
-              <Dialog.Title>选择展柜头像</Dialog.Title>
+              <Dialog.Title>{t("showcase.picker.portraitTitle")}</Dialog.Title>
               <Dialog.Description className="m-0 mt-1 text-sm text-muted">
                 {target.name}
               </Dialog.Description>
@@ -48,7 +52,7 @@ export function ShowcasePortraitPicker({
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="关闭头像选择"
+                aria-label={t("showcase.picker.portraitClose")}
               >
                 <X aria-hidden="true" />
               </Button>
@@ -75,6 +79,8 @@ function PortraitChoices({
   disabled,
   onChoose,
 }: PickerProps) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [offset, setOffset] = useState(0);
   const [result, setResult] = useState<ShowcasePortraitPage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,21 +94,21 @@ function PortraitChoices({
       try {
 
         const data = await requestJsonValue<ShowcasePortraitPage>(
-          `/api/account/showcase?op=portraits&characterId=${target.id}&offset=${offset}`,
+          `/api/account/showcase?op=portraits&characterId=${target.id}&offset=${offset}&${UI_LOCALE_PARAM}=${locale}`,
           { signal: controller.signal },
-          "头像加载失败",
+          t("showcase.picker.portraitFailed"),
         );
 
         if (!controller.signal.aborted) setResult(data);
       } catch (error) {
         if (!controller.signal.aborted)
-          setError(error instanceof Error ? error.message : "头像加载失败。");
+          setError(formatFeedbackError(error, locale, t("showcase.picker.portraitFailed")));
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     })();
     return () => controller.abort();
-  }, [target.id, offset, retry]);
+  }, [target.id, offset, retry, locale, t]);
   const locked = disabled || loading || !!error;
   return (
     <div className="min-h-0 overflow-y-auto p-4" aria-busy={loading}>
@@ -122,7 +128,7 @@ function PortraitChoices({
               size={48}
               className="size-12"
             />
-            使用角色默认头像
+            {t("showcase.picker.portraitDefault")}
           </Button>
           <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-3">
             {result.items.map((sheet) => (
@@ -133,7 +139,7 @@ function PortraitChoices({
                 height={sheet.height}
                 scale={1}
                 fit
-                label={`${target.name}的头像选格`}
+                label={t("showcase.picker.portraitGrid", { name: target.name })}
                 disabled={locked}
                 selectedCell={
                   target.portrait?.blobSha256 === sheet.blobSha256
@@ -157,7 +163,7 @@ function PortraitChoices({
             ))}
           </div>
           {!loading && !error && !result.items.length ? (
-            <p className="text-sm text-muted">该角色暂无可选择的公开脸图。</p>
+            <p className="text-sm text-muted">{t("showcase.picker.portraitEmpty")}</p>
           ) : null}
           {offset > 0 || result.more ? (
             <div className="mt-4 flex justify-between gap-3">
@@ -167,7 +173,7 @@ function PortraitChoices({
                 disabled={locked || offset === 0}
                 onClick={() => setOffset((value) => Math.max(0, value - 12))}
               >
-                上一页
+                {t("pagination.previous")}
               </Button>
               <Button
                 type="button"
@@ -175,7 +181,7 @@ function PortraitChoices({
                 disabled={locked || !result.more}
                 onClick={() => setOffset((value) => value + 12)}
               >
-                下一页
+                {t("pagination.next")}
               </Button>
             </div>
           ) : null}
@@ -183,7 +189,7 @@ function PortraitChoices({
       ) : null}
       {loading ? (
         <p role="status" className="text-sm text-muted">
-          正在加载头像…
+          {t("showcase.picker.portraitLoading")}
         </p>
       ) : null}
       {error ? (
@@ -195,7 +201,7 @@ function PortraitChoices({
             size="sm"
             onClick={() => setRetry((value) => value + 1)}
           >
-            重试
+            {t("core.action.retry")}
           </Button>
         </div>
       ) : null}

@@ -3,12 +3,14 @@ import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
 import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import { commentTargetHref } from "@/lib/comment-target";
 import type { UserCommentSummary } from "@/lib/dto/db/work-community";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages } from "@/lib/i18n/react";
 
 export function CommentTargetImage({ comment }: { comment: UserCommentSummary }) {
+  const t = useMessages();
   return (
     <Link
-      aria-label={`查看${comment.target.kind === "work" ? "作品" : comment.target.kind === "creator" ? "作者" : comment.target.kind === "catalog" ? "目录" : "角色"}：${comment.targetTitle}`}
+      aria-label={t(`comment.openTarget.${comment.target.kind}`, { title: comment.targetTitle })}
       className="block w-24 shrink-0"
       to={commentTargetHref(comment.target)}
     >
@@ -18,7 +20,7 @@ export function CommentTargetImage({ comment }: { comment: UserCommentSummary })
             blobSha256={comment.coverBlobSha256}
             width={96}
             height={72}
-            fallback="暂无封面"
+            fallback={t("work.noCover")}
             fallbackClassName="flex h-full items-center justify-center text-xs text-muted"
           />
         </span>

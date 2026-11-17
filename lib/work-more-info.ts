@@ -1,23 +1,28 @@
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
+
 export type WorkMoreInfo = { title: string; body: string };
 
 export const MORE_INFO_MAX_ITEMS = 20;
 export const MORE_INFO_TITLE_MAX_LENGTH = 100;
 export const MORE_INFO_BODY_MAX_LENGTH = 10_000;
 
-export function moreInfoItemError(item: WorkMoreInfo): {
+export function moreInfoItemError(item: WorkMoreInfo, locale: UiLocale = DEFAULT_UI_LOCALE): {
   field: keyof WorkMoreInfo;
   message: string;
+  reason: "titleRequired" | "bodyRequired" | "titleMax" | "bodyMax";
 } | null {
   const title = item.title.trim();
   const body = item.body.trim();
   if (!title && !body) return null;
-  if (!title) return { field: "title", message: "请填写标题，或移除此条信息。" };
-  if (!body) return { field: "body", message: "请填写内容，或移除此条信息。" };
+  if (!title) return { field: "title", reason: "titleRequired", message: translate(locale, "upload.info.titleRequired") };
+  if (!body) return { field: "body", reason: "bodyRequired", message: translate(locale, "upload.info.bodyRequired") };
   if (title.length > MORE_INFO_TITLE_MAX_LENGTH) {
-    return { field: "title", message: `标题最多 ${MORE_INFO_TITLE_MAX_LENGTH} 字。` };
+    return { field: "title", reason: "titleMax", message: translate(locale, "upload.info.titleMax", { limit: MORE_INFO_TITLE_MAX_LENGTH }) };
   }
   if (body.length > MORE_INFO_BODY_MAX_LENGTH) {
-    return { field: "body", message: `内容最多 ${MORE_INFO_BODY_MAX_LENGTH.toLocaleString("en-US")} 字。` };
+    return { field: "body", reason: "bodyMax", message: translate(locale, "upload.info.bodyMax", { limit: MORE_INFO_BODY_MAX_LENGTH }) };
   }
   return null;
 }
@@ -25,17 +30,21 @@ export function moreInfoItemError(item: WorkMoreInfo): {
 // The field is optional; when present it is always a complete, ordered list.
 export function normalizeWorkMoreInfo(value: unknown): WorkMoreInfo[] {
   if (value === undefined) return [];
-  if (!Array.isArray(value)) throw new Error("更多信息必须为列表。");
-  if (value.length > MORE_INFO_MAX_ITEMS) throw new Error(`更多信息最多 ${MORE_INFO_MAX_ITEMS} 条。`);
+  if (!Array.isArray(value)) throw new UiFeedbackError("upload.info.error.list");
+  if (value.length > MORE_INFO_MAX_ITEMS) throw new UiFeedbackError("upload.info.error.limit", { max: MORE_INFO_MAX_ITEMS });
   const items: WorkMoreInfo[] = [];
   for (const [index, item] of value.entries()) {
     if (!item || typeof item !== "object" || Array.isArray(item) ||
         typeof item.title !== "string" || typeof item.body !== "string") {
-      throw new Error(`第 ${index + 1} 条更多信息格式不合法。`);
+      throw new UiFeedbackError("upload.info.error.itemFormat", { index: index + 1 });
     }
     const normalized = { title: item.title.trim(), body: item.body.trim() };
     const error = moreInfoItemError(normalized);
-    if (error) throw new Error(`第 ${index + 1} 条信息：${error.message}`);
+    if (error) throw new UiFeedbackError("upload.info.error.item", {
+      index: index + 1,
+      reason: error.reason,
+      limit: error.field === "title" ? MORE_INFO_TITLE_MAX_LENGTH : MORE_INFO_BODY_MAX_LENGTH,
+    });
     if (normalized.title || normalized.body) items.push(normalized);
   }
   return items;

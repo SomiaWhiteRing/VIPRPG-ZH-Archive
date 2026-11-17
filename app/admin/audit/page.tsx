@@ -16,13 +16,17 @@ import { Pane } from "@/app/components/ui/pane";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { SelectField } from "@/app/components/ui/select";
 import { AUDIT_TARGET_LABELS, auditRecord, entityAuditChanges, entityAuditTargets, entityAuditTargetHref } from "@/lib/entity-audit";
-import { PERMISSIONS } from "@/lib/authz/permissions";
+import { isPermissionKey } from "@/lib/authz/permissions";
 import { formatDate } from "@/lib/format";
 import { listDailyAuditReports } from "@/app/.server/db/audit-reports";
 import { DailyAuditReportPane } from "@/app/admin/audit/daily-report";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
+import { useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
@@ -55,74 +59,80 @@ export async function loader(args: LoaderFunctionArgs) {
     listDailyAuditReports(runtime, reportDate),
   ]);
 
-  return { query, eventType, targetType, targetId, logId, page, auditResult, roleEvents, dailyReports };
+  return { query, eventType, targetType, targetId, logId, page, auditResult, roleEvents, dailyReports, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["审计日志", "控制台"], page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.audit.title"), translate(locale, "admin.characterIndex.console")], page: loaderData?.page }, error, locale);
+};
 
 export default function AdminAuditPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const navigationLocale = useNavigationLocale();
   const { query, eventType, targetType, targetId, logId, page, auditResult, roleEvents, dailyReports } =
     useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
         compact
-        title="审计日志"
-        subtitle="按操作者或条目核查资料、评论与讨论的编辑历史及授权记录。"
+        title={t("admin.audit.title")}
+        subtitle={t("admin.audit.subtitle")}
       />
 
       <DailyAuditReportPane {...dailyReports} />
 
-      <Pane heading="系统审计日志">
+      <Pane heading={t("admin.audit.systemLogs")}>
         <div className="grid min-w-0 gap-5">
           <form
             key={JSON.stringify([query, eventType, targetType, targetId])}
             action="/admin/audit"
             className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr]"
-            aria-label="系统审计日志筛选"
+            aria-label={t("admin.audit.filters")}
             method="get"
           >
+            {navigationLocale ? <input type="hidden" name={UI_LOCALE_PARAM} value={navigationLocale} /> : null}
             <Label className="admin-field">
-              操作者
+              {t("admin.audit.actor")}
               <Input
                 defaultValue={query}
                 name="q"
-                placeholder="当前或操作时名称、邮箱、用户 ID"
+                placeholder={t("admin.audit.actorHint")}
               />
             </Label>
             <Label className="admin-field">
-              动作
+              {t("admin.audit.action")}
               <Input
                 defaultValue={eventType}
                 name="action"
-                placeholder="事件类型"
+                placeholder={t("admin.audit.event")}
               />
             </Label>
             <Label className="admin-field">
-              条目类型
-              <SelectField aria-label="条目类型" name="targetType" defaultValue={targetType}
-                options={[{ value: "", label: "全部类型" }, ...Object.entries(AUDIT_TARGET_LABELS).map(([value, label]) => ({ value, label }))]} />
+              {t("admin.audit.targetType")}
+              <SelectField aria-label={t("admin.audit.targetType")} name="targetType" defaultValue={targetType}
+                options={[{ value: "", label: t("admin.audit.allTypes") }, ...(Object.keys(AUDIT_TARGET_LABELS) as (keyof typeof AUDIT_TARGET_LABELS)[]).map((value) => ({ value, label: t(`admin.audit.target.${value}`) }))]} />
             </Label>
             <Label className="admin-field">
-              条目 ID／标签名
-              <Input name="targetId" defaultValue={targetId} placeholder="精确 ID 或标签名称" />
+              {t("admin.audit.targetId")}
+              <Input name="targetId" defaultValue={targetId} placeholder={t("admin.audit.targetHint")} />
             </Label>
             <div className="admin-filter-actions sm:col-span-2 xl:col-span-4">
-              <Button type="submit">应用筛选</Button>
+              <Button type="submit">{t("admin.list.apply")}</Button>
               {query || eventType || targetType || targetId || logId ? (
                 <Link className={buttonVariants({ variant: "ghost" })} to="/admin/audit">
-                  清除
+                  {t("admin.list.clear")}
                 </Link>
               ) : null}
             </div>
           </form>
           <div className="admin-list-meta">
             <span>
-              {logId ? `日志 #${logId} · ` : ""}
-              共 {auditResult.total.toLocaleString("zh-CN")} 条系统日志
+              {logId ? t("admin.audit.logId", { id: logId }) : ""}
+              {t("admin.audit.total", { count: auditResult.total })}
             </span>
-            <span>每页 {PAGE_SIZE} 条</span>
+            <span>{t("admin.audit.pageSize", { count: PAGE_SIZE })}</span>
           </div>
 
           {auditResult.items.length > 0 ? (
@@ -134,13 +144,13 @@ export default function AdminAuditPage() {
                       <h3 className="m-0 wrap-anywhere font-mono text-sm font-semibold text-primary">{log.eventType}</h3>
                       <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
                         <span className="font-mono">#{log.id}</span>
-                        <span>{formatDate(log.createdAt)}</span>
+                        <span>{formatDate(log.createdAt, { locale })}</span>
                       </p>
                     </div>
                     <div className="min-w-0 wrap-anywhere text-sm">
-                      <p className="mb-1 text-xs text-muted">操作者</p>
+                      <p className="mb-1 text-xs text-muted">{t("admin.audit.actor")}</p>
                       <p className="font-medium">
-                        {String(auditRecord(auditRecord(log.detail)?.actor)?.displayName ?? log.actorName ?? log.email ?? "系统")}
+                        {String(auditRecord(auditRecord(log.detail)?.actor)?.displayName ?? log.actorName ?? log.email ?? t("admin.audit.system"))}
                         {log.userId ? <span className="ml-2 font-mono text-xs text-muted">#{log.userId}</span> : null}
                       </p>
                       {log.email ? <p className="mt-1 text-xs text-muted">{log.email}</p> : null}
@@ -151,7 +161,7 @@ export default function AdminAuditPage() {
               ))}
             </ol>
           ) : (
-            <EmptyState title="暂无系统审计日志。" />
+            <EmptyState title={t("admin.audit.empty")} />
           )}
           <PaginationLinks
             className="my-0"
@@ -165,24 +175,24 @@ export default function AdminAuditPage() {
       </Pane>
 
       <details className="admin-panel admin-details">
-        <summary>用户角色事件 · {roleEvents.length} 条</summary>
+        <summary>{t("admin.audit.roleCount", { count: roleEvents.length })}</summary>
         {roleEvents.length > 0 ? (
-          <TableWrap compact label="用户角色事件" minWidth={980}>
+          <TableWrap compact label={t("admin.audit.roleEvents")} minWidth={980}>
             <thead>
               <tr>
-                <th>时间</th>
-                <th>操作者</th>
-                <th>目标用户</th>
-                <th>变更</th>
-                <th>来源</th>
+                <th>{t("admin.archives.time")}</th>
+                <th>{t("admin.audit.actor")}</th>
+                <th>{t("admin.audit.targetUser")}</th>
+                <th>{t("admin.audit.change")}</th>
+                <th>{t("admin.audit.source")}</th>
               </tr>
             </thead>
             <tbody>
               {roleEvents.map((event) => (
                 <tr key={event.id}>
-                  <td>{formatDate(event.createdAt)}</td>
+                  <td>{formatDate(event.createdAt, { locale })}</td>
                   <td>
-                    {event.actorName ?? "系统"}
+                    {event.actorName ?? t("admin.audit.system")}
                     {event.actorUserId ? (
                       <span className="admin-cell-meta font-mono">
                         #{event.actorUserId}
@@ -190,13 +200,13 @@ export default function AdminAuditPage() {
                     ) : null}
                   </td>
                   <td>
-                    {event.targetName ?? "未知用户"}
+                    {event.targetName ?? t("admin.audit.unknownUser")}
                     <span className="admin-cell-meta font-mono">
                       #{event.targetUserId}
                     </span>
                   </td>
                   <td>
-                    {event.action === "assigned" ? "分配" : "移除"}{" "}
+                    {event.action === "assigned" ? t("admin.audit.assigned") : t("admin.audit.removed")}{" "}
                     {event.role.name}
                     {event.reason ? (
                       <span className="admin-cell-meta whitespace-pre-wrap wrap-anywhere">{event.reason}</span>
@@ -205,10 +215,10 @@ export default function AdminAuditPage() {
                   <td>
                     {event.sourceInboxItemId ? (
                       <span className="font-mono text-sm text-primary">
-                        提醒 #{event.sourceInboxItemId}
+                        {t("admin.audit.inbox", { id: event.sourceInboxItemId })}
                       </span>
                     ) : (
-                      "直接调整"
+                      t("admin.audit.direct")
                     )}
                   </td>
                 </tr>
@@ -216,7 +226,7 @@ export default function AdminAuditPage() {
             </tbody>
           </TableWrap>
         ) : (
-          <EmptyState title="暂无用户角色事件。" />
+          <EmptyState title={t("admin.audit.emptyRoles")} />
         )}
       </details>
     </main>
@@ -224,6 +234,7 @@ export default function AdminAuditPage() {
 }
 
 function AuditDetail({ detail }: { detail: unknown }) {
+  const t = useMessages();
   const data = auditRecord(detail);
   const targets = entityAuditTargets(detail);
   const hasSnapshots = data && Object.hasOwn(data, "before") && Object.hasOwn(data, "after");
@@ -231,47 +242,46 @@ function AuditDetail({ detail }: { detail: unknown }) {
   const authorization = auditRecord(data?.authorization);
   const actor = auditRecord(data?.actor);
   const permission = typeof authorization?.permission === "string" ? authorization.permission : null;
-  const permissionLabel = permission && Object.hasOwn(PERMISSIONS, permission)
-    ? PERMISSIONS[permission as keyof typeof PERMISSIONS].label : permission;
+  const permissionLabel = isPermissionKey(permission) ? t(`permission.${permission}`) : permission;
   return <div className="grid min-w-0 content-start gap-3">
     {targets.length ? <ul className="grid gap-2 text-sm">
       {targets.map((target) => <li className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1" key={`${target.type}:${target.id}`}>
         <Link className="min-w-0 wrap-anywhere text-primary hover:underline" to={entityAuditTargetHref(target)}>
-          {AUDIT_TARGET_LABELS[target.type]} {target.name ?? ""} <span className="font-mono">#{target.id}</span>
+          {t(`admin.audit.target.${target.type}`)} {target.name ?? ""} <span className="font-mono">#{target.id}</span>
         </Link>
-        <Link className="shrink-0 text-xs text-muted hover:underline" to={`/admin/audit?targetType=${target.type}&targetId=${encodeURIComponent(String(target.id))}`}>编辑历史</Link>
+        <Link className="shrink-0 text-xs text-muted hover:underline" to={`/admin/audit?targetType=${target.type}&targetId=${encodeURIComponent(String(target.id))}`}>{t("admin.audit.history")}</Link>
       </li>)}
     </ul> : null}
     {!hasSnapshots && targets.length ?
-      <p className="text-sm text-muted">此记录没有完整前后快照，无法还原全部字段修改。</p> : null}
+      <p className="text-sm text-muted">{t("admin.audit.noSnapshots")}</p> : null}
     <details className="admin-details">
-      <summary>{hasSnapshots ? `修改详情 · ${changes.length} 个字段` : "审计详情"}</summary>
+      <summary>{hasSnapshots ? t("admin.audit.changeCount", { count: changes.length }) : t("admin.audit.detail")}</summary>
       <div className="mt-4 grid min-w-0 gap-4">
         {authorization ? <dl className="grid gap-3 rounded-md bg-muted/10 p-3 text-sm sm:grid-cols-2">
-          <div className="min-w-0"><dt className="text-xs text-muted">操作时角色</dt><dd className="mt-1 wrap-anywhere">{Array.isArray(actor?.roleNames) ? actor.roleNames.join("、") || "无角色" : "未记录"}</dd></div>
-          <div className="min-w-0"><dt className="text-xs text-muted">授权依据</dt><dd className="mt-1 wrap-anywhere">{authorization.basis === "content_author" ? "本人内容编辑" : authorization.basis === "work_maintainer" ? "作品维护者身份" : permissionLabel ?? "未记录"}</dd></div>
-          {data?.source ? <div className="min-w-0"><dt className="text-xs text-muted">操作入口</dt><dd className="mt-1">{data.source === "admin" ? "后台" : data.source === "owned" ? "本人维护" : "前台"}</dd></div> : null}
+          <div className="min-w-0"><dt className="text-xs text-muted">{t("admin.audit.rolesAtAction")}</dt><dd className="mt-1 wrap-anywhere">{Array.isArray(actor?.roleNames) ? actor.roleNames.join("、") || t("admin.audit.noRoles") : t("admin.audit.unrecorded")}</dd></div>
+          <div className="min-w-0"><dt className="text-xs text-muted">{t("admin.audit.authorization")}</dt><dd className="mt-1 wrap-anywhere">{authorization.basis === "content_author" ? t("admin.audit.contentAuthor") : authorization.basis === "work_maintainer" ? t("admin.audit.maintainer") : permissionLabel ?? t("admin.audit.unrecorded")}</dd></div>
+          {data?.source ? <div className="min-w-0"><dt className="text-xs text-muted">{t("admin.audit.entry")}</dt><dd className="mt-1">{data.source === "admin" ? t("admin.audit.admin") : data.source === "owned" ? t("admin.audit.owned") : t("admin.audit.frontend")}</dd></div> : null}
         </dl> : null}
         {hasSnapshots ? (changes.length ? <ul className="grid min-w-0 gap-4">
           {changes.map((change, index) => <li className="min-w-0 rounded-md border border-border p-3" key={`${change.field}:${index}`}>
             <h4 className="mb-3 wrap-anywhere text-sm font-semibold">{change.field}</h4>
             <dl className="grid min-w-0 gap-4 md:grid-cols-2">
-              <div className="min-w-0"><dt className="mb-2 text-xs text-muted">修改前</dt><dd><pre className="whitespace-pre-wrap wrap-anywhere rounded bg-muted/10 p-3 font-mono text-xs leading-relaxed">{formatDetail(change.before)}</pre></dd></div>
-              <div className="min-w-0"><dt className="mb-2 text-xs text-muted">修改后</dt><dd><pre className="whitespace-pre-wrap wrap-anywhere rounded bg-primary/5 p-3 font-mono text-xs leading-relaxed">{formatDetail(change.after)}</pre></dd></div>
+              <div className="min-w-0"><dt className="mb-2 text-xs text-muted">{t("admin.audit.before")}</dt><dd><pre className="whitespace-pre-wrap wrap-anywhere rounded bg-muted/10 p-3 font-mono text-xs leading-relaxed">{formatDetail(change.before, t)}</pre></dd></div>
+              <div className="min-w-0"><dt className="mb-2 text-xs text-muted">{t("admin.audit.after")}</dt><dd><pre className="whitespace-pre-wrap wrap-anywhere rounded bg-primary/5 p-3 font-mono text-xs leading-relaxed">{formatDetail(change.after, t)}</pre></dd></div>
             </dl>
           </li>)}
-        </ul> : <p className="text-sm text-muted">未检测到字段变化。</p>) : null}
-        <details className="admin-details"><summary>原始审计记录</summary>
-          <pre className="mt-3 min-w-0 whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-muted/10 p-3 font-mono text-xs leading-relaxed">{formatDetail(detail)}</pre>
+        </ul> : <p className="text-sm text-muted">{t("admin.audit.noChanges")}</p>) : null}
+        <details className="admin-details"><summary>{t("admin.audit.raw")}</summary>
+          <pre className="mt-3 min-w-0 whitespace-pre-wrap wrap-anywhere rounded-md border border-border bg-muted/10 p-3 font-mono text-xs leading-relaxed">{formatDetail(detail, t)}</pre>
         </details>
       </div>
     </details>
   </div>;
 }
 
-function formatDetail(value: unknown): string {
-  if (value === undefined) return "（不存在）";
-  if (value === null) return "（空）";
+function formatDetail(value: unknown, t: ReturnType<typeof useMessages>): string {
+  if (value === undefined) return t("admin.audit.undefined");
+  if (value === null) return t("admin.audit.null");
 
   if (typeof value === "string") {
     return value;

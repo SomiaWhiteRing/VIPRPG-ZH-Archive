@@ -6,9 +6,12 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { FavoriteLibrary } from "@/app/me/favorite-library";
 import { AccountPageHeader } from "@/app/me/account-page-header";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { useRouteRefresh } from "@/app/components/use-route-refresh";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -24,36 +27,45 @@ export async function loader(args: LoaderFunctionArgs) {
   };
   return {
     ...await loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "favorite", publicOnly: false }), currentUserId: user.id,
+    locale: runtime.uiLocale,
     unavailable,
     unavailablePrevious: unavailable.page > 1 ? unavailablePageUrl(unavailable.page - 1) : null,
     unavailableNext: unavailable.page * unavailable.pageSize < unavailable.total ? unavailablePageUrl(unavailable.page + 1) : null,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: "我的收藏", page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "favorites.mine"), page: loaderData?.page }, error, locale);
+};
 
 export default function FavoritesPage() {
+  const t = useMessages();
   const { data, refresh } = useRouteRefresh(useLoaderData<typeof loader>());
   return (
     <div>
-      <AccountPageHeader title="收藏" subtitle={data.unavailable.total > 0 ? `${data.total} 部可访问作品，${data.unavailable.total} 部暂不可访问` : `共 ${data.total} 部作品`} />
+      <AccountPageHeader title={t("timeline.feed.kind.favorite")} subtitle={data.unavailable.total > 0
+        ? t("favorites.accessible", { count: data.total, unavailable: data.unavailable.total })
+        : t("favorites.total", { count: data.total })} />
       <FavoriteLibrary data={data} currentUserId={data.currentUserId} unavailableCount={data.unavailable.total} onSaved={refresh} />
       {data.unavailable.total > 0 ? (
         <section className="mt-6" aria-labelledby="unavailable-favorites-title">
-          <h2 id="unavailable-favorites-title" className="text-lg font-semibold">暂不可访问的收藏（{data.unavailable.total}）</h2>
-          <p className="text-sm text-muted">这些作品暂不可访问。你可以保留收藏，或取消收藏并移除相应标签和吐槽。</p>
+          <h2 id="unavailable-favorites-title" className="text-lg font-semibold">{t("favorites.unavailable", { count: data.unavailable.total })}</h2>
+          <p className="text-sm text-muted">{t("favorites.help")}</p>
           <ul className="grid gap-2">
-            {data.unavailable.items.map(({ workId }) => (
-              <li key={workId} className="flex items-center justify-between gap-3">
-                <span>暂不可访问的作品 #{workId}</span>
-                <WorkFavoriteButton onSaved={refresh} appearance="remove" currentUserId={data.currentUserId} initialFavorited workId={workId} workTitle={`暂不可访问的作品 #${workId}`} />
-              </li>
-            ))}
+            {data.unavailable.items.map(({ workId }) => {
+              const title = t("favorites.work", { id: workId });
+              return (
+                <li key={workId} className="flex items-center justify-between gap-3">
+                  <span>{title}</span>
+                  <WorkFavoriteButton onSaved={refresh} appearance="remove" currentUserId={data.currentUserId} initialFavorited workId={workId} workTitle={title} />
+                </li>
+              );
+            })}
           </ul>
-          <nav aria-label="暂不可访问的收藏分页" className="mt-3 flex gap-4">
-            {data.unavailablePrevious ? <Link to={data.unavailablePrevious}>上一页</Link> : null}
-            {data.unavailableNext ? <Link to={data.unavailableNext}>下一页</Link> : null}
+          <nav aria-label={t("favorites.pages")} className="mt-3 flex gap-4">
+            {data.unavailablePrevious ? <Link to={data.unavailablePrevious}>{t("pagination.previous")}</Link> : null}
+            {data.unavailableNext ? <Link to={data.unavailableNext}>{t("pagination.next")}</Link> : null}
           </nav>
         </section>
       ) : null}

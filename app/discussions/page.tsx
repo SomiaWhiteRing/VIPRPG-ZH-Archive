@@ -7,12 +7,13 @@ import { forumTagHeat } from "@/app/.server/forum/tag-heat";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { forumPage } from "@/lib/forum";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { interactiveTopic } from "@/lib/forum-state";
 import { HttpError } from "@/lib/http";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { DiscussionWorkspace } from "./workspace";
+import { translate } from "@/lib/i18n/core";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -47,19 +48,19 @@ export async function loader(args: LoaderFunctionArgs) {
   }
   const renderData0 = await forumTagHeat(ctx);
 
-  return { viewer, featured, selected, topics, filterError, renderData0 };
+  return { viewer, featured, selected, topics, filterError, renderData0, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors(
     {
-      title: loaderData?.featured
-        ? "精华讨论"
-        : "讨论版",
+      title: translate(locale, loaderData?.featured ? "forum.featuredTitle" : "core.nav.discussions"),
       page: loaderData?.topics?.page,
     },
-    error,
+    error, locale,
   );
+};
 
 export default function DiscussionsPage() {
   const { viewer, featured, selected, topics, filterError, renderData0 } =

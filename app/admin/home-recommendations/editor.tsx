@@ -1,3 +1,5 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { Button } from "@/app/components/ui/button";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { EmptyState } from "@/app/components/ui/empty-state";
@@ -9,12 +11,14 @@ import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import type { HomeRecommendation } from "@/lib/home-recommendations";
 import { requestJson } from "@/lib/ui/api-response";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { StickySaveBar } from "@/app/admin/admin-list-controls";
 
 type Candidate = Pick<HomeRecommendation, "id" | "originalTitle" | "chineseTitle">;
 
 export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: HomeRecommendation[] }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [works, setWorks] = useState(initialWorks);
   const [savedIds, setSavedIds] = useState(initialWorks.map((work) => work.id));
   const [query, setQuery] = useState("");
@@ -28,22 +32,22 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
   const confirm = useConfirm();
   const selectedIds = works.map((work) => work.id).join(",");
   const dirty = selectedIds !== savedIds.join(",");
-  useNavigationGuard(dirty || busy, () => !busy && confirm("站长推荐尚未保存，确定放弃修改并离开？"));
+  useNavigationGuard(dirty || busy, () => !busy && confirm(t("admin.recommendations.discard")));
 
   useEffect(() => {
     if (!query.trim()) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       void requestJson<{ ok: true; works: Candidate[] }>(
-        `/api/works/lookup?scope=home&title=${encodeURIComponent(query.trim())}`,
+        `/api/works/lookup?scope=home&title=${encodeURIComponent(query.trim())}&${UI_LOCALE_PARAM}=${locale}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ excludeWorkIds: selectedIds }), signal: controller.signal }, "游戏搜索失败",
+          body: JSON.stringify({ excludeWorkIds: selectedIds }), signal: controller.signal }, t("admin.recommendations.searchFailed"),
       ).then((result) => { if (!controller.signal.aborted) setCandidates(result.works); })
-        .catch((error) => { if (!controller.signal.aborted) setSearchError(error instanceof Error ? error.message : "游戏搜索失败。"); })
+        .catch((error) => { if (!controller.signal.aborted) setSearchError(error instanceof Error ? error.message : t("admin.recommendations.searchFailed")); })
         .finally(() => { if (!controller.signal.aborted) setSearching(false); });
     }, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [query, selectedIds]);
+  }, [locale, query, selectedIds, t]);
 
   function changeQuery(value: string) {
     setQuery(value); setCandidates([]); setSearchError(""); setSearching(Boolean(value.trim()));
@@ -54,14 +58,14 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
     if (running.current || !dirty) return;
     running.current = true; setBusy(true);
     try {
-      const result = await requestJson<{ ok: true; works: HomeRecommendation[] }>("/api/admin/home-recommendations", {
+      const result = await requestJson<{ ok: true; works: HomeRecommendation[] }>(`/api/admin/home-recommendations?${UI_LOCALE_PARAM}=${locale}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workIds: works.map((work) => work.id) }),
-      }, "站长推荐保存失败");
+      }, t("admin.recommendations.saveFailed"));
       setWorks(result.works); setSavedIds(result.works.map((work) => work.id));
-      toast.success("站长推荐已保存。");
+      toast.success(t("admin.recommendations.saved"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "站长推荐保存失败。");
+      toast.error(error instanceof Error ? error.message : t("admin.recommendations.saveFailed"));
     } finally {
       running.current = false; setBusy(false);
     }
@@ -69,9 +73,9 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
 
   return (
     <form className="grid gap-5" onSubmit={(event) => void save(event)}>
-      <FormField label="添加游戏" controlId={inputId}>
-        <SearchComboBox id={inputId} label="添加推荐游戏" query={query} onQueryChange={changeQuery}
-          placeholder="搜索游戏标题或别名" maxLength={200} loading={searching}
+      <FormField label={t("admin.recommendations.add")} controlId={inputId}>
+        <SearchComboBox id={inputId} label={t("admin.recommendations.addRecommended")} query={query} onQueryChange={changeQuery}
+          placeholder={t("admin.recommendations.search")} maxLength={200} loading={searching}
           disabled={busy}
           items={candidates.filter((candidate) => !works.some((work) => work.id === candidate.id))}
           selectedKey={null} getKey={(work) => work.id} getText={(work) => work.chineseTitle || work.originalTitle}
@@ -85,11 +89,11 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
             changeQuery("");
           }}
           onClear={() => changeQuery("")}
-          emptyState={searchError || (query.trim() ? "没有找到允许首页展示的游戏。" : "输入游戏标题或别名搜索。")} />
+          emptyState={searchError || (query.trim() ? t("admin.recommendations.noMatches") : t("admin.recommendations.prompt"))} />
       </FormField>
-      {works.some((work) => !work.isPublic) ? <Notice tone="warning">存在不允许首页展示或已不可访问的游戏，请移除后保存。</Notice> : null}
+      {works.some((work) => !work.isPublic) ? <Notice tone="warning">{t("admin.recommendations.unavailable")}</Notice> : null}
       {works.length ? (
-        <ul className="admin-panel m-0 grid list-none divide-y divide-border" aria-label="推荐游戏">
+        <ul className="admin-panel m-0 grid list-none divide-y divide-border" aria-label={t("admin.recommendations.games")}>
           {works.map((work) => (
             <li key={work.id} className="flex flex-wrap items-center gap-3 py-3">
               <div className="min-w-0 flex-1 basis-40">
@@ -97,17 +101,17 @@ export function HomeRecommendationsEditor({ initialWorks }: { initialWorks: Home
                   {work.chineseTitle || work.originalTitle}
                 </Link>
                 {work.chineseTitle ? <p className="mt-0.5 wrap-anywhere text-xs text-muted">{work.originalTitle}</p> : null}
-                {!work.isPublic ? <span className="text-xs text-muted">不可在首页展示</span> : null}
+                {!work.isPublic ? <span className="text-xs text-muted">{t("admin.recommendations.ineligible")}</span> : null}
               </div>
               <Button type="button" variant="ghost" size="sm" className="shrink-0" disabled={busy}
-                aria-label={`移除 ${work.chineseTitle || work.originalTitle}`}
-                onClick={() => setWorks((current) => current.filter((item) => item.id !== work.id))}>移除</Button>
+                aria-label={t("admin.recommendations.remove", { name: work.chineseTitle || work.originalTitle })}
+                onClick={() => setWorks((current) => current.filter((item) => item.id !== work.id))}>{t("core.action.remove")}</Button>
             </li>
           ))}
         </ul>
-      ) : <EmptyState title="尚未配置站长推荐。" />}
-      <StickySaveBar><Button type="submit" disabled={busy || !dirty}>{busy ? "保存中…" : "保存推荐"}</Button>
-        <span className="text-xs text-muted" role="status">{dirty ? "有未保存修改" : "推荐已保存"}</span>
+      ) : <EmptyState title={t("admin.recommendations.empty")} />}
+      <StickySaveBar><Button type="submit" disabled={busy || !dirty}>{busy ? t("admin.discussionTags.saving") : t("admin.recommendations.save")}</Button>
+        <span className="text-xs text-muted" role="status">{dirty ? t("admin.recommendations.dirty") : t("admin.recommendations.current")}</span>
       </StickySaveBar>
     </form>
   );

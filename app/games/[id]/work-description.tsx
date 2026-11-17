@@ -3,10 +3,12 @@ import { ChevronDown } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { HeightBox } from "@/app/components/ui/height-box";
 import { cn } from "@/lib/ui/cn";
+import { useMessages } from "@/lib/i18n/react";
 
 const PREVIEW_LINES = 8;
 
 export function WorkDescription({ description }: { description: string }) {
+  const t = useMessages();
   const contentId = useId();
   const contentRef = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -59,7 +61,7 @@ export function WorkDescription({ description }: { description: string }) {
           onClick={() => setExpanded((value) => !value)}
           type="button"
         >
-          {expanded ? "收起简介" : "展开全部"}
+          {t(expanded ? "work.description.collapse" : "work.description.expand")}
           <ChevronDown
             aria-hidden
             className={cn("transition-transform duration-300 motion-reduce:transition-none", expanded && "rotate-180")}

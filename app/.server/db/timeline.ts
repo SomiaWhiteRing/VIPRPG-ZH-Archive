@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { contentEmojiStatements, validateBodyEmojis } from "@/app/.server/emojis/service";
 import { statusBody, timelineBody, timelineEmojiMap } from "@/app/.server/timeline/content";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
@@ -30,7 +31,7 @@ export function timelineStatement(db: D1Database, input: {
 export async function readTimelineSettings(runtime: AppRuntime, userId: number): Promise<TimelineSettings> {
   const row = await getD1(runtime).prepare(`SELECT timeline_enabled,timeline_record_kinds,timeline_as_homepage,timeline_default_view FROM users WHERE id=? AND status='active'`)
     .bind(userId).first<{ timeline_enabled: number; timeline_record_kinds: string; timeline_as_homepage: number; timeline_default_view: TimelineDefaultView }>();
-  if (!row) throw new HttpError(404, "账户不可用");
+  if (!row) throw new HttpError(404, translate(runtime.uiLocale, "timeline.error.account"), undefined, "timeline.error.account");
   const kinds: unknown = JSON.parse(row.timeline_record_kinds);
   return { enabled: row.timeline_enabled === 1, recordKinds: Array.isArray(kinds) ? kinds.filter(isTimelineRecordKind) : [], timelineAsHomepage: row.timeline_as_homepage === 1, defaultView: row.timeline_default_view };
 }
@@ -40,14 +41,14 @@ export async function updateTimelineSettings(runtime: AppRuntime, userId: number
     input.recordKinds.some((kind) => !isTimelineRecordKind(kind)) || new Set(input.recordKinds).size !== input.recordKinds.length ||
     (input.timelineAsHomepage !== undefined && typeof input.timelineAsHomepage !== "boolean") ||
     (input.defaultView !== undefined && !isTimelineDefaultView(input.defaultView)))
-    throw new HttpError(400, "动态设置格式无效");
+    throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.settings"), undefined, "timeline.error.settings");
   const kinds = TIMELINE_RECORD_KINDS.filter((kind) => (input.recordKinds as unknown[]).includes(kind));
   if (input.enabled) await assertTimelinePermission(runtime, userId, ["timeline.use"]);
   const result = await getD1(runtime).prepare(`UPDATE users SET timeline_enabled=?,timeline_record_kinds=?,timeline_as_homepage=COALESCE(?,timeline_as_homepage),timeline_default_view=COALESCE(?,timeline_default_view),updated_at=CURRENT_TIMESTAMP
     WHERE id=? AND status='active' AND (?=0 OR ${userPermissionSql("users.id", "timeline.use")}) RETURNING timeline_as_homepage,timeline_default_view`)
     .bind(input.enabled ? 1 : 0, JSON.stringify(kinds), input.timelineAsHomepage === undefined ? null : input.timelineAsHomepage ? 1 : 0, input.defaultView === undefined ? null : input.defaultView as TimelineDefaultView, userId, input.enabled ? 1 : 0)
     .first<{ timeline_as_homepage: number; timeline_default_view: TimelineDefaultView }>();
-  if (!result) throw new HttpError(404, "账户不可用");
+  if (!result) throw new HttpError(404, translate(runtime.uiLocale, "timeline.error.account"), undefined, "timeline.error.account");
   return { enabled: input.enabled, recordKinds: kinds, timelineAsHomepage: result.timeline_as_homepage === 1, defaultView: result.timeline_default_view };
 }
 
@@ -104,7 +105,7 @@ type TimelineRow = {
   like_count: number; reply_count: number; liked_by_me: number;
 };
 type Cursor = { at: string; id: number; actor: number | null; kind: TimelineKind | null; followingUserId: number | null; followingRevision: number | null };
-function readCursor(value: string, actor: number | null, kind: TimelineKind | null, followingUserId: number | null): Cursor {
+function readCursor(value: string, actor: number | null, kind: TimelineKind | null, followingUserId: number | null, locale: AppRuntime["uiLocale"]): Cursor {
   try {
     if (value.length > 300) throw new Error();
     const cursor = JSON.parse(atob(value)) as Cursor;
@@ -112,9 +113,9 @@ function readCursor(value: string, actor: number | null, kind: TimelineKind | nu
       !Number.isSafeInteger(cursor.id) || cursor.id < 1 || cursor.actor !== actor || cursor.kind !== kind || cursor.followingUserId !== followingUserId ||
       (followingUserId !== null && (!Number.isSafeInteger(cursor.followingRevision) || cursor.followingRevision! < 0))) throw new Error();
     return cursor;
-  } catch { throw new HttpError(400, "动态分页位置无效，请返回最新动态"); }
+  } catch { throw new HttpError(400, translate(locale, "timeline.error.cursor"), undefined, "timeline.error.cursor"); }
 }
-function mapItem(row: TimelineRow, viewer: Awaited<ReturnType<typeof getCurrentUser>>, emojis: Awaited<ReturnType<typeof timelineEmojiMap>>): TimelineItem {
+function mapItem(row: TimelineRow, viewer: Awaited<ReturnType<typeof getCurrentUser>>, emojis: Awaited<ReturnType<typeof timelineEmojiMap>>, locale: AppRuntime["uiLocale"]): TimelineItem {
   let href: string | null = null;
   const title = row.target_title;
   if (row.catalog_id) href = `/catalogs/${row.catalog_id}`;
@@ -122,7 +123,7 @@ function mapItem(row: TimelineRow, viewer: Awaited<ReturnType<typeof getCurrentU
   else if (row.comment_id) {
     href = `${row.comment_work_id ? `/games/${row.comment_work_id}` : row.comment_creator_id ? `/creators/${row.comment_creator_id}` : row.comment_catalog_id ? `/catalogs/${row.comment_catalog_id}` : `/characters/${row.comment_character_id}`}#sec-comments`;
   } else if (row.forum_post_id) href = `/discussions/${row.topic_id}/posts/${row.post_number}`;
-  const sourceText = row.kind === "favorite" ? emojiText(row.favorite_note ?? "") : "";
+  const sourceText = row.kind === "favorite" ? emojiText(row.favorite_note ?? "", locale) : "";
   const body = row.kind === "status" ? timelineBody(row.body ?? "", emojis)
     : row.kind === "comment" ? timelineBody(mentionText(row.source_body ?? ""), emojis, 180)
     : row.kind === "catalog" && row.catalog_description ? [{ type: "text" as const, text: row.catalog_description }]
@@ -146,21 +147,21 @@ function mapItem(row: TimelineRow, viewer: Awaited<ReturnType<typeof getCurrentU
 export async function listTimeline(runtime: AppRuntime, input: {
   viewerId?: number | null; actorUserId?: number; eventId?: number; following?: boolean; cursor?: string | null; kind?: TimelineKind; limit?: number;
 } = {}): Promise<TimelinePage> {
-  if (input.actorUserId !== undefined && (!Number.isSafeInteger(input.actorUserId) || input.actorUserId < 1)) throw new HttpError(400, "用户编号无效");
-  if (input.eventId !== undefined && (!Number.isSafeInteger(input.eventId) || input.eventId < 1)) throw new HttpError(400, "动态编号无效");
-  if (input.kind !== undefined && !isTimelineKind(input.kind)) throw new HttpError(400, "动态类型无效");
+  if (input.actorUserId !== undefined && (!Number.isSafeInteger(input.actorUserId) || input.actorUserId < 1)) throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.userId"), undefined, "timeline.error.userId");
+  if (input.eventId !== undefined && (!Number.isSafeInteger(input.eventId) || input.eventId < 1)) throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.eventId"), undefined, "timeline.error.eventId");
+  if (input.kind !== undefined && !isTimelineKind(input.kind)) throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.kind"), undefined, "timeline.error.kind");
   const limit = Number.isSafeInteger(input.limit) ? Math.min(50, Math.max(1, input.limit!)) : 30;
   const actor = input.actorUserId ?? null, kind = input.kind ?? null;
   const viewer = input.viewerId ? await getCurrentUser(runtime) : null;
   const verifiedViewer = viewer?.id === input.viewerId ? viewer : null;
-  if (input.following && (!verifiedViewer || actor !== null)) throw new HttpError(verifiedViewer ? 400 : 401, "好友时间线需要登录，且不能指定其他用户");
+  if (input.following && (!verifiedViewer || actor !== null)) throw new HttpError(verifiedViewer ? 400 : 401, translate(runtime.uiLocale, "timeline.error.following"), undefined, "timeline.error.following");
   const followingUserId = input.following ? verifiedViewer!.id : null;
   const followingRevision = followingUserId === null ? null : (await getD1(runtime)
     .prepare("SELECT following_revision FROM users WHERE id=? AND status='active'").bind(followingUserId)
     .first<{ following_revision: number }>())?.following_revision;
-  if (followingUserId !== null && followingRevision === undefined) throw new HttpError(401, "账户不可用");
-  const cursor = input.cursor ? readCursor(input.cursor, actor, kind, followingUserId) : null;
-  if (cursor && followingUserId !== null && cursor.followingRevision !== followingRevision) throw new HttpError(409, "好友关系已变化，请返回最新动态", "timeline_cursor_changed");
+  if (followingUserId !== null && followingRevision === undefined) throw new HttpError(401, translate(runtime.uiLocale, "timeline.error.account"), undefined, "timeline.error.account");
+  const cursor = input.cursor ? readCursor(input.cursor, actor, kind, followingUserId, runtime.uiLocale) : null;
+  if (cursor && followingUserId !== null && cursor.followingRevision !== followingRevision) throw new HttpError(409, translate(runtime.uiLocale, "timeline.error.changed"), "timeline_cursor_changed", "timeline.error.changed");
   const args: Bind[] = [];
   let filter = "";
   if (input.eventId !== undefined) { filter += " AND e.id=?"; args.push(input.eventId); }
@@ -180,27 +181,27 @@ export async function listTimeline(runtime: AppRuntime, input: {
   const emojis = await timelineEmojiMap(getD1(runtime), rows.flatMap((row) => row.kind === "status" ? [row.body] : row.kind === "comment" ? [row.source_body] : []));
   const statusImages = await timelineImagesById(getD1(runtime), "timeline_event_id", rows.filter((row) => row.kind === "status").map((row) => row.id));
   const commentImages = await commentImagesById(getD1(runtime), rows.flatMap((row) => row.kind === "comment" && row.comment_id ? [row.comment_id] : []));
-  return { items: rows.map((row) => ({ ...mapItem(row, verifiedViewer, emojis), images: row.kind === "status" ? statusImages.get(row.id) ?? [] : row.kind === "comment" ? commentImages.get(row.comment_id!) ?? [] : [] })),
+  return { items: rows.map((row) => ({ ...mapItem(row, verifiedViewer, emojis, runtime.uiLocale), images: row.kind === "status" ? statusImages.get(row.id) ?? [] : row.kind === "comment" ? commentImages.get(row.comment_id!) ?? [] : [] })),
     nextCursor: result.results.length > limit && last ? btoa(JSON.stringify({ at: last.created_at, id: last.id, actor, kind, followingUserId, followingRevision })) : null };
 }
 
 export async function assertTimelinePermission(runtime: AppRuntime, userId: number, permissions: readonly PermissionKey[]) {
   const allowed = await getD1(runtime).prepare(`SELECT 1 FROM users WHERE id=? AND status='active' AND ${permissions.map((key) => userPermissionSql("users.id", key)).join(" AND ")}`)
     .bind(userId).first();
-  if (!allowed) throw new HttpError(403, "没有执行此时间线操作的权限");
+  if (!allowed) throw new HttpError(403, translate(runtime.uiLocale, "timeline.error.denied"), undefined, "timeline.error.denied");
 }
 
 export async function createTimelineStatus(runtime: AppRuntime, userId: number, input: Record<string, unknown>) {
   await assertTimelinePermission(runtime, userId, ["timeline.use", "timeline.status.create"]);
-  const body = statusBody(input);
+  const body = statusBody(input, runtime.uiLocale);
   const ids = parseCommentImageIds(input.imageIds);
-  if (typeof input.requestKey !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(input.requestKey)) throw new HttpError(400, "发布标识无效");
+  if (typeof input.requestKey !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(input.requestKey)) throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.requestKey"), undefined, "timeline.error.requestKey");
   const key = `status:${userId}:${input.requestKey}`;
   const hash = await sha256Hex(new TextEncoder().encode(ids.length ? JSON.stringify({ body, ids }) : body).buffer);
   const db = getD1(runtime);
   const previous = await db.prepare("SELECT id,request_hash FROM timeline_events WHERE event_key=? AND user_id=?").bind(key, userId).first<{ id: number; request_hash: string }>();
   if (previous) {
-    if (previous.request_hash !== hash) throw new HttpError(409, "发布标识对应的内容已改变，请重新发布");
+    if (previous.request_hash !== hash) throw new HttpError(409, translate(runtime.uiLocale, "timeline.error.requestChanged"), undefined, "timeline.error.requestChanged");
     return previous.id;
   }
   await validateBodyEmojis(db, body);
@@ -219,11 +220,11 @@ export async function createTimelineStatus(runtime: AppRuntime, userId: number, 
   if (!saved) {
     await assertTimelinePermission(runtime, userId, ["timeline.use", "timeline.status.create"]);
     const settings = await readTimelineSettings(runtime, userId);
-    if (!settings.enabled) throw new HttpError(409, "请先在时间线设置中开启时间线");
-    if (!await db.prepare(`SELECT 1 WHERE ${guard.sql}`).bind(...guard.args).first()) throw new HttpError(400, "配图不可用，请移除后重新上传");
-    throw new HttpError(429, "发布过于频繁，请稍后再试");
+    if (!settings.enabled) throw new HttpError(409, translate(runtime.uiLocale, "timeline.error.enable"), undefined, "timeline.error.enable");
+    if (!await db.prepare(`SELECT 1 WHERE ${guard.sql}`).bind(...guard.args).first()) throw new HttpError(400, translate(runtime.uiLocale, "timeline.error.image"), undefined, "timeline.error.image");
+    throw new HttpError(429, translate(runtime.uiLocale, "timeline.error.postRate"), undefined, "timeline.error.postRate");
   }
-  if (saved.request_hash !== hash) throw new HttpError(409, "发布标识对应的内容已改变，请重新发布");
+  if (saved.request_hash !== hash) throw new HttpError(409, translate(runtime.uiLocale, "timeline.error.requestChanged"), undefined, "timeline.error.requestChanged");
   return saved.id;
 }
 function moderatePermissionSql(userId: string, kind: string) {
@@ -246,5 +247,5 @@ export async function deleteTimelineEvent(runtime: AppRuntime, eventId: number, 
           OR ${moderatePermissionSql("actor.id", "timeline_events.kind")}))`).bind(eventId, userId),
     db.prepare("DELETE FROM timeline_event_face_emojis WHERE content_id=? AND EXISTS(SELECT 1 FROM timeline_events WHERE id=? AND hidden_at IS NOT NULL)").bind(eventId, eventId),
   ]);
-  if (!result.meta.changes) throw new HttpError(404, "动态不存在或无权移除");
+  if (!result.meta.changes) throw new HttpError(404, translate(runtime.uiLocale, "timeline.error.eventDelete"), undefined, "timeline.error.eventDelete");
 }

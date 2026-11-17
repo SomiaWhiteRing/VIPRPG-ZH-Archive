@@ -57,7 +57,7 @@ async function readBody(request: Request) {
   try {
     value = await readJsonObject(request, "请求必须为 JSON 对象");
   } catch {
-    throw new HttpError(400, "请求内容不是有效 JSON");
+    throw new HttpError(400, "请求内容不是有效 JSON", undefined, "request.invalidJson");
   }
   return parseArchiveSourceManifest(value);
 }

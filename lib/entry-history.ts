@@ -1,8 +1,11 @@
 import { auditRecord } from "./entity-audit";
-import { creatorRoleLabel, engineLabel, LANGUAGE_OPTIONS, relationLabel, TRANSLATION_ROLE_LABELS, WORK_EXTERNAL_LINK_OPTIONS, WORK_RELATION_TYPES, workStatusLabel } from "./labels";
-import { CHARACTER_ROLE_LABELS, isCharacterRoleKey } from "./character-names";
+import { creatorRoleLabel, engineLabel, languageLabel, LANGUAGE_OPTIONS, relationLabel, WORK_EXTERNAL_LINK_OPTIONS, WORK_RELATION_TYPES, workStatusLabel } from "./labels";
+import { isCharacterRoleKey } from "./character-names";
 import { CHARACTER_MATERIAL_CATEGORIES } from "./character-materials";
 import { WORK_AUDIENCE_OPTIONS } from "./work-visibility";
+import { referenceDurationLabel } from "./work-reference-duration";
+import { translate, type MessageKey } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 
 export type EntryHistoryKind = "work" | "creator" | "character";
 
@@ -22,7 +25,7 @@ export type EntryHistoryNames = {
 type Snapshot = Record<string, unknown> | null;
 
 const text = (value: unknown) => typeof value === "string" ? value : "";
-const yesNo = (value: unknown) => value === true || value === 1 ? "是" : value === false || value === 0 ? "否" : "";
+const yesNo = (value: unknown, locale: UiLocale) => value === true || value === 1 ? translate(locale, "admin.archiveDetail.yes") : value === false || value === 0 ? translate(locale, "admin.archiveDetail.no") : "";
 const array = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 const records = (value: unknown) => array(value).flatMap(item => {
   const record = auditRecord(item);
@@ -31,10 +34,11 @@ const records = (value: unknown) => array(value).flatMap(item => {
 const image = (value: unknown) => typeof value === "string" && /^[a-f0-9]{64}$/i.test(value)
   ? `/api/media/blobs/${value.toLowerCase()}` : undefined;
 
-function language(value: unknown): string {
+function language(value: unknown, locale: UiLocale): string {
   const code = text(value).replace(/[-_]/g, "").toLowerCase();
-  return code === "zh" ? "中文"
-    : LANGUAGE_OPTIONS.find(option => option.value.replace(/-/g, "").toLowerCase() === code)?.label ?? (code ? "未知语言" : "");
+  if (code === "zh") return translate(locale, "entryHistory.chineseLanguage");
+  const option = LANGUAGE_OPTIONS.find(option => option.value.replace(/-/g, "").toLowerCase() === code);
+  return option ? languageLabel(option.value, locale) : code ? translate(locale, "work.unknownLanguage") : "";
 }
 
 function portrait(value: unknown): EntryHistoryValue {
@@ -44,7 +48,7 @@ function portrait(value: unknown): EntryHistoryValue {
   return src ? { image: src, cell: { row, column } } : {};
 }
 
-function displaySnapshot(snapshot: Snapshot, kind: EntryHistoryKind, id: number, names: EntryHistoryNames) {
+function displaySnapshot(snapshot: Snapshot, kind: EntryHistoryKind, id: number, names: EntryHistoryNames, locale: UiLocale = DEFAULT_UI_LOCALE) {
   const fields = new Map<string, EntryHistoryValue[]>();
   if (!snapshot) return fields;
   function add(label: string, ...values: EntryHistoryValue[]) {
@@ -58,9 +62,9 @@ function displaySnapshot(snapshot: Snapshot, kind: EntryHistoryKind, id: number,
   const links = (value: unknown) => records(value).map(row => lines(row.label, row.url));
   const credit = (row: Record<string, unknown>, character: boolean) => {
     const role = text(row.roleKey);
-    const staffRole = creatorRoleLabel(role);
-    const label = character ? (isCharacterRoleKey(role) ? CHARACTER_ROLE_LABELS[role] : "")
-      : text(row.roleLabel) || (role && staffRole === role ? "其他" : staffRole);
+    const staffRole = creatorRoleLabel(role, locale);
+    const label = character ? (isCharacterRoleKey(role) ? translate(locale, `work.role.${role}`) : "")
+      : text(row.roleLabel) || (role && staffRole === role ? translate(locale, "work.credit.other") : staffRole);
     return [text(row.displayName) || text(row.creatorName), label, row.notes];
   };
 
@@ -70,24 +74,25 @@ function displaySnapshot(snapshot: Snapshot, kind: EntryHistoryKind, id: number,
     texts("别名", ...array(snapshot.aliases));
     texts("简介", snapshot.description);
     texts("类型", snapshot.genre);
-    texts("参考时长", snapshot.referenceDuration);
+    texts("参考时长", referenceDurationLabel(text(snapshot.referenceDuration), locale));
     texts("更多信息", ...records(snapshot.moreInfo).map(row => lines(row.title, row.body)));
     const date = text(snapshot.originalReleaseDate);
     const precision = snapshot.releasePrecision;
     texts("发布日期", precision === "unknown" ? "" : date.slice(0, precision === "year" ? 4 : precision === "month" ? 7 : 10));
-    texts("语言", language(snapshot.language));
-    texts("引擎", typeof snapshot.engineFamily === "string" ? engineLabel(snapshot.engineFamily) : "");
+    texts("语言", language(snapshot.language, locale));
+    texts("引擎", typeof snapshot.engineFamily === "string" ? engineLabel(snapshot.engineFamily, locale) : "");
     const status = text(snapshot.status);
-    const statusLabel = workStatusLabel(status);
-    texts("状态", status && statusLabel === status ? "未知状态" : statusLabel);
-    texts("可见范围", WORK_AUDIENCE_OPTIONS.find(option => option.value === snapshot.audience)?.label);
-    texts("在首页展示", yesNo(snapshot.showOnHome));
-    texts("原创声明", yesNo(snapshot.isOriginal));
-    texts("翻译声明", yesNo(snapshot.isTranslation));
-    texts("特殊 Maniacs 功能", yesNo(snapshot.usesUnsupportedManiac));
+    const statusLabel = workStatusLabel(status, locale);
+    texts("状态", status && statusLabel === status ? translate(locale, "entryHistory.unknownStatus") : statusLabel);
+    const audience = WORK_AUDIENCE_OPTIONS.find(option => option.value === snapshot.audience);
+    texts("可见范围", audience ? translate(locale, `entryHistory.audience.${audience.value}`) : "");
+    texts("在首页展示", yesNo(snapshot.showOnHome, locale));
+    texts("原创声明", yesNo(snapshot.isOriginal, locale));
+    texts("翻译声明", yesNo(snapshot.isTranslation, locale));
+    texts("特殊 Maniacs 功能", yesNo(snapshot.usesUnsupportedManiac, locale));
     texts("制作人员", ...records(snapshot.staff).map(row => lines(...credit(row, false))));
     add("登场角色", ...records(snapshot.characters).map(row => ({
-      text: lines(...credit(row, true), row.spoilerLevel ? "剧透" : ""),
+      text: lines(...credit(row, true), row.spoilerLevel ? translate(locale, "entryHistory.spoiler") : ""),
       ...portrait(row.portrait),
     })));
     texts("标签", ...array(snapshot.tags));
@@ -95,12 +100,14 @@ function displaySnapshot(snapshot: Snapshot, kind: EntryHistoryKind, id: number,
     add("封面", ...media.filter(row => row.role === "cover").map(row => ({ image: image(row.sha256) })));
     add("截图", ...media.filter(row => row.role === "preview").map(row => ({ image: image(row.sha256) })));
     const externalLinks = records(snapshot.externalLinks);
-    texts("外部链接", ...externalLinks.filter(row => row.type !== "download_page").map(row =>
-      lines(row.label, row.url, WORK_EXTERNAL_LINK_OPTIONS.find(option => option.value === row.type)?.label)));
+    texts("外部链接", ...externalLinks.filter(row => row.type !== "download_page").map(row => {
+      const option = WORK_EXTERNAL_LINK_OPTIONS.find(option => option.value === row.type);
+      return lines(row.label, row.url, option ? translate(locale, `entryHistory.link.${option.value}`) : "");
+    }));
     texts("外部下载", ...links(externalLinks.filter(row => row.type === "download_page")));
     texts("当前归档", ...records(snapshot.currentArchives).map(row =>
-      lines(typeof row.id === "number" ? names.archives.get(row.id) : null, row.sourceUrl) || "站内归档"));
-    texts("维护者", ...array(snapshot.maintainers).map(value => typeof value === "number" ? names.users.get(value) ?? "已注销用户" : "").sort());
+      lines(typeof row.id === "number" ? names.archives.get(row.id) : null, row.sourceUrl) || translate(locale, "entryHistory.siteArchive")));
+    texts("维护者", ...array(snapshot.maintainers).map(value => typeof value === "number" ? names.users.get(value) ?? translate(locale, "entryHistory.deletedUser") : "").sort());
     for (const [key, label] of [["relations", "作品关联"], ["translationRelations", "翻译关联"]] as const) {
       const related = records(snapshot[key]).flatMap(row => {
         // The inverse row already has the correct label when this work is its source.
@@ -108,8 +115,8 @@ function displaySnapshot(snapshot: Snapshot, kind: EntryHistoryKind, id: number,
         const title = names.works.get(row.toWorkId);
         if (!title) return [];
         const type = text(row.type);
-        const role = key === "relations" ? (WORK_RELATION_TYPES.includes(type) ? relationLabel(type) : "")
-          : type === "original" || type === "translation" ? TRANSLATION_ROLE_LABELS[type] : "";
+        const role = key === "relations" ? (WORK_RELATION_TYPES.includes(type) ? relationLabel(type, locale) : "")
+          : type === "original" || type === "translation" ? translate(locale, `relation.${type}`) : "";
         return [lines(title, role)];
       });
       texts(label, ...related.sort());
@@ -129,11 +136,11 @@ function displaySnapshot(snapshot: Snapshot, kind: EntryHistoryKind, id: number,
     texts("简介", snapshot.description);
     texts("别名", ...array(snapshot.aliases).map(value => {
       const alias = auditRecord(value);
-      return alias ? [text(alias.name), language(alias.language)].filter(Boolean).join(" · ") : text(value);
+      return alias ? [text(alias.name), language(alias.language, locale)].filter(Boolean).join(" · ") : text(value);
     }));
     texts("来源资料", ...array(snapshot.sources));
     texts("分类归属", ...records(snapshot.memberships).map(row => lines(
-      names.categories.get(text(row.categoryId)) || row.categoryLabel || "分类",
+      names.categories.get(text(row.categoryId)) || row.categoryLabel || translate(locale, "character.categoryButton"),
       row.displayName, row.originalName,
     )).sort());
     add("默认头像", portrait(snapshot.defaultPortrait));
@@ -150,9 +157,12 @@ function displaySnapshot(snapshot: Snapshot, kind: EntryHistoryKind, id: number,
   return fields;
 }
 
-export function entryHistoryChanges(before: Snapshot, after: Snapshot, kind: EntryHistoryKind, id: number, names: EntryHistoryNames) {
+export function entryHistoryChanges(before: Snapshot, after: Snapshot, kind: EntryHistoryKind, id: number, names: EntryHistoryNames, locale: UiLocale = DEFAULT_UI_LOCALE) {
   const previous = displaySnapshot(before, kind, id, names);
   const next = displaySnapshot(after, kind, id, names);
+  // Detect changes using the original snapshot representation in every locale.
+  const displayBefore = locale === DEFAULT_UI_LOCALE ? previous : displaySnapshot(before, kind, id, names, locale);
+  const displayAfter = locale === DEFAULT_UI_LOCALE ? next : displaySnapshot(after, kind, id, names, locale);
   return [...new Set([...previous.keys(), ...next.keys()])].flatMap(field => {
     const left = previous.get(field) ?? [];
     const right = next.get(field) ?? [];
@@ -172,7 +182,7 @@ export function entryHistoryChanges(before: Snapshot, after: Snapshot, kind: Ent
         }];
       }
     }
-    return [{ field, before: left, after: right }];
+    return [{ field, before: displayBefore.get(field) ?? left, after: displayAfter.get(field) ?? right }];
   });
 }
 
@@ -185,24 +195,75 @@ function includesInOrder(values: EntryHistoryValue[], subset: EntryHistoryValue[
   return index === keys.length;
 }
 
-export function entryHistorySummary(changes: ReturnType<typeof entryHistoryChanges>): string {
-  const groups: Record<"新增" | "移除" | "编辑", string[]> = { 新增: [], 移除: [], 编辑: [] };
+const fieldLabels: Readonly<Record<string, MessageKey>> = {
+  "作品原名": "entryHistory.original",
+  "中文标题": "entryHistory.chinese",
+  "姓名": "entryHistory.name",
+  "中文名": "entryHistory.chineseName",
+  "日文名": "entryHistory.japaneseName",
+  "在首页展示": "entryHistory.home",
+  "原创声明": "entryHistory.originalClaim",
+  "翻译声明": "entryHistory.translationClaim",
+  "特殊 Maniacs 功能": "entryHistory.maniacs",
+  "当前归档": "entryHistory.archive",
+  "来源资料": "entryHistory.sources",
+  "分类归属": "entryHistory.membership",
+  "默认头像": "entryHistory.portrait",
+  "作品署名": "entryHistory.credits",
+  "登场作品": "entryHistory.appearances",
+  "别名": "upload.metadata.aliases",
+  "简介": "work.intro",
+  "类型": "work.sidebar.genre",
+  "参考时长": "library.duration",
+  "更多信息": "upload.info.moreInfo",
+  "发布日期": "library.release",
+  "语言": "library.language",
+  "引擎": "work.sidebar.engine",
+  "状态": "admin.list.status",
+  "登场角色": "work.cast",
+  "标签": "library.tags",
+  "封面": "upload.cover.cover",
+  "截图": "installed.screenshot.heading",
+  "外部链接": "work.sidebar.external",
+  "外部下载": "upload.external",
+  "维护者": "work.sidebar.maintainer",
+  "作品关联": "relation.edit.title",
+  "翻译关联": "relation.edit.translations",
+  "网站": "creator.links.website",
+  "头像": "profile.avatar",
+  "脸图": "character.material.faceset",
+  "行走图": "character.material.charset",
+  "怪物／战斗图": "character.material.monster",
+  "插图及其他": "character.material.other",
+  "可见范围": "entryHistory.audience",
+  "制作人员": "entryHistory.staff",
+};
+
+export function entryHistoryFieldLabel(field: string, locale: UiLocale) {
+  return Object.hasOwn(fieldLabels, field) ? translate(locale, fieldLabels[field]) : field;
+}
+
+export function entryHistorySummary(changes: ReturnType<typeof entryHistoryChanges>, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const groups = { added: [] as string[], removed: [] as string[], edited: [] as string[] };
   for (const { field, before, after } of changes) {
-    if (before.length < after.length && includesInOrder(after, before)) groups.新增.push(field);
-    else if (after.length < before.length && includesInOrder(before, after)) groups.移除.push(field);
-    else groups.编辑.push(field);
+    const label = entryHistoryFieldLabel(field, locale);
+    if (before.length < after.length && includesInOrder(after, before)) groups.added.push(label);
+    else if (after.length < before.length && includesInOrder(before, after)) groups.removed.push(label);
+    else groups.edited.push(label);
   }
-  return Object.entries(groups).flatMap(([action, fields]) =>
-    fields.length ? [action + fields.join("、")] : []).join("，");
+  const separator = locale === "en" ? ", " : "、";
+  return (["added", "removed", "edited"] as const).flatMap(action => groups[action].length
+    ? [translate(locale, `entryHistory.${action}`, { fields: groups[action].join(separator) })]
+    : []).join(locale === "en" ? " · " : "，");
 }
 
 /** Reconstruct the endpoints from chronological, operation-scoped snapshots before diffing. */
-export function entryHistoryRangeChanges(edits: ReturnType<typeof entryHistorySnapshots>[], kind: EntryHistoryKind, id: number, names: EntryHistoryNames) {
+export function entryHistoryRangeChanges(edits: ReturnType<typeof entryHistorySnapshots>[], kind: EntryHistoryKind, id: number, names: EntryHistoryNames, locale: UiLocale = DEFAULT_UI_LOCALE) {
   let before: Record<string, unknown> | null = null;
   for (const edit of [...edits].reverse()) before = applyHistoryEdit(before, edit.after, edit.before);
   let after = before;
   for (const edit of edits) after = applyHistoryEdit(after, edit.before, edit.after);
-  return entryHistoryChanges(before, after, kind, id, names);
+  return entryHistoryChanges(before, after, kind, id, names, locale);
 }
 
 function applyHistoryEdit(current: Record<string, unknown> | null, before: Record<string, unknown> | null, after: Record<string, unknown> | null): Record<string, unknown> | null {

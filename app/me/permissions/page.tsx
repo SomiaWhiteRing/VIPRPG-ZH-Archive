@@ -1,3 +1,7 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 import { requireAccountUser } from "@/app/.server/auth/account-user";
@@ -15,21 +19,26 @@ import { useToast } from "@/app/components/ui/toast";
 import type { AccountRoleOption } from "@/lib/dto/db/permissions";
 import { notifyInboxChanged } from "@/lib/inbox-events";
 import { cn } from "@/lib/ui/cn";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { useState, useTransition, type FormEvent } from "react";
-import { Link, useLoaderData, useRevalidator, useSearchParams, type LoaderFunctionArgs, type MetaFunction } from "react-router";
+import { useLoaderData, useRevalidator, useSearchParams, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 export { shouldRevalidatePermissionPanel as shouldRevalidate } from "@/lib/ui/route-revalidation";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const user = await requireAccountUser(runtime, "/me/permissions");
-  return { roles: await listAccountRoleOptions(runtime, user) };
+  return { locale: runtime.uiLocale, roles: await listAccountRoleOptions(runtime, user) };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["权限申请", "个人中心"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "account.nav.permissions"), translate(locale, "header.me")] }, error, locale);
+};
 
 export default function AccountPermissionsPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const navigationLocale = useNavigationLocale();
   const { roles } = useLoaderData<typeof loader>();
   const [params, setParams] = useSearchParams();
   const selectedKey = params.get("role");
@@ -39,7 +48,7 @@ export default function AccountPermissionsPage() {
   const [refreshing, startTransition] = useTransition();
   const revalidator = useRevalidator();
   const toast = useToast();
-  const state = role ? applicationState(role) : null;
+  const state = role ? applicationState(role, t) : null;
   const busy = saving || refreshing;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -48,7 +57,7 @@ export default function AccountPermissionsPage() {
     setSaving(true);
     try {
 
-      await requestJson("/api/account/role-requests", {
+      await requestJson(`/api/account/role-requests?${UI_LOCALE_PARAM}=${locale}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roleId: role.id, reason: reasons[role.id] ?? "" }),
@@ -57,11 +66,11 @@ export default function AccountPermissionsPage() {
       setReasons((current) => ({ ...current, [role.id]: "" }));
       notifyInboxChanged();
       startTransition(() => revalidator.revalidate());
-      toast.success("申请已提交，请在提醒中查看处理结果。");
+      toast.success(t("account.permissions.submitted"));
     } catch (error) {
       if (error instanceof ApiResponseError && error.status === 409)
         startTransition(() => revalidator.revalidate());
-      toast.error(error instanceof Error ? error.message : "申请提交失败，请重试。");
+      toast.error(error instanceof ApiResponseError ? error.messageFor(locale) : error instanceof Error ? error.message : t("account.permissions.failed"));
     } finally {
       setSaving(false);
     }
@@ -69,12 +78,12 @@ export default function AccountPermissionsPage() {
 
   return (
     <div>
-      <AccountPageHeader title="权限申请" />
+      <AccountPageHeader title={t("account.nav.permissions")} />
       {role && state ? (
         <div className="flex flex-col items-start gap-5 lg:flex-row lg:gap-6">
-          <nav className="grid w-full min-w-0 shrink-0 grid-cols-2 gap-2 lg:w-44 lg:grid-cols-1" aria-label="选择要申请的权限">
+          <nav className="grid w-full min-w-0 shrink-0 grid-cols-2 gap-2 lg:w-44 lg:grid-cols-1" aria-label={t("account.permissions.choose")}>
             {roles.map((item) => {
-              const itemState = applicationState(item);
+              const itemState = applicationState(item, t);
               return (
                 <Button
                   key={item.id}
@@ -89,6 +98,7 @@ export default function AccountPermissionsPage() {
                   disabled={busy}
                   onClick={() => setParams((current) => {
                     current.set("role", item.key);
+                    if (navigationLocale) current.set(UI_LOCALE_PARAM, navigationLocale);
                     return current;
                   }, { replace: true, preventScrollReset: true })}
                 >
@@ -106,17 +116,17 @@ export default function AccountPermissionsPage() {
               ) : null}
             </div>
             {state.message ? <p className="text-sm text-muted" role="status">{state.message}</p> : null}
-            {role.request?.rejectionReason ? <p className="whitespace-pre-wrap wrap-anywhere text-sm"><span className="font-semibold">上次申请驳回理由：</span>{role.request.rejectionReason}</p> : null}
+            {role.request?.rejectionReason ? <p className="whitespace-pre-wrap wrap-anywhere text-sm"><span className="font-semibold">{t("account.permissions.rejection")}</span>{role.request.rejectionReason}</p> : null}
             {role.request ? (
               <Link className="w-fit text-sm text-primary hover:underline" to={`/inbox/${role.request.id}`}>
-                查看最近一次申请
+                {t("account.permissions.latest")}
               </Link>
             ) : null}
             {state.canApply ? (
               <form className="grid gap-3 border-t border-border pt-5" onSubmit={submit}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label htmlFor="application-reason">
-                    申请理由
+                    {t("account.permissions.reason")}
                   </Label>
                   <span id="application-reason-count" className="text-xs tabular-nums text-muted">
                     {(reasons[role.id] ?? "").length} / 2000
@@ -129,54 +139,54 @@ export default function AccountPermissionsPage() {
                   maxLength={2000}
                   rows={5}
                   disabled={busy}
-                  placeholder="请简要说明申请理由，例如你需要使用该权限的场景或目的。"
+                  placeholder={t("account.permissions.placeholder")}
                   value={reasons[role.id] ?? ""}
                   onChange={(event) => setReasons((current) => ({ ...current, [role.id]: event.target.value }))}
                 />
                 <div className="flex justify-end pt-2">
                   <Rm2kButton type="submit" disabled={busy}>
-                    {busy ? "提交中…" : role.request ? "重新提交申请" : "提交申请"}
+                    {busy ? t("account.permissions.sending") : role.request ? t("account.permissions.again") : t("account.permissions.submit")}
                   </Rm2kButton>
                 </div>
               </form>
             ) : null}
           </Card>
         </div>
-      ) : <EmptyState title="目前没有可申请的权限。" />}
+      ) : <EmptyState title={t("account.permissions.empty")} />}
     </div>
   );
 }
 
-function applicationState(role: AccountRoleOption): {
+function applicationState(role: AccountRoleOption, t: ReturnType<typeof useMessages>): {
   canApply: boolean;
   label: string;
   variant: "subtle" | "positive" | "pending" | "neutral";
   message: string | null;
 } {
   if (role.status !== "active") return {
-    canApply: false, label: "已停用", variant: "neutral", message: "该角色已停用，相关权限暂不生效。",
+    canApply: false, label: t("account.permissions.inactive"), variant: "neutral", message: t("account.permissions.inactiveHint"),
   };
   if (role.availableToAll) return {
-    canApply: false, label: "全员开放", variant: "positive",
-    message: "已向所有用户开放，无需申请。" + (role.individuallyAssigned ? "你另有单独授权，全员开放收回后仍会保留。" : ""),
+    canApply: false, label: t("account.permissions.available"), variant: "positive",
+    message: [ t("account.permissions.availableHint"), role.individuallyAssigned ? t("account.permissions.assignedHint") : null ].filter(Boolean).join(" "),
   };
   if (role.granted) return {
-    canApply: false, label: "已拥有", variant: "positive", message: "你已拥有此权限。",
+    canApply: false, label: t("account.permissions.granted"), variant: "positive", message: t("account.permissions.grantedHint"),
   };
   if (role.request?.status === "pending") return {
-    canApply: false, label: "待审核", variant: "pending", message: "申请已提交，等待管理员审核。",
+    canApply: false, label: t("account.permissions.pending"), variant: "pending", message: t("account.permissions.pendingHint"),
   };
   if (!role.applicationEnabled) return {
-    canApply: false, label: "暂未开放", variant: "neutral", message: "此权限暂未开放申请。",
+    canApply: false, label: t("account.permissions.closed"), variant: "neutral", message: t("account.permissions.closedHint"),
   };
   if (role.request?.status === "rejected") return {
-    canApply: true, label: "可重新申请", variant: "pending", message: "上次申请未通过，可以重新申请。",
+    canApply: true, label: t("account.permissions.reapply"), variant: "pending", message: t("account.permissions.rejectedHint"),
   };
   if (role.request?.status === "archived") return {
-    canApply: true, label: "可重新申请", variant: "subtle", message: "上次申请已关闭，现已重新开放。",
+    canApply: true, label: t("account.permissions.reapply"), variant: "subtle", message: t("account.permissions.archivedHint"),
   };
   if (role.request?.status === "approved") return {
-    canApply: true, label: "可重新申请", variant: "pending", message: "之前的申请已通过，当前权限已收回或不完整，可以重新申请。",
+    canApply: true, label: t("account.permissions.reapply"), variant: "pending", message: t("account.permissions.approvedHint"),
   };
-  return { canApply: true, label: "可申请", variant: "subtle", message: null };
+  return { canApply: true, label: t("account.permissions.open"), variant: "subtle", message: null };
 }

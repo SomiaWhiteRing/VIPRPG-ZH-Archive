@@ -1,7 +1,8 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { CatalogCover } from "@/app/catalogs/catalog-cover";
 import type { CatalogSummary } from "@/lib/dto/db/catalogs";
-import { formatDate, formatNumber } from "@/lib/format";
-import { Link } from "react-router";
+import { formatDate } from "@/lib/format";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import type { ReactNode } from "react";
 
 export function CatalogListRow({
@@ -19,6 +20,8 @@ export function CatalogListRow({
   showCreatedAt?: boolean;
   actions?: ReactNode;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const href = `/catalogs/${catalog.id}`;
 
   return (
@@ -33,15 +36,15 @@ export function CatalogListRow({
             {catalog.title}
           </Link>
           <span className="font-mono text-[11.5px] text-muted">
-            {formatNumber(catalog.itemCount)} 部作品
+            {t("favorite.workCount", { count: catalog.itemCount })}
           </span>
         </div>
         {showDescription ? <p className="mt-1 line-clamp-2 text-[13px] leading-[1.55] text-muted">
-          {catalog.description || "未填写说明。"}
+          {catalog.description || t("catalog.noDescription")}
         </p> : null}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted">
           {showOwner ? <span>
-            {!compact ? "创建者 " : null}
+            {!compact ? t("catalog.creator") : null}
             <Link
               className="font-semibold text-primary hover:underline hover:underline-offset-2"
               to={`/users/${catalog.ownerUserId}`}
@@ -50,15 +53,15 @@ export function CatalogListRow({
             </Link>
           </span> : null}
           {showCreatedAt ? <span>
-            创建于{" "}
+            {t("catalog.createdAt")}{" "}
             <time className="font-mono" dateTime={catalog.createdAt}>
-              {formatDate(catalog.createdAt)}
+              {formatDate(catalog.createdAt, { locale })}
             </time>
           </span> : null}
           {!compact ? <span>
-            更新于{" "}
+            {t("catalog.updatedAt")}{" "}
             <time className="font-mono" dateTime={catalog.updatedAt}>
-              {formatDate(catalog.updatedAt)}
+              {formatDate(catalog.updatedAt, { locale })}
             </time>
           </span> : null}
         </div>

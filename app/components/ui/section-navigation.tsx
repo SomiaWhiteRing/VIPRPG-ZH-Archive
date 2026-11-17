@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { cn } from "@/lib/ui/cn";
 import { SmoothAnchorLink } from "./anchor-navigation";
 
@@ -16,9 +17,10 @@ export function SectionNavigation({
   items: SectionLink[];
   className?: string;
 }) {
+  const t = useMessages();
   return (
     <nav
-      aria-label="页面分区"
+      aria-label={t("core.ui.sections")}
       className={cn("mt-4 overflow-x-auto border-b border-border", className)}
     >
       <ul className="m-0 flex min-w-max list-none gap-0.5 p-0">

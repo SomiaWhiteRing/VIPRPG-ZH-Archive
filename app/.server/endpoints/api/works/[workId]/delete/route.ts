@@ -15,7 +15,7 @@ export async function POST(
     const id = parsePositiveId((await context.params).workId, "work id");
     const form = await request.formData();
     if (form.get("confirm") !== "delete")
-      throw new HttpError(400, "请确认删除作品");
+      throw new HttpError(400, "请确认删除作品", undefined, "upload.error.deleteConfirm");
     const db = getD1(runtime);
     // Deletion only needs ownership, including incomplete uploads without editable metadata.
     const [owned, deleted] = await db.batch([
@@ -42,9 +42,9 @@ export async function POST(
         .bind(auth.user.id, auth.user.email, JSON.stringify({ workId: id })),
     ]);
     if (!owned.results?.length)
-      throw new HttpError(404, "作品不存在或不可维护");
+      throw new HttpError(404, "作品不存在或当前账户无权维护", undefined, "upload.metadata.error.ownedMissing");
     if (Number(deleted.meta.changes ?? 0) !== 1)
-      throw new HttpError(409, "作品正在提交或状态已变化，请等待提交结束或刷新后重试");
+      throw new HttpError(409, "作品正在提交或状态已变化，请等待提交结束或刷新后重试", undefined, "upload.error.deleteConflict");
     return json({ ok: true, redirectTo: "/me/uploads" });
   } catch (error) {
     return jsonError("删除作品失败", error);

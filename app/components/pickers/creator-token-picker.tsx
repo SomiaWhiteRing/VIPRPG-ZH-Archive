@@ -14,6 +14,8 @@ import {
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import { creatorNameKey, creatorSelectionKey } from "@/lib/creator-names";
 import { normalizeEntityName } from "@/lib/entity-name";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { creatorRoleLabel } from "@/lib/labels";
 import { cn } from "@/lib/ui/cn";
 import { useMemo, useRef, useState } from "react";
 
@@ -24,7 +26,7 @@ export function CreatorTokenPicker({
   errorId,
   id,
   invalid = false,
-  label,
+  role,
   onChange,
   suggestions,
   values,
@@ -33,11 +35,14 @@ export function CreatorTokenPicker({
   errorId?: string;
   id: string;
   invalid?: boolean;
-  label: "作者" | "译者";
+  role: "author" | "translator";
   onChange: (values: CreatorSelection[]) => void;
   suggestions: CreatorSuggestion[];
   values: CreatorSelection[];
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const label = creatorRoleLabel(role, locale);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<{
     index: number;
@@ -61,7 +66,7 @@ export function CreatorTokenPicker({
         name: option.creator.name,
         displayName: option.matchedName,
       },
-      meta: `${option.creator.workCount} 部作品`,
+      meta: t("upload.staff.works", { count: option.creator.workCount }),
     }));
     const name = normalizeEntityName(query);
     const selection: CreatorSelection = {
@@ -80,10 +85,10 @@ export function CreatorTokenPicker({
       !exactMatch &&
       !selectedKeys.has(creatorSelectionKey(selection))
     ) {
-      matches.push({ selection, meta: "新建" });
+      matches.push({ selection, meta: t("upload.staff.create") });
     }
     return matches;
-  }, [query, selectedKeys, suggestions]);
+  }, [query, selectedKeys, suggestions, t]);
   const editingSelection = editing?.selection;
   const duplicateEdit =
     editingSelection &&
@@ -138,7 +143,7 @@ export function CreatorTokenPicker({
               creatorNameKey(option.selection.displayName) === creatorNameKey(query)
             }
             label={label}
-            placeholder={values.length ? "继续添加" : `搜索或新建${label}`}
+            placeholder={values.length ? t("upload.staff.addMore") : t("upload.staff.search", { role })}
             invalid={invalid}
             descriptionId={errorId}
             getKey={(option) =>
@@ -164,8 +169,8 @@ export function CreatorTokenPicker({
                   {...reorder.handleProps(index)}
                   aria-controls={`${id}-edit-dialog`}
                   aria-haspopup="dialog"
-                  aria-label={`编辑${label} ${value.displayName}`}
-                  aria-description="拖动排序，或按 Alt 加方向键调整顺序"
+                  aria-label={t("upload.staff.editNamed", { role: label, name: value.displayName })}
+                  aria-description={t("upload.staff.reorder")}
                   className={tokenDragHandleClassName}
                   disabled={disabled}
                   onClick={(event) => {
@@ -175,7 +180,7 @@ export function CreatorTokenPicker({
                   size="sm"
                   title={
                     value.kind === "existing"
-                      ? `已关联：${value.name}`
+                      ? t("upload.staff.linked", { name: value.name })
                       : value.name
                   }
                   type="button"
@@ -191,7 +196,7 @@ export function CreatorTokenPicker({
                   {option.selection.displayName}
                   {option.selection.displayName !== option.selection.name ? (
                     <span className="block text-xs text-muted">
-                      身份：{option.selection.name}
+                      {t("upload.staff.identity", { name: option.selection.name })}
                     </span>
                   ) : null}
                 </span>
@@ -202,7 +207,7 @@ export function CreatorTokenPicker({
             )}
           />
         </div>
-        <span className="text-xs text-muted">输入后按 Enter 添加</span>
+        <span className="text-xs text-muted">{t("upload.staff.enter")}</span>
       </div>
       {reorder.preview ? (
         <TokenDragPreview element={reorder.preview.element} {...reorder.preview.chip} />
@@ -225,14 +230,14 @@ export function CreatorTokenPicker({
               target?.focus();
             }}
           >
-            <Dialog.Title>编辑{label}</Dialog.Title>
+            <Dialog.Title>{t("upload.staff.edit", { role: label })}</Dialog.Title>
             <Dialog.Description className="sr-only">
-              修改{label}署名或关联人物。
+              {t("upload.staff.editDescription", { role: label })}
             </Dialog.Description>
             <div className="grid gap-2">
-              <Label htmlFor={`${id}-edit-name`}>{label}署名</Label>
+              <Label htmlFor={`${id}-edit-name`}>{t("upload.staff.credit", { role: label })}</Label>
               <CreatorPicker
-                label={`${label}署名`}
+                label={t("upload.staff.credit", { role: label })}
                 disabled={disabled}
                 id={`${id}-edit-name`}
                 onChange={(selection) =>
@@ -240,20 +245,20 @@ export function CreatorTokenPicker({
                     current ? { ...current, selection } : null,
                   )
                 }
-                placeholder={`搜索或新建${label}`}
+                placeholder={t("upload.staff.search", { role })}
                 suggestions={suggestions}
                 value={editing?.selection ?? null}
               />
             </div>
             {duplicateEdit ? (
               <p className="text-sm text-red-700 dark:text-red-300" role="alert">
-                该{label}已添加。
+                {t("upload.staff.duplicate", { role: label })}
               </p>
             ) : null}
             <div className="flex justify-end gap-2">
               <Dialog.Close asChild>
                 <Button type="button" variant="outline">
-                  取消
+                  {t("play.save.cancel")}
                 </Button>
               </Dialog.Close>
               <Button
@@ -266,7 +271,7 @@ export function CreatorTokenPicker({
                 onClick={saveEdit}
                 type="button"
               >
-                保存
+                {t("core.action.save")}
               </Button>
             </div>
           </Dialog.Content>

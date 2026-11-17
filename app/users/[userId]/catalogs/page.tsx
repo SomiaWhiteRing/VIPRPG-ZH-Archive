@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { parseAccountPage } from "@/app/.server/auth/account-user";
 import { searchCatalogsForOwner } from "@/app/.server/db/catalogs";
 import { requirePublicProfileSection } from "@/app/.server/public-user";
@@ -24,26 +26,25 @@ export async function loader(args: LoaderFunctionArgs) {
     pageSize: 20,
   });
   const base = `/users/${user.id}/catalogs`;
-  return { displayName: user.displayName, page, result, base };
+  return { locale: runtime.uiLocale, displayName: user.displayName, page, result, base };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    {
-      title: [loaderData?.displayName || "用户", "公开目录"],
-      page: loaderData?.page,
-    },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "publicProfile.catalogs");
+  const name = loaderData?.displayName;
+  return pageMetaDescriptors({ title: name ? [name, title] : title, page: loaderData?.page }, error, locale);
+};
 
 export default function PublicCatalogs() {
+  const t = useMessages();
   const { page, result, base } = useLoaderData<typeof loader>();
   return (
-    <section aria-label="目录">
+    <section aria-label={t("timeline.feed.kind.catalog")}>
       {result.items.length ? (
         <CatalogSummaryList items={result.items} />
       ) : (
-        <AccountEmpty>还没有公开目录。</AccountEmpty>
+        <AccountEmpty>{t("publicProfile.noCatalogs")}</AccountEmpty>
       )}
       <PaginationLinks
         basePath={base}

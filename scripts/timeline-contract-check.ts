@@ -98,7 +98,7 @@ function fixture(preserveDefaults = false, beforeAccountHistory?: (db: DatabaseS
   const counter = { async counts() { return {}; }, async initializePlayUsers() {}, async mergeWorks() {} };
   const env = { DB: db, ARCHIVE_BUCKET: bucket, VIEW_STATS: { getByName: () => counter } } as unknown as CloudflareEnv;
   const runtime = { db, bucket, env, memo: new Map(), origin: "https://timeline.example.test",
-    request: new Request("https://timeline.example.test/timeline"),
+    request: new Request("https://timeline.example.test/timeline"), uiLocale: "zh-Hans",
     execution: { waitUntil(value: Promise<unknown>) { pending.push(value); }, passThroughOnException() {} },
   } satisfies AppRuntime;
   const actor = (id: number): ArchiveUser => ({ id, email: `${id}@example.test`, displayName: `Actor ${id}`, status: "active", roleKeys: [], roleNames: [],

@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 
@@ -13,7 +14,6 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { WorkListItem } from "@/app/components/work/work-list-item";
 import { useVisibleWorkItems } from "@/app/components/work/use-visible-work-items";
 import type { CatalogDetail, CatalogItem } from "@/lib/dto/db/catalogs";
-import { formatNumber } from "@/lib/format";
 import { EllipsisVertical } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useRef, useState } from "react";
@@ -39,6 +39,7 @@ export function CatalogItemsSection({
   items: CatalogItem[];
   onSaved: (catalog: CatalogDetail) => void;
 }) {
+  const t = useMessages();
   const toast = useToast();
   const visibleItems = useVisibleWorkItems(items);
   const addButtonRef = useRef<HTMLButtonElement>(null);
@@ -48,16 +49,13 @@ export function CatalogItemsSection({
   const [addOpen, setAddOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [addMessage, setAddMessage] = useState<{
-    kind: "empty" | "feedback";
-    text: string;
-  } | null>(null);
+  const [addMessage, setAddMessage] = useState<"empty" | "feedback" | null>(null);
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState(false);
   const [selectedWorkId, setSelectedWorkId] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [sortOrder, setSortOrder] = useState("0");
-  const [editMessage, setEditMessage] = useState<string | null>(null);
+  const [invalidSortOrder, setInvalidSortOrder] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pendingRemovalWorkId, setPendingRemovalWorkId] = useState<
     number | null
@@ -94,9 +92,9 @@ export function CatalogItemsSection({
       );
       setCandidates(works);
       if (!works.length)
-        setAddMessage({ kind: "empty", text: "没有找到可添加的游戏。" });
+        setAddMessage("empty");
     } catch {
-      setAddMessage({ kind: "feedback", text: "网络请求失败。" });
+      setAddMessage("feedback");
     } finally {
       setSearching(false);
     }
@@ -115,10 +113,10 @@ export function CatalogItemsSection({
       })) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
 
       setAddOpen(false);
-      toast.success("游戏已添加到目录。");
+      toast.success(t("catalog.items.added"));
       onSaved(body.catalog);
     } catch (error) {
-      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
+      toast.error(error instanceof ApiResponseError ? error : t("relation.edit.network"));
     } finally {
       setAdding(false);
     }
@@ -129,19 +127,19 @@ export function CatalogItemsSection({
     setSelectedWorkId(item.workId);
     setNote(item.note ?? "");
     setSortOrder(String(item.sortOrder));
-    setEditMessage(null);
+    setInvalidSortOrder(false);
   }
 
   async function saveSelectedItem() {
     if (!selectedItem) return;
-    setEditMessage(null);
+    setInvalidSortOrder(false);
     const parsedSortOrder = Number(sortOrder);
     if (
       !sortOrder.trim() ||
       !Number.isSafeInteger(parsedSortOrder) ||
       parsedSortOrder < 0
     ) {
-      setEditMessage("排序值必须是 0 或正整数。");
+      setInvalidSortOrder(true);
       return;
     }
     setSaving(true);
@@ -159,10 +157,10 @@ export function CatalogItemsSection({
       })) as { ok?: boolean; catalog: CatalogDetail; detail?: string };
 
       setSelectedWorkId(null);
-      toast.success("目录条目已保存。");
+      toast.success(t("catalog.items.saved"));
       onSaved(body.catalog);
     } catch (error) {
-      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
+      toast.error(error instanceof ApiResponseError ? error : t("relation.edit.network"));
     } finally {
       setSaving(false);
     }
@@ -176,10 +174,10 @@ export function CatalogItemsSection({
 
       removalCompletedRef.current = true;
       setPendingRemovalWorkId(null);
-      toast.success("游戏已从目录移除。");
+      toast.success(t("catalog.items.removed"));
       onSaved(body.catalog);
     } catch (error) {
-      toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
+      toast.error(error instanceof ApiResponseError ? error : t("relation.edit.network"));
     } finally {
       setRemovingWorkId(null);
     }
@@ -193,10 +191,10 @@ export function CatalogItemsSection({
             className="m-0 font-display text-xl font-bold"
             id="catalog-games-heading"
           >
-            收录游戏
+            {t("catalog.items.heading")}
           </h2>
           <span className="font-mono text-xs text-muted">
-            共 {formatNumber(items.length)} 个
+            {t("catalog.items.count", { count: items.length })}
           </span>
         </div>
         {canEdit ? (
@@ -209,7 +207,7 @@ export function CatalogItemsSection({
             size="sm"
             type="button"
           >
-            添加游戏
+            {t("catalog.items.add")}
           </Button>
         ) : null}
       </header>
@@ -242,7 +240,7 @@ export function CatalogItemsSection({
         </ol>
       ) : (
         <div className="mt-4">
-          <EmptyState title="这个目录还没有游戏。" />
+          <EmptyState title={t("catalog.items.empty")} />
         </div>
       )}
 
@@ -264,15 +262,15 @@ export function CatalogItemsSection({
           }}
         >
           <AlertDialogTitle className="m-0 text-lg font-bold">
-            移除“{pendingRemovalItem?.title}”？
+            {t("favorite.removeNamed", { title: pendingRemovalItem?.title ?? "" })}
           </AlertDialogTitle>
           <AlertDialogDescription className="m-0 text-sm leading-6 text-muted">
-            这只会移除目录中的条目，不会删除游戏。
+            {t("catalog.items.removeHint")}
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
               <Button type="button" variant="outline">
-                取消
+                {t("relation.edit.cancel")}
               </Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
@@ -285,7 +283,7 @@ export function CatalogItemsSection({
                 type="button"
                 variant="destructive"
               >
-                确认移除
+                {t("favorite.confirmRemove")}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -304,12 +302,12 @@ export function CatalogItemsSection({
               addButtonRef.current?.focus();
             }}
           >
-            <Dialog.Title>添加游戏</Dialog.Title>
+            <Dialog.Title>{t("catalog.items.add")}</Dialog.Title>
             <Dialog.Description
               className="sr-only"
               id="catalog-add-game-description"
             >
-              搜索并以默认排序值 0 将一部作品加入目录。
+              {t("catalog.items.addHint")}
             </Dialog.Description>
             <form
               className="flex gap-2 max-sm:flex-col"
@@ -319,9 +317,9 @@ export function CatalogItemsSection({
               }}
             >
               <Input
-                aria-label="查找游戏"
+                aria-label={t("catalog.items.find")}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="输入游戏标题"
+                placeholder={t("catalog.items.query")}
                 value={query}
               />
               <Button
@@ -329,13 +327,13 @@ export function CatalogItemsSection({
                 type="submit"
                 variant="outline"
               >
-                {searching ? "正在查找…" : "查找"}
+                {searching ? t("relation.edit.searching") : t("catalog.items.search")}
               </Button>
             </form>
             <div className="min-h-0 overflow-y-auto">
               {candidates.length ? (
                 <ol
-                  aria-label="查找结果"
+                  aria-label={t("catalog.items.results")}
                   className="divide-y divide-border border-t border-border"
                 >
                   {candidates.map((candidate, index) => (
@@ -361,27 +359,27 @@ export function CatalogItemsSection({
                           type="button"
                           variant="outline"
                         >
-                          添加
+                          {t("catalog.items.addCandidate")}
                         </Button>
                       }
                     />
                   ))}
                 </ol>
               ) : null}
-              {addMessage?.kind === "empty" ? (
+              {addMessage === "empty" ? (
                 <EmptyState
-                  title={addMessage.text}
+                  title={t("catalog.items.cannotFind")}
                   variant="plain"
                   role="status"
                 />
               ) : addMessage ? (
-                <Notice>{addMessage.text}</Notice>
+                <Notice>{t("relation.edit.network")}</Notice>
               ) : null}
             </div>
             <div className="flex justify-end border-t border-border pt-4">
               <Dialog.Close asChild>
                 <Button disabled={adding} type="button" variant="outline">
-                  取消
+                  {t("relation.edit.cancel")}
                 </Button>
               </Dialog.Close>
             </div>
@@ -407,26 +405,26 @@ export function CatalogItemsSection({
                 editReturnFocusRef.current.focus();
             }}
           >
-            <Dialog.Title>编辑条目</Dialog.Title>
+            <Dialog.Title>{t("catalog.items.edit")}</Dialog.Title>
             <Dialog.Description
               className="sr-only"
               id="catalog-item-edit-description"
             >
-              修改所选游戏在目录中的备注和排序值。
+              {t("catalog.items.editHint")}
             </Dialog.Description>
             {selectedItem ? (
               <>
                 <strong>{selectedItem.title}</strong>
-                <FormField controlId="catalog-item-note" label="目录备注">
+                <FormField controlId="catalog-item-note" label={t("catalog.items.note")}>
                   <Textarea
                     id="catalog-item-note"
                     onChange={(event) => setNote(event.target.value)}
-                    placeholder="可选备注"
+                    placeholder={t("catalog.items.notePlaceholder")}
                     rows={4}
                     value={note}
                   />
                 </FormField>
-                <FormField controlId="catalog-item-sort-order" label="排序值">
+                <FormField controlId="catalog-item-sort-order" label={t("catalog.items.sort")}>
                   <Input
                     id="catalog-item-sort-order"
                     inputMode="numeric"
@@ -441,11 +439,11 @@ export function CatalogItemsSection({
                 </FormField>
               </>
             ) : null}
-            {editMessage ? <Notice>{editMessage}</Notice> : null}
+            {invalidSortOrder ? <Notice>{t("catalog.items.sortInvalid")}</Notice> : null}
             <div className="flex justify-end gap-2 border-t border-border pt-4">
               <Dialog.Close asChild>
                 <Button disabled={saving} type="button" variant="outline">
-                  取消
+                  {t("relation.edit.cancel")}
                 </Button>
               </Dialog.Close>
               <Button
@@ -453,7 +451,7 @@ export function CatalogItemsSection({
                 onClick={() => void saveSelectedItem()}
                 type="button"
               >
-                {saving ? "正在保存…" : "保存条目"}
+                {saving ? t("forum.editor.saving") : t("catalog.items.save")}
               </Button>
             </div>
           </Dialog.Content>
@@ -478,6 +476,7 @@ function CatalogItemActions({
   onRemove: (returnFocus: HTMLElement) => void;
   removing: boolean;
 }) {
+  const t = useMessages();
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const menuItemClass =
     "flex min-h-9 w-full cursor-pointer data-[disabled]:cursor-not-allowed items-center rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15 data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
@@ -489,7 +488,7 @@ function CatalogItemActions({
           aria-controls="catalog-edit-item-dialog"
           aria-expanded={editing}
           aria-haspopup="dialog"
-          aria-label={`编辑条目：${item.title}`}
+          aria-label={t("catalog.items.editNamed", { title: item.title })}
           className="h-7 min-h-7 rounded-none px-2.5 text-xs shadow-none focus-visible:ring-inset focus-visible:ring-offset-0"
           disabled={disabled}
           onClick={(event) => onEdit(event.currentTarget)}
@@ -497,13 +496,13 @@ function CatalogItemActions({
           type="button"
           variant="ghost"
         >
-          编辑
+          {t("core.action.edit")}
         </Button>
         <Button
           aria-controls="catalog-remove-item-dialog"
           aria-expanded={removing}
           aria-haspopup="dialog"
-          aria-label={`从目录移除：${item.title}`}
+          aria-label={t("catalog.items.removeNamed", { title: item.title })}
           className="h-7 min-h-7 rounded-none px-2.5 text-xs text-destructive shadow-none hover:text-destructive focus-visible:ring-inset focus-visible:ring-offset-0"
           disabled={disabled}
           onClick={(event) => onRemove(event.currentTarget)}
@@ -511,14 +510,14 @@ function CatalogItemActions({
           type="button"
           variant="ghost"
         >
-          移除
+          {t("core.action.remove")}
         </Button>
       </div>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button
             ref={menuTriggerRef}
-            aria-label={`管理条目：${item.title}`}
+            aria-label={t("catalog.items.manageNamed", { title: item.title })}
             className="size-8 rounded-full sm:hidden"
             disabled={disabled}
             size="icon"
@@ -542,7 +541,7 @@ function CatalogItemActions({
                 if (menuTriggerRef.current) onEdit(menuTriggerRef.current);
               }}
             >
-              编辑条目
+              {t("catalog.items.edit")}
             </DropdownMenu.Item>
             <DropdownMenu.Item
               aria-controls="catalog-remove-item-dialog"
@@ -553,7 +552,7 @@ function CatalogItemActions({
                 if (menuTriggerRef.current) onRemove(menuTriggerRef.current);
               }}
             >
-              移除
+              {t("core.action.remove")}
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>

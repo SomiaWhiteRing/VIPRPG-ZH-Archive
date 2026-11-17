@@ -1,4 +1,5 @@
 import { ClientOnly } from "@/app/components/ui/client-only";
+import { useMessages } from "@/lib/i18n/react";
 import type { ComponentProps } from "react";
 import { lazy } from "react";
 import type LightboxComponent from "yet-another-react-lightbox";
@@ -29,6 +30,7 @@ export function ImageLightbox({
 > & {
   pixelated?: boolean;
 }) {
+  const t = useMessages();
   return (
     <ClientOnly>
       <Lightbox
@@ -43,16 +45,16 @@ export function ImageLightbox({
           pixelated ? { slide: { imageRendering: "pixelated" } } : {}
         }
         labels={{
-          Lightbox: "图片查看器",
-          "Photo gallery": "图片集",
-          Carousel: "图片轮播",
-          Slide: "图片",
-          "{index} of {total}": "第 {index} 张，共 {total} 张",
-          Close: "关闭看图",
-          Next: "下一张",
-          Previous: "上一张",
-          "Zoom in": "放大",
-          "Zoom out": "缩小",
+          Lightbox: t("lightbox.label"),
+          "Photo gallery": t("lightbox.gallery"),
+          Carousel: t("lightbox.carousel"),
+          Slide: t("lightbox.slide"),
+          "{index} of {total}": t("lightbox.position", { index: "{index}", total: "{total}" }),
+          Close: t("lightbox.close"),
+          Next: t("lightbox.next"),
+          Previous: t("lightbox.previous"),
+          "Zoom in": t("lightbox.zoomIn"),
+          "Zoom out": t("lightbox.zoomOut"),
           ...labels,
         }}
       />

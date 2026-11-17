@@ -46,17 +46,17 @@ export type WorkStaffCreditInput = {
 
 export function parseCreatorSelection(value: unknown): CreatorSelection {
   if (!isRecord(value)) {
-    throw new HttpError(400, "制作人员选择格式不合法，请重新选择后再提交。");
+    throw new HttpError(400, "制作人员选择格式不合法，请重新选择后再提交。", undefined, "upload.staff.error.selectionFormat");
   }
   const name = normalizeEntityName(stringValue(value.name));
   const displayName = normalizeEntityName(stringValue(value.displayName));
   if (!name || !displayName) {
-    throw new HttpError(400, "制作人员名称和本作署名不能为空。");
+    throw new HttpError(400, "制作人员名称和本作署名不能为空。", undefined, "upload.staff.error.nameRequired");
   }
   if (value.kind === "existing") {
     const creatorId = Number(value.creatorId);
     if (!Number.isSafeInteger(creatorId) || creatorId <= 0) {
-      throw new HttpError(400, "制作人员身份不合法，请重新选择后再提交。");
+      throw new HttpError(400, "制作人员身份不合法，请重新选择后再提交。", undefined, "upload.staff.error.identity");
     }
     return { kind: "existing", creatorId, name, displayName };
   }
@@ -66,7 +66,7 @@ export function parseCreatorSelection(value: unknown): CreatorSelection {
       (!Number.isSafeInteger(value.sourceUserId) ||
         Number(value.sourceUserId) <= 0)
     ) {
-      throw new HttpError(400, "制作人员预填来源不合法。");
+      throw new HttpError(400, "制作人员预填来源不合法。", undefined, "upload.staff.error.prefillSource");
     }
     return {
       kind: "new",
@@ -77,7 +77,7 @@ export function parseCreatorSelection(value: unknown): CreatorSelection {
         : {}),
     };
   }
-  throw new HttpError(400, "制作人员选择类型不合法，请重新选择后再提交。");
+  throw new HttpError(400, "制作人员选择类型不合法，请重新选择后再提交。", undefined, "upload.staff.error.selectionType");
 }
 
 export function parseCreatorSelectionJson(
@@ -88,21 +88,21 @@ export function parseCreatorSelectionJson(
     return parseCreatorSelection(JSON.parse(value));
   } catch (error) {
     if (error instanceof HttpError) throw error;
-    throw new HttpError(400, "制作人员选择无法读取，请重新选择后再提交。");
+    throw new HttpError(400, "制作人员选择无法读取，请重新选择后再提交。", undefined, "upload.staff.error.selectionUnreadable");
   }
 }
 
 export function parseTranslatorSelectionsJson(
   value: FormDataEntryValue | null,
 ): CreatorSelection[] {
-  if (typeof value !== "string") throw new HttpError(400, "缺少译者资料。");
+  if (typeof value !== "string") throw new HttpError(400, "缺少译者资料。", undefined, "upload.staff.error.translatorsRequired");
   let items: unknown;
   try {
     items = JSON.parse(value);
   } catch {
-    throw new HttpError(400, "译者资料无法读取。");
+    throw new HttpError(400, "译者资料无法读取。", undefined, "upload.staff.error.translatorsUnreadable");
   }
-  if (!Array.isArray(items)) throw new HttpError(400, "译者资料必须为列表。");
+  if (!Array.isArray(items)) throw new HttpError(400, "译者资料必须为列表。", undefined, "upload.staff.error.translatorsList");
   return items.map(parseCreatorSelection);
 }
 
@@ -111,22 +111,22 @@ export function parseExtraStaffJson(
 ): WorkStaffCreditInput[] {
   const credits = parseWorkStaffJson(value);
   if (credits.some((credit) => !isExtraStaffRole(credit.roleKey)))
-    throw new HttpError(400, "其他制作人员职务不合法。");
+    throw new HttpError(400, "其他制作人员职务不合法。", undefined, "upload.staff.error.extraRole");
   return credits;
 }
 
 export function parseWorkStaffJson(
   value: FormDataEntryValue | null,
 ): WorkStaffCreditInput[] {
-  if (typeof value !== "string") throw new HttpError(400, "缺少制作人员资料。");
+  if (typeof value !== "string") throw new HttpError(400, "缺少制作人员资料。", undefined, "upload.staff.error.staffRequired");
   let items: unknown;
   try {
     items = JSON.parse(value);
   } catch {
-    throw new HttpError(400, "制作人员资料无法读取。");
+    throw new HttpError(400, "制作人员资料无法读取。", undefined, "upload.staff.error.staffUnreadable");
   }
   if (!Array.isArray(items))
-    throw new HttpError(400, "制作人员资料必须为列表。");
+    throw new HttpError(400, "制作人员资料必须为列表。", undefined, "upload.staff.error.staffList");
   return items.map((item: unknown) => {
     if (
       !isRecord(item) ||
@@ -138,12 +138,12 @@ export function parseWorkStaffJson(
       (item.roleLabel !== null && typeof item.roleLabel !== "string") ||
       (item.notes !== null && typeof item.notes !== "string")
     ) {
-      throw new HttpError(400, "制作人员职务格式不合法。");
+      throw new HttpError(400, "制作人员职务格式不合法。", undefined, "upload.staff.error.roleFormat");
     }
     const roleLabel =
       typeof item.roleLabel === "string" ? item.roleLabel.trim() || null : null;
     if (item.roleKey === "other" && !roleLabel)
-      throw new HttpError(400, "请填写其他职务的名称。");
+      throw new HttpError(400, "请填写其他职务的名称。", undefined, "upload.staff.error.customRoleRequired");
     return {
       selection: parseCreatorSelection(item.selection),
       roleKey: item.roleKey,
@@ -220,6 +220,8 @@ export async function prepareWorkStaffStatements(input: {
       409,
       `制作人员 #${missingId} 已不存在，请刷新页面并重新选择。`,
       "creator_selection_stale",
+      "upload.staff.error.staleSelection",
+      { id: missingId },
     );
   }
 
@@ -240,7 +242,7 @@ export async function prepareWorkStaffStatements(input: {
     const identity = creatorSelectionKey(credit.selection);
     const key = `${identity}:${credit.roleKey}`;
     if (seen.has(key))
-      throw new HttpError(400, "已有这条署名，请移除重复的制作人员职务。");
+      throw new HttpError(400, "已有这条署名，请移除重复的制作人员职务。", undefined, "upload.staff.error.duplicateRole");
     seen.add(key);
     const { selection } = credit;
     if (selection.kind === "existing") {

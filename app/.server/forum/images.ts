@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 import type { ForumRuntime } from "./runtime";
 
 import { FORUM_IMAGE_COUNT } from "@/lib/forum";
@@ -8,7 +10,7 @@ import { FORUM_ELEMENT_PATTERN } from "@/lib/forum-elements";
 export const imageColumns =
   "id,('/api/discussions/images/' || id) AS url,('/api/discussions/images/' || id) AS thumb,width,height,size,format,body_offset AS offset";
 export const imageJsonSql = `(SELECT COALESCE(json_group_array(json_object('id',id,'url',url,'thumb',thumb,'width',width,'height',height,'size',size,'format',format,'offset',offset)),'[]') FROM (SELECT ${imageColumns} FROM forum_images WHERE post_id=p.id AND status='ready' ORDER BY position))`;
-export function imageIds(value: unknown, comment = false): string[] {
+export function imageIds(value: unknown, comment = false, locale: UiLocale = DEFAULT_UI_LOCALE): string[] {
   if (value === undefined) return [];
   if (
     !Array.isArray(value) ||
@@ -21,7 +23,7 @@ export function imageIds(value: unknown, comment = false): string[] {
   )
     throw new HttpError(
       400,
-      comment ? "楼内回复不支持图片。" : "图片列表无效。",
+      comment ? translate(locale, "forum.write.commentImages") : translate(locale, "forum.write.imageList"),
     );
   return value;
 }

@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { Hono } from "hono";
 import { requireAnyPermission, requirePermission } from "@/app/.server/auth/authorize";
 import { assertSameOrigin, SameOriginError } from "@/app/.server/auth/origin";
@@ -13,10 +14,11 @@ import type { EmojiCharacter } from "@/lib/face-emojis";
 
 export const seaApi = new Hono<{ Bindings: CloudflareEnv; Variables: { runtime: AppRuntime } }>();
 seaApi.get("/api/sea/portraits", async c => {
-  const { DB } = c.get("runtime").env;
+  const runtime = c.get("runtime");
+  const { DB } = runtime.env;
   const params = new URL(c.req.url).searchParams;
   const offset = Number(params.get("offset") ?? 0);
-  if (!Number.isSafeInteger(offset) || offset < 0) throw new HttpError(400, "分页位置无效");
+  if (!Number.isSafeInteger(offset) || offset < 0) throw new HttpError(400, translate(runtime.uiLocale, "messages.error.cursor"));
   switch (params.get("op")) {
     case "categories":
       return json({ items: await readCharacterPickerCategories(DB, true) });
@@ -27,7 +29,7 @@ seaApi.get("/api/sea/portraits", async c => {
       const row = Number(params.get("row") ?? -1);
       const column = Number(params.get("column") ?? -1);
       if (!Number.isSafeInteger(row) || row < 0 || !Number.isSafeInteger(column) || column < 0)
-        throw new HttpError(400, "头像选择无效");
+        throw new HttpError(400, translate(runtime.uiLocale, "sea.avatar.invalid"));
       const character = await DB.prepare(`SELECT ch.id,ch.primary_name AS name,ch.original_name AS originalName
         FROM character_face_sheet_bindings binding
         JOIN characters ch ON ch.id=binding.character_id
@@ -44,7 +46,7 @@ seaApi.get("/api/sea/portraits", async c => {
     case "sheets":
       return json(await readShowcasePortraitSheets(DB, parsePositiveId(params.get("characterId") ?? "", "角色"), offset));
     default:
-      throw new HttpError(400, "头像查询无效");
+      throw new HttpError(400, translate(runtime.uiLocale, "sea.avatar.query"));
   }
 });
 seaApi.get("/api/sea/fonts/:id", async c => {
@@ -61,7 +63,7 @@ seaApi.post("/api/sea/messages", async c => {
     throw error;
   }
   const { actor, cookie } = await prepareSeaActor(runtime);
-  const input = await seaSubmission(await readJsonObject(c.req.raw, "发言格式无效", { maximumBytes: 4096, requireJsonContentType: true, fatalUtf8: true }), actor, runtime.env.DB);
+  const input = await seaSubmission(await readJsonObject(c.req.raw, translate(runtime.uiLocale, "sea.payload"), { maximumBytes: 4096, requireJsonContentType: true, fatalUtf8: true }), actor, runtime.env.DB, runtime.uiLocale);
   const result = await seaRoom(runtime).publish(actor, input);
   if (!result.ok) throw new HttpError(result.status, result.detail, result.code);
   return json(result, { status: result.repeated ? 200 : 201, headers: cookie ? { "Set-Cookie": cookie } : undefined });
@@ -69,7 +71,7 @@ seaApi.post("/api/sea/messages", async c => {
 seaApi.get("/api/sea/socket", async c => {
   const runtime = c.get("runtime");
   // assertSameOrigin skips GET; WebSocket handshakes need an explicit Origin check.
-  if (c.req.header("Origin") !== runtime.origin) throw new HttpError(403, "连接来源无效");
+  if (c.req.header("Origin") !== runtime.origin) throw new HttpError(403, translate(runtime.uiLocale, "messages.error.origin"));
   const headers = new Headers(c.req.raw.headers);
   headers.set("X-Sea-IP", await seaIpKey(runtime));
   return seaRoom(runtime).fetch(new Request(c.req.url, { headers }));
@@ -78,27 +80,27 @@ seaApi.get("/api/sea/moderation", async c => {
   const runtime = c.get("runtime");
   const auth = await requireAnyPermission(runtime, c.req.raw, ["sea.message.moderate_any", "sea.user.mute_any"]);
   if ("response" in auth) return auth.response;
-  const page = parsePositiveId(c.req.query("page") ?? "1", "page", "页码无效");
+  const page = parsePositiveId(c.req.query("page") ?? "1", "page", translate(runtime.uiLocale, "admin.sea.page"));
   return json({ ok: true, ...await seaRoom(runtime).moderation(page) });
 });
 seaApi.delete("/api/sea/messages/:id", async c => {
   const runtime = c.get("runtime");
   const auth = await requirePermission(runtime, c.req.raw, "sea.message.moderate_any");
   if ("response" in auth) return auth.response;
-  if (!await seaRoom(runtime).hide(parsePositiveId(c.req.param("id")), auth.user.id)) throw new HttpError(404, "对话不存在");
+  if (!await seaRoom(runtime).hide(parsePositiveId(c.req.param("id")), auth.user.id)) throw new HttpError(404, translate(runtime.uiLocale, "admin.sea.missing"));
   return json({ ok: true });
 });
 seaApi.put("/api/sea/mutes", async c => {
   const runtime = c.get("runtime");
   const auth = await requirePermission(runtime, c.req.raw, "sea.user.mute_any");
   if ("response" in auth) return auth.response;
-  const body = await readJsonObject(c.req.raw, "禁言格式无效", { maximumBytes: 4096, requireJsonContentType: true });
+  const body = await readJsonObject(c.req.raw, translate(runtime.uiLocale, "admin.sea.payload"), { maximumBytes: 4096, requireJsonContentType: true });
   const scope = body.scope ?? "identity";
   const reason = typeof body.reason === "string" ? body.reason.trim() : "";
   if (typeof body.messageId !== "number" || !Number.isSafeInteger(body.messageId) || body.messageId <= 0
     || (body.minutes !== null && (typeof body.minutes !== "number" || !Number.isInteger(body.minutes) || body.minutes < 0 || body.minutes > 5256000))
     || (scope !== "identity" && scope !== "ip") || (body.reason !== undefined && typeof body.reason !== "string") || reason.length > 1000)
-    throw new HttpError(400, "禁言参数无效");
-  if (!await seaRoom(runtime).mute(body.messageId, body.minutes as number | null, auth.user.id, scope, reason)) throw new HttpError(404, "对话不存在或没有可用的来源记录");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.sea.params"));
+  if (!await seaRoom(runtime).mute(body.messageId, body.minutes as number | null, auth.user.id, scope, reason)) throw new HttpError(404, translate(runtime.uiLocale, "admin.sea.missingSource"));
   return json({ ok: true });
 });

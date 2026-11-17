@@ -5,12 +5,16 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { Label } from "@/app/components/ui/label";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useToast } from "@/app/components/ui/toast";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { formatBytes, formatDate } from "@/lib/format";
 import type { LocalLibraryWork } from "@/app/play/[workId]/web-play-db";
 import { acquireGameSaveTransferLock } from "@/app/play/[workId]/web-play-locks";
 import { WebPlaySaveExport } from "@/app/play/[workId]/web-play-save-export";
 import { deleteSaveFiles, readSaveFiles, type SaveFile } from "@/app/play/[workId]/web-play-save-transfer";
 export function SaveManager({ work, onChanged }: { work: LocalLibraryWork; onChanged: () => void }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [files, setFiles] = useState<SaveFile[]>([]);
   const [selected, setSelected] = useState(new Set<string>());
   const [loading, setLoading] = useState(true);
@@ -24,14 +28,15 @@ export function SaveManager({ work, onChanged }: { work: LocalLibraryWork; onCha
       setFiles(await readSaveFiles(work.workId));
       setSelected(new Set());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "读取本地存档失败，请检查浏览器存储权限后重试。");
+      toast.error(formatFeedbackError(error, locale, t("play.save.localRead")));
     } finally { setLoading(false); }
-  }, [work.workId, toast]);
+  }, [work.workId, locale, t, toast]);
   useEffect(() => {
     void refresh();
     window.addEventListener("focus", refresh);
-    return () => { operation.current?.abort(); window.removeEventListener("focus", refresh); };
+    return () => window.removeEventListener("focus", refresh);
   }, [refresh]);
+  useEffect(() => () => operation.current?.abort(), [work.workId]);
 
   async function remove() {
     if (operation.current || busy || !selected.size) return;
@@ -42,8 +47,8 @@ export function SaveManager({ work, onChanged }: { work: LocalLibraryWork; onCha
       const refreshLocks = await acquireGameSaveTransferLock(work.workId, work.playKey, controller.signal);
       const chosen = (await readSaveFiles(work.workId)).filter(file => selected.has(file.name));
       if (!chosen.length) return;
-      const removed = await confirm(chosen.map(file => file.name).join("、"), {
-        title: `删除「${work.title}」的 ${chosen.length} 个存档？`, confirmLabel: "删除", destructive: true,
+      const removed = await confirm(new Intl.ListFormat(locale).format(chosen.map(file => file.name)), {
+        title: t("installed.game.deleteSaves", { title: work.title, count: chosen.length }), confirmLabel: t("play.screenshot.deleteAction"), destructive: true,
         action: async () => {
           await refreshLocks();
           await deleteSaveFiles(work.workId, chosen, controller.signal);
@@ -51,7 +56,7 @@ export function SaveManager({ work, onChanged }: { work: LocalLibraryWork; onCha
       });
       if (removed) { await refresh(); onChanged(); }
     } catch (error) {
-      if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : "操作失败，请重试。");
+      if (!controller.signal.aborted) toast.error(formatFeedbackError(error, locale, t("installed.game.saveActionFailed")));
     } finally {
       controller.abort();
       operation.current = null;
@@ -61,29 +66,29 @@ export function SaveManager({ work, onChanged }: { work: LocalLibraryWork; onCha
 
   return <div className="min-w-0">
     <div className="mb-4 flex flex-wrap items-center gap-2">
-      <fieldset disabled={deleting} className="contents" aria-label="存档导入导出">
+      <fieldset disabled={deleting} className="contents" aria-label={t("installed.game.transferSaves")}>
         <WebPlaySaveExport workId={work.workId} playKey={work.playKey} title={work.title} active playerBusy={false}
           onChanged={() => { void refresh(); onChanged(); }} onBusyChange={setTransferBusy}
           exportNames={selected.size ? [...selected] : undefined} />
       </fieldset>
-      <Button type="button" size="sm" variant="ghost" disabled={busy || !selected.size} onClick={() => void remove()}>删除所选</Button>
+      <Button type="button" size="sm" variant="ghost" disabled={busy || !selected.size} onClick={() => void remove()}>{t("installed.game.deleteSelected")}</Button>
     </div>
-    {loading ? <p className="py-6 text-sm text-muted" role="status">读取本地游戏…</p> : files.length ? <>
+    {loading ? <p className="py-6 text-sm text-muted" role="status">{t("installed.game.loadingSaves")}</p> : files.length ? <>
       <Label className="mb-2 flex min-h-9 items-center gap-2 text-sm">
-        <Checkbox aria-label="全选存档" disabled={busy} checked={selected.size === files.length ? true : selected.size ? "indeterminate" : false}
-          onCheckedChange={checked => setSelected(checked === true ? new Set(files.map(file => file.name)) : new Set())} />全选
+        <Checkbox aria-label={t("installed.game.selectAllSaves")} disabled={busy} checked={selected.size === files.length ? true : selected.size ? "indeterminate" : false}
+          onCheckedChange={checked => setSelected(checked === true ? new Set(files.map(file => file.name)) : new Set())} />{t("installed.screenshot.selectAll")}
       </Label>
       <ul className="divide-y divide-border border-y border-border">
         {files.map(file => <li key={file.name} className="flex items-center gap-3 py-3">
-          <Checkbox aria-label={`选择 ${file.name}`} disabled={busy} checked={selected.has(file.name)}
+          <Checkbox aria-label={t("installed.game.selectSave", { name: file.name })} disabled={busy} checked={selected.has(file.name)}
             onCheckedChange={checked => setSelected(current => { const next = new Set(current); if (checked === true) next.add(file.name); else next.delete(file.name); return next; })} />
           <div className="min-w-0 flex-1">
             <span className="font-mono text-sm wrap-anywhere">{file.name}</span>
-            {file.timestamp ? <p className="mt-1 text-xs text-muted">{formatDate(file.timestamp.toISOString())}</p> : null}
+            {file.timestamp ? <p className="mt-1 text-xs text-muted">{formatDate(file.timestamp.toISOString(), { locale })}</p> : null}
           </div>
           <span className="shrink-0 font-mono text-xs text-muted">{formatBytes(file.bytes.byteLength)}</span>
         </li>)}
       </ul>
-    </> : <EmptyState title="没有本地存档。" variant="plain" />}
+    </> : <EmptyState title={t("installed.game.emptySaves")} variant="plain" />}
   </div>;
 }

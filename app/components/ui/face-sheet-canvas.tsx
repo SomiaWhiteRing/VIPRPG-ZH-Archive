@@ -1,4 +1,5 @@
 import { cn } from "@/lib/ui/cn";
+import { useMessages } from "@/lib/i18n/react";
 import type { DragEvent, ReactElement } from "react";
 
 const GRID_COLUMNS = [
@@ -61,6 +62,7 @@ export function FaceSheetCanvas({
   src?: string;
   width: number;
 }) {
+  const t = useMessages();
   const rows = height / 48;
   const columns = width / 48;
 
@@ -98,9 +100,10 @@ export function FaceSheetCanvas({
           const selected =
             selectedCell?.row === row && selectedCell.column === column;
           const state = cellState?.(row, column);
+          const position = t("upload.portrait.coords", { row: row + 1, column: column + 1 });
           const button = (
             <button
-              aria-label={`第 ${row + 1} 行，第 ${column + 1} 列${state?.collected ? "，已添加" : ""}`}
+              aria-label={state?.collected ? t("upload.faces.collectedCell", { position }) : position}
               aria-pressed={selected || !!state?.selected}
               disabled={disabled || state?.disabled}
               draggable={!!onDragCell && !disabled && !state?.disabled}

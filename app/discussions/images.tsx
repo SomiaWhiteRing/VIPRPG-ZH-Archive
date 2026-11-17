@@ -1,3 +1,6 @@
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, UI_LOCALE_PARAM, type UiLocale } from "@/lib/i18n/locale";
+import { useMessages } from "@/lib/i18n/react";
 import { requestJson } from "@/lib/ui/api-response";
 
 import { Button } from "@/app/components/ui/button";
@@ -38,16 +41,17 @@ export function draftImageFromFile(file: File): DraftImage {
     size: file.size,
   };
 }
-export async function cloneDraftImage(file: File) {
-  inspectForumImage(await file.arrayBuffer());
+export async function cloneDraftImage(file: File, locale: UiLocale = DEFAULT_UI_LOCALE) {
+  inspectForumImage(await file.arrayBuffer(), FORUM_IMAGE_BYTES, locale);
   return draftImageFromFile(file);
 }
 export async function selectDraftImages(
   files: File[],
   process: (file: File) => Promise<File>,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ) {
   if (files.some((file) => !file.size || file.size > FORUM_IMAGE_BYTES))
-    throw new Error("每张图片必须非空且不能超过 2 MiB。");
+    throw new Error(translate(locale, "image.size"));
   const processed: File[] = [];
   for (const file of files) processed.push(await process(file));
   return processed.map(draftImageFromFile);
@@ -56,15 +60,17 @@ export async function uploadDraftImages(
   images: DraftImage[],
   context: { mode: string; topicId?: number; targetId?: number },
   update: (images: DraftImage[], progress: string) => void,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ) {
   const next = images.map((image) => ({ ...image }));
   for (let i = 0; i < next.length; i++) {
     const image = next[i];
     if (image.uploaded) continue;
     image.error = undefined;
-    update([...next], `上传图片 ${i + 1}/${next.length}`);
+    const progress = translate(locale, "image.uploadIndex", { index: i + 1, total: next.length });
+    update([...next], progress);
     try {
-      if (!image.file) throw new Error("本地图片不可用，请重新选择。");
+      if (!image.file) throw new Error(translate(locale, "forum.image.localMissing"));
       const form = new FormData();
       form.set("image", image.file);
       form.set("clientId", image.key);
@@ -72,10 +78,10 @@ export async function uploadDraftImages(
       if (context.topicId) form.set("topicId", String(context.topicId));
       if (context.targetId) form.set("targetId", String(context.targetId));
 
-      const result = (await requestJson("/api/discussions/images", {
+      const result = (await requestJson(`/api/discussions/images?${UI_LOCALE_PARAM}=${locale}`, {
         method: "POST",
         body: form,
-      })) as {
+      }, translate(locale, "image.uploadFailed"))) as {
         ok?: boolean;
         image: ForumImage;
         detail?: string;
@@ -84,12 +90,12 @@ export async function uploadDraftImages(
       };
 
       image.uploaded = result.image;
-      update([...next], `上传图片 ${i + 1}/${next.length}`);
+      update([...next], progress);
     } catch (error) {
       image.error =
         error instanceof Error
           ? error.message
-          : "上传未完成，重试将查询同一上传标识。";
+          : translate(locale, "forum.image.retryId");
       update([...next], "");
       throw error;
     }
@@ -110,6 +116,7 @@ export function ForumImages({
   interactiveElements?: boolean;
   diceKey?: string;
 }) {
+  const t = useMessages();
   const [active, setActive] = useState(-1);
   return (
     <>
@@ -126,12 +133,12 @@ export function ForumImages({
                 type="button"
                 variant="ghost"
                 className="h-auto max-w-full rounded-sm p-0"
-                aria-label={`查看图片 ${index + 1}`}
+                aria-label={t("image.view", { index: index + 1, total: images.length, remaining: 0 })}
                 onClick={() => setActive(index)}
               >
                 <img
                   src={image.url}
-                  alt={`图片 ${index + 1}`}
+                  alt={t("image.bodyIndex", { index: index + 1 })}
                   width={image.width}
                   height={image.height}
                   loading="lazy"

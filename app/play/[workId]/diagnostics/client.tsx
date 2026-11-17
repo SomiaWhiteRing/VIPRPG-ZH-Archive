@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
@@ -14,7 +15,7 @@ let head: TraceEvent[] = [];
 let chunks: Chunk[] = [];
 let retainedEvents = 0, characters = 0, droppedEvents = 0, activeWorkers = 0;
 let pageSequence = 0;
-const emptySnapshot = { events: 0, dropped: 0, active: 0, last: "尚未开始安装", lastWorker: 0 };
+const emptySnapshot = { events: 0, dropped: 0, active: 0, last: "", lastWorker: 0 };
 let snapshot = emptySnapshot;
 let lastWorker = 0;
 let lastWorkerSnapshot: TraceEvent | null = null;
@@ -138,6 +139,7 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function InstallDiagnosticsPanel() {
+  const t = useMessages();
   const state = useSyncExternalStore(subscribe, () => snapshot, () => emptySnapshot);
   const [text, setText] = useState("");
   const [notice, setNotice] = useState("");
@@ -151,35 +153,35 @@ export function InstallDiagnosticsPanel() {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 30000);
-    setNotice("已发起导出；若当前应用未弹出保存，请使用复制日志或展开文本。");
+    setNotice(t("play.trace.exported"));
   };
   const copy = async () => {
     const contents = exportedLog();
     try {
       await navigator.clipboard.writeText(contents);
-      setNotice("完整诊断日志已复制。");
+      setNotice(t("play.trace.copied"));
     } catch (error) {
       setText(contents);
-      setNotice(`自动复制失败，请在下方文本框全选复制。${errorFields(error).message}`);
+      setNotice(t("play.trace.copyFailed", { error: String(errorFields(error).message ?? "") }));
     }
   };
   return (
     <details className="mt-4 rounded border border-border p-3 text-sm">
-      <summary className="cursor-pointer font-semibold">详细安装诊断（临时）</summary>
-      <p className="my-2">已记录 {state.events.toLocaleString()} 条；容量限制淘汰 {state.dropped.toLocaleString()} 条。最近事件：{state.last}</p>
-      <p className="my-2 text-muted-foreground">日志保存在本页内存，刷新会丢失。卡住时也可导出；不会自动上传。</p>
+      <summary className="cursor-pointer font-semibold">{t("play.trace.title")}</summary>
+      <p className="my-2">{t("play.trace.counts", { events: state.events, dropped: state.dropped, last: state.last || t("play.trace.idle") })}</p>
+      <p className="my-2 text-muted-foreground">{t("play.trace.retention")}</p>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={download}>导出 JSON</Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => void copy()}>复制日志</Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => setText(text ? "" : exportedLog())}>{text ? "收起文本" : "展开文本"}</Button>
+        <Button type="button" size="sm" variant="outline" onClick={download}>{t("play.trace.export")}</Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void copy()}>{t("play.trace.copy")}</Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => setText(text ? "" : exportedLog())}>{text ? t("play.trace.hide") : t("play.trace.show")}</Button>
         <Button type="button" size="sm" variant="ghost" disabled={state.active > 0} onClick={() => {
           head = []; chunks = []; retainedEvents = 0; characters = 0; droppedEvents = 0;
           lastWorkerSnapshot = null; lastWorker = 0; snapshot = emptySnapshot;
           setText(""); setNotice(""); for (const listener of listeners) listener();
-        }}>清空记录</Button>
+        }}>{t("play.trace.clear")}</Button>
       </div>
       {notice ? <p role="status" className="mt-2">{notice}</p> : null}
-      {text ? <Label className="mt-2 block">诊断 JSON（只读，可全选复制）
+      {text ? <Label className="mt-2 block">{t("play.trace.json")}
         <Textarea className="mt-1 font-mono text-xs" readOnly rows={10} value={text} />
       </Label> : null}
     </details>

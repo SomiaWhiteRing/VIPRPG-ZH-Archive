@@ -9,6 +9,7 @@ import { TreeIndent } from "@/app/components/ui/tree-layout";
 import { Label } from "@/app/components/ui/label";
 import { Notice } from "@/app/components/ui/notice";
 import { resourceMediaDirectories } from "@/lib/archive/resource-cleanup";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { formatBytes } from "@/lib/format";
 import { normalizeFolderSource } from "./archive-source-picker";
 import type { BrowserUploadTaskSnapshot, UploadExtraCandidate, UploadSourceFile, UploadSourceKind } from "./upload-types";
@@ -22,6 +23,7 @@ export function ArchiveExtrasPicker({ task, candidates, sourceAvailable, onConfi
   onConfirm: (paths: string[]) => void;
   onReloadSource: (files: UploadSourceFile[], kind: UploadSourceKind) => void;
 }) {
+  const t = useMessages();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string> | null>(new Set());
@@ -30,11 +32,17 @@ export function ArchiveExtrasPicker({ task, candidates, sourceAvailable, onConfi
   const titleRef = useRef<HTMLHeadingElement>(null);
   const id = useId();
   const extras = task.extras ?? [];
+  const extrasError = task.extrasErrorMessage
+    ? t(task.extrasErrorMessage.key, task.extrasErrorMessage.values)
+    : task.extrasError;
+  const processingLabel = task.extrasProgress
+    ? t("upload.extras.processingProgress", { done: task.extrasProgress.completed, total: task.extrasProgress.total })
+    : t("upload.extras.processing");
   const tree = useMemo(() => {
     const children = new Map<string, FileNode>();
     const directories: string[] = [];
-    const unused: FileNode = { region: true, path: "\0unused-resources", name: "游戏中未引用的素材", size: 0, paths: [], children: new Map() };
-    const saves: FileNode = { region: true, path: "\0save-files", name: "存档文件", size: 0, paths: [], children: new Map() };
+    const unused: FileNode = { region: true, path: "\0unused-resources", name: t("upload.extras.unused"), size: 0, paths: [], children: new Map() };
+    const saves: FileNode = { region: true, path: "\0save-files", name: t("upload.extras.saves"), size: 0, paths: [], children: new Map() };
     const matching = candidates.filter(file => file.path.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
     for (const file of matching) {
       const parts = file.path.split("/");
@@ -66,7 +74,7 @@ export function ArchiveExtrasPicker({ task, candidates, sourceAvailable, onConfi
       directories.push(region.path);
     }
     return { children, directories, matching };
-  }, [candidates, query]);
+  }, [candidates, query, t]);
   const selectedFiles = candidates.filter(file => selected.has(file.path));
   function toggle(paths: string[], checked: boolean) {
     setSelected(current => {
@@ -94,35 +102,35 @@ export function ArchiveExtrasPicker({ task, candidates, sourceAvailable, onConfi
         setOpen(value);
       }}>
         <Dialog.Trigger asChild>
-          <Button type="button" size="sm" variant="outline" disabled={task.extrasBusy}><FilePlus2 aria-hidden />追加文件</Button>
+          <Button type="button" size="sm" variant="outline" disabled={task.extrasBusy}><FilePlus2 aria-hidden />{t("upload.extras.title")}</Button>
         </Dialog.Trigger>
         <Dialog.Portal>
           <Dialog.Overlay />
           <Dialog.Content aria-describedby={undefined} onOpenAutoFocus={event => { event.preventDefault(); titleRef.current?.focus(); }} className="left-1/2 top-1/2 flex h-[min(80dvh,42rem)] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg">
             <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-              <Dialog.Title ref={titleRef} tabIndex={-1} className="outline-none">追加文件</Dialog.Title>
+              <Dialog.Title ref={titleRef} tabIndex={-1} className="outline-none">{t("upload.extras.title")}</Dialog.Title>
               <InfoTooltip>
-                网站的上传器会自动清理游戏中未引用的素材、存档与无关文件。<br />
-                如果认为这些被排除的类目中存在需要被归档的内容，请在这个页面勾选以补充上传。
+                {t("upload.extras.helpCleanup")}<br />
+                {t("upload.extras.helpSelect")}
               </InfoTooltip>
-              <Dialog.Close asChild><Button type="button" variant="ghost" size="icon" className="ml-auto" aria-label="关闭追加文件" disabled={task.extrasBusy}><X aria-hidden /></Button></Dialog.Close>
+              <Dialog.Close asChild><Button type="button" variant="ghost" size="icon" className="ml-auto" aria-label={t("upload.extras.close")} disabled={task.extrasBusy}><X aria-hidden /></Button></Dialog.Close>
             </header>
             <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/5 px-4 py-2 text-sm">
               {task.sourceKind === "folder" ? <FolderOpen aria-hidden className="size-4 shrink-0 text-primary" /> : <FileArchive aria-hidden className="size-4 shrink-0 text-primary" />}
               <span className="min-w-0 flex-1 break-all leading-relaxed" title={task.sourceName}>{task.sourceName}</span>
-              <span className="shrink-0 text-xs text-muted">{tree.matching.length.toLocaleString("zh-CN")} 个文件</span>
+              <span className="shrink-0 text-xs text-muted">{t("upload.extras.count", { count: tree.matching.length })}</span>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-3">
               <div className="relative min-w-32 flex-1">
                 <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-                <Input type="search" aria-label="搜索追加文件" placeholder="搜索文件或路径" className="h-9 pl-9" value={query}
+                <Input type="search" aria-label={t("upload.extras.search")} placeholder={t("upload.extras.placeholder")} className="h-9 pl-9" value={query}
                   onChange={event => { setQuery(event.target.value); setExpanded(event.target.value.trim() ? null : new Set()); }} />
               </div>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setExpanded(new Set(tree.directories))}>全部展开</Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setExpanded(new Set())}>全部折叠</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setExpanded(new Set(tree.directories))}>{t("upload.extras.expandAll")}</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setExpanded(new Set())}>{t("upload.extras.collapseAll")}</Button>
               {!sourceAvailable ? <>
-                <Button type="button" size="sm" variant="outline" disabled={task.extrasBusy} onClick={() => sourceInput.current?.click()}>重新选择来源</Button>
-                <input ref={sourceInput} type="file" className="hidden" aria-label="原始游戏文件"
+                <Button type="button" size="sm" variant="outline" disabled={task.extrasBusy} onClick={() => sourceInput.current?.click()}>{t("upload.extras.reselect")}</Button>
+                <input ref={sourceInput} type="file" className="hidden" aria-label={t("upload.extras.source")}
                   {...(task.sourceKind === "folder" ? { webkitdirectory: "", multiple: true } : { accept: ".zip,.7z" })}
                   onChange={event => {
                     const files = Array.from(event.target.files ?? []);
@@ -135,27 +143,27 @@ export function ArchiveExtrasPicker({ task, candidates, sourceAvailable, onConfi
             </div>
             <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
               <div className="sticky top-0 z-10 flex min-h-10 items-center gap-2 border-b border-border bg-card px-4 text-xs text-muted">
-                <Checkbox id={`${id}-all`} aria-label="选择全部显示的文件" disabled={task.extrasBusy || !tree.matching.length}
+                <Checkbox id={`${id}-all`} aria-label={t("upload.extras.selectAll")} disabled={task.extrasBusy || !tree.matching.length}
                   checked={tree.matching.length > 0 && tree.matching.every(file => selected.has(file.path)) ? true : tree.matching.some(file => selected.has(file.path)) ? "indeterminate" : false}
                   onCheckedChange={checked => toggle(tree.matching.map(file => file.path), checked === true)} />
-                <span className="flex-1 pl-6">名称</span><span className="w-20 text-right">大小</span>
+                <span className="flex-1 pl-6">{t("upload.extras.name")}</span><span className="w-20 text-right">{t("upload.extras.size")}</span>
               </div>
-              {!tree.matching.length ? <p className="p-6 text-center text-sm text-muted">{query.trim() ? "没有匹配的文件。" : sourceAvailable ? "没有可追加的文件。" : "重新选择来源后可添加更多文件。"}</p> : null}
+              {!tree.matching.length ? <p className="p-6 text-center text-sm text-muted">{query.trim() ? t("upload.extras.noMatch") : sourceAvailable ? t("upload.extras.empty") : t("upload.extras.needsSource")}</p> : null}
               <FileTree nodes={tree.children} depth={0} id={id} selected={selected} expanded={expanded}
                 disabled={Boolean(task.extrasBusy)} onToggle={toggle} onExpand={toggleExpanded} />
             </div>
-            {task.extrasError ? <Notice tone="error" role="alert" className="mx-4 mb-3 p-2 text-sm">{task.extrasError}</Notice> : null}
+            {extrasError ? <Notice tone="error" role="alert" className="mx-4 mb-3 p-2 text-sm">{extrasError}</Notice> : null}
             <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/5 px-4 py-3">
-              <span className="mr-auto text-sm" aria-live="polite">已选择 {selectedFiles.length.toLocaleString("zh-CN")} 个文件 · {formatBytes(selectedFiles.reduce((sum, file) => sum + file.size, 0))}</span>
-              <Dialog.Close asChild><Button type="button" variant="outline" disabled={task.extrasBusy}>取消</Button></Dialog.Close>
-              <Button type="button" disabled={task.extrasBusy} onClick={() => { onConfirm([...selected]); setOpen(false); }}>确定</Button>
+              <span className="mr-auto text-sm" aria-live="polite">{t("upload.extras.selected", { count: selectedFiles.length, size: formatBytes(selectedFiles.reduce((sum, file) => sum + file.size, 0)) })}</span>
+              <Dialog.Close asChild><Button type="button" variant="outline" disabled={task.extrasBusy}>{t("play.save.cancel")}</Button></Dialog.Close>
+              <Button type="button" disabled={task.extrasBusy} onClick={() => { onConfirm([...selected]); setOpen(false); }}>{t("upload.extras.confirm")}</Button>
             </footer>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-      {extras.length ? <span className="order-first mr-auto text-xs text-muted">追加文件：{extras.length} 个文件 · {formatBytes(extras.reduce((sum, file) => sum + file.size, 0))}</span> : null}
-      {task.extrasBusy ? <span className="w-full text-sm" role="status">正在处理追加文件{task.extrasProgress ? ` ${task.extrasProgress.completed}/${task.extrasProgress.total}` : ""}{task.progress.currentPath ? `：${task.progress.currentPath}` : "…"}</span> : null}
-      {task.extrasError ? <Notice tone="error" role="alert" className="w-full p-2 text-sm">{task.extrasError}</Notice> : null}
+      {extras.length ? <span className="order-first mr-auto text-xs text-muted">{t("upload.extras.summary", { count: extras.length, size: formatBytes(extras.reduce((sum, file) => sum + file.size, 0)) })}</span> : null}
+      {task.extrasBusy ? <span className="w-full text-sm" role="status">{task.progress.currentPath ? t("upload.extras.currentPath", { status: processingLabel, path: task.progress.currentPath }) : `${processingLabel}…`}</span> : null}
+      {extrasError ? <Notice tone="error" role="alert" className="w-full p-2 text-sm">{extrasError}</Notice> : null}
     </>
   );
 }
@@ -164,6 +172,8 @@ function FileTree({ nodes, depth, id, selected, expanded, disabled, onToggle, on
   nodes: Map<string, FileNode>; depth: number; id: string; selected: Set<string>; expanded: Set<string> | null; disabled: boolean;
   onToggle: (paths: string[], checked: boolean) => void; onExpand: (path: string) => void;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   return <ul className="m-0 list-none p-0">
     {[...nodes.values()].sort((a, b) => Number(Boolean(a.region)) - Number(Boolean(b.region)) || Number(Boolean(b.children)) - Number(Boolean(a.children)) || a.name.localeCompare(b.name, "zh-CN", { numeric: true })).map(node => {
       const open = expanded === null || expanded.has(node.path);
@@ -174,15 +184,15 @@ function FileTree({ nodes, depth, id, selected, expanded, disabled, onToggle, on
       return <li key={node.path}>
         <TreeIndent depth={depth} step="1.25rem">
         <div className={`flex min-h-10 items-center gap-2 border-b border-border/40 px-4 text-sm hover:bg-muted/10 ${checked ? "bg-primary/5" : ""}`}>
-          <Checkbox id={checkboxId} aria-label={node.children ? `选择${node.region ? "区域" : "文件夹"} ${displayPath}` : displayPath} checked={checked ? true : partial ? "indeterminate" : false}
+          <Checkbox id={checkboxId} aria-label={node.children ? t(node.region ? "upload.extras.selectRegion" : "upload.extras.selectFolder", { path: displayPath }) : displayPath} checked={checked ? true : partial ? "indeterminate" : false}
             disabled={disabled} onCheckedChange={value => onToggle(node.paths, value === true)} />
-          {node.children ? <Button type="button" variant="ghost" aria-expanded={open} aria-label={`${open ? "折叠" : "展开"} ${displayPath}`}
+          {node.children ? <Button type="button" variant="ghost" aria-expanded={open} aria-label={t(open ? "upload.extras.collapse" : "upload.extras.expand", { path: displayPath })}
             className="h-auto min-h-10 min-w-0 flex-1 justify-start gap-2 whitespace-normal rounded-sm px-0 py-2 text-left font-normal leading-relaxed hover:bg-transparent"
             onClick={() => onExpand(node.path)}>
             {open ? <ChevronDown aria-hidden className="size-3.5 shrink-0" /> : <ChevronRight aria-hidden className="size-3.5 shrink-0" />}
             {!node.region ? (open ? <FolderOpen aria-hidden className="size-4 shrink-0 text-primary" /> : <Folder aria-hidden className="size-4 shrink-0 text-primary" />) : null}
             <span className="min-w-0 break-all leading-relaxed" title={displayPath}>{node.name}</span>
-            <span className="shrink-0 text-xs text-muted">{node.paths.length.toLocaleString("zh-CN")}</span>
+            <span className="shrink-0 text-xs text-muted">{node.paths.length.toLocaleString(locale)}</span>
           </Button> : <Label htmlFor={checkboxId} title={displayPath} className="flex min-h-10 min-w-0 flex-1 cursor-pointer items-center gap-2 py-2 pl-[1.375rem] font-normal leading-relaxed">
             <File aria-hidden className="size-4 shrink-0 text-muted" /><span className="min-w-0 break-all leading-relaxed">{node.name}</span>
           </Label>}

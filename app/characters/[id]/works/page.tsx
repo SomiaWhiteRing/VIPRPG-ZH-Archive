@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { browsePublicCharacterWorks } from "@/app/.server/db/character-detail";
 import { throwNotFound } from "@/app/.server/http/page-response";
 import { parsePositiveId } from "@/app/.server/http/request";
@@ -8,7 +10,7 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
@@ -20,27 +22,27 @@ export async function loader(args: LoaderFunctionArgs) {
     pageSize: 20,
   });
   if (!result) throwNotFound();
-  return result;
+  return { ...result, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({
-    title: [loaderData?.character.primaryName || "角色", "登场作品"],
-    page: loaderData?.page,
-  }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [loaderData?.character.primaryName || translate(locale, "core.nav.characters"), translate(locale, "character.works")], page: loaderData?.page }, error, locale);
+};
 
 export default function CharacterWorksPage() {
+  const t = useMessages();
   const { character, items, page, pageSize, total } = useLoaderData<typeof loader>();
   return (
     <PageContainer>
       <PageHeader
-        actions={<BackLink href={`/characters/${character.id}#sec-works`} label="返回角色" />}
+        actions={<BackLink href={`/characters/${character.id}#sec-works`} label={t("character.back")} />}
         subtitle={character.primaryName}
-        title="登场作品"
+        title={t("character.works")}
       />
       {items.length ? (
         <CharacterWorkList works={items} characterName={character.primaryName} standalone />
-      ) : <EmptyState title="暂无登场作品。" />}
+      ) : <EmptyState title={t("character.emptyWorks")} />}
       <PaginationLinks
         basePath={`/characters/${character.id}/works`}
         page={page}

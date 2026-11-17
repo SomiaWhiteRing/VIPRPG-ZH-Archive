@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { requireUser } from "@/app/.server/auth/guards";
 import {
   readCharacterPickerCategories,
@@ -26,14 +27,15 @@ export async function GET(runtime: AppRuntime, request: Request) {
       const characterId = parsePositiveId(
         params.get("characterId") ?? "",
         "角色",
+        translate(runtime.uiLocale, "admin.portraits.error.characterId"),
       );
       const offset = Number(params.get("offset") ?? 0);
       if (!Number.isSafeInteger(offset) || offset < 0)
-        throw new HttpError(400, "分页位置无效。");
+        throw new HttpError(400, translate(runtime.uiLocale, "emoji.error.cursor"), undefined, "emoji.error.cursor");
       const [target] = await findShowcaseTargets(runtime, "character", {
         id: characterId,
       });
-      if (!target) throw new HttpError(404, "角色不存在。");
+      if (!target) throw new HttpError(404, "角色不存在。", undefined, "comment.error.characterMissing");
       return json({
         ...(await readShowcasePortraitSheets(
           getD1(runtime),
@@ -51,7 +53,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
     if (op === "characters") {
       const offset = Number(params.get("offset") ?? 0);
       if (!Number.isSafeInteger(offset) || offset < 0)
-        throw new HttpError(400, "分页位置无效。");
+        throw new HttpError(400, translate(runtime.uiLocale, "emoji.error.cursor"), undefined, "emoji.error.cursor");
       return json(
         await readCharacterPickerPage(
           getD1(runtime),
@@ -61,10 +63,10 @@ export async function GET(runtime: AppRuntime, request: Request) {
         ),
       );
     }
-    if (op !== null) throw new HttpError(400, "未知展柜查询。");
+    if (op !== null) throw new HttpError(400, "未知展柜查询。", undefined, "showcase.error.unknownQuery");
     const kind = params.get("kind");
     if (kind !== null) {
-      if (!isShowcaseKind(kind)) throw new HttpError(400, "展柜类型不合法");
+      if (!isShowcaseKind(kind)) throw new HttpError(400, "展柜类型不合法", undefined, "showcase.error.invalidKind");
       return json({
         ok: true,
         targets: await findShowcaseTargets(runtime, kind, {
@@ -74,7 +76,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
     }
     return json({ ok: true, ...(await readShowcase(runtime, auth.user.id)) });
   } catch (error) {
-    return jsonError("展柜读取失败", error);
+    return jsonError(translate(runtime.uiLocale, "showcase.readFailed"), error);
   }
 }
 
@@ -83,11 +85,12 @@ export async function PUT(runtime: AppRuntime, request: Request) {
   if ("response" in auth) return auth.response;
   try {
     const input = parseShowcaseInput(
-      await readJsonObject(request, "展柜内容格式不合法"),
+      await readJsonObject(request, translate(runtime.uiLocale, "showcase.public.payload")),
+      runtime.uiLocale,
     );
     await saveShowcase(runtime, auth.user, input);
     return json({ ok: true });
   } catch (error) {
-    return jsonError("展柜保存失败", error);
+    return jsonError(translate(runtime.uiLocale, "showcase.saveFailed"), error);
   }
 }

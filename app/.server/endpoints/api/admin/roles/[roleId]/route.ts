@@ -54,6 +54,7 @@ export async function PATCH(
           ok: false,
           code: error.code,
           detail: error.message,
+          messageKey: error.messageKey,
           currentRole: error.currentRole,
         },
         { status: 409 },

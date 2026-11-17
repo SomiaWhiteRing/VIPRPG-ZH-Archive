@@ -1,3 +1,4 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { isAndroidClient } from "@/lib/browser/client-environment";
 import { useEffect, useState } from "react";
 import { BackLink } from "@/app/components/ui/back-link";
@@ -43,24 +44,26 @@ export function WorkPageHeader({
   originalTitle: string;
   tabs: SectionLink[];
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [native, setNative] = useState(false);
   useEffect(() => { setNative(isAndroidClient()); }, []);
-  const title = chineseTitle || originalTitle;
+  const title = chineseTitle ? <span lang="zh-Hans">{chineseTitle}</span> : originalTitle;
 
   return (
     <>
       <WorkHeader title={title} originalTitle={chineseTitle ? originalTitle : null}
         coverSrc={coverBlobSha256 ? `/api/media/blobs/${coverBlobSha256}` : undefined}
-        beforeTitle={<BackLink href="/games" label="作品库" variant="text" />}>
+        beforeTitle={<BackLink href="/games" label={t("core.nav.games")} variant="text" />}>
           <div
-            aria-label="元信息"
+            aria-label={t("work.sidebar.metadata")}
             className="mt-[0.7rem] flex flex-wrap items-center gap-2"
           >
             <span className="inline-flex min-h-[1.6rem] items-center rounded-full border border-rm2k-green-2 bg-rm2k-green-2 px-[0.6rem] py-[0.15rem] font-mono text-xs tracking-[0.04em] text-white">
-              {engineLabel(engineFamily)}
+              {engineLabel(engineFamily, locale)}
             </span>
             <span className="inline-flex min-h-[1.6rem] items-center rounded-full border border-primary/40 bg-card px-[0.6rem] py-[0.15rem] font-mono text-xs tracking-[0.04em] text-secondary">
-              {languageLabel(language)}
+              {languageLabel(language, locale)}
             </span>
           </div>
       </WorkHeader>

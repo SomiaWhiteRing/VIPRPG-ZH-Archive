@@ -1,3 +1,4 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import * as Dialog from "@/app/components/ui/dialog";
@@ -27,6 +28,8 @@ type Props = {
 const buttonClass = "border-white/40 bg-zinc-900 text-white hover:border-white hover:bg-zinc-700 hover:text-white";
 
 export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, touchEnabled, onTouchEnabledChange, onSplitDpadChange, onCustomKeyChange, onSelect, onChange, onReset, onCancel, onSave }: Props) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -42,7 +45,7 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
   }, []);
 
   const control = layout.buttons[selected];
-  const label = getControlLabel(layout, selected);
+  const label = getControlLabel(layout, selected, locale);
   const disabledCodes = new Set([...reservedKeyboardCodes, ...customControlIds.filter((id) => id !== selected).map((id) => layout.customKeys[id])]);
   const panelPosition = orientation === "portrait"
     ? control.y < 0.5
@@ -55,26 +58,26 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
     <div className={dragging ? "pointer-events-none invisible absolute inset-0 z-40" : "pointer-events-none absolute inset-0 z-40"} ref={editorRef}>
       <div className="pointer-events-auto absolute right-0 top-0 flex max-w-full flex-wrap justify-end gap-1" ref={actionsRef}>
         <Button aria-checked={touchEnabled} className={buttonClass} onClick={() => onTouchEnabledChange(!touchEnabled)} role="checkbox" size="sm" type="button" variant="outline">
-          触控
+          {t("play.touch.touch")}
           <span aria-hidden className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-white/70">
             {touchEnabled ? <Check /> : null}
           </span>
         </Button>
         <Button aria-expanded={propertiesOpen} aria-controls="web-play-layout-properties" className={`${buttonClass} aria-expanded:border-yellow-300 aria-expanded:bg-zinc-700 aria-expanded:text-yellow-200 aria-expanded:ring-1 aria-expanded:ring-yellow-300`} onClick={() => setPropertiesOpen(!propertiesOpen)} size="sm" type="button" variant="outline">
-          属性<span aria-hidden className="text-[10px]">{propertiesOpen ? "▲" : "▼"}</span>
+          {t("play.touch.properties")}<span aria-hidden className="text-[10px]">{propertiesOpen ? "▲" : "▼"}</span>
         </Button>
-        <Button className={buttonClass} onClick={onReset} size="sm" type="button" variant="outline">恢复默认</Button>
-        <Button className={buttonClass} onClick={onCancel} size="sm" type="button" variant="outline">取消</Button>
-        <Button className={buttonClass} onClick={onSave} size="sm" type="button" variant="outline">保存</Button>
+        <Button className={buttonClass} onClick={onReset} size="sm" type="button" variant="outline">{t("play.touch.reset")}</Button>
+        <Button className={buttonClass} onClick={onCancel} size="sm" type="button" variant="outline">{t("play.save.cancel")}</Button>
+        <Button className={buttonClass} onClick={onSave} size="sm" type="button" variant="outline">{t("core.action.save")}</Button>
       </div>
       <div className={propertiesOpen ? `pointer-events-auto absolute ${panelPosition} overflow-y-auto overscroll-contain rounded-lg border border-white/25 bg-zinc-950 p-3 text-white` : "hidden"} id="web-play-layout-properties">
-        <div aria-label="选择或添加按钮" className="mb-3 flex flex-wrap gap-1.5" role="group">
+        <div aria-label={t("play.touch.selectGroup")} className="mb-3 flex flex-wrap gap-1.5" role="group">
           {getLayoutControlIds(layout).map((id) => {
             const visible = layout.buttons[id].visible;
-            const label = getControlLabel(layout, id);
+            const label = getControlLabel(layout, id, locale);
             return (
               <Button
-                aria-label={visible ? `选择${label}` : `添加${label}`}
+                aria-label={t(visible ? "play.touch.select" : "play.touch.add", { label })}
                 aria-pressed={selected === id && visible}
                 className={`${buttonClass} aria-pressed:border-white aria-pressed:bg-zinc-600`}
                 key={id}
@@ -92,19 +95,19 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="text-sm font-semibold">{label}</span>
           {control.visible ? (
-            <Button aria-label={`隐藏${label}`} className={buttonClass} onClick={() => onChange(selected, { visible: false })} size="sm" type="button" variant="outline">隐藏</Button>
+            <Button aria-label={t("play.touch.hide", { label })} className={buttonClass} onClick={() => onChange(selected, { visible: false })} size="sm" type="button" variant="outline">{t("admin.discussionTags.hide")}</Button>
           ) : null}
         </div>
         {selected === "debug" || selected === "highlight" ? (
           <p className="mb-2 mt-0 text-xs text-white/80">
             {selected === "debug"
-              ? "需在 Menu → 追加功能中开启「强制TestPlay」。"
-              : "按住显示交互位置，需在 Menu → 追加功能中开启「场景交互高亮」。"}
+              ? t("play.touch.debugHint")
+              : t("play.touch.highlightHint")}
           </p>
         ) : null}
         {selected === "dpad" || selected === "up" || selected === "left" || selected === "right" || selected === "down" ? (
           <Button aria-checked={layout.splitDpad} className={buttonClass} onClick={() => onSplitDpadChange(!layout.splitDpad)} role="checkbox" size="sm" type="button" variant="outline">
-            拆分方向键
+            {t("play.touch.split")}
             <span aria-hidden className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-white/70">
               {layout.splitDpad ? <Check /> : null}
             </span>
@@ -113,17 +116,17 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
         {isCustomControlId(selected) ? (
           <Dialog.Root open={keyboardOpen} onOpenChange={setKeyboardOpen}>
             <Dialog.Trigger asChild>
-              <Button className={buttonClass} size="sm" type="button" variant="outline">自定义</Button>
+              <Button className={buttonClass} size="sm" type="button" variant="outline">{t("play.touch.custom")}</Button>
             </Dialog.Trigger>
             <Dialog.Portal container={editorRef.current}>
               <Dialog.Overlay className="pointer-events-auto absolute" />
               <Dialog.Content className="web-play-controls-help pointer-events-auto absolute left-1/2 top-1/2 max-h-[calc(100%-1rem)] w-[calc(100%-1rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg p-3">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <Dialog.Title>自定义按键</Dialog.Title>
-                    <Dialog.Description className="mb-0 mt-1 text-xs text-muted">选择按键；默认功能键和其他三个自定义按键已占用的键不可选。左右滑动可查看完整键盘。</Dialog.Description>
+                    <Dialog.Title>{t("play.touch.customTitle")}</Dialog.Title>
+                    <Dialog.Description className="mb-0 mt-1 text-xs text-muted">{t("play.touch.customHint")}</Dialog.Description>
                   </div>
-                  <Dialog.Close asChild><Button aria-label="关闭键盘" size="icon" type="button" variant="outline"><X aria-hidden /></Button></Dialog.Close>
+                  <Dialog.Close asChild><Button aria-label={t("play.touch.closeKeyboard")} size="icon" type="button" variant="outline"><X aria-hidden /></Button></Dialog.Close>
                 </div>
                 <div className="web-play-help-board overflow-x-auto">
                   <WebPlayKeyboard disabledCodes={disabledCodes} onSelect={(code) => { onCustomKeyChange(selected, code); setKeyboardOpen(false); }} value={layout.customKeys[selected]} />
@@ -132,8 +135,8 @@ export function WebPlayLayoutEditor({ orientation, layout, selected, dragging, t
             </Dialog.Portal>
           </Dialog.Root>
         ) : null}
-        <LayoutSlider label="大小" value={Math.round(control.size * 100)} min={50} max={200} onChange={(value) => onChange(selected, { size: value / 100 })} />
-        <LayoutSlider label="透明度" value={Math.round((1 - control.opacity) * 100)} min={0} max={100} onChange={(value) => onChange(selected, { opacity: 1 - value / 100 })} />
+        <LayoutSlider label={t("play.touch.size")} value={Math.round(control.size * 100)} min={50} max={200} onChange={(value) => onChange(selected, { size: value / 100 })} />
+        <LayoutSlider label={t("play.touch.transparency")} value={Math.round((1 - control.opacity) * 100)} min={0} max={100} onChange={(value) => onChange(selected, { opacity: 1 - value / 100 })} />
       </div>
     </div>
   );

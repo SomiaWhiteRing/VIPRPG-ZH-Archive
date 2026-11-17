@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { useDroppable } from "@dnd-kit/core";
 import { Plus } from "lucide-react";
 import { useMemo, type Ref } from "react";
@@ -38,6 +39,7 @@ export function EmojiGroupTabs({ groups, emojis, value, onSelect, onCreate, canA
   droppable?: boolean;
   management?: boolean;
 }) {
+  const t = useMessages();
   const counts = useMemo(() => {
     const result = new Map<number | null, number>([[null, emojis.length]]);
     for (const emoji of emojis) for (const id of new Set(emoji.groupIds ?? [])) result.set(id, (result.get(id) ?? 0) + 1);
@@ -46,11 +48,11 @@ export function EmojiGroupTabs({ groups, emojis, value, onSelect, onCreate, canA
   if (!management && !groups.length) return null;
   const Tab = droppable ? DroppableGroupTab : GroupTab;
   return <div className="flex shrink-0 items-start gap-1 border-b border-border p-2">
-    <div className="flex min-w-0 flex-1 flex-wrap gap-1" role="group" aria-label="表情分组">
-      {[{ id: null, name: "全部" }, ...groups].map((group) => <Tab key={group.id ?? "all"} id={group.id} name={group.name}
+    <div className="flex min-w-0 flex-1 flex-wrap gap-1" role="group" aria-label={t("emoji.group.groups")}>
+      {[{ id: null, name: t("timeline.feed.allKinds") }, ...groups].map((group) => <Tab key={group.id ?? "all"} id={group.id} name={group.name}
         count={counts.get(group.id) ?? 0}
         active={value === group.id} disabled={disabled} canAdd={canAdd?.(group.id) ?? false} onSelect={onSelect} />)}
     </div>
-    <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0" disabled={disabled} onClick={onCreate} aria-label="新建表情分组" title="新建表情分组"><Plus aria-hidden /></Button>
+    <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0" disabled={disabled} onClick={onCreate} aria-label={t("emoji.group.createNamed")} title={t("emoji.group.createNamed")}><Plus aria-hidden /></Button>
   </div>;
 }

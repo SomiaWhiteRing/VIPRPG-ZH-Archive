@@ -1,4 +1,5 @@
 import { deflateSync } from "fflate";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 import { compactLsdSave } from "@/lib/archive/lsd-save-upgrade";
 import { openExistingDatabase, sameBytes, saveDirectory } from "./web-play-save-transfer";
 
@@ -23,7 +24,7 @@ function transaction<T>(
     tx.oncomplete = () => { signal.removeEventListener("abort", abort); resolve(result); };
     tx.onabort = () => {
       signal.removeEventListener("abort", abort);
-      reject(failure ?? tx.error ?? new Error("本地存档升级事务失败。"));
+      reject(failure ?? tx.error ?? new UiFeedbackError("play.diagnostic.saveUpgradeTransaction"));
     };
     signal.addEventListener("abort", abort, { once: true });
     try { action(tx.objectStore(store), value => { result = value; }, fail); }
@@ -36,7 +37,7 @@ function openBackups(): Promise<IDBDatabase> {
     const request = indexedDB.open(backupDatabase, 1);
     let blocked = false;
     request.onupgradeneeded = () => request.result.createObjectStore(backupStore);
-    request.onblocked = () => { blocked = true; reject(new Error("存档备份库正在被其他页面使用。")); };
+    request.onblocked = () => { blocked = true; reject(new UiFeedbackError("play.diagnostic.saveBackupInUse")); };
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const db = request.result;
@@ -69,7 +70,7 @@ export async function upgradeWebPlaySaves(workId: number, signal: AbortSignal): 
         request.onsuccess = () => result(request.result);
       });
       if (!entry || (entry.mode & 0o170000) !== 0o100000) continue;
-      if (!(entry.contents instanceof Uint8Array)) throw new Error("本地存档格式异常，原档已保留。");
+      if (!(entry.contents instanceof Uint8Array)) throw new UiFeedbackError("play.diagnostic.saveUpgradeFormat");
       const updated = compactLsdSave(entry.contents);
       if (updated === entry.contents) continue;
       signal.throwIfAborted();
@@ -84,7 +85,7 @@ export async function upgradeWebPlaySaves(workId: number, signal: AbortSignal): 
             const current = request.result as Entry | undefined;
             if (!current || current.mode !== entry.mode || !sameTimestamp(current.timestamp, entry.timestamp)
               || !(current.contents instanceof Uint8Array) || !sameBytes(current.contents, entry.contents)) {
-              throw new Error("本地存档已变化，请重新启动游戏；原档已保留。");
+              throw new UiFeedbackError("play.diagnostic.saveUpgradeChanged");
             }
             store.put({ ...current, contents: updated }, key);
           } catch (error) { fail(error); }

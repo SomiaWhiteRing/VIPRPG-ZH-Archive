@@ -1,3 +1,4 @@
+import { UiHttpError } from "@/lib/i18n/feedback";
 import { timingSafeEqualString } from "@/lib/sha256";
 import { getD1 } from "@/app/.server/db/d1";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -52,7 +53,7 @@ const unverifiedRegistrationRecipientsSql = `
   )`;
 
 function registrationSourceQuotaError(): HttpError {
-  return new HttpError(429, "当前网络申请注册验证码过于频繁，请稍后重试或联系管理员");
+  return new UiHttpError(429, "auth.error.registerQuota");
 }
 
 export async function assertRegistrationSourceQuota(
@@ -95,7 +96,7 @@ export async function assertEmailChallengeQuota(
     .first<CountRow>();
 
   if ((row?.count ?? 0) >= 5) {
-    throw new HttpError(429, "验证码发送过于频繁，请稍后再试");
+    throw new UiHttpError(429, "auth.error.sendRate");
   }
 }
 
@@ -205,20 +206,20 @@ export async function consumeLatestEmailChallenge(
     .first<ChallengeRow>();
 
   if (!row || row.expires_at <= new Date().toISOString().slice(0, 19).replace("T", " ")) {
-    throw new HttpError(400, "验证码不正确或已失效，请重新获取");
+    throw new UiHttpError(400, "auth.error.code");
   }
 
   if (row.consumed_at) {
-    throw new HttpError(400, "验证码不正确或已失效，请重新获取");
+    throw new UiHttpError(400, "auth.error.code");
   }
 
   if (row.attempt_count >= 5) {
-    throw new HttpError(400, "验证码不正确或已失效，请重新获取");
+    throw new UiHttpError(400, "auth.error.code");
   }
 
   if (!timingSafeEqualString(row.code_hash, input.codeHash)) {
     await incrementChallengeAttempts(runtime, row.id);
-    throw new HttpError(400, "验证码不正确或已失效，请重新获取");
+    throw new UiHttpError(400, "auth.error.code");
   }
 
   const consumed = await getD1(runtime)
@@ -235,7 +236,7 @@ export async function consumeLatestEmailChallenge(
     .run();
 
   if (Number(consumed.meta.changes ?? 0) !== 1) {
-    throw new HttpError(400, "验证码不正确或已失效，请重新获取");
+    throw new UiHttpError(400, "auth.error.code");
   }
 
   return mapChallengeRow({

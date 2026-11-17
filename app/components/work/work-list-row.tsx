@@ -1,7 +1,8 @@
 import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import { engineShortLabel, languageLabel } from "@/lib/labels";
 import type { ReactNode } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 
 export function WorkListRow({
   href,
@@ -30,11 +31,13 @@ export function WorkListRow({
   action?: ReactNode;
   children?: ReactNode;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const metadata = [
     authorName,
     releaseDate,
-    engineFamily ? engineShortLabel(engineFamily) : null,
-    language ? languageLabel(language) : null,
+    engineFamily ? engineShortLabel(engineFamily, locale) : null,
+    language ? languageLabel(language, locale) : null,
   ].filter(Boolean);
 
   return (
@@ -45,7 +48,7 @@ export function WorkListRow({
         </span>
       ) : null}
       <Link
-        aria-label={`查看作品：${title}`}
+        aria-label={t("work.open", { title })}
         className="group relative block aspect-4/3 w-26 shrink-0 overflow-hidden rounded-md border border-border bg-muted/15 sm:w-32"
         to={href}
       >
@@ -55,7 +58,7 @@ export function WorkListRow({
           width={128}
           height={96}
           imageClassName="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-          fallback="暂无封面"
+          fallback={t("work.noCover")}
           fallbackClassName="flex h-full items-center justify-center px-1 text-center font-mono text-[10.5px] text-muted"
         />
       </Link>

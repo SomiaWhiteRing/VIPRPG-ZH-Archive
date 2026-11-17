@@ -5,7 +5,8 @@ import { PageContainer } from "@/app/components/ui/page-container";
 import { usePageLayout } from "@/app/components/use-page-layout";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { canAccessOwnWorks } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData } from "react-router";
 import { AccountNavigation } from "./account-navigation";
@@ -18,6 +19,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const user = await getCurrentUser(runtime);
 
   return {
+    locale: runtime.uiLocale,
     user: pickPageFields(user, [
       "avatarBlobSha256",
       "displayName",
@@ -28,8 +30,10 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: "个人中心" }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "header.me") }, error, locale);
+};
 
 export default function AccountLayout() {
   const { user } = useLoaderData<typeof loader>();

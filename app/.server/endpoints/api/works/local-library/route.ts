@@ -6,7 +6,7 @@ import { workReadCondition } from "@/app/.server/db/work-visibility";
 
 export async function GET(runtime: AppRuntime, request: Request) {
   const values = new URL(request.url).searchParams.get("ids")?.split(",").filter(Boolean) ?? [];
-  if (!values.length || values.length > 100) throw new HttpError(400, "作品编号无效");
+  if (!values.length || values.length > 100) throw new HttpError(400, "作品编号无效", undefined, "play.save.workId");
   const ids = [...new Set(values.map(value => parsePositiveId(value)))];
   const access = workReadCondition(await getCurrentUser(runtime));
   const rows = await runtime.db.prepare(`SELECT w.id AS workId,COALESCE(NULLIF(w.chinese_title,''),w.original_title) AS title,

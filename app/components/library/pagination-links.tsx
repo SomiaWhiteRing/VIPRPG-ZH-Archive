@@ -8,7 +8,10 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
-import { Form, Link } from "react-router";
+import { Form } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
 
 const DESKTOP_PAGE_COUNT = 10;
 const MOBILE_PAGE_COUNT = 5;
@@ -46,10 +49,12 @@ export function PaginationLinks({
   onPageChange,
   disabled = false,
   className,
-  ariaLabel = "分页",
+  ariaLabel,
   compact = false,
 }: PaginationProps) {
   const JumpForm = onPageChange ? "form" : Form;
+  const t = useMessages();
+  const locale = useNavigationLocale();
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (totalPages <= 1) return null;
   const desktopPages = pageWindow(page, totalPages, compact ? MOBILE_PAGE_COUNT : DESKTOP_PAGE_COUNT);
@@ -68,7 +73,7 @@ export function PaginationLinks({
   return (
     <nav
       className={cn("my-8 flex flex-wrap items-center justify-start gap-2", className)}
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? t("pagination.label")}
       aria-busy={disabled || undefined}
     >
       <div className={cn("flex max-w-full items-center justify-center gap-1.5", compact && "flex-wrap")}>
@@ -77,7 +82,7 @@ export function PaginationLinks({
             <PageControl
               onPageChange={onPageChange}
               disabled={disabled}
-              aria-label="首页"
+              aria-label={t("pagination.first")}
               className={cn(paginationItem, "hidden sm:inline-flex")}
               page={1}
               href={onPageChange ? undefined : makeHref(1)}
@@ -87,7 +92,7 @@ export function PaginationLinks({
             <PageControl
               onPageChange={onPageChange}
               disabled={disabled}
-              aria-label="上一页"
+              aria-label={t("pagination.previous")}
               className={paginationItem}
               page={page - 1}
               href={onPageChange ? undefined : makeHref(page - 1)}
@@ -113,7 +118,7 @@ export function PaginationLinks({
             <PageControl
               onPageChange={onPageChange}
               disabled={disabled}
-              aria-label={`第 ${pageNumber} 页`}
+              aria-label={t("core.meta.page", { page: pageNumber })}
               className={cn(
                 paginationItem,
                 !mobilePages.has(pageNumber) && "hidden sm:inline-flex",
@@ -131,7 +136,7 @@ export function PaginationLinks({
             <PageControl
               onPageChange={onPageChange}
               disabled={disabled}
-              aria-label="下一页"
+              aria-label={t("pagination.next")}
               className={paginationItem}
               page={page + 1}
               href={onPageChange ? undefined : makeHref(page + 1)}
@@ -141,7 +146,7 @@ export function PaginationLinks({
             <PageControl
               onPageChange={onPageChange}
               disabled={disabled}
-              aria-label="末页"
+              aria-label={t("pagination.last")}
               className={cn(paginationItem, "hidden sm:inline-flex")}
               page={totalPages}
               href={onPageChange ? undefined : makeHref(totalPages)}
@@ -163,6 +168,8 @@ export function PaginationLinks({
               onPageChange(value);
           } : undefined}
         >
+          {!onPageChange && locale && !params?.[UI_LOCALE_PARAM] &&
+            <input name={UI_LOCALE_PARAM} type="hidden" value={locale} />}
           {Object.entries(params ?? {}).flatMap(([key, value]) =>
             value && key !== "page"
               ? (typeof value === "string" ? [value] : value).map(
@@ -178,7 +185,7 @@ export function PaginationLinks({
               : [],
           )}
           <Input
-            aria-label={`跳转页码，范围 1 到 ${totalPages}`}
+            aria-label={t("pagination.jump", { total: totalPages })}
             autoComplete="off"
             disabled={disabled}
             className="h-8 w-14 px-2 text-center font-mono text-xs tabular-nums sm:w-16"
@@ -186,10 +193,10 @@ export function PaginationLinks({
             max={totalPages}
             min={1}
             name="page"
-            placeholder="页码"
+            placeholder={t("pagination.placeholder")}
             required
             step={1}
-            title={`输入 1 到 ${totalPages} 的页码并按回车`}
+            title={t("pagination.hint", { total: totalPages })}
             type="number"
           />
         </JumpForm>

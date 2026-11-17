@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { EmojiDragSource } from "@/app/components/ui/emoji-drag";
 import {
   useLayoutEffect,
@@ -53,6 +54,7 @@ export const SourceFaces = memo(function SourceFaces({
   lifted: Set<string>;
   settling: Set<string>;
 }) {
+  const t = useMessages();
   const { items, more, start, loading, error, loadPage, retryPage } = useSourceFacePages(source);
   const scrollAnchor = useRef<{ element: HTMLElement; top: number } | null>(
     null,
@@ -106,7 +108,7 @@ export const SourceFaces = memo(function SourceFaces({
             size="icon"
             key={key}
             type="button"
-            aria-label={`${collected ? "已添加" : "选择表情"}${emoji.users ? `，${emoji.users} 人使用` : ""}`}
+            aria-label={emoji.users ? t("emoji.source.usedBy", { label: t(collected ? "emoji.source.collected" : "emoji.picker.choose"), count: emoji.users }) : t(collected ? "emoji.source.collected" : "emoji.picker.choose")}
             aria-pressed={isSelected}
             disabled={disabled}
             onClick={() => onSelect(emoji)}
@@ -125,7 +127,7 @@ export const SourceFaces = memo(function SourceFaces({
               />
             ) : null}
             {emoji.users ? (
-              <span className="text-[11px] text-muted">{emoji.users} 人</span>
+              <span className="text-[11px] text-muted">{t("emoji.source.users", { count: emoji.users })}</span>
             ) : null}
           </Button>
           </EmojiDragSource>
@@ -159,7 +161,7 @@ export const SourceFaces = memo(function SourceFaces({
           disabled={loading}
           onClick={() => void loadPage("previous", anchorScroll)}
         >
-          加载前面的脸图
+          {t("emoji.source.earlier")}
         </Button>
       ) : null}
       {source.kind === "hot" ? (
@@ -167,10 +169,10 @@ export const SourceFaces = memo(function SourceFaces({
           {discovery(items as FaceEmoji[])}
           {!loading && !error && !items.length ? (
             <div className="grid gap-4">
-              <p className="text-sm text-muted">还没有热门表情</p>
+              <p className="text-sm text-muted">{t("emoji.source.noPopular")}</p>
               {defaults.length ? (
                 <>
-                  <strong className="text-xs text-muted">默认推荐</strong>
+                  <strong className="text-xs text-muted">{t("emoji.source.recommended")}</strong>
                   {discovery(defaults)}
                 </>
               ) : null}
@@ -202,11 +204,11 @@ export const SourceFaces = memo(function SourceFaces({
       )}
       {loading ? (
         <p role="status" className="text-sm text-muted">
-          正在加载…
+          {t("admin.portraits.loading")}
         </p>
       ) : null}
       {source.kind !== "hot" && !loading && !error && !items.length ? (
-        <p className="text-sm text-muted">该角色暂无可用脸图。</p>
+        <p className="text-sm text-muted">{t("upload.portrait.empty")}</p>
       ) : null}
       {error ? (
         <div role="alert" className="text-sm">
@@ -218,7 +220,7 @@ export const SourceFaces = memo(function SourceFaces({
             disabled={loading}
             onClick={() => retryPage(anchorScroll)}
           >
-            重试
+            {t("core.action.retry")}
           </Button>
         </div>
       ) : null}
@@ -231,7 +233,7 @@ export const SourceFaces = memo(function SourceFaces({
           disabled={loading}
           onClick={() => void loadPage("next")}
         >
-          加载更多
+          {t("sea.avatar.more")}
         </Button>
       ) : null}
     </div>

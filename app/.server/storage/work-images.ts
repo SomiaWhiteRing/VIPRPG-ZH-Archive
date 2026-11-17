@@ -12,10 +12,11 @@ export function readWorkImage(
   value: FormDataEntryValue | null,
   field: string,
 ): File {
+  const kind = field === "browsing_images[]" ? "preview" : field === "目录封面" ? "catalogCover" : field;
   if (!(value instanceof File) || value.size <= 0) {
-    throw new HttpError(400, `${field} 必须是图片文件`);
+    throw new HttpError(400, `${field} 必须是图片文件`, undefined, "upload.image.error.file", { kind });
   }
-  if (value.size > MAX_IMAGE_BYTES) throw new HttpError(413, `${field} 不能超过 20 MiB`);
+  if (value.size > MAX_IMAGE_BYTES) throw new HttpError(413, `${field} 不能超过 20 MiB`, undefined, "upload.image.error.size", { kind });
   return value;
 }
 
@@ -28,13 +29,13 @@ export async function storeWorkPreviews(runtime: AppRuntime, form: FormData, exi
   if (raw === null) order = files.map((_, index) => index);
   else {
     try { order = typeof raw === "string" ? JSON.parse(raw) : null; }
-    catch { throw new HttpError(400, "预览图顺序格式不合法"); }
+    catch { throw new HttpError(400, "预览图顺序格式不合法", undefined, "upload.preview.error.order"); }
   }
   if (!Array.isArray(order) || order.some((entry) =>
     typeof entry === "string" ? !existingHashes.includes(entry) :
       typeof entry !== "number" || !Number.isSafeInteger(entry) || entry < 0 || entry >= files.length,
   ) || new Set(order).size !== order.length || files.some((_, index) => !order.includes(index))) {
-    throw new HttpError(400, "预览图顺序或已有图片引用不合法，请刷新后重试");
+    throw new HttpError(400, "预览图顺序或已有图片引用不合法，请刷新后重试", undefined, "upload.preview.error.references");
   }
   const hashes = await storeWorkImages(runtime, files);
   return [...new Set(order.map((entry: string | number) => typeof entry === "string" ? entry : hashes[entry]))];
@@ -68,6 +69,9 @@ export async function storeWorkImages(
       throw new HttpError(
         409,
         "Blob is being garbage-collected; retry the upload",
+        undefined,
+        "upload.error.objectPurging",
+        { kind: "blob" },
       );
     }
   }
@@ -95,17 +99,18 @@ export async function storeWorkImages(
 export function inspectWorkImage(body: ArrayBuffer) {
   try { return inspectImage(body); }
   catch (error) {
-    if (error instanceof ImageValidationError) throw new HttpError(error.status, error.message);
+    if (error instanceof ImageValidationError)
+      throw new HttpError(error.status, error.message, undefined, error.status === 413 ? "upload.image.error.storedSize" : "upload.image.error.format");
     throw error;
   }
 }
 
 async function getImageBlob(runtime: AppRuntime, sha256: string) {
   const object = await getBlob(runtime, sha256);
-  if (!object) throw new HttpError(404, "图片文件不存在");
+  if (!object) throw new HttpError(404, "图片文件不存在", undefined, "upload.image.error.missing");
   if (!object.size || object.size > MAX_IMAGE_BYTES) {
     await object.body.cancel();
-    throw new HttpError(413, "图片必须非空且不能超过 20 MiB");
+    throw new HttpError(413, "图片必须非空且不能超过 20 MiB", undefined, "upload.image.error.storedSize");
   }
   return object;
 }
@@ -162,7 +167,8 @@ export async function streamValidatedImage(runtime: AppRuntime, sha256: string) 
   } catch (error) {
     try { await reader.cancel(); }
     finally { reader.releaseLock(); }
-    if (error instanceof ImageValidationError) throw new HttpError(error.status, error.message);
+    if (error instanceof ImageValidationError)
+      throw new HttpError(error.status, error.message, undefined, "upload.image.error.format");
     throw error;
   }
 }

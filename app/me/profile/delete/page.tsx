@@ -1,7 +1,11 @@
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { requestJson } from "@/lib/ui/api-response";
 
 import { useState } from "react";
-import { Link, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
+import { useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { redirectPage } from "@/app/.server/http/page-response";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -14,19 +18,23 @@ import { AccountPageHeader } from "@/app/me/account-page-header";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 import { useToast } from "@/app/components/ui/toast";
 import { ACCOUNT_DELETION_ACKNOWLEDGEMENT } from "@/lib/auth/account-deletion";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const user = await requireAccountUser(runtime, "/me/profile/delete");
-  if (user.isBootstrapAdmin) redirectPage("/me/profile");
-  return { email: user.email };
+  if (user.isBootstrapAdmin) redirectPage("/me/profile", args.request);
+  return { email: user.email, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["注销账号", "个人中心"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "profile.deleteAccount"), translate(locale, "header.me")] }, error, locale);
+};
 
 export default function DeleteAccountPage() {
+  const t = useMessages();
+  const locale = useNavigationLocale();
   const { email } = useLoaderData<typeof loader>();
   const toast = useToast();
   const [acknowledgement, setAcknowledgement] = useState("");
@@ -42,7 +50,7 @@ export default function DeleteAccountPage() {
       const body = new FormData();
       body.set("acknowledgement", acknowledgement);
 
-      await requestJson("/api/account/delete/start", {
+      await requestJson(locale ? `/api/account/delete/start?${UI_LOCALE_PARAM}=${locale}` : "/api/account/delete/start", {
         method: "POST",
         body,
         credentials: "same-origin",
@@ -50,12 +58,12 @@ export default function DeleteAccountPage() {
       });
 
       setSent(true);
-      toast.success("注销验证码已发送，请检查当前绑定邮箱。");
+      toast.success(t("account.delete.codeSent"));
     } catch (error) {
       toast.error(
         error instanceof TypeError
-          ? "无法连接服务器，请检查网络后重试。"
-          : error instanceof Error ? error.message : "验证码发送失败，请稍后重试。",
+          ? t("relation.edit.network")
+          : error instanceof Error ? error : t("profile.codeFailed"),
       );
     } finally {
       setSending(false);
@@ -64,33 +72,34 @@ export default function DeleteAccountPage() {
 
   return (
     <div>
-      <AccountPageHeader parentTitle="个人资料" title="注销账号" />
+      <AccountPageHeader parentTitle={t("account.nav.profile")} title={t("profile.deleteAccount")} />
       <div className="max-w-2xl space-y-6">
         <section
           aria-labelledby="account-deletion-warning"
           className="rounded-md border border-destructive/30 bg-destructive/5 p-5"
         >
           <h2 id="account-deletion-warning" className="font-semibold text-destructive">
-            注销后无法恢复，请慎重操作
+            {t("account.delete.warning")}
           </h2>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed">
-            <li>账号将无法登录，所有设备上的登录状态都会失效。</li>
-            <li>名称改为“账户已注销”，头像恢复默认，简介及喜爱展柜清空，个人主页内容全部设为不可见。</li>
-            <li>已上传作品、评论和其他公共贡献会保留。</li>
+            <li>{t("account.delete.signOut")}</li>
+            <li>{t("account.delete.profileEffects")}</li>
+            <li>{t("account.delete.contributions")}</li>
           </ul>
         </section>
 
         <RedirectForm
           action="/api/account/delete"
+          preserveLanguage
           className="space-y-6"
           method="post"
           onBusyChange={setSubmitting}
         >
           <div className="space-y-2">
-            <Label htmlFor="delete-account-acknowledgement">1. 确认注销后果</Label>
+            <Label htmlFor="delete-account-acknowledgement">{t("account.delete.confirmEffects")}</Label>
             <p id="delete-account-acknowledgement-help" className="text-sm text-muted">
-              请在下方完整输入：
-              <strong className="font-semibold text-foreground">{ACCOUNT_DELETION_ACKNOWLEDGEMENT}</strong>
+              {t("account.delete.typePhrase")}
+              <strong lang="zh-Hans" className="font-semibold text-foreground">{ACCOUNT_DELETION_ACKNOWLEDGEMENT}</strong>
             </p>
             <Input
               id="delete-account-acknowledgement"
@@ -107,9 +116,9 @@ export default function DeleteAccountPage() {
           </div>
 
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold">2. 验证当前绑定邮箱</h2>
+            <h2 className="text-sm font-semibold">{t("account.delete.verifyEmail")}</h2>
             <p className="break-all text-sm text-muted">
-              验证码将发送至 <strong className="font-semibold text-foreground">{email}</strong>
+              {t("account.delete.codeDestination")}<strong className="font-semibold text-foreground">{email}</strong>
             </p>
             <Button
               type="button"
@@ -117,37 +126,37 @@ export default function DeleteAccountPage() {
               disabled={!acknowledged || sending || submitting}
               onClick={() => void sendCode()}
             >
-              {sending ? "正在发送……" : sent ? "重新发送验证码" : "获取邮箱验证码"}
+              {sending ? t("account.delete.sending") : sent ? t("auth.code.resend") : t("account.delete.getCode")}
             </Button>
             {sent ? (
               <Notice tone="success">
-                验证码已发送，10 分钟内有效。未收到时请检查垃圾邮件；重新发送后请使用最新验证码。
+                {t("account.delete.latestCode")}
               </Notice>
             ) : null}
             <div className="space-y-2">
-              <Label htmlFor="delete-account-code">邮箱验证码</Label>
+              <Label htmlFor="delete-account-code">{t("account.delete.emailCode")}</Label>
               <VerificationCodeInput
                 id="delete-account-code"
                 name="code"
                 disabled={!sent || !acknowledged || sending || submitting}
-                placeholder="请输入 6 位验证码"
+                placeholder={t("account.delete.sixDigits")}
                 required
               />
             </div>
           </div>
 
           <div className="space-y-3 border-t border-border pt-5">
-            <p className="text-sm text-destructive">点击下方红色按钮后，账号将立即注销，无法撤销。</p>
+            <p className="text-sm text-destructive">{t("account.delete.finalWarning")}</p>
             <div className="flex flex-wrap items-center justify-end gap-4">
               <Link className="text-sm font-semibold text-primary hover:underline" to="/me/profile">
-                取消，返回个人资料
+                {t("account.delete.back")}
               </Link>
               <Button
                 type="submit"
                 variant="destructive"
                 disabled={!acknowledged || !sent || sending || submitting}
               >
-                {submitting ? "正在注销……" : "永久注销账号"}
+                {submitting ? t("account.delete.deleting") : t("account.delete.permanent")}
               </Button>
             </div>
           </div>

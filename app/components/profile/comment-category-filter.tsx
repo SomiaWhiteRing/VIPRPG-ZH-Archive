@@ -1,13 +1,23 @@
 import { COMMENT_TARGET_LABELS, type CommentTarget } from "@/lib/comment-target";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages } from "@/lib/i18n/react";
+
+const labels = {
+  work: "publicProfile.work",
+  creator: "publicProfile.creator",
+  character: "publicProfile.character",
+  catalog: "timeline.feed.kind.catalog",
+} as const;
 
 export function CommentCategoryFilter({ basePath, kind }: {
   basePath: string;
   kind?: CommentTarget["kind"];
 }) {
-  const categories = [["", "全部"], ...Object.entries(COMMENT_TARGET_LABELS)];
+  const t = useMessages();
+  const kinds = Object.keys(COMMENT_TARGET_LABELS) as CommentTarget["kind"][];
+  const categories = [["", t("timeline.feed.allKinds")], ...kinds.map(value => [value, t(labels[value])])];
   return (
-    <nav aria-label="评论类别" className="mb-2 flex max-w-full gap-1 overflow-x-auto border-b border-border">
+    <nav aria-label={t("publicProfile.commentFilter")} className="mb-2 flex max-w-full gap-1 overflow-x-auto border-b border-border">
       {categories.map(([value, label]) => (
         <Link
           key={value}

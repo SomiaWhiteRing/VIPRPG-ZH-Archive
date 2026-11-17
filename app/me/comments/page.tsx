@@ -1,6 +1,8 @@
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { parseCommentTargetKind } from "@/lib/comment-target";
 import { CommentCategoryFilter } from "@/app/components/profile/comment-category-filter";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import {
   parseAccountPage,
   requireAccountUser,
@@ -35,25 +37,28 @@ export async function loader(args: LoaderFunctionArgs) {
     kind,
   });
 
-  return { page, result, kind };
+  return { locale: runtime.uiLocale, page, result, kind };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: "我的评论", page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "account.nav.comments"), page: loaderData?.page }, error, locale);
+};
 
 export default function CommentsPage() {
+  const t = useMessages();
   const { page, result, kind } = useLoaderData<typeof loader>();
   return (
     <div>
       <AccountPageHeader
-        title="我的评论"
-        subtitle={`${kind ? "当前类别" : ""}共 ${result.total} 条评论`}
+        title={t("account.nav.comments")}
+        subtitle={t(kind ? "account.activity.filteredComments" : "account.activity.comments", { count: result.total })}
       />
       <CommentCategoryFilter basePath="/me/comments" kind={kind} />
       {result.items.length ? (
         <CommentSummaryList items={result.items} showStatus />
       ) : (
-        <AccountEmpty>{kind ? "这个类别下还没有评论。" : "还没有发表过评论。"}</AccountEmpty>
+        <AccountEmpty>{t(kind ? "account.activity.noFilteredComments" : "account.activity.noComments")}</AccountEmpty>
       )}
       <PaginationLinks
         basePath="/me/comments"

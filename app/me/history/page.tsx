@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import {
   requireAccountUser,
 } from "@/app/.server/auth/account-user";
@@ -18,21 +20,25 @@ export async function loader(args: LoaderFunctionArgs) {
     runtime,
     `/me/history${url.search}`,
   );
-  return loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "played", publicOnly: false });
+  const data = await loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "played", publicOnly: false });
+  return { ...data, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: "游玩历史", page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "account.nav.history"), page: loaderData?.page }, error, locale);
+};
 
 export default function HistoryPage() {
+  const t = useMessages();
   const data = useLoaderData<typeof loader>();
   return (
     <div>
       <AccountPageHeader
-        title="游玩历史"
-        subtitle={`共 ${data.total} 部作品`}
+        title={t("account.nav.history")}
+        subtitle={t("favorites.total", { count: data.total })}
       />
-      <GameLibrary data={data} basePath="/me/history" emptyTitle="还没有游玩记录。" />
+      <GameLibrary data={data} basePath="/me/history" emptyTitle={t("account.activity.noHistory")} />
     </div>
   );
 }

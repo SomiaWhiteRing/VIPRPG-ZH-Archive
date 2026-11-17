@@ -1,3 +1,5 @@
+import { UiFeedbackError, formatFeedbackError } from "@/lib/i18n/feedback";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { useConfirm } from "./confirm-provider";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
@@ -33,6 +35,8 @@ export function AvatarCropper({
   onChange?: (changed: boolean) => void;
   onBusyChange?: (busy: boolean) => void;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const toast = useToast();
   const confirm = useConfirm();
   const dialogId = useId();
@@ -72,11 +76,11 @@ export function AvatarCropper({
   function choose(file: File | undefined) {
     if (!file) return;
     if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type)) {
-      toast.error("请选择 JPEG、PNG 或 WebP 图片。");
+      toast.error(t("avatar.type"));
       return;
     }
     if (file.size > MAX_SOURCE_BYTES) {
-      toast.error("源图片不能超过 10 MiB。");
+      toast.error(t("avatar.size"));
       return;
     }
     if (source) URL.revokeObjectURL(source);
@@ -103,7 +107,7 @@ export function AvatarCropper({
       setSource(null);
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "头像处理失败");
+      toast.error(formatFeedbackError(error, locale, t("avatar.failed")));
       return false;
     } finally {
       setPreparing(false);
@@ -113,8 +117,8 @@ export function AvatarCropper({
 
   async function remove() {
     if (!hasAvatar || busy) return;
-    if (await confirm(`确定删除“${displayName}”的头像吗？保存资料后生效。`, {
-      title: "删除头像", confirmLabel: "删除", destructive: true,
+    if (await confirm(t("avatar.deleteNamed", { name: displayName }), {
+      title: t("avatar.delete"), confirmLabel: t("comment.delete"), destructive: true,
     })) {
       setDraft(avatarBlobSha256 ? null : undefined);
       onChange?.(Boolean(avatarBlobSha256));
@@ -125,7 +129,7 @@ export function AvatarCropper({
     <div className="flex flex-wrap items-center gap-4" ref={rootRef}>
       {draft ? (
         <img
-          alt={`${displayName}的待保存头像`}
+          alt={t("avatar.pending", { name: displayName })}
           className={cn("shrink-0 object-cover", shape === "round" ? "size-20 rounded-full" : "size-24 rounded-md border border-border")}
           height={shape === "round" ? 80 : 96}
           src={draft.src}
@@ -179,7 +183,7 @@ export function AvatarCropper({
             type="button"
             variant="outline"
           >
-            上传图片
+            {t("image.upload")}
           </Button>
           <CharacterAvatarPicker disabled={busy} shape={shape} onSave={prepare} />
           {allowDelete && hasAvatar ? (
@@ -190,11 +194,11 @@ export function AvatarCropper({
               type="button"
               variant="ghost"
             >
-              删除头像
+              {t("avatar.delete")}
             </Button>
           ) : null}
         </div>
-        <p className="m-0 text-sm text-muted">{draft !== undefined ? "头像已修改，保存资料后生效。" : "头像修改将在保存资料后生效。"}</p>
+        <p className="m-0 text-sm text-muted">{draft !== undefined ? t("avatar.changed") : t("avatar.saveHint")}</p>
       </div>
       <Dialog.Root
         open={Boolean(source)}
@@ -213,12 +217,12 @@ export function AvatarCropper({
               editButtonRef.current?.focus();
             }}
           >
-            <Dialog.Title>裁剪头像</Dialog.Title>
+            <Dialog.Title>{t("avatar.crop")}</Dialog.Title>
             <Dialog.Description
               className="m-0 text-sm text-muted"
               id={`${dialogId}-description`}
             >
-              拖动、缩放以裁剪
+              {t("avatar.cropHint")}
             </Dialog.Description>
             <div className="relative h-[min(55vh,380px)] overflow-hidden rounded-md bg-black">
               {source ? (
@@ -236,7 +240,7 @@ export function AvatarCropper({
               ) : null}
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm">缩放</span>
+              <span className="text-sm">{t("avatar.zoom")}</span>
               <Slider.Root
                 className="relative flex h-5 flex-1 cursor-pointer touch-none select-none items-center"
                 max={3}
@@ -249,7 +253,7 @@ export function AvatarCropper({
                   <Slider.Range className="absolute h-full rounded-full bg-primary" />
                 </Slider.Track>
                 <Slider.Thumb
-                  aria-label="缩放头像"
+                  aria-label={t("avatar.zoomLabel")}
                   className="block size-4 cursor-grab active:cursor-grabbing rounded-full border border-primary bg-card shadow-sm"
                 />
               </Slider.Root>
@@ -261,14 +265,14 @@ export function AvatarCropper({
                 type="button"
                 variant="outline"
               >
-                取消
+                {t("relation.edit.cancel")}
               </Button>
               <Button
                 disabled={busy || !area}
                 onClick={() => void prepare()}
                 type="button"
               >
-                {busy ? "正在处理…" : "使用此头像"}
+                {busy ? t("core.confirm.working") : t("avatar.use")}
               </Button>
             </div>
           </Dialog.Content>
@@ -286,7 +290,7 @@ async function cropToPng(source: string, area: Area, pixelated = false): Promise
   canvas.width = 192;
   canvas.height = 192;
   const context = canvas.getContext("2d");
-  if (!context) throw new Error("当前浏览器无法处理头像");
+  if (!context) throw new UiFeedbackError("avatar.unsupported");
   // Role face cells are enlarged exactly 4x without blending adjacent pixels.
   context.imageSmoothingEnabled = !pixelated;
   context.drawImage(
@@ -303,6 +307,6 @@ async function cropToPng(source: string, area: Area, pixelated = false): Promise
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/png"),
   );
-  if (!blob) throw new Error("头像导出失败");
+  if (!blob) throw new UiFeedbackError("avatar.exportFailed");
   return blob;
 }

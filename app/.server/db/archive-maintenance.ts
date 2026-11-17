@@ -8,6 +8,7 @@ import type {
 } from "@/lib/dto/db/archive-maintenance";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 import { isArchiveEngineFamily } from "@/lib/labels";
 
 type Row = {
@@ -170,14 +171,14 @@ export async function moveArchiveVersionToTrash(
   actor?: ArchiveUser,
 ): Promise<AdminArchiveVersion> {
   const row = await identity(runtime, id);
-  if (!row) throw new HttpError(404, "ArchiveVersion 不存在");
+  if (!row) throw new HttpError(404, "ArchiveVersion 不存在", undefined, "admin.archives.error.missing");
   if (actor) {
     const archive = await required(runtime, id);
     const maintainerId = archive.workDeleted
       ? null
       : (archive.maintainerIds.find((id) => id === actor.id) ?? null);
     if (!canDeleteArchiveVersion(actor, maintainerId))
-      throw new HttpError(404, "ArchiveVersion 不存在");
+      throw new HttpError(404, "ArchiveVersion 不存在", undefined, "admin.archives.error.missing");
   }
   await getD1(runtime)
     .prepare(
@@ -193,8 +194,8 @@ export async function restoreArchiveVersion(
   id: number,
 ): Promise<AdminArchiveVersion> {
   const row = await identity(runtime, id);
-  if (!row) throw new Error("ArchiveVersion 不存在");
-  if (row.purged_at) throw new Error("ArchiveVersion 已最终清理，不能还原");
+  if (!row) throw new UiFeedbackError("admin.archives.error.missing");
+  if (row.purged_at) throw new UiFeedbackError("admin.archives.cannotRestore");
   await getD1(runtime)
     .prepare(
       `UPDATE archive_versions SET status='published',deleted_at=NULL,published_at=COALESCE(published_at,CURRENT_TIMESTAMP),is_current=0 WHERE id=? AND status='deleted' AND purged_at IS NULL`,
@@ -210,7 +211,7 @@ export async function setCurrentArchiveVersion(
 ): Promise<AdminArchiveVersion> {
   const row = await identity(runtime, id);
   if (!row || row.status !== "published" || row.purged_at)
-    throw new Error("只能把未清理的 published ArchiveVersion 设为当前版本");
+    throw new UiFeedbackError("admin.archives.error.currentPublished");
   const work = await getD1(runtime)
     .prepare(
       `SELECT w.engine_family,
@@ -227,9 +228,7 @@ export async function setCurrentArchiveVersion(
     !isArchiveEngineFamily(work.engine_family) ||
     work.has_download_link === 1
   ) {
-    throw new Error(
-      "只有使用 RPG Maker 2000/2003 系引擎且没有外部下载的作品才能设置当前归档",
-    );
+    throw new UiFeedbackError("admin.archives.error.currentEligible");
   }
   await getD1(runtime).batch([
     getD1(runtime)

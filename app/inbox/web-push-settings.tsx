@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Info, Settings2, X } from "lucide-react";
 import { Switch } from "radix-ui";
@@ -15,11 +16,22 @@ import { WebPushPermissionGuide, type PushPermissionGuide } from "./web-push-per
 
 type AndroidNotificationSettings = { enabled: boolean; permission: NotificationPermission; categories: PushCategory[] | null };
 
+const pushCategoryLabels = {
+  comments: "block.comments",
+  replies: "timeline.action.reply",
+  forum: "core.nav.discussions",
+  likes: "inbox.ui.likes",
+  friends: "friends.title",
+  messages: "admin.discussions.message",
+  system: "inbox.system",
+} as const satisfies Record<PushCategory, string>;
+
 export function WebPushSettings({ userId, publicKey, preferences }: {
   userId: number;
   publicKey: string | null;
   preferences: AccountPreferences;
 }) {
+  const t = useMessages();
   const environment = useClientEnvironment();
   const native = environment === "android";
   const id = useId();
@@ -162,17 +174,17 @@ export function WebPushSettings({ userId, publicKey, preferences }: {
 
   if (!ready || (!native && (!publicKey || !client || environment !== "browser"))) return null;
   return <div className="flex shrink-0 items-center gap-2">
-    <Label htmlFor={id} className="whitespace-nowrap text-sm">系统通知</Label>
+    <Label htmlFor={id} className="whitespace-nowrap text-sm">{t("inbox.ui.push")}</Label>
     <Switch.Root id={id} checked={enabled && !blocked} disabled={busy || blocked} onCheckedChange={checked => void toggle(checked)}
       className="relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full bg-muted transition-colors data-[state=checked]:bg-primary disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
       <Switch.Thumb className="block size-4 translate-x-1 rounded-full bg-background transition-transform data-[state=checked]:translate-x-5" />
     </Switch.Root>
-    {blocked ? native ? <Button type="button" variant="ghost" size="icon" className="size-9" aria-label="打开系统通知设置" onClick={() => {
+    {blocked ? native ? <Button type="button" variant="ghost" size="icon" className="size-9" aria-label={t("inbox.ui.openSettings")} onClick={() => {
         void androidNotificationRequest("openSettings").catch(error => console.error("Android notification settings failed", error));
-      }}><Info aria-hidden className="size-3.5" /></Button> : <InfoTooltip label="查看通知开启引导" className="w-[min(21rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] p-3">
+      }}><Info aria-hidden className="size-3.5" /></Button> : <InfoTooltip label={t("inbox.ui.guide")} className="w-[min(21rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] p-3">
       {client && <WebPushPermissionGuide guide={client.guide} supported={client.supported} />}
     </InfoTooltip> : <Button ref={settingsButton} type="button" variant="ghost" size="icon" className="size-9" disabled={busy}
-      aria-label="系统通知接收类型" aria-haspopup="dialog" onClick={() => { setDraft(selected); setOpen(true); }}>
+      aria-label={t("inbox.ui.pushCategories")} aria-haspopup="dialog" onClick={() => { setDraft(selected); setOpen(true); }}>
       <Settings2 aria-hidden />
     </Button>}
     <Dialog.Root open={open} onOpenChange={value => { if (!busy) setOpen(value); }}>
@@ -180,20 +192,20 @@ export function WebPushSettings({ userId, publicKey, preferences }: {
         <Dialog.Content className="left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(27rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg p-5"
           onCloseAutoFocus={event => { event.preventDefault(); (settingsButton.current ?? document.getElementById(id))?.focus(); }}>
           <div className="flex items-start justify-between gap-3"><div>
-            <Dialog.Title id={`${id}-title`}>接收类型</Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm text-muted">{native ? "设置仅影响当前应用。" : "设置仅影响当前浏览器。"}</Dialog.Description>
-          </div><Button type="button" variant="ghost" size="icon" className="size-9" disabled={busy} aria-label="关闭设置" onClick={() => setOpen(false)}><X aria-hidden /></Button></div>
+            <Dialog.Title id={`${id}-title`}>{t("inbox.ui.categories")}</Dialog.Title>
+            <Dialog.Description className="mt-1 text-sm text-muted">{native ? t("inbox.ui.appOnly") : t("inbox.ui.browserOnly")}</Dialog.Description>
+          </div><Button type="button" variant="ghost" size="icon" className="size-9" disabled={busy} aria-label={t("inbox.ui.closeSettings")} onClick={() => setOpen(false)}><X aria-hidden /></Button></div>
           <form onSubmit={event => { event.preventDefault(); void saveCategories(); }}>
             <fieldset aria-labelledby={`${id}-title`} disabled={!enabled || blocked || busy} className="mb-5 grid disabled:opacity-50">
               {PUSH_CATEGORIES.map(item => <Label key={item.value} htmlFor={`${id}-${item.value}`}
                 className="flex min-h-11 cursor-pointer items-center gap-3 text-sm has-disabled:cursor-not-allowed has-disabled:opacity-50">
                 <Checkbox id={`${id}-${item.value}`} checked={available.includes(item.value) && draft.includes(item.value)} disabled={!available.includes(item.value)}
                   onCheckedChange={checked => setDraft(current => checked === true ? [...current, item.value] : current.filter(category => category !== item.value))} />
-                {item.label}
+                {t(pushCategoryLabels[item.value])}
               </Label>)}
             </fieldset>
-            <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>取消</Button>
-              <Button type="submit" disabled={!enabled || blocked || busy}>保存设置</Button></div>
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>{t("play.save.cancel")}</Button>
+              <Button type="submit" disabled={!enabled || blocked || busy}>{t("timeline.settings.save")}</Button></div>
           </form>
         </Dialog.Content>
       </Dialog.Portal>

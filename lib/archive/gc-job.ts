@@ -1,3 +1,5 @@
+export const GC_ITEM_RETRY_DETAIL = "删除未完成，已保留进度与安全锁；可以重试";
+
 /** Manual cleanup is a persisted snapshot, separate from the scheduled GC cursor. */
 export type GcJobStatus = "scanning" | "ready" | "running" | "needs_retry" | "completed" | "cancelled";
 export type GcJobPhase = "archives" | "blobs" | "core_packs" | "manifests";

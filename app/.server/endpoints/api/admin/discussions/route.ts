@@ -5,7 +5,7 @@ import { jsonError } from "@/lib/http";
 
 export async function GET(runtime: AppRuntime, request: Request) {
   try {
-    return await handler.GET(getForumRequestRuntime(runtime), request);
+    return await handler.GET(getForumRequestRuntime(runtime), request, runtime.uiLocale);
   } catch (error) {
     return jsonError("论坛请求失败。", error);
   }
@@ -13,7 +13,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
 
 export async function POST(runtime: AppRuntime, request: Request) {
   try {
-    return await handler.POST(getForumRequestRuntime(runtime), request);
+    return await handler.POST(getForumRequestRuntime(runtime), request, runtime.uiLocale);
   } catch (error) {
     return jsonError("论坛请求失败。", error);
   }

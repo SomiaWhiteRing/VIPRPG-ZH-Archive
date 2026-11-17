@@ -1,3 +1,5 @@
+import type { MessageKey } from "@/lib/i18n/core";
+
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 // Enough for the signatures and primary headers below, including BMP.
 export const IMAGE_HEADER_BYTES = 64;
@@ -6,6 +8,7 @@ export class ImageValidationError extends Error {
   constructor(
     public status: number,
     message: string,
+    readonly messageKey?: MessageKey,
   ) {
     super(message);
   }

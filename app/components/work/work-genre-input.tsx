@@ -1,6 +1,7 @@
 import { requestJsonValue } from "@/lib/ui/api-response";
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { WORK_GENRE_MAX_LENGTH } from "@/lib/work-genre";
+import { useMessages } from "@/lib/i18n/react";
 import { useEffect, useState } from "react";
 
 export function WorkGenreInput({ id, value, disabled, onChange }: {
@@ -9,6 +10,7 @@ export function WorkGenreInput({ id, value, disabled, onChange }: {
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
+  const t = useMessages();
   const [focused, setFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<{ query: string | null; names: string[] }>({ query: null, names: [] });
   useEffect(() => {
@@ -16,7 +18,7 @@ export function WorkGenreInput({ id, value, disabled, onChange }: {
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
-        const result = await requestJsonValue<{ names: string[] }>(`/api/genres?${new URLSearchParams({ q: value })}`, { signal: controller.signal }, "类型候补加载失败");
+        const result = await requestJsonValue<{ names: string[] }>(`/api/genres?${new URLSearchParams({ q: value })}`, { signal: controller.signal });
         if (!controller.signal.aborted) setSuggestions({ query: value, names: result.names });
       } catch {
         // Suggestions are optional; a failed request never blocks free text.
@@ -31,7 +33,7 @@ export function WorkGenreInput({ id, value, disabled, onChange }: {
   return (
     <SearchComboBox
       id={id}
-      label="类型"
+      label={t("upload.metadata.genre")}
       query={value}
       disabled={disabled}
       maxLength={WORK_GENRE_MAX_LENGTH}

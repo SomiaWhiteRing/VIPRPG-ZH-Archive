@@ -9,6 +9,8 @@ import {
 } from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
+import { preserveFormRedirectLocale, UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
 import type {
   ApiConfirmation,
   ApiResponsePayload,
@@ -38,10 +40,12 @@ export function ConfirmingForm({
   id,
   method = "post",
   confirmField,
-  errorTitle = "保存失败",
+  errorTitle,
   title,
   description,
 }: ConfirmingFormProps) {
+  const t = useMessages();
+  const navigationLocale = useNavigationLocale();
   const toast = useToast();
   const formRef = useRef<HTMLFormElement>(null);
   const submitterRef = useRef<HTMLElement | null>(null);
@@ -69,6 +73,7 @@ export function ConfirmingForm({
     confirmation: ApiConfirmation | null = null,
   ) {
     if (!form || submittingRef.current) return;
+    const submittedFrom = new URL(window.location.href);
     submittingRef.current = true;
     setSubmitting(true);
     setRetryConfirmation(null);
@@ -77,10 +82,14 @@ export function ConfirmingForm({
       if (confirmation)
         formData.set(confirmation.fieldName, confirmation.fieldValue);
       const request = formRequest(form, formData);
+      const requestUrl = new URL(request.url);
+      if (navigationLocale && requestUrl.origin === window.location.origin && !requestUrl.searchParams.has(UI_LOCALE_PARAM)) {
+        requestUrl.searchParams.set(UI_LOCALE_PARAM, navigationLocale);
+      }
       const payload = await requestJson<ApiResponsePayload>(
-        request.url,
+        requestUrl,
         request.init,
-        errorTitle,
+        errorTitle ?? t("core.confirm.failed"),
       );
       const target = new URL(
         payload.redirectTo ?? window.location.href,
@@ -88,9 +97,10 @@ export function ConfirmingForm({
       );
       if (target.origin !== window.location.origin) {
         throw new Error(
-          `${errorTitle}：服务器返回了不安全的跳转地址，请刷新页面后重试。`,
+          t("core.confirm.failed"),
         );
       }
+      preserveFormRedirectLocale(target, submittedFrom, new URL(window.location.href), navigationLocale);
       setOpen(false);
       setRetryConfirmation(null);
       window.location.assign(target.href);
@@ -104,7 +114,7 @@ export function ConfirmingForm({
         return;
       }
       toast.error(
-        error instanceof Error ? error.message : `${errorTitle}，请稍后重试。`,
+        error instanceof Error ? error : errorTitle ?? t("core.confirm.failed"),
       );
     }
   }
@@ -136,7 +146,7 @@ export function ConfirmingForm({
           <AlertDialogDescription>{description}</AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
-              <Button variant="outline">取消</Button>
+              <Button variant="outline">{t("play.save.cancel")}</Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
               <Button
@@ -144,7 +154,7 @@ export function ConfirmingForm({
                 onClick={() => void submit(formRef.current)}
                 variant="destructive"
               >
-                确认继续
+                {t("core.confirm.continue")}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -168,7 +178,7 @@ export function ConfirmingForm({
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
-              <Button variant="outline">取消</Button>
+              <Button variant="outline">{t("play.save.cancel")}</Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
               <Button

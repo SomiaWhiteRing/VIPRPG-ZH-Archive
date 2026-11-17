@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Card } from "@/app/components/ui/card";
+import { useMessages } from "@/lib/i18n/react";
 
 export function WorkSidebar({
   engagement,
@@ -18,6 +19,7 @@ export function WorkSidebar({
   secondary: ReactNode;
   stats?: ReactNode;
 }) {
+  const t = useMessages();
   return (
     <>
       <Card
@@ -44,7 +46,7 @@ export function WorkSidebar({
       </Card>
 
       <Card
-        aria-label="作品资料"
+        aria-label={t("upload.details")}
         className="order-2 rounded-lg border border-border bg-card p-4.5 text-card-foreground shadow-none max-[980px]:w-full"
         id="infobox-card"
       >

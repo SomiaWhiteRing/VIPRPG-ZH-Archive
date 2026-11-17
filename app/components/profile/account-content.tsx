@@ -3,7 +3,8 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import type { UserWorkListItem } from "@/lib/dto/db/game-library";
 import { formatDate } from "@/lib/format";
 import type { ReactNode } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 
 export function AccountSection({
   title,
@@ -11,7 +12,7 @@ export function AccountSection({
   status,
   children,
   divided = true,
-  linkText = "更多 →",
+  linkText,
 }: {
   title: string;
   href: string;
@@ -20,6 +21,7 @@ export function AccountSection({
   divided?: boolean;
   linkText?: string;
 }) {
+  const t = useMessages();
   return (
     <section className={divided ? "min-w-0 border-t border-border pt-5 first:border-t-0 first:pt-0" : "min-w-0"}>
       <header className="mb-3 flex items-center justify-between gap-4">
@@ -31,7 +33,7 @@ export function AccountSection({
           className="shrink-0 whitespace-nowrap text-sm font-semibold text-primary hover:underline"
           to={href}
         >
-          {linkText}
+          {linkText ?? t("library.more")}
         </Link>
       </header>
       {children}
@@ -40,6 +42,8 @@ export function AccountSection({
 }
 
 export function AccountWorkGrid({ items, showPlayedAt = false }: { items: UserWorkListItem[]; showPlayedAt?: boolean }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   return (
     <div className="@container">
     <ul className="grid grid-cols-2 gap-3 @min-[720px]:grid-cols-4">
@@ -51,7 +55,7 @@ export function AccountWorkGrid({ items, showPlayedAt = false }: { items: UserWo
           <GameCard work={item.work}>
             {showPlayedAt ? (
               <p className="mt-1 text-xs text-muted wrap-anywhere">
-                最近游玩：{formatDate(item.occurredAt)}
+                {t("publicProfile.playedAt", { date: formatDate(item.occurredAt, { locale }) })}
               </p>
             ) : null}
           </GameCard>

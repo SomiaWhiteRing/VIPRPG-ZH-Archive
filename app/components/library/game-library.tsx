@@ -1,3 +1,4 @@
+import { RichMessage } from "@/app/components/ui/rich-message";
 import type { loadGameLibrary } from "@/app/.server/game-library-page";
 import { GameCard } from "@/app/components/home/game-card";
 import { FavoriteTagSidebar } from "@/app/components/library/favorite-tag-sidebar";
@@ -11,26 +12,22 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { GameLibraryListRow } from "@/app/games/game-library-list-row";
 import type { GameLibrarySummary } from "@/lib/dto/db/game-library";
-import { formatNumber, formatDate } from "@/lib/format";
-import { ENGINE_OPTIONS, LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
-import { WORK_REFERENCE_DURATIONS } from "@/lib/work-reference-duration";
+import { formatDate } from "@/lib/format";
+import { engineLabel, LANGUAGE_OPTIONS, languageLabel } from "@/lib/labels";
+import { referenceDurationLabel, WORK_REFERENCE_DURATIONS } from "@/lib/work-reference-duration";
 import { LayoutGrid, List } from "lucide-react";
-import type { ReactNode } from "react";
-import { Link } from "react-router";
+import { useId, type ReactNode } from "react";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { isFilteredGameList } from "@/lib/crawl-policy";
 
 export type GameLibraryData = Awaited<ReturnType<typeof loadGameLibrary>>;
-
-const REFERENCE_DURATIONS = [
-  { value: "", label: "全部" },
-  ...WORK_REFERENCE_DURATIONS.map((value) => ({ value, label: value })),
-];
 
 export function GameLibrary({
   data,
   basePath,
   title,
-  emptyTitle = "没有找到匹配的作品。",
+  emptyTitle,
   renderWorkActions,
   sidebar,
   showActiveFilters = true,
@@ -43,6 +40,8 @@ export function GameLibrary({
   sidebar?: (releaseFilter: ReactNode) => ReactNode;
   showActiveFilters?: boolean;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const {
     engine,
     referenceDuration,
@@ -79,8 +78,8 @@ export function GameLibrary({
     to={gamesHref({ ...activeParams, release: undefined, page: undefined })}
     aria-current={!data.release ? "true" : undefined}
     className="shrink-0 text-xs font-semibold text-primary hover:text-accent"
-  >全部</Link>;
-  const releaseFilter = <FilterSection label="发布日期" action={clearTimeFilter}>{timeFilter}</FilterSection>;
+  >{t("library.all")}</Link>;
+  const releaseFilter = <FilterSection label={t("library.release")} action={clearTimeFilter}>{timeFilter}</FilterSection>;
   return (
     <div className="@container/library">
       {title ? <PageHeader
@@ -88,11 +87,7 @@ export function GameLibrary({
         title={title}
         actions={
           <span className="text-sm text-muted">
-            共{" "}
-            <strong className="tabular-nums text-foreground">
-              {formatNumber(total)}
-            </strong>{" "}
-            个作品
+            <RichMessage id="library.count" values={{ count: total }} components={{ emphasis: children => <strong key="count" className="tabular-nums text-foreground">{children}</strong> }} />
           </span>
         }
       /> : null}
@@ -102,21 +97,21 @@ export function GameLibrary({
         <div className="@container min-w-0 flex-1">
           <div
             className="flex flex-wrap items-center gap-x-5 gap-y-1 py-2.5"
-            aria-label="游戏工具栏"
+            aria-label={t("library.toolbar")}
           >
             {!data.userWorkKind ? <div
               className="flex flex-wrap items-center gap-3 text-sm font-semibold text-muted"
-              aria-label="游戏排序"
+              aria-label={t("library.sortLabel")}
             >
-              <span className="text-[13px]">排序</span>
+              <span className="text-[13px]">{t("library.sort")}</span>
               {([
-                { value: "id", label: "默认" },
-                { value: "title", label: "标题" },
-                { value: "release", label: "发布日期" },
-                { value: "views", label: "浏览数" },
-                { value: "players", label: "游玩数" },
-                { value: "comments", label: "评论数" },
-                { value: "favorites", label: "收藏数" },
+                { value: "id", label: t("library.default") },
+                { value: "title", label: t("library.title") },
+                { value: "release", label: t("library.release") },
+                { value: "views", label: t("library.views") },
+                { value: "players", label: t("library.players") },
+                { value: "comments", label: t("library.comments") },
+                { value: "favorites", label: t("library.favorites") },
               ] as const).map(({ value, label }) => (
                 <Link
                   rel={value === "id" && !hasFilters ? undefined : "nofollow"}
@@ -139,14 +134,14 @@ export function GameLibrary({
             </div> : null}
             <div
               className="ml-auto inline-flex overflow-hidden rounded-md border border-border bg-card text-[13px] font-semibold"
-              aria-label="显示方式"
+              aria-label={t("library.display")}
             >
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 aria-pressed={isListView}
-                aria-label="列表视图"
+                aria-label={t("library.listView")}
                 className={
                   view === "list"
                     ? "min-h-8 gap-1.5 rounded-none bg-secondary px-3 text-[13px] text-secondary-foreground hover:bg-secondary [&_svg]:size-3.5"
@@ -155,14 +150,14 @@ export function GameLibrary({
                 onClick={() => setView("list")}
               >
                 <List aria-hidden size={14} />
-                <span className="max-[560px]:hidden">列表</span>
+                <span className="max-[560px]:hidden">{t("library.list")}</span>
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 aria-pressed={!isListView}
-                aria-label="网格视图"
+                aria-label={t("library.gridView")}
                 className={
                   view === "grid"
                     ? "min-h-8 gap-1.5 rounded-none border-l border-border bg-secondary px-3 text-[13px] text-secondary-foreground hover:bg-secondary [&_svg]:size-3.5"
@@ -171,77 +166,77 @@ export function GameLibrary({
                 onClick={() => setView("grid")}
               >
                 <LayoutGrid aria-hidden size={14} />
-                <span className="max-[560px]:hidden">网格</span>
+                <span className="max-[560px]:hidden">{t("library.grid")}</span>
               </Button>
             </div>
           </div>
           {showActiveFilters && !isFavoriteLibrary && hasFilters ? (
             <div
               className="mb-5 flex flex-wrap items-center gap-2 text-sm"
-              aria-label="当前筛选"
+              aria-label={t("library.active")}
             >
-              <span className="font-bold text-muted">当前筛选</span>
+              <span className="font-bold text-muted">{t("library.active")}</span>
               <Link
                 className="font-bold text-accent hover:underline"
                 to={basePath}
               >
-                清除全部
+                {t("library.clear")}
               </Link>
               {engine !== "all" ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, engine: undefined })}
-                  label={`引擎：${ENGINE_OPTIONS.find((option) => option.value === engine)?.label ?? engine}`}
+                  label={t("library.engineChip", { value: engineLabel(engine, locale) })}
                 />
               ) : null}
               {referenceDuration ? <FilterChip
                 href={gamesHref({ ...activeParams, duration: undefined })}
-                label={`参考时长：${referenceDuration === "custom" ? "自定义" : referenceDuration}`}
+                label={t("library.durationChip", { value: referenceDuration === "custom" ? t("library.custom") : referenceDurationLabel(referenceDuration, locale) })}
               /> : null}
               {data.release ? <FilterChip
                 href={gamesHref({ ...activeParams, release: undefined })}
-                label={`发布日期：${releasePeriodLabel(data.release)}`}
+                label={t("library.releaseChip", { value: releasePeriodLabel(data.release, locale) })}
               /> : null}
               {uploader ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, uploader: undefined })}
-                  label={`上传者：${uploaderName || uploader}`}
+                  label={t("library.uploaderChip", { value: uploaderName || uploader })}
                 />
               ) : null}
               {tag ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, tag: undefined })}
-                  label={`标签：${selectedTag?.name ?? tag}`}
+                  label={t("library.tagChip", { value: selectedTag?.name ?? tag })}
                 />
               ) : null}
               {data.genre ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, genre: undefined })}
-                  label={`类型：${data.genre}`}
+                  label={t("library.genreChip", { value: data.genre })}
                 />
               ) : null}
               {character ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, character: undefined })}
-                  label={`角色：${selectedCharacter?.primaryName ?? character}`}
+                  label={t("library.characterChip", { value: selectedCharacter?.primaryName ?? character })}
                 />
               ) : null}
               {language ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, language: undefined })}
-                  label={`语言：${languageLabel(language)}`}
+                  label={t("library.languageChip", { value: languageLabel(language, locale) })}
                 />
               ) : null}
               {original ? (
                 <FilterChip
                   href={gamesHref({ ...activeParams, original: undefined })}
-                  label={original === "1" ? "本站原创" : "社区收录"}
+                  label={original === "1" ? t("library.original") : t("library.community")}
                 />
               ) : null}
             </div>
           ) : null}
           {works.length > 0 ? (
             <section
-              aria-label={isListView ? "作品列表" : "作品网格"}
+              aria-label={isListView ? t("library.gameList") : t("library.gameGrid")}
               className={
                 isListView
                   ? "divide-y divide-border border-y border-border"
@@ -254,7 +249,7 @@ export function GameLibrary({
                 const details = occurredAt ? isFavoriteLibrary ? (
                   <FavoriteEntryDetails occurredAt={occurredAt} tags={favorite?.tags ?? []} basePath={basePath} />
                 ) : (
-                  <p className="mt-1 break-words text-xs text-muted">最近游玩：{formatDate(occurredAt, { time: true })}</p>
+                  <p className="mt-1 break-words text-xs text-muted">{t("library.lastPlayed", { date: formatDate(occurredAt, { time: true, locale }) })}</p>
                 ) : null;
                 return (
                   <div className="min-w-0" key={work.id}>
@@ -272,7 +267,7 @@ export function GameLibrary({
               })}
             </section>
           ) : (
-            <EmptyState title={emptyTitle} />
+            <EmptyState title={emptyTitle ?? t("search.emptyWorks")} />
           )}
           <PaginationLinks
             basePath={basePath}
@@ -288,10 +283,10 @@ export function GameLibrary({
           basePath={basePath}
         /> : !data.userWorkKind ? <aside
           className="mt-5 shrink-0 rounded-lg border border-border bg-muted/5 p-3 @min-[981px]/library:sticky @min-[981px]/library:top-18.5 @min-[981px]/library:mt-1 @min-[981px]/library:w-[252px] @min-[981px]/library:self-start @min-[981px]/library:border-0 @min-[981px]/library:bg-transparent @min-[981px]/library:p-0"
-          aria-label={sidebar ? "标签浏览" : "游戏筛选"}
+          aria-label={sidebar ? t("library.browseTags") : t("library.filters")}
         >
           {sidebar ? sidebar(releaseFilter) : <>
-            <FilterSection label="来源">
+            <FilterSection label={t("library.source")}>
               <FilterLink
                 active={!original}
                 href={gamesHref({
@@ -299,7 +294,7 @@ export function GameLibrary({
                   original: undefined,
                   page: undefined,
                 })}
-                label="全部"
+                label={t("library.all")}
               />
               <FilterLink
                 active={original === "1"}
@@ -308,7 +303,7 @@ export function GameLibrary({
                   original: "1",
                   page: undefined,
                 })}
-                label="本站原创"
+                label={t("library.original")}
               />
               {/* <FilterLink
                 active={original === "0"}
@@ -317,11 +312,11 @@ export function GameLibrary({
                   original: "0",
                   page: undefined,
                 })}
-                label="社区收录"
+                label={t("library.community")}
               /> */}
             </FilterSection>
-            <FilterSection label="参考时长">
-              {REFERENCE_DURATIONS.map(({ value, label }) => (
+            <FilterSection label={t("library.duration")} optionsClassName="grid grid-cols-2 justify-items-start">
+              {(["", ...WORK_REFERENCE_DURATIONS] as const).map((value) => (
                 <FilterLink
                   key={value}
                   active={referenceDuration === value}
@@ -330,11 +325,11 @@ export function GameLibrary({
                     duration: value || undefined,
                     page: undefined,
                   })}
-                  label={label}
+                  label={value ? referenceDurationLabel(value, locale) : t("library.all")}
                 />
               ))}
             </FilterSection>
-            <FilterSection label="语言">
+            <FilterSection label={t("library.language")}>
               <CollapsibleFilterLinks
                 options={[
                   {
@@ -344,17 +339,18 @@ export function GameLibrary({
                       language: undefined,
                       page: undefined,
                     }),
-                    label: "全部",
+                    label: t("library.all"),
                     value: "all",
                   },
-                  ...LANGUAGE_OPTIONS.map(({ value, label }) => ({
+                  ...LANGUAGE_OPTIONS.map(({ value }) => ({
                     active: language === value,
                     href: gamesHref({
                       ...activeParams,
                       language: value,
                       page: undefined,
                     }),
-                    label,
+                    label: value === "zh-CN" ? t("library.language.simplified") : languageLabel(value, locale),
+                    fullLabel: languageLabel(value, locale),
                     value,
                   })),
                 ]}
@@ -362,8 +358,8 @@ export function GameLibrary({
               />
             </FilterSection>
             {releaseFilter}
-            <FilterSection label="标签">
-              <Link className="py-1.5 text-sm text-primary hover:underline" to="/tags">浏览全部标签</Link>
+            <FilterSection label={t("library.tags")}>
+              <Link className="py-1.5 text-sm text-primary hover:underline" to="/tags">{t("library.allTags")}</Link>
             </FilterSection>
           </>}
         </aside> : null}
@@ -376,6 +372,7 @@ type FilterOptionLink = {
   active: boolean;
   href: string;
   label: string;
+  fullLabel?: string;
   value: string;
 };
 
@@ -386,6 +383,7 @@ function CollapsibleFilterLinks({
   options: readonly FilterOptionLink[];
   visibleCount: number;
 }) {
+  const t = useMessages();
   const visibleOptions = options.slice(0, visibleCount);
   const overflowOptions = options.slice(visibleCount);
 
@@ -397,6 +395,8 @@ function CollapsibleFilterLinks({
           href={option.href}
           key={option.value}
           label={option.label}
+          fullLabel={option.fullLabel}
+          compact
         />
       ))}
       {overflowOptions.length > 0 ? (
@@ -404,9 +404,9 @@ function CollapsibleFilterLinks({
           className="group contents"
           open={overflowOptions.some((option) => option.active)}
         >
-          <summary className="order-last inline-flex min-h-8 cursor-pointer list-none items-center rounded-md px-2.5 text-sm font-medium text-primary hover:bg-primary/10 [&::-webkit-details-marker]:hidden">
-            <span className="group-open:hidden">展开</span>
-            <span className="hidden group-open:inline">折叠</span>
+          <summary className="order-last inline-flex min-h-8 cursor-pointer list-none items-center rounded-md px-1.5 text-sm font-medium text-primary hover:bg-primary/10 [&::-webkit-details-marker]:hidden">
+            <span className="group-open:hidden">{t("library.expand")}</span>
+            <span className="hidden group-open:inline">{t("library.collapse")}</span>
           </summary>
           {overflowOptions.map((option) => (
             <FilterLink
@@ -414,6 +414,8 @@ function CollapsibleFilterLinks({
               href={option.href}
               key={option.value}
               label={option.label}
+              fullLabel={option.fullLabel}
+              compact
             />
           ))}
         </details>
@@ -427,21 +429,25 @@ export function FilterSection({
   moreHref,
   action,
   children,
+  optionsClassName = "flex flex-wrap",
 }: {
   label: string;
   moreHref?: string;
   action?: ReactNode;
   children: React.ReactNode;
+  optionsClassName?: string;
 }) {
+  const t = useMessages();
+  const headingId = useId();
   return (
     <section
       className="border-b border-border py-3 last:border-b-0"
-      aria-labelledby={`filter-${label}`}
+      aria-labelledby={headingId}
     >
       <div className="mb-2 flex items-center justify-between gap-2 rounded-md bg-card px-3 py-1.5">
         <h3
           className="m-0 min-w-0 wrap-anywhere font-display text-base font-normal"
-          id={`filter-${label}`}
+          id={headingId}
         >
           {label}
         </h3>
@@ -451,11 +457,11 @@ export function FilterSection({
             className="shrink-0 whitespace-nowrap text-xs font-semibold text-primary hover:text-accent"
             to={moreHref}
           >
-            更多 →
+            {t("library.more")}
           </Link>
         ) : null}
       </div>
-      <div className="flex flex-wrap gap-x-1.5 gap-y-1">{children}</div>
+      <div className={`${optionsClassName} gap-x-1.5 gap-y-1`}>{children}</div>
     </section>
   );
 }
@@ -464,20 +470,23 @@ export function FilterLink({
   active,
   href,
   label,
+  fullLabel,
+  compact = false,
 }: {
   active: boolean;
   href: string;
   label: string;
+  fullLabel?: string;
+  compact?: boolean;
 }) {
   return (
     <Link
       rel={href.startsWith("/games?") && isFilteredGameList(new URLSearchParams(href.split("?")[1])) ? "nofollow" : undefined}
       aria-current={active ? "true" : undefined}
-      className={
-        active
-          ? "inline-flex min-h-8 items-center rounded-md bg-primary px-2.5 text-sm font-bold text-primary-foreground"
-          : "inline-flex min-h-8 items-center rounded-md px-2.5 text-sm font-medium text-primary hover:bg-primary/10"
-      }
+      aria-label={fullLabel !== label ? fullLabel : undefined}
+      className={`inline-flex min-h-8 items-center rounded-md text-sm ${compact ? "px-1.5" : "px-2.5"} ${
+        active ? "bg-primary font-bold text-primary-foreground" : "font-medium text-primary hover:bg-primary/10"
+      }`}
       to={href}
     >
       {label}

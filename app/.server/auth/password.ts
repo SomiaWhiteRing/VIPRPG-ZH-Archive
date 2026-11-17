@@ -1,4 +1,5 @@
 import { scrypt } from "node:crypto";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 import {
   base64UrlDecodeBytes,
   base64UrlEncodeBytes,
@@ -18,11 +19,11 @@ const DERIVED_KEY_BYTES = 32;
 
 export function validatePasswordStrength(password: string): void {
   if (password.length < PASSWORD_MIN_LENGTH) {
-    throw new Error(`密码长度至少需要 ${PASSWORD_MIN_LENGTH} 位`);
+    throw new UiFeedbackError("auth.error.passwordMin", { count: PASSWORD_MIN_LENGTH });
   }
 
   if (password.length > PASSWORD_MAX_LENGTH) {
-    throw new Error(`密码长度不能超过 ${PASSWORD_MAX_LENGTH} 位`);
+    throw new UiFeedbackError("auth.error.passwordMax", { count: PASSWORD_MAX_LENGTH });
   }
 }
 

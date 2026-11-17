@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { Hono } from "hono";
 import { requireUser } from "@/app/.server/auth/guards";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
@@ -20,20 +21,20 @@ messageApi.use("/api/messages/*", async (c, next) => {
   await next();
 });
 async function imageResponse(runtime: AppRuntime, image: { object_key: string; format: string } | null) {
-  if (!image) throw new HttpError(404, "图片不存在");
+  if (!image) throw new HttpError(404, translate(runtime.uiLocale, "messages.error.imageMissing"), undefined, "messages.error.imageMissing");
   const object = await runtime.bucket.get(image.object_key);
-  if (!object) throw new HttpError(404, "图片不存在");
+  if (!object) throw new HttpError(404, translate(runtime.uiLocale, "messages.error.imageMissing"), undefined, "messages.error.imageMissing");
   return new Response(object.body, { headers: { "Content-Type": `image/${image.format}`, "Content-Length": String(object.size),
     "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Cross-Origin-Resource-Policy": "same-origin" } });
 }
 messageApi.get("/api/messages/conversations", async c => {
   const before = c.req.query("before");
   return json({ ok: true, ...await listDirectConversations(c.get("runtime"), c.get("messageUser"),
-    before === undefined ? undefined : parsePositiveId(before)) });
+    before === undefined ? undefined : parseMessageId(before, "messages.error.cursor")) });
 });
 messageApi.get("/api/messages/images/:messageId", async c => {
   const runtime = c.get("runtime"), user = c.get("messageUser");
-  const id = parsePositiveId(c.req.param("messageId"));
+  const id = parseMessageId(c.req.param("messageId"));
   const image = await runtime.db.prepare(`SELECT i.object_key,i.format FROM direct_messages m
     JOIN direct_message_images i ON i.id=m.image_id AND i.state='ready'
     WHERE m.id=? AND (m.sender_user_id=? OR (m.recipient_user_id=? AND m.delivered=1))`)
@@ -42,16 +43,16 @@ messageApi.get("/api/messages/images/:messageId", async c => {
 });
 messageApi.get("/api/messages/reports/:reportId/images/:messageId", async c => {
   const runtime = c.get("runtime");
-  const report = await readDirectMessageReport(runtime, c.get("messageUser"), parsePositiveId(c.req.param("reportId")));
+  const report = await readDirectMessageReport(runtime, c.get("messageUser"), parseMessageId(c.req.param("reportId")));
   const image = await runtime.db.prepare(`SELECT i.object_key,i.format FROM direct_messages m
     JOIN direct_message_images i ON i.id=m.image_id AND i.state='ready' WHERE m.id=? AND m.conversation_id=?`)
-    .bind(parsePositiveId(c.req.param("messageId")), report.conversationId).first<{ object_key: string; format: string }>();
+    .bind(parseMessageId(c.req.param("messageId")), report.conversationId).first<{ object_key: string; format: string }>();
   return imageResponse(runtime, image);
 });
 messageApi.get("/api/messages/:peerId/socket", async c => {
   const runtime = c.get("runtime"), user = c.get("messageUser");
-  if (c.req.header("Origin") !== runtime.origin) throw new HttpError(403, "连接来源无效");
-  const peerId = parsePositiveId(c.req.param("peerId"));
+  if (c.req.header("Origin") !== runtime.origin) throw new HttpError(403, translate(runtime.uiLocale, "messages.error.origin"), undefined, "messages.error.origin");
+  const peerId = parseMessageId(c.req.param("peerId"));
   await directMessagePeer(runtime, user, peerId);
   const headers = new Headers(c.req.raw.headers);
   headers.set("X-Message-User", String(user.id));
@@ -59,57 +60,66 @@ messageApi.get("/api/messages/:peerId/socket", async c => {
     .fetch(new Request(c.req.url, { headers }));
 });
 messageApi.get("/api/messages/:peerId", async c => {
+  const runtime = c.get("runtime");
   const before = c.req.query("before"), after = c.req.query("after");
-  if (before && after) throw new HttpError(400, "分页位置无效");
-  return json({ ok: true, ...await listDirectMessages(c.get("runtime"), c.get("messageUser"), parsePositiveId(c.req.param("peerId")), {
-    before: before === undefined ? undefined : parsePositiveId(before),
-    after: after === undefined ? undefined : after === "0" ? 0 : parsePositiveId(after),
+  if (before && after) throw new HttpError(400, translate(runtime.uiLocale, "messages.error.cursor"), undefined, "messages.error.cursor");
+  return json({ ok: true, ...await listDirectMessages(runtime, c.get("messageUser"), parseMessageId(c.req.param("peerId")), {
+    before: before === undefined ? undefined : parseMessageId(before, "messages.error.cursor"),
+    after: after === undefined ? undefined : after === "0" ? 0 : parseMessageId(after, "messages.error.cursor"),
   }) });
 });
 messageApi.post("/api/messages/:peerId/read", async c => {
-  const input = await readJsonObject(c.req.raw, "已读位置无效", { maximumBytes: 1024 });
+  const runtime = c.get("runtime");
+  const input = await readJsonObject(c.req.raw, translate(runtime.uiLocale, "messages.error.readPosition"), { maximumBytes: 1024 });
   if (typeof input.through !== "number" || !Number.isSafeInteger(input.through) || input.through < 1)
-    throw new HttpError(400, "已读位置无效");
-  await markDirectMessagesRead(c.get("runtime"), c.get("messageUser").id, parsePositiveId(c.req.param("peerId")), input.through);
+    throw new HttpError(400, translate(runtime.uiLocale, "messages.error.readPosition"), undefined, "messages.error.readPosition");
+  await markDirectMessagesRead(runtime, c.get("messageUser").id, parseMessageId(c.req.param("peerId")), input.through);
   return json({ ok: true });
 });
 messageApi.post("/api/messages/:peerId/receiving", async c => {
-  const input = await readJsonObject(c.req.raw, "接收设置无效", { maximumBytes: 1024 });
-  if (typeof input.receive !== "boolean") throw new HttpError(400, "接收设置无效");
-  await setDirectMessageReceiving(c.get("runtime"), c.get("messageUser"), parsePositiveId(c.req.param("peerId")), input.receive);
+  const runtime = c.get("runtime");
+  const input = await readJsonObject(c.req.raw, translate(runtime.uiLocale, "messages.error.receiving"), { maximumBytes: 1024 });
+  if (typeof input.receive !== "boolean") throw new HttpError(400, translate(runtime.uiLocale, "messages.error.receiving"), undefined, "messages.error.receiving");
+  await setDirectMessageReceiving(runtime, c.get("messageUser"), parseMessageId(c.req.param("peerId")), input.receive);
   return json({ ok: true });
 });
 messageApi.post("/api/messages/:peerId/report", async c => {
-  const input = await readJsonObject(c.req.raw, "举报内容无效", { maximumBytes: 16384 });
-  const report = await createDirectMessageReport(c.get("runtime"), c.get("messageUser"), parsePositiveId(c.req.param("peerId")), input);
+  const runtime = c.get("runtime");
+  const input = await readJsonObject(c.req.raw, translate(runtime.uiLocale, "messages.error.reportPayload"), { maximumBytes: 16384 });
+  const report = await createDirectMessageReport(runtime, c.get("messageUser"), parseMessageId(c.req.param("peerId")), input);
   return json({ ok: true, ...report });
 });
 messageApi.post("/api/messages/:peerId", async c => {
-  const input = await readJsonObject(c.req.raw, "消息格式无效", { maximumBytes: 20000, requireJsonContentType: true });
-  const message = await sendDirectMessage(c.get("runtime"), c.get("messageUser"), parsePositiveId(c.req.param("peerId")),
-    { kind: "text", clientId: messageClientId(input.clientId), body: messageBody(input.body) });
+  const runtime = c.get("runtime");
+  const input = await readJsonObject(c.req.raw, translate(runtime.uiLocale, "messages.error.payload"), { maximumBytes: 20000, requireJsonContentType: true });
+  const message = await sendDirectMessage(runtime, c.get("messageUser"), parseMessageId(c.req.param("peerId")),
+    { kind: "text", clientId: messageClientId(input.clientId, runtime.uiLocale), body: messageBody(input.body, runtime.uiLocale) });
   return json({ ok: true, message });
 });
 messageApi.post("/api/messages/:peerId/image", async c => {
-  const runtime = c.get("runtime"), user = c.get("messageUser"), peerId = parsePositiveId(c.req.param("peerId"));
+  const runtime = c.get("runtime"), user = c.get("messageUser"), peerId = parseMessageId(c.req.param("peerId"));
   const peer = await directMessagePeer(runtime, user, peerId);
-  if (!peer.canSend) throw new HttpError(403, "无法向此用户发送短信");
+  if (!peer.canSend) throw new HttpError(403, translate(runtime.uiLocale, "messages.error.cannotSend"), undefined, "messages.error.cannotSend");
   const contentType = c.req.header("Content-Type") ?? "";
-  if (!contentType.startsWith("multipart/form-data;")) throw new HttpError(415, "图片格式无效");
+  if (!contentType.startsWith("multipart/form-data;")) throw new HttpError(415, translate(runtime.uiLocale, "messages.error.imageFormat"), undefined, "messages.error.imageFormat");
   const bytes = await readRequestBody(c.req.raw, MESSAGE_IMAGE_BYTES + 16384);
   let form: FormData;
   try { form = await new Response(bytes, { headers: { "Content-Type": contentType } }).formData(); }
-  catch { throw new HttpError(400, "图片格式无效"); }
-  const clientId = messageClientId(form.get("clientId")), file = form.get("image");
-  if (!(file instanceof File)) throw new HttpError(400, "请选择图片");
+  catch { throw new HttpError(400, translate(runtime.uiLocale, "messages.error.imageFormat"), undefined, "messages.error.imageFormat"); }
+  const clientId = messageClientId(form.get("clientId"), runtime.uiLocale), file = form.get("image");
+  if (!(file instanceof File)) throw new HttpError(400, translate(runtime.uiLocale, "image.choose"), undefined, "image.choose");
   const existing = await findSentDirectMessage(runtime, user.id, peerId, { kind: "image", clientId });
   if (existing) return json({ ok: true, message: existing });
   await assertInteractionAllowed(runtime.db, peerId, user.id, "message");
   const imageBytes = await file.arrayBuffer();
   let meta: ReturnType<typeof inspectImage>;
   try { meta = inspectImage(imageBytes, MESSAGE_IMAGE_BYTES); }
-  catch (error) { if (error instanceof ImageValidationError) throw new HttpError(error.status, error.message); throw error; }
-  if (meta.format === "bmp" || (file.type && file.type !== `image/${meta.format}`)) throw new HttpError(400, "图片格式无效");
+  catch (error) {
+    if (!(error instanceof ImageValidationError)) throw error;
+    const messageKey = error.status === 413 ? "image.size" : "messages.error.imageFormat";
+    throw new HttpError(error.status, translate(runtime.uiLocale, messageKey), undefined, messageKey);
+  }
+  if (meta.format === "bmp" || (file.type && file.type !== `image/${meta.format}`)) throw new HttpError(400, translate(runtime.uiLocale, "messages.error.imageFormat"), undefined, "messages.error.imageFormat");
   const imageId = crypto.randomUUID();
   await runtime.db.prepare(`INSERT INTO direct_message_images(id,sender_user_id,recipient_user_id,client_id,object_key,format,size,width,height,state)
     SELECT ?,?,?,?,?,?,?,?,?,'uploading' WHERE ${userPermissionSql(String(user.id), "message.send")}
@@ -121,11 +131,15 @@ messageApi.post("/api/messages/:peerId/image", async c => {
   const image = await runtime.db.prepare(`SELECT id,recipient_user_id,object_key,format,size,width,height,state
     FROM direct_message_images WHERE sender_user_id=? AND client_id=?`).bind(user.id, clientId)
     .first<{ id: string; recipient_user_id: number; object_key: string; format: string; size: number; width: number; height: number; state: string }>();
-  if (!image) throw new HttpError(429, "发送过于频繁，请稍后重试");
+  if (!image) throw new HttpError(429, translate(runtime.uiLocale, "messages.error.rate"), undefined, "messages.error.rate");
   if (image.recipient_user_id !== peerId || image.format !== meta.format || image.size !== meta.size || image.width !== meta.width || image.height !== meta.height)
-    throw new HttpError(409, "消息编号已用于其他图片");
+    throw new HttpError(409, translate(runtime.uiLocale, "messages.error.imageConflict"), undefined, "messages.error.imageConflict");
   if (image.state === "uploading")
     await runtime.bucket.put(image.object_key, imageBytes, { onlyIf: { etagDoesNotMatch: "*" }, httpMetadata: { contentType: `image/${meta.format}` } });
-  else if (image.state !== "ready") throw new HttpError(409, "图片发送状态已变化");
+  else if (image.state !== "ready") throw new HttpError(409, translate(runtime.uiLocale, "messages.error.imageState"), undefined, "messages.error.imageState");
   return json({ ok: true, message: await sendDirectMessage(runtime, user, peerId, { kind: "image", clientId, imageId: image.id }) });
 });
+
+function parseMessageId(value: string, messageKey: "messages.error.recordId" | "messages.error.cursor" = "messages.error.recordId") {
+  return parsePositiveId(value, undefined, undefined, undefined, messageKey);
+}

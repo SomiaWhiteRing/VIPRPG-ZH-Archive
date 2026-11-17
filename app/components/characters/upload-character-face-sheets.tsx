@@ -1,3 +1,7 @@
+import { formatFeedbackError } from "@/lib/i18n/feedback";
+import { isMessageKey } from "@/lib/i18n/core";
+import type { SourceFaceSheetWarning } from "@/app/upload/upload-types";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { FaceSheetCanvas } from "@/app/components/ui/face-sheet-canvas";
@@ -38,8 +42,10 @@ export function UploadCharacterFaceSheets({
   onConfirm: (draft: FaceSheetDraft) => void;
   sourceFiles: File[];
   sourceLoading: boolean;
-  sourceWarnings: string[];
+  sourceWarnings: SourceFaceSheetWarning[];
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [draft, setDraft] = useState<FaceSheetDraft>(() => ({
     files,
     portrait: credit.portrait,
@@ -78,7 +84,14 @@ export function UploadCharacterFaceSheets({
     height: portraitSheet.height,
   } : null;
   const busy = disabled || adding;
-  const warnings = [...sourceWarnings, ...sourcePreviews.errors];
+  const warnings = [...sourceWarnings.map((warning) => {
+    if (typeof warning === "string") return warning;
+    const { name, detail, feedback } = warning;
+    return t("upload.faces.readDetail", {
+      name,
+      detail: feedback && isMessageKey(feedback.key) ? t(feedback.key, feedback.values) : detail,
+    });
+  }), ...sourcePreviews.errors];
 
   function addSheets(sheets: Array<Pick<Preview, "file" | "sha256">>) {
     if (disabled) return;
@@ -109,7 +122,7 @@ export function UploadCharacterFaceSheets({
         const sheet = await inspectCharacterFaceSheetFile(file);
         added.push({ file, sha256: sheet.sha256 });
       } catch (error) {
-        failures.push(`${file.name}：${error instanceof Error ? error.message : "无法读取脸图。"}`);
+        failures.push(t("upload.faces.readDetail", { name: file.name, detail: formatFeedbackError(error, locale, t("upload.portrait.sheetFailed")) }));
       }
     }
     addSheets(added);
@@ -139,13 +152,13 @@ export function UploadCharacterFaceSheets({
 
   return (
     <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] sm:grid-rows-1">
-      <section aria-label="当前作品的脸图" className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] border-b border-border sm:border-b-0 sm:border-r">
+      <section aria-label={t("upload.faces.source")} className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] border-b border-border sm:border-b-0 sm:border-r">
         <header className="grid gap-2 border-b border-border p-3">
           <div className="flex items-center gap-2">
-            <strong className="text-sm">角色脸图</strong>
-            <span className="text-xs tabular-nums text-muted">{sourceSheets.length} 张</span>
+            <strong className="text-sm">{t("upload.portrait.faces")}</strong>
+            <span className="text-xs tabular-nums text-muted">{t("upload.cover.count", { count: sourceSheets.length })}</span>
           </div>
-          <Input aria-label="按文件名查找脸图" disabled={disabled} placeholder="回车查找文件名" enterKeyHint="search" value={query} onChange={(event) => setQuery(event.target.value)}
+          <Input aria-label={t("upload.faces.search")} disabled={disabled} placeholder={t("upload.faces.searchHint")} enterKeyHint="search" value={query} onChange={(event) => setQuery(event.target.value)}
             onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
             onKeyDown={(event) => {
               if (event.key !== "Enter" || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || composing.current) return;
@@ -160,7 +173,7 @@ export function UploadCharacterFaceSheets({
                 key={sheet.sha256}
                 type="button"
                 variant="ghost"
-                aria-label={`选择整张脸图 ${sheet.file.name}${assignedHashes.has(sheet.sha256) ? "，已添加" : ""}`}
+                aria-label={t("upload.faces.selectSheet", { name: sheet.file.name, added: assignedHashes.has(sheet.sha256) ? "yes" : "no" })}
                 aria-pressed={activeHash === sheet.sha256}
                 disabled={busy}
                 draggable={!busy}
@@ -184,28 +197,28 @@ export function UploadCharacterFaceSheets({
               </Button>
             ))}
           </div>
-          {sourceLoading || sourcePreviews.loading ? <p role="status" className="text-sm text-muted">正在读取作品脸图…</p> : null}
+          {sourceLoading || sourcePreviews.loading ? <p role="status" className="text-sm text-muted">{t("upload.faces.sourceLoading")}</p> : null}
           {!sourceLoading && !sourcePreviews.loading && !visibleSheets.length ? (
             <p className="py-4 text-center text-sm text-muted">
-              {sourceSheets.length ? "没有匹配的文件名。" : "尚无可用脸图。选择游戏文件后自动读取 FaceSet，也可在右侧手动添加 PNG。"}
+              {sourceSheets.length ? t("upload.faces.noMatch") : t("upload.faces.sourceEmpty")}
             </p>
           ) : null}
           {warnings.length ? (
             <details className="mt-3 text-xs text-muted">
-              <summary className="cursor-pointer">有 {warnings.length} 张脸图无法读取</summary>
+              <summary className="cursor-pointer">{t("upload.faces.warningCount", { count: warnings.length })}</summary>
               <ul className="mt-2 grid min-w-0 grid-cols-1 gap-1 wrap-anywhere">{warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
             </details>
           ) : null}
         </div>
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3">
-          <span className="text-xs text-muted">选中后添加，或拖拽脸图。</span>
+          <span className="text-xs text-muted">{t("upload.faces.dragHint")}</span>
           <Button type="button" size="sm" variant="outline" disabled={busy || !activeSheet || assignedHashes.has(activeSheet.sha256)} onClick={() => activeSheet && addSheets([activeSheet])}>
-            {activeSheet && assignedHashes.has(activeSheet.sha256) ? "已添加" : "添加选中脸图"}<ArrowRight className="size-4" />
+            {activeSheet && assignedHashes.has(activeSheet.sha256) ? t("upload.faces.added") : t("upload.faces.addSelected")}<ArrowRight className="size-4" />
           </Button>
         </footer>
       </section>
       <section
-        aria-label="该角色的脸图"
+        aria-label={t("upload.faces.assigned")}
         className={cn("grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]", dropActive && "bg-primary/5 ring-2 ring-inset ring-primary")}
         onDragOver={(event) => {
           if (busy || !dragHash.current || !event.dataTransfer.types.includes(FACE_SHEET_DRAG_TYPE)) return;
@@ -229,24 +242,24 @@ export function UploadCharacterFaceSheets({
         }}
       >
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-3">
-          <div><strong className="text-sm">该角色的脸图</strong><span className="ml-2 text-xs tabular-nums text-muted">{assignedHashes.size} 张</span></div>
+          <div><strong className="text-sm">{t("upload.faces.assigned")}</strong><span className="ml-2 text-xs tabular-nums text-muted">{t("upload.cover.count", { count: assignedHashes.size })}</span></div>
           <Label className={cn(buttonVariants({ variant: "outline", size: "sm" }), "cursor-pointer", busy && "pointer-events-none opacity-50")}>
-            {adding ? "正在读取…" : "添加脸图"}
+            {adding ? t("upload.portrait.reading") : t("upload.portrait.addFace")}
             <input type="file" accept="image/png" multiple disabled={busy} className="sr-only" onChange={(event) => {
               const nextFiles = Array.from(event.currentTarget.files ?? []);
               event.currentTarget.value = "";
               void addLocalFiles(nextFiles);
             }} />
           </Label>
-          <p className="m-0 w-full text-xs text-muted">保留整张脸图，点击其中一格设为本作头像。</p>
+          <p className="m-0 w-full text-xs text-muted">{t("upload.faces.gridHelp")}</p>
         </header>
         <div className="min-h-0 overflow-y-auto p-3">
-          {!assignedHashes.size ? <p className="grid min-h-24 place-content-center rounded-md border border-dashed border-border p-4 text-center text-sm text-muted">将属于该角色的整张脸图拖到这里</p> : null}
+          {!assignedHashes.size ? <p className="grid min-h-24 place-content-center rounded-md border border-dashed border-border p-4 text-center text-sm text-muted">{t("upload.faces.drop")}</p> : null}
           <div className="grid grid-cols-2 content-start items-start gap-3">
             {assignedSheets.map((sheet) => (
               <div key={sheet.sha256} className="min-w-0">
                 <FaceSheetCanvas
-                  label={`${sheet.file.name}，点击选择本作头像`}
+                  label={t("upload.faces.chooseCell", { name: sheet.file.name })}
                   src={sheet.src}
                   width={sheet.width}
                   height={sheet.height}
@@ -258,7 +271,7 @@ export function UploadCharacterFaceSheets({
                 />
                 <div className="mt-1 flex min-w-0 items-center gap-1">
                   <span className="min-w-0 flex-1 truncate text-xs text-muted" title={sheet.file.name}>{sheet.file.name}</span>
-                  <Button type="button" size="icon" variant="ghost" className="size-6 min-h-0 shrink-0 p-0" disabled={busy} aria-label={`移除脸图 ${sheet.file.name}`} onClick={() => removeSheet(sheet.sha256)}><X className="size-3.5" /></Button>
+                  <Button type="button" size="icon" variant="ghost" className="size-6 min-h-0 shrink-0 p-0" disabled={busy} aria-label={t("upload.faces.removeSheet", { name: sheet.file.name })} onClick={() => removeSheet(sheet.sha256)}><X className="size-3.5" /></Button>
                 </div>
               </div>
             ))}
@@ -269,10 +282,10 @@ export function UploadCharacterFaceSheets({
         <footer className="flex flex-wrap items-center gap-3 border-t border-border p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
           <CharacterPortrait className="size-12 shrink-0 rounded" displayName={credit.selection.displayName} portrait={portrait} previewSrc={portraitSheet?.src} size={48} toneKey={credit.selection.originalName} />
           <div className="min-w-0 flex-1 text-xs text-muted" aria-live="polite">
-            <strong className="block text-sm text-foreground">{portrait ? "本作头像" : "未选择头像"}</strong>
-            {portrait ? `第 ${portrait.row + 1} 行，第 ${portrait.column + 1} 列` : "添加脸图后选择头像"}
+            <strong className="block text-sm text-foreground">{portrait ? t("upload.portrait.gamePortrait") : t("upload.portrait.unselected")}</strong>
+            {portrait ? t("upload.portrait.coords", { row: portrait.row + 1, column: portrait.column + 1 }) : t("upload.faces.addThenChoose")}
           </div>
-          <Button type="button" size="sm" disabled={busy || assignedPreviews.loading || assignedSheets.length !== assignedHashes.size} onClick={() => onConfirm(draft)}>确定</Button>
+          <Button type="button" size="sm" disabled={busy || assignedPreviews.loading || assignedSheets.length !== assignedHashes.size} onClick={() => onConfirm(draft)}>{t("upload.extras.confirm")}</Button>
         </footer>
       </section>
     </div>
@@ -280,7 +293,9 @@ export function UploadCharacterFaceSheets({
 }
 
 function useFaceSheetPreviews(files: File[]) {
-  const [state, setState] = useState<{ files: File[]; previews: Preview[]; errors: string[] } | null>(null);
+  const t = useMessages();
+  const locale = useUiLocale();
+  const [state, setState] = useState<{ files: File[]; previews: Preview[]; errors: { name: string; error: unknown }[] } | null>(null);
   useEffect(() => {
     let active = true;
     const urls: string[] = [];
@@ -292,14 +307,14 @@ function useFaceSheetPreviews(files: File[]) {
         urls.push(src);
         return { file, src, ...sheet };
       } catch (error) {
-        return `${file.name}：${error instanceof Error ? error.message : "无法读取脸图。"}`;
+        return { name: file.name, error };
       }
     })).then((results) => {
       if (!active) return;
       setState({
         files,
-        previews: results.filter((result): result is Preview => result !== null && typeof result !== "string"),
-        errors: results.filter((result): result is string => typeof result === "string"),
+        previews: results.filter((result): result is Preview => result !== null && "src" in result),
+        errors: results.filter((result): result is { name: string; error: unknown } => result !== null && "error" in result),
       });
     });
     return () => {
@@ -309,7 +324,7 @@ function useFaceSheetPreviews(files: File[]) {
   }, [files]);
   return {
     previews: state?.files === files ? state.previews : [],
-    errors: state?.files === files ? state.errors : [],
+    errors: state?.files === files ? state.errors.map(({ name, error }) => t("upload.faces.readDetail", { name, detail: formatFeedbackError(error, locale, t("upload.portrait.sheetFailed")) })) : [],
     loading: state?.files !== files,
   };
 }

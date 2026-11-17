@@ -1,4 +1,4 @@
-import { HttpError } from "@/lib/http";
+import { UiHttpError } from "@/lib/i18n/feedback";
 import { NON_VIPRPG_TAG, tagNameKey } from "@/lib/user-tags";
 
 export const WORK_AUDIENCE_OPTIONS = [
@@ -23,7 +23,7 @@ export function workStatusFromLegacyInput(value: unknown, fallback: WorkStatus):
   if (value === undefined || value === "") return fallback;
   if (value === "hidden") return "published";
   if (value === "processing" || value === "published" || value === "deleted") return value;
-  throw new HttpError(400, "作品状态不合法");
+  throw new UiHttpError(400, "upload.visibility.invalidStatus");
 }
 
 export function hasNonViprpgTag(tags: readonly string[]): boolean {
@@ -44,9 +44,9 @@ export function parseWorkVisibility(
 ): WorkVisibility {
   const audience = input.audience === undefined ? fallback.audience : input.audience;
   if (!WORK_AUDIENCE_OPTIONS.some((option) => option.value === audience))
-    throw new HttpError(400, "作品访问范围不合法。");
+    throw new UiHttpError(400, "upload.visibility.invalidAudience");
   const showOnHome = input.showOnHome === undefined ? fallback.showOnHome : input.showOnHome;
-  if (typeof showOnHome !== "boolean") throw new HttpError(400, "首页展示设置不合法。");
+  if (typeof showOnHome !== "boolean") throw new UiHttpError(400, "upload.visibility.invalidHomepage");
   return constrainWorkVisibility({ audience: audience as WorkAudience, showOnHome }, tags);
 }
 

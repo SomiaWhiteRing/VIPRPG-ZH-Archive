@@ -7,7 +7,9 @@ export async function requireAccountUser(
   nextPath: string,
 ) {
   const user = await getCurrentUser(runtime);
-  if (!user) redirectPage(`/login?next=${encodeURIComponent(nextPath)}`);
+  if (!user) {
+    redirectPage(`/login?next=${encodeURIComponent(nextPath)}`, runtime.request);
+  }
   return user;
 }
 

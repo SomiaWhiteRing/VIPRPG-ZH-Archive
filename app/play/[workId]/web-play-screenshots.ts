@@ -1,3 +1,5 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { formatFeedbackError, UiFeedbackError } from "@/lib/i18n/feedback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlayerScreenshot } from "./web-play-player";
 import { isAndroidClient } from "@/lib/browser/client-environment";
@@ -12,6 +14,8 @@ import {
 export type ScreenshotPreview = WebPlayScreenshot & { url: string };
 
 export function useWebPlayScreenshots(workId: number, title: string) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [screenshots, setScreenshots] = useState<ScreenshotPreview[]>([]);
   const [loading, setLoading] = useState(true);
   const [capturing, setCapturing] = useState(false);
@@ -61,7 +65,7 @@ export function useWebPlayScreenshots(workId: number, title: string) {
       signal.throwIfAborted();
       if (android) {
         await saveAndroidScreenshot(image.blob, workId, title, capturedAt);
-        return signal.aborted ? undefined : { ok: true, message: "截图已保存" };
+        return signal.aborted ? undefined : { ok: true, message: t("play.screenshot.saved") };
       }
       const screenshot: WebPlayScreenshot = {
         ...image,
@@ -74,26 +78,26 @@ export function useWebPlayScreenshots(workId: number, title: string) {
       const url = URL.createObjectURL(screenshot.blob);
       urlsRef.current.add(url);
       setScreenshots((current) => [{ ...screenshot, url }, ...current]);
-      return { ok: true, message: "截图已保存" };
+      return { ok: true, message: t("play.screenshot.saved") };
     } catch (error) {
       if (signal.aborted) return;
       return {
         ok: false,
         message: error instanceof DOMException && error.name === "QuotaExceededError"
-          ? "浏览器存储空间不足，截图未保存。"
+          ? t("play.screenshot.quota")
           : error instanceof Error
-            ? `截图未保存：${error.message}`
-            : "截图未保存，请检查浏览器本地存储后重试。",
+            ? t("play.screenshot.saveError", { reason: formatFeedbackError(error, locale, t("play.screenshot.saveFailed")) })
+            : t("play.screenshot.saveFailed"),
       };
     } finally {
       capturingRef.current = false;
       if (!signal.aborted) setCapturing(false);
     }
-  }, [loading, workId, title]);
+  }, [loading, workId, title, locale, t]);
 
   const remove = useCallback(async (ids: string[]) => {
     const signal = lifetimeRef.current?.signal;
-    if (!signal) throw new Error("截图画廊尚未就绪，请重试。");
+    if (!signal) throw new UiFeedbackError("play.screenshot.notReady");
     signal.throwIfAborted();
     const deletedIds = new Set(ids);
     const removed = screenshots.filter((item) => deletedIds.has(item.id));

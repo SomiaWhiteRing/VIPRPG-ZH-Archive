@@ -1,3 +1,5 @@
+import { UiFeedbackError } from "@/lib/i18n/feedback";
+import { useMessages } from "@/lib/i18n/react";
 import type { StaffRowError } from "@/app/components/work/staff-credit-row";
 import { StaffCreditRow } from "@/app/components/work/staff-credit-row";
 
@@ -32,16 +34,16 @@ export function staffRowErrors(rows: StaffRow[]): (StaffRowError | null)[] {
   return rows.map((row) => {
     if (isBlank(row)) return null;
     if (!isExtraStaffRole(row.roleKey))
-      return { field: "role", message: "请选择职务。" };
+      return { field: "role", messageKey: "upload.staff.roleRequired" };
     if (!row.selection?.displayName.trim())
-      return { field: "person", message: "请填写人物，或移除此行。" };
+      return { field: "person", messageKey: "upload.staff.personRequired" };
     if (row.roleKey === "other" && !row.roleLabel.trim())
-      return { field: "label", message: "请填写职务名称。" };
+      return { field: "label", messageKey: "upload.staff.labelRequired" };
     const selection = row.selection;
     const identity = creatorSelectionKey(selection);
     const key = `${identity}:${row.roleKey}`;
     if (seen.has(key))
-      return { field: "person", message: "已有这条署名，请移除重复行。" };
+      return { field: "person", messageKey: "upload.staff.duplicateRow" };
     seen.add(key);
     return null;
   });
@@ -56,7 +58,7 @@ export function extraStaffCredits(rows: StaffRow[]): StaffCredit[] {
         !row.selection?.displayName.trim() ||
         (row.roleKey === "other" && !row.roleLabel.trim())
       )
-        throw new Error("请补全其他制作人员资料。");
+        throw new UiFeedbackError("upload.staff.incomplete");
       return {
         selection: row.selection,
         roleKey: row.roleKey,
@@ -79,6 +81,7 @@ export function StaffEditor({
   suggestions: CreatorSuggestion[];
   showErrors: boolean;
 }) {
+  const t = useMessages();
   const errors = showErrors ? staffRowErrors(rows) : [];
   function update(id: string, patch: Partial<StaffRow>) {
     onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -93,7 +96,7 @@ export function StaffEditor({
   }
   return (
     <fieldset className="min-w-0 grid gap-2" disabled={disabled}>
-      <legend className="mb-2 text-sm font-bold">其他制作人员</legend>
+      <legend className="mb-2 text-sm font-bold">{t("upload.staff.otherStaff")}</legend>
       {rows.map((row, index) => (
         <StaffCreditRow
           key={row.id}
@@ -115,7 +118,7 @@ export function StaffEditor({
         />
       ))}
       <AddInformationButton id="add-work-staff" disabled={disabled} onAdd={add}>
-        添加制作人员
+        {t("upload.staff.addStaff")}
       </AddInformationButton>
     </fieldset>
   );

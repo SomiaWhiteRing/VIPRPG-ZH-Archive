@@ -1,6 +1,6 @@
 import { requireUser } from "@/app/.server/auth/guards";
 import { markInboxItemRead } from "@/app/.server/db/inbox";
-import { redirectResponse } from "@/app/.server/http/form";
+import { redirectWithParams } from "@/app/.server/http/form";
 import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { json, jsonError } from "@/lib/http";
@@ -50,7 +50,7 @@ export async function POST(
       return json({ ok: true });
     }
 
-    return redirectResponse(new URL("/inbox", request.url));
+    return redirectWithParams(request, "/inbox", {});
   } catch (error) {
     return jsonError("Inbox item read failed", error);
   }

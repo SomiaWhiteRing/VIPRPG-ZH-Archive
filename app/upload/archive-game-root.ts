@@ -1,3 +1,5 @@
+import { UiFeedbackError } from "@/lib/i18n/feedback";
+
 export function filesWithinArchiveGameRoot<T extends { path: string }>(
   entries: T[],
   format: string,
@@ -6,12 +8,10 @@ export function filesWithinArchiveGameRoot<T extends { path: string }>(
     /(?:^|\/)rpg_rt\.lmt$/i.test(entry.path),
   );
   if (!roots.length) {
-    throw new Error(`${format} 内未找到 RPG_RT.lmt，请选择包含游戏文件的压缩包。`);
+    throw new UiFeedbackError("upload.feedback.archiveLmtMissing", { format });
   }
   if (roots.length > 1) {
-    throw new Error(
-      `${format} 内找到多个 RPG_RT.lmt，无法确定游戏根目录；请每次只上传一部作品。`,
-    );
+    throw new UiFeedbackError("upload.feedback.archiveLmtMultiple", { format });
   }
   const rootPath = roots[0].path;
   const prefix = rootPath.slice(0, rootPath.lastIndexOf("/") + 1);

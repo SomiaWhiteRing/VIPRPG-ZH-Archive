@@ -12,7 +12,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { WorkMoreInfoEditor } from "@/app/components/work/work-more-info-editor";
 import { StaffEditor } from "@/app/upload/staff-editor";
 import { UploadTagPicker } from "@/app/upload/upload-tag-picker";
-import type { UploadFormMetadata as FlatMetadata, UploadImageSelections as ImageSelections, UploadSuggestions } from "@/app/upload/upload-types";
+import type { SourceFaceSheetWarning, UploadFormMetadata as FlatMetadata, UploadImageSelections as ImageSelections, UploadSuggestions } from "@/app/upload/upload-types";
 import { WorkbenchField } from "@/app/upload/workbench-field";
 import type { CharacterCreditSelection } from "@/lib/character-names";
 import type { CreatorSelection } from "@/lib/creator-names";
@@ -20,18 +20,22 @@ import { isArchiveEngineFamily } from "@/lib/labels";
 import { MAX_PUBLIC_TAGS } from "@/lib/user-tags";
 import { constrainWorkVisibility } from "@/lib/work-visibility";
 import { WORK_REFERENCE_DURATIONS, WORK_REFERENCE_DURATION_MAX_LENGTH } from "@/lib/work-reference-duration";
+import type { MessageKey } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useRef } from "react";
 
-const referenceDurationOptions = [
-  { value: "none", label: "不填写" },
-  ...WORK_REFERENCE_DURATIONS.map((value) => ({ value, label: value })),
-  { value: "custom", label: "自定义" },
-];
+const durationMessageKeys = {
+  "nnkr（~5min）": "upload.metadata.duration.nnkr",
+  "短篇（~30min）": "upload.metadata.duration.short",
+  "中篇（~2h）": "upload.metadata.duration.medium",
+  "长篇（~10h）": "upload.metadata.duration.long",
+  "巨作（10h+）": "upload.metadata.duration.epic",
+} satisfies Record<(typeof WORK_REFERENCE_DURATIONS)[number], MessageKey>;
 
 export function WorkMetadataFields({
   originalTitleReadOnly = false,
-  originalDeclarationLabel = "本作品为我原创。",
+  originalDeclarationLabel,
   showArchiveSource = true,
   showUploadTagGuidance = false,
   archiveSourceDisabled,
@@ -64,7 +68,7 @@ export function WorkMetadataFields({
   archiveSourceDisabled?: boolean;
   characterFaceSheetFiles?: Record<number, File[]>;
   sourceFaceSheetFiles?: File[];
-  sourceFaceSheetWarnings?: string[];
+  sourceFaceSheetWarnings?: SourceFaceSheetWarning[];
   sourceFaceSheetsLoading?: boolean;
   changeCharacterFaceSheetFiles?: (index: number, files: File[]) => void;
   changeCharacters: (
@@ -87,6 +91,12 @@ export function WorkMetadataFields({
   staffErrorsVisible: boolean;
   moreInfoErrorsVisible: boolean;
 }) {
+  const t = useMessages();
+  const referenceDurationOptions = [
+    { value: "none", label: t("upload.metadata.none") },
+    ...WORK_REFERENCE_DURATIONS.map((value) => ({ value, label: t(durationMessageKeys[value]) })),
+    { value: "custom", label: t("upload.metadata.custom") },
+  ];
   const moreSettingsRef = useRef<HTMLDetailsElement>(null);
   const hasStaff = form.extraStaff.length > 0;
   const hasMoreInfo = form.moreInfo.length > 0;
@@ -105,9 +115,9 @@ export function WorkMetadataFields({
   }, [hasStaff, hasMoreInfo]);
   return (
     <div>
-      <h2 className="mb-4 text-lg font-bold">作品资料</h2>
+      <h2 className="mb-4 text-lg font-bold">{t("upload.details")}</h2>
       <div className="grid gap-4 md:grid-cols-2">
-        <WorkbenchField controlId="upload-chinese-title" label="中文名">
+        <WorkbenchField controlId="upload-chinese-title" label={t("upload.metadata.chineseTitle")}>
           <Input
             disabled={disabled}
             id="upload-chinese-title"
@@ -120,7 +130,7 @@ export function WorkMetadataFields({
             value={form.chineseTitle}
           />
         </WorkbenchField>
-        <WorkbenchField controlId="upload-original-title" label="原名" required={!originalTitleReadOnly} info={originalTitleReadOnly ? "管理员资料维护中不可修改原名。" : undefined}>
+        <WorkbenchField controlId="upload-original-title" label={t("upload.metadata.originalTitle")} required={!originalTitleReadOnly} info={originalTitleReadOnly ? t("upload.metadata.originalReadOnly") : undefined}>
           <Input
             disabled={disabled}
             id="upload-original-title"
@@ -136,7 +146,7 @@ export function WorkMetadataFields({
           />
         </WorkbenchField>
         <div className="grid min-w-0 grid-cols-2 gap-4 md:col-span-2">
-          <WorkbenchField controlId="upload-genre" label="类型">
+          <WorkbenchField controlId="upload-genre" label={t("upload.metadata.genre")}>
             <WorkGenreInput
               disabled={disabled}
               id="upload-genre"
@@ -144,10 +154,10 @@ export function WorkMetadataFields({
               value={form.genre}
             />
           </WorkbenchField>
-          <WorkbenchField controlId="upload-reference-duration" label="参考时长">
+          <WorkbenchField controlId="upload-reference-duration" label={t("upload.metadata.duration")}>
             <CustomSelect
               id="upload-reference-duration"
-              label="参考时长"
+              label={t("upload.metadata.duration")}
               options={referenceDurationOptions}
               value={form.referenceDurationCustom ? "custom" : form.referenceDuration}
               customValue={form.referenceDuration}
@@ -163,11 +173,11 @@ export function WorkMetadataFields({
             />
           </WorkbenchField>
         </div>
-        <WorkbenchField controlId="upload-author" label="作者">
+        <WorkbenchField controlId="upload-author" label={t("upload.metadata.author")}>
           <CreatorTokenPicker
             disabled={disabled}
             id="upload-author"
-            label="作者"
+            role="author"
             onChange={(authors) =>
               setForm((current) => ({ ...current, authors }))
             }
@@ -178,7 +188,7 @@ export function WorkMetadataFields({
           />
         </WorkbenchField>
         {form.isTranslation ? (
-          <WorkbenchField controlId="upload-translator" label="译者">
+          <WorkbenchField controlId="upload-translator" label={t("upload.metadata.translator")}>
             <div className="grid gap-1.5">
               <CreatorTokenPicker
                 disabled={disabled}
@@ -187,7 +197,7 @@ export function WorkMetadataFields({
                 }
                 id="upload-translator"
                 invalid={Boolean(translatorError)}
-                label="译者"
+                role="translator"
                 onChange={changeTranslator}
                 suggestions={suggestions.creators}
                 values={form.translators.filter(
@@ -209,7 +219,7 @@ export function WorkMetadataFields({
         <WorkbenchField
           className="md:col-span-2"
           controlId="upload-release-date"
-          label="发布日期"
+          label={t("upload.metadata.published")}
         >
           <PrecisionDatePicker
             disabled={disabled}
@@ -217,13 +227,13 @@ export function WorkMetadataFields({
             onChange={(value) =>
               setForm((current) => ({ ...current, originalReleaseDate: value }))
             }
-            placeholder="选择或粘贴作品最初发表的日期（可留空）"
+            placeholder={t("upload.metadata.publishedHint")}
             value={form.originalReleaseDate}
           />
         </WorkbenchField>
         <WorkbenchField
           className="md:col-span-2"
-          label={<span id="upload-declarations-label">发布声明</span>}
+          label={<span id="upload-declarations-label">{t("upload.metadata.declarations")}</span>}
         >
           <div
             aria-labelledby="upload-declarations-label"
@@ -243,7 +253,7 @@ export function WorkMetadataFields({
                   changeOriginalDeclaration(checked === true)
                 }
               />
-              {originalDeclarationLabel}
+              {originalDeclarationLabel ?? t("upload.metadata.originalDeclaration")}
             </Label>
             <Label
               className="flex w-fit items-center gap-2 text-sm"
@@ -257,7 +267,7 @@ export function WorkMetadataFields({
                   changeTranslationDeclaration(checked === true)
                 }
               />
-              本作品为翻译作品。
+              {t("upload.metadata.translation")}
             </Label>
             {form.engineFamily === "rpg_maker_2003_maniac" ? (
               <Label
@@ -275,7 +285,7 @@ export function WorkMetadataFields({
                     }))
                   }
                 />
-                本作品使用了EasyRPG不支持的Maniac语法。
+                {t("upload.metadata.maniac")}
               </Label>
             ) : null}
           </div>
@@ -283,7 +293,7 @@ export function WorkMetadataFields({
         <WorkbenchField
           className="md:col-span-2"
           controlId="upload-description"
-          label="简介"
+          label={t("upload.metadata.description")}
         >
           <Textarea
             className="min-h-32 resize-y overflow-auto"
@@ -302,7 +312,7 @@ export function WorkMetadataFields({
         <WorkbenchField
           className="md:col-span-2"
           controlId="upload-tags"
-          label="标签"
+          label={t("upload.metadata.tags")}
         >
           {showUploadTagGuidance ? <UploadTagPicker
             disabled={disabled}
@@ -312,11 +322,11 @@ export function WorkMetadataFields({
           /> : <TokenPicker
             disabled={disabled}
             id="upload-tags"
-            label="标签"
+            label={t("upload.metadata.tags")}
             maxValues={MAX_PUBLIC_TAGS}
             onChange={(tags) => setForm((current) => ({ ...current, tags, ...constrainWorkVisibility(current, tags) }))}
-            placeholder="搜索或创建标签"
-            recommendationLabel="推荐标签"
+            placeholder={t("upload.metadata.tagSearch")}
+            recommendationLabel={t("upload.metadata.tagRecommendations")}
             sortable
             suggestions={suggestions.tags}
             values={form.tags}
@@ -325,7 +335,7 @@ export function WorkMetadataFields({
         <WorkbenchField
           className="md:col-span-2"
           controlId="upload-characters"
-          label="登场角色"
+          label={t("upload.metadata.characters")}
         >
           <CharacterPicker
             characterIndex={suggestions.characterIndex}
@@ -348,20 +358,20 @@ export function WorkMetadataFields({
           ref={moreSettingsRef}
         >
           <summary className="cursor-pointer py-1 text-sm font-bold">
-            更多设置
+            {t("upload.metadata.moreSettings")}
             {filledStaffCount > 0 ? (
               <span className="ml-2 text-xs font-normal text-muted">
-                制作人员 {filledStaffCount}
+                {t("upload.metadata.staffCount", { count: filledStaffCount })}
               </span>
             ) : null}
             {filledMoreInfoCount > 0 ? (
               <span className="ml-2 text-xs font-normal text-muted">
-                更多信息 {filledMoreInfoCount}
+                {t("upload.metadata.infoCount", { count: filledMoreInfoCount })}
               </span>
             ) : null}
           </summary>
           <div className="mt-3 grid gap-4 border-t border-border pt-4">
-            <WorkbenchField label="预览图">
+            <WorkbenchField label={t("upload.metadata.previews")}>
               <PreviewPicker
                 disabled={disabled}
                 existingHashes={imageSelections.replacePreviews ? [] : existingPreviewHashes}
@@ -378,22 +388,22 @@ export function WorkMetadataFields({
                 }
               />
             </WorkbenchField>
-            <WorkbenchField controlId="upload-aliases" label="别名">
+            <WorkbenchField controlId="upload-aliases" label={t("upload.metadata.aliases")}>
               <TokenPicker
                 disabled={disabled}
                 id="upload-aliases"
-                label="别名"
+                label={t("upload.metadata.aliases")}
                 onChange={(aliasTitles) =>
                   setForm((current) => ({ ...current, aliasTitles }))
                 }
-                placeholder="输入别名"
+                placeholder={t("upload.metadata.aliasInput")}
                 showRecommendations={false}
                 showSelectionCount={false}
                 suggestions={[]}
                 values={form.aliasTitles}
               />
             </WorkbenchField>
-            {showArchiveSource && isArchiveEngineFamily(form.engineFamily) ? <WorkbenchField controlId="upload-source-url" label="发布地址">
+            {showArchiveSource && isArchiveEngineFamily(form.engineFamily) ? <WorkbenchField controlId="upload-source-url" label={t("upload.metadata.releaseUrl")}>
               <Input
                 disabled={archiveSourceDisabled ?? disabled}
                 id="upload-source-url"

@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 import { bodyEmojis } from "@/app/.server/emojis/service";
 import { bodyLength, FACE_EMOJI_PATTERN, type FaceEmoji } from "@/lib/face-emojis";
 import type { TimelineBodySegment } from "@/lib/dto/db/timeline";
@@ -7,13 +9,13 @@ import { HttpError } from "@/lib/http";
 export const PUBLIC_STATUS = `SELECT e.id FROM timeline_events e JOIN users u ON u.id=e.user_id
   WHERE e.id=? AND e.kind='status' AND e.hidden_at IS NULL AND u.status='active'`;
 
-export function statusBody(input: Record<string, unknown>): string {
+export function statusBody(input: Record<string, unknown>, locale: UiLocale = DEFAULT_UI_LOCALE): string {
   const value = input.body;
   if (typeof value !== "string" || !value.trim() || value.length > 16000 || bodyLength(value.trim()) > 500 || value.includes("\0"))
-    throw new HttpError(400, "内容需要 1–500 个字符");
+    throw new HttpError(400, translate(locale, "timeline.error.body"), undefined, "timeline.error.body");
   if (mentions(value).length || /<img\b|!\[[^\]]*\]\(/i.test(value) ||
       (input.images !== undefined && (!Array.isArray(input.images) || input.images.length > 0)) || input.mentions !== undefined)
-    throw new HttpError(400, "图片请通过配图上传，吐槽和回复不支持提及");
+    throw new HttpError(400, translate(locale, "timeline.error.attachments"), undefined, "timeline.error.attachments");
   return value.trim().replace(/\r\n?/g, "\n");
 }
 

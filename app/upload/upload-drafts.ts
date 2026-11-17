@@ -1,3 +1,4 @@
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 import type {
   PreparedArchiveSource,
   UploadRecoveryDraft,
@@ -78,7 +79,7 @@ export async function acquireDraftLock(
   importJobId: number,
 ): Promise<DraftLock | null> {
   if (!("locks" in navigator)) {
-    throw new Error("当前浏览器不支持上传草稿锁，请使用支持 Web Locks 的现代浏览器。");
+    throw new UiFeedbackError("upload.draft.locksUnsupported");
   }
 
   let resolveAcquired!: (acquired: boolean) => void;
@@ -129,7 +130,7 @@ function openDatabase(): Promise<IDBDatabase> {
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("无法打开上传草稿数据库"));
+    request.onerror = () => reject(request.error ?? new UiFeedbackError("upload.draft.openFailed"));
   });
   return databasePromise;
 }
@@ -145,14 +146,14 @@ async function transactionDone(
 function waitForTransaction(transaction: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error ?? new Error("上传草稿写入失败"));
-    transaction.onabort = () => reject(transaction.error ?? new Error("上传草稿写入已中止"));
+    transaction.onerror = () => reject(transaction.error ?? new UiFeedbackError("upload.draft.writeFailed"));
+    transaction.onabort = () => reject(transaction.error ?? new UiFeedbackError("upload.draft.writeAborted"));
   });
 }
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error("上传草稿读取失败"));
+    request.onerror = () => reject(request.error ?? new UiFeedbackError("upload.draft.readDatabase"));
   });
 }
