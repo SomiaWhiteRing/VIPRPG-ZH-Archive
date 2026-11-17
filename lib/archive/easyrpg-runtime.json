@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.15-site-kai-replay-prefetch.2",
-  "revision": "939c19f9c29c9193847cd548c98af85f0335954a",
-  "build": "kai-web-replay-export",
+  "version": "2026.11.17-site-kai-netplay-latency.1",
+  "revision": "3a5c37f98767fa173913ddb8aa07022c0dcb5e58",
+  "build": "kai-web-netplay-latency",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
   "sourceState": "commit",
-  "archiveSha256": "2e781182ea8fa4cb41140dffd775cd5921485971cdfeb63a0e2eda751aebc8af",
+  "archiveSha256": "cfa3b1aea8874c7e1d8416f2f67c099c6b1fb8af632475719ebff6d648d87ecd",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {

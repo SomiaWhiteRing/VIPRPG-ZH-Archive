@@ -34,6 +34,18 @@ staging 保留该 Environment 的 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKE
 
 发布双路输入时先核对正式网站已提供同一候选的 Player。随后备份 `/opt/viprpg-netplay-production` 中的香港中继脚本，将同一提交的 `netplay-hk-relay.mjs` 安装为 `relay.mjs`，同步选线、诊断和房间密码模块，再重启 `viprpg-netplay-production`。重启会结束该进程内的现有房间。核对运行脚本及本机 8788、公网 `netplay-hk.viprpg.org/healthz` 返回的空间编号，随后从 `netplay_route.backup` 和 `netplay_ice_pair` 核对双路对局。
 
+### 香港 VPS 一键自检
+
+将 `scripts/netplay-hk-self-check.mjs` 与中继脚本部署在同一目录，在香港 VPS 执行：
+
+```sh
+sudo node /opt/viprpg-netplay-production/netplay-hk-self-check.mjs
+```
+
+命令只读检查正式进程的实际环境、Node `ws` 版本及 `setNoDelay` 实现、本机和公网健康接口、域名解析、Caddy/Coturn 状态、UDP 3478/443 监听、Coturn 与房间服务的共享密钥是否一致，以及最近的 `netplay_route_probe` / `netplay_route` 结果。密钥只输出匹配结果，不输出内容；失败项目使退出码为 1。预生产可传 `--service viprpg-netplay --origin https://netplay-hk-staging.viprpg.org`，服务名以实际 systemd 配置为准；非默认 Coturn 配置使用 `--coturn-config` 指定。
+
+该检查不会修改 DNS、防火墙、配置或重启服务。VPS 本机监听和 DNS 查询不等于玩家侧 TURN 连通；Cloudflare 是否仅 DNS、云厂商产品防火墙及外部 Allocate/Relay 仍需另行核对。没有近期对局日志不代表连通失败。
+
 ## 本地准备与执行
 
 Wrangler 顶层仍对应原正式 Worker，`env.staging` 对应预生产；没有为命名统一创建 `-production` Worker。`--env production` 是项目脚本的显式选择，不会再传给 Wrangler 追加名称。

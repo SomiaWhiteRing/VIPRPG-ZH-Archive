@@ -544,7 +544,10 @@ function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, in
         if (turnKey) paths.push("turn");
       }
       room.selection = startRouteSelection({
-        round, seats, paths, send: sendRoute, inputMirror,
+        round, seats, paths, send: sendRoute, inputMirror, inputProtocol: room.inputProtocol,
+        report(details) {
+          console.log(JSON.stringify({ event: "netplay_route_probe", archiveVersionId: pool.id, roomId, round, ...details }));
+        },
         commit(path, measurements, backup) {
           selectRoute(room, path === "websocket" ? "hong_kong_websocket" : "webrtc",
             "measured", { round, path, backup, measurements, turnPort: path === "turn" ? turnPort : undefined,

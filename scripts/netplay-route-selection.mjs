@@ -3,6 +3,7 @@ const selectionTimeoutMs = 8_000;
 const confirmationTimeoutMs = 1_000;
 const mirrorConfirmationTimeoutMs = 3_000;
 const directToleranceMs = 20;
+const toleratedMissing = 2;
 
 export function isRouteProbe(packet, round) {
   return packet.length === 10 && (packet[0] === 128 || packet[0] === 129) &&
@@ -24,7 +25,7 @@ function readMeasurement(message) {
   };
 }
 
-export function startRouteSelection({ round, seats, paths, send, commit, fail, inputMirror = false }) {
+export function startRouteSelection({ round, seats, paths, send, commit, fail, inputMirror = false, inputProtocol = 0, report }) {
   const candidates = new Map(paths.map(path => [path, { ready: new Set(), reports: new Map() }]));
   const probeTimeoutMs = inputMirror ? 9_000 : selectionTimeoutMs - confirmationTimeoutMs;
   const timeoutMs = probeTimeoutMs + (inputMirror ? mirrorConfirmationTimeoutMs : confirmationTimeoutMs);
@@ -58,8 +59,12 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail, i
     }
     scores.sort((a, b) => a.missing - b.missing || a.tailRttMs - b.tailRttMs ||
       a.longestGapMs - b.longestGapMs || a.medianRttMs - b.medianRttMs);
-    const fastest = scores[0];
-    const direct = scores.find(score => score.path === "direct");
+    // INP1 repairs isolated loss. Compare usable UDP paths before a reliable
+    // WebSocket whose retransmitted probes can hide the same loss.
+    const udp = inputProtocol === 1 ? scores.filter(score => score.path !== "websocket" && score.missing <= toleratedMissing) : [];
+    const preferred = udp.length ? udp : scores;
+    const fastest = preferred[0];
+    const direct = preferred.find(score => score.path === "direct");
     selected = direct && direct.missing === fastest.missing &&
       direct.tailRttMs <= fastest.tailRttMs + directToleranceMs &&
       direct.longestGapMs <= fastest.longestGapMs + directToleranceMs ? direct.path : fastest?.path;
@@ -68,6 +73,9 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail, i
     // Keep a healthy direct connection. When relaying, both open paths can deliver the same input.
     if (inputMirror && selected !== "direct" && !socket.failed && socket.ready.size === seats.length &&
       (!selected || !turn.failed && turn.ready.size === seats.length)) selected = "websocket";
+    report?.({ phase: "select", path: selected ?? null, inputProtocol, toleratedMissing,
+      preference: udp.length ? "udp_with_input_repair" : "measured_fallback", scores,
+      measurements: measurements(), elapsedMs: Date.now() - round });
     if (!selected || Date.now() >= deadline) {
       stop();
       fail(measurements());
@@ -106,9 +114,12 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail, i
         if (candidate.ready.size === seats.length) {
           candidate.probing = true;
           sendToBoth({ type: "probe", path, ...probe });
+          report?.({ phase: "probe", path, ...probe });
         }
       } else if (type === "measurement" && candidate.probing && !selected && !candidate.reports.has(seat)) {
         const measurement = readMeasurement(message);
+        report?.({ phase: "measurement", path, seat: seats.indexOf(seat) + 1,
+          ...(measurement ? { ...measurement, rtts: message.rtts } : { noUsableMeasurement: true }) });
         if (measurement || inputMirror && path !== "direct") candidate.reports.set(seat, measurement);
         else candidate.failed = true;
         chooseWhenMeasured();
