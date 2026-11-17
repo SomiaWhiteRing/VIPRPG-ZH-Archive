@@ -1,5 +1,7 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { ArrowLeft } from "lucide-react";
 import { FaceEmojiView } from "@/app/components/emojis/face-emoji";
 import { useClientEnvironment } from "@/app/components/use-client-environment";
@@ -14,7 +16,7 @@ import { FACE_EMOJI_PATTERN, type FaceEmoji } from "@/lib/face-emojis";
 import { MESSAGE_PAGE_SIZE } from "@/lib/messages";
 import { notifyInboxChanged } from "@/lib/inbox-events";
 import type { RestrictedInteraction } from "@/lib/interaction-restrictions";
-import { requestJson } from "@/lib/ui/api-response";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 import { MessageComposer } from "./composer";
 import { useMessageRoom } from "./use-message-room";
 import { MessageMenu } from "./menu";
@@ -22,6 +24,8 @@ import { MessageMenu } from "./menu";
 export function MessageThread({ viewerId, initial, interactionRestrictions }: {
   viewerId: number; initial: DirectMessagePage; interactionRestrictions: RestrictedInteraction[] | null;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const environment = useClientEnvironment();
   const native = environment === "android";
   const [page, setPage] = useState(initial);
@@ -69,7 +73,7 @@ export function MessageThread({ viewerId, initial, interactionRestrictions }: {
         let more = true;
         while (more && alive.current) {
           const after = current.current.messages.at(-1)?.id ?? 0;
-          const next = await requestJson<DirectMessagePage>(`/api/messages/${peerId}?after=${after}`, { cache: "no-store" });
+          const next = await requestJson<DirectMessagePage>(`/api/messages/${peerId}?after=${after}&${UI_LOCALE_PARAM}=${locale}`, { cache: "no-store" });
           merge(next);
           more = next.messages.length === MESSAGE_PAGE_SIZE;
         }
@@ -79,7 +83,7 @@ export function MessageThread({ viewerId, initial, interactionRestrictions }: {
     loading.current = task;
     void task.finally(() => { loading.current = null; }).catch(() => {});
     return task;
-  }, [peerId, merge]);
+  }, [peerId, merge, locale]);
   useMessageRoom(peerId, refresh);
 
   useEffect(() => { merge(initial); }, [initial, merge]);
@@ -141,7 +145,7 @@ export function MessageThread({ viewerId, initial, interactionRestrictions }: {
       if (through <= readThrough.current) return;
       inFlight = true;
       try {
-        await requestJson(`/api/messages/${peerId}/read`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ through }) });
+        await requestJson(`/api/messages/${peerId}/read?${UI_LOCALE_PARAM}=${locale}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ through }) });
         readThrough.current = Math.max(readThrough.current, through);
         notifyInboxChanged();
       } catch { /* Viewing the conversation again retries the read marker. */ }
@@ -176,17 +180,17 @@ export function MessageThread({ viewerId, initial, interactionRestrictions }: {
     if (native) window.addEventListener("resize", observe);
     document.addEventListener("visibilitychange", schedule);
     return () => { disposed = true; observer?.disconnect(); resizeObserver.disconnect(); clearTimeout(timer); window.removeEventListener("focus", schedule); window.removeEventListener("resize", observe); document.removeEventListener("visibilitychange", schedule); };
-  }, [page.messages, peerId, environment, native]);
+  }, [page.messages, peerId, environment, native, locale]);
 
   async function older() {
     if (loadingOlder || !page.messages.length) return;
     setLoadingOlder(true);
     try {
-      const next = await requestJson<DirectMessagePage>(`/api/messages/${peerId}?before=${page.messages[0].id}`, { cache: "no-store" });
+      const next = await requestJson<DirectMessagePage>(`/api/messages/${peerId}?before=${page.messages[0].id}&${UI_LOCALE_PARAM}=${locale}`, { cache: "no-store" });
       followBottom.current = false;
       prependHeight.current = (native ? document.scrollingElement : list.current)?.scrollHeight ?? null;
       merge(next, true);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "读取失败"); }
+    } catch (error) { toast.error(error instanceof ApiResponseError ? error.messageFor(locale) : error instanceof Error ? error.message : t("messages.loadFailed")); }
     finally { setLoadingOlder(false); }
   }
 
@@ -197,7 +201,7 @@ export function MessageThread({ viewerId, initial, interactionRestrictions }: {
           <Link className="flex min-w-0 items-center gap-3 text-sm font-semibold" to={`/users/${peerId}`}>
             <UserAvatar avatarBlobSha256={page.peer.avatarBlobSha256} displayName={page.peer.displayName} size={32} /><span className="truncate">{page.peer.displayName}</span>
           </Link>
-          {!page.peer.receiveMessages ? <span className="shrink-0 text-sm text-muted">[已屏蔽]</span> : null}
+          {!page.peer.receiveMessages ? <span className="shrink-0 text-sm text-muted">{t("messages.blocked")}</span> : null}
         </div>
         <MessageMenu peer={page.peer} interactionRestrictions={interactionRestrictions} onChanged={refresh} />
       </div>;
@@ -205,23 +209,23 @@ export function MessageThread({ viewerId, initial, interactionRestrictions }: {
   // Clip the fixed background at the conversation's end, before the site footer.
   return <div className={native ? "flex flex-col pb-5 [clip-path:inset(0_-100vw)] [overflow-anchor:none]" : undefined}>
     <div ref={heading} className={native ? "sticky top-[var(--site-header-height,3.5rem)] z-30 shrink-0 bg-background pt-5" : undefined}>
-      <AccountPageHeader title="短信箱" actions={<Button asChild variant="ghost" size="sm"><Link to="/me/messages"><ArrowLeft aria-hidden />返回</Link></Button>} />
+      <AccountPageHeader title={t("account.nav.messages")} actions={<Button asChild variant="ghost" size="sm"><Link to="/me/messages"><ArrowLeft aria-hidden />{t("creator.edit.return")}</Link></Button>} />
       {native ? peerHeader : null}
     </div>
     {/* SwipeRefreshLayout can only see document scroll in the Android WebView. */}
     <section ref={section} className={native
       ? "flex min-h-[var(--message-content-min-height,20rem)] flex-col rounded-b-lg border border-y-0 border-border bg-card"
-      : "mt-4 flex h-[min(72dvh,48rem)] min-h-80 flex-col overflow-hidden rounded-lg border border-border bg-card"} aria-label={`与${page.peer.displayName}的短信`}>
+      : "mt-4 flex h-[min(72dvh,48rem)] min-h-80 flex-col overflow-hidden rounded-lg border border-border bg-card"} aria-label={t("messages.thread", { name: page.peer.displayName })}>
       {!native ? peerHeader : null}
-      <div ref={list} className={native ? "flex-1 p-4" : "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"} role="log" aria-label="短信记录" aria-live="polite" aria-relevant="additions"
+      <div ref={list} className={native ? "flex-1 p-4" : "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"} role="log" aria-label={t("messages.log")} aria-live="polite" aria-relevant="additions"
         onScroll={event => { const element = event.currentTarget; if (!native) followBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 96; }}>
-        {page.hasOlder ? <div className="mb-4 text-center"><Button type="button" variant="ghost" size="sm" disabled={loadingOlder} onClick={() => void older()}>更早的短信</Button></div> : null}
+        {page.hasOlder ? <div className="mb-4 text-center"><Button type="button" variant="ghost" size="sm" disabled={loadingOlder} onClick={() => void older()}>{t("admin.discussions.older")}</Button></div> : null}
         <div className="flex flex-col gap-4">
           {page.messages.map(message => <div key={message.id}
             className={message.senderUserId === viewerId ? "flex flex-col items-end" : "flex flex-col items-start"}>
             <div className={message.image ? "max-w-[85%]" : message.senderUserId === viewerId ? "max-w-[85%] rounded-2xl rounded-br-sm bg-primary/10 px-3 py-2" : "max-w-[85%] rounded-2xl rounded-bl-sm bg-muted/15 px-3 py-2"}>
-              {message.image ? <a className="block" href={message.image.url} target="_blank" rel="noreferrer" aria-label="查看图片">
-                <img src={message.image.url} width={message.image.width} height={message.image.height} alt="图片短信" loading="lazy" className="block h-auto max-h-72 w-auto max-w-full rounded-md object-contain"
+              {message.image ? <a className="block" href={message.image.url} target="_blank" rel="noreferrer" aria-label={t("messages.viewImage")}>
+                <img src={message.image.url} width={message.image.width} height={message.image.height} alt={t("admin.discussions.messageImage")} loading="lazy" className="block h-auto max-h-72 w-auto max-w-full rounded-md object-contain"
                   onLoad={() => { if (followBottom.current) scrollToBottom(); }} />
               </a> : <p className="m-0 whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed"><MessageText body={message.body} emojis={page.emojis} /></p>}
             </div>
@@ -232,7 +236,7 @@ export function MessageThread({ viewerId, initial, interactionRestrictions }: {
         </div>
       </div>
       <div ref={dock} className={native ? "sticky bottom-[var(--message-bottom-gap,0px)] z-20 shrink-0 rounded-b-lg border-b border-border bg-card" : "shrink-0"}>
-        {!page.peer.acceptsMessages ? <p role="status" className="m-0 border-t border-border px-4 py-2 text-sm text-muted">对方已停止接收你的信息</p> : null}
+        {!page.peer.acceptsMessages ? <p role="status" className="m-0 border-t border-border px-4 py-2 text-sm text-muted">{t("messages.notAccepting")}</p> : null}
         {page.peer.canSend ? <MessageComposer peerId={peerId} lastMessageId={page.messages.at(-1)?.id ?? 0} onSent={async () => { followBottom.current = true; await refresh(); scrollToBottom(); }} /> : null}
       </div>
       {/* Keep messages behind the composer from showing through the page's footer area. */}

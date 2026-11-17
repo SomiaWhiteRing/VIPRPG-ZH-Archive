@@ -1,3 +1,6 @@
+import { isMessageKey, translate, type MessageKey } from "../i18n/core";
+import { DEFAULT_UI_LOCALE, parseUiLocale, type UiLocale } from "../i18n/locale";
+
 export type ApiConfirmation = {
   title: string;
   description: string;
@@ -11,6 +14,8 @@ export type ApiResponsePayload = {
   code?: string;
   confirmation?: ApiConfirmation;
   detail?: string;
+  messageKey?: string;
+  messageValues?: Record<string, string | number>;
   error?: string;
   redirectTo?: string;
 };
@@ -18,6 +23,7 @@ export type ApiResponsePayload = {
 export class ApiResponseError extends Error {
   readonly status: number;
   readonly payload: ApiResponsePayload;
+  readonly messageValues?: Record<string, string | number>;
   constructor(
     message: string,
     status: number,
@@ -27,28 +33,58 @@ export class ApiResponseError extends Error {
     this.name = "ApiResponseError";
     this.status = status;
     this.payload = payload;
+    const values = payload.messageValues;
+    if (isRecord(values) && Object.values(values).every(value => typeof value === "string" || typeof value === "number")) {
+      this.messageValues = values;
+    }
   }
 
   get code(): string | undefined {
     return this.payload.code;
   }
+
+  messageFor(locale: UiLocale): string {
+    if (isMessageKey(this.payload.messageKey)) {
+      try {
+        return translate(locale, this.payload.messageKey, this.messageValues);
+      } catch {
+        // Older responses and messages requiring unavailable arguments retain their detail.
+      }
+    }
+    return this.message;
+  }
+}
+
+function requestLocale(): UiLocale {
+  return typeof document === "undefined"
+    ? DEFAULT_UI_LOCALE
+    : parseUiLocale(document.documentElement.lang) ?? DEFAULT_UI_LOCALE;
+}
+
+function defaultFailureLabel() {
+  return translate(requestLocale(), "core.request.failed");
 }
 
 export async function requestResponse(
   input: RequestInfo | URL,
   init: RequestInit = {},
-  failureLabel = "请求失败",
+  failureLabel = defaultFailureLabel(),
 ): Promise<Response> {
   try {
     return await fetch(input, init);
   } catch (error) {
     if (init.signal?.aborted || isAbortError(error)) throw error;
-    throw new ApiResponseError(`${failureLabel}：无法连接服务器，请检查网络后重试。`, 0, { code: "network_error" });
+    const locale = requestLocale();
+    throw new ApiResponseError(
+      translate(locale, "core.request.detail", { label: failureLabel, detail: translate(locale, "core.form.network") }),
+      0,
+      { code: "network_error" },
+    );
   }
 }
 
 // Binary bodies and 204 responses share HTTP failure handling without JSON decoding on success.
-export async function requestOk(input: RequestInfo | URL, init: RequestInit = {}, failureLabel = "请求失败"): Promise<Response> {
+export async function requestOk(input: RequestInfo | URL, init: RequestInit = {}, failureLabel = defaultFailureLabel()): Promise<Response> {
   const response = await requestResponse(input, init, failureLabel);
   if (!response.ok) {
     const payload = await readJsonResponse<ApiResponsePayload>(response, failureLabel, true).catch((error: unknown) => {
@@ -61,22 +97,28 @@ export async function requestOk(input: RequestInfo | URL, init: RequestInit = {}
 }
 
 // Recovery flows can inspect a failed response before deciding whether to retry or recover.
-export async function readJsonResponse<T>(response: Response, failureLabel = "请求失败", allowFailure = false): Promise<T> {
+export async function readJsonResponse<T>(response: Response, failureLabel = defaultFailureLabel(), allowFailure = false): Promise<T> {
+  const locale = requestLocale();
   let payload: unknown;
   try {
     payload = await response.json();
   } catch (error) {
     if (isAbortError(error)) throw error;
     throw new ApiResponseError(
-      response.redirected
-        ? `${failureLabel}：登录状态可能已失效，请刷新页面并重新登录。`
-        : `${failureLabel}：服务器返回了无法识别的响应，请刷新页面后重试。`,
+      translate(locale, "core.request.detail", {
+        label: failureLabel,
+        detail: translate(locale, response.redirected ? "core.request.redirected" : "core.form.badResponse"),
+      }),
       response.status,
       { code: "invalid_response" },
     );
   }
   if (!isRecord(payload)) {
-    throw new ApiResponseError(`${failureLabel}：服务器返回了无法识别的响应，请刷新页面后重试。`, response.status, { code: "invalid_response" });
+    throw new ApiResponseError(
+      translate(locale, "core.request.detail", { label: failureLabel, detail: translate(locale, "core.form.badResponse") }),
+      response.status,
+      { code: "invalid_response" },
+    );
   }
   if (!allowFailure && (!response.ok || payload.ok === false)) {
     throw apiResponseError(response.status, payload, failureLabel);
@@ -87,7 +129,7 @@ export async function readJsonResponse<T>(response: Response, failureLabel = "�
 export async function requestJsonValue<T>(
   input: RequestInfo | URL,
   init: RequestInit = {},
-  failureLabel = "请求失败",
+  failureLabel = defaultFailureLabel(),
 ): Promise<T> {
   return readSuccessfulJson<T>(input, init, failureLabel, false);
 }
@@ -95,12 +137,15 @@ export async function requestJsonValue<T>(
 export async function requestJson<T>(
   input: RequestInfo | URL,
   init: RequestInit = {},
-  failureLabel = "请求失败",
+  failureLabel: string | { messageKey: MessageKey; messageValues?: Record<string, string | number> } = defaultFailureLabel(),
 ): Promise<T> {
-  return readSuccessfulJson<T>(input, init, failureLabel, true);
+  const label = typeof failureLabel === "string"
+    ? failureLabel
+    : translate(requestLocale(), failureLabel.messageKey, failureLabel.messageValues);
+  return readSuccessfulJson<T>(input, init, label, true);
 }
 
-export function postJson<T>(url: string, body: unknown, failureLabel = "请求失败"): Promise<T> {
+export function postJson<T>(url: string, body: unknown, failureLabel = defaultFailureLabel()): Promise<T> {
   return requestJsonValue<T>(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -117,20 +162,33 @@ async function readSuccessfulJson<T>(input: RequestInfo | URL, init: RequestInit
   return payload as T;
 }
 
-export function apiResponseError(status: number, payload: ApiResponsePayload, failureLabel = "请求失败"): ApiResponseError {
-  const authorizationMessage = status === 401
-    ? "登录状态已失效，请刷新页面并重新登录。"
+export function apiResponseError(status: number, payload: ApiResponsePayload, failureLabel = defaultFailureLabel()): ApiResponseError {
+  const locale = requestLocale();
+  if (payload.code === "internal_error" && !isMessageKey(payload.messageKey)) {
+    const messageKey = "core.request.internal";
+    return new ApiResponseError(translate(locale, messageKey), status, { ...payload, messageKey });
+  }
+  const detail = stringValue(payload.detail);
+  const fallbackKey = status === 401
+    ? "core.request.session"
     : status === 403
-      ? "当前账户没有执行此操作的权限，请确认登录状态和权限后重试。"
-      : null;
-  return new ApiResponseError(
-    stringValue(payload.detail)
-      ?? authorizationMessage
+      ? "core.request.forbidden"
+      : status === 405 && payload.error === "Method not allowed"
+        ? "core.request.methodNotAllowed"
+        : null;
+  if (!detail && fallbackKey && !isMessageKey(payload.messageKey)) {
+    return new ApiResponseError(translate(locale, fallbackKey), status, { ...payload, messageKey: fallbackKey });
+  }
+  const error = new ApiResponseError(
+    detail
+      ?? (fallbackKey ? translate(locale, fallbackKey) : null)
       ?? stringValue(payload.error)
-      ?? `${failureLabel}（状态码 ${status}），请稍后重试。`,
+      ?? translate(locale, "core.request.status", { label: failureLabel, status }),
     status,
     payload,
   );
+  error.message = error.messageFor(locale);
+  return error;
 }
 
 function isAbortError(error: unknown): boolean {

@@ -1,9 +1,20 @@
 import { isRouteErrorResponse } from "react-router";
 import type { MetaDescriptor } from "react-router";
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, parseUiLocale, UI_LOCALE_PARAM, type UiLocale } from "@/lib/i18n/locale";
 
 const SITE_NAME = "VIPRPG.org";
-const SITE_TAGLINE = "VIPRPG中文保管库";
-const SITE_DESCRIPTION = "VIPRPG中文保管库";
+
+export function pageMetadataLocale(
+  search: string,
+  matches: readonly { id: string; loaderData?: unknown }[],
+): UiLocale {
+  const selected = parseUiLocale(new URLSearchParams(search).get(UI_LOCALE_PARAM));
+  if (selected) return selected;
+  const root = matches.find((match) => match.id === "root")?.loaderData;
+  const value = root && typeof root === "object" && "uiLocale" in root ? root.uiLocale : null;
+  return parseUiLocale(typeof value === "string" ? value : null) ?? DEFAULT_UI_LOCALE;
+}
 
 export type PageMetadata = {
   title?: string | string[];
@@ -15,13 +26,15 @@ export type PageMetadata = {
 export function pageMetaDescriptors(
   value: PageMetadata = {},
   error?: unknown,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ): MetaDescriptor[] {
+  const description = translate(locale, "core.site.description");
   if (error != null) {
     value = {
       title:
         isRouteErrorResponse(error) && error.status === 404
-          ? "页面不存在"
-          : "暂时无法打开页面",
+          ? translate(locale, "core.notFound.title")
+          : translate(locale, "core.pageError.title"),
     };
   }
 
@@ -33,17 +46,17 @@ export function pageMetaDescriptors(
     Number.isSafeInteger(value.page) &&
     value.page > 1
   ) {
-    parts.push(`第 ${value.page} 页`);
+    parts.push(translate(locale, "core.meta.page", { page: value.page }));
   }
   const title = parts.length
     ? [...parts, SITE_NAME].join(" | ")
-    : [SITE_NAME, SITE_TAGLINE].join(" | ");
+    : [SITE_NAME, description].join(" | ");
 
   return [
     { title },
     {
       name: "description",
-      content: value.description ?? SITE_DESCRIPTION,
+      content: value.description ?? description,
     },
     ...(value.alternates?.canonical
       ? [

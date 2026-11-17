@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { Button } from "@/app/components/ui/button";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { Checkbox } from "@/app/components/ui/checkbox";
@@ -60,6 +61,7 @@ export function CharacterCreditManager({
   renderPortrait: (index: number) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const t = useMessages();
   const [category, setCategory] = useState("");
   const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -109,8 +111,8 @@ export function CharacterCreditManager({
   const suggestionMap = useMemo(() => new Map(suggestions.map((item) => [item.id, item])), [suggestions]);
   const { categories, memberships } = characterIndex;
   const browseCategories = useMemo(() => [...categories, {
-    id: UNCLASSIFIED_GROUP_ID, parentId: null, label: "未分类", originalName: null, sourceUrl: null, sortOrder: Number.MAX_SAFE_INTEGER,
-  }], [categories]);
+    id: UNCLASSIFIED_GROUP_ID, parentId: null, label: t("character.uncategorized"), originalName: null, sourceUrl: null, sortOrder: Number.MAX_SAFE_INTEGER,
+  }], [categories, t]);
   const catalogIndex = useMemo(() => {
     const nodes = sortCharacterNodes([
       ...categories.map((item) => ({ id: item.id, parentId: item.parentId, sortOrder: item.sortOrder, member: null })),
@@ -234,10 +236,10 @@ export function CharacterCreditManager({
     if (save && !disabled && credit && displayName && displayName !== credit.selection.displayName) {
       const selection = { ...credit.selection, displayName };
       creditIds.set(selection, creditDragId(credit));
-      change(values.map((item, index) => index === draft.index ? { ...item, selection } : item), "本作名称已更新");
+      change(values.map((item, index) => index === draft.index ? { ...item, selection } : item), t("character.manager.nameUpdated"));
     }
     if (focus) nameButtons.current.get(draft.index)?.focus({ preventScroll: true });
-  }, [change, disabled, values]);
+  }, [change, disabled, values, t]);
   const editName = useCallback((index: number) => {
     if (disabled || nameDraft.current?.index === index) return;
     finishName();
@@ -272,7 +274,7 @@ export function CharacterCreditManager({
     const indices = values.map((_, index) => index);
     indices.splice(at, 0, ...added.map(() => -1));
     pendingScroll.current = at;
-    change([...values.slice(0, at), ...added, ...values.slice(at)], `已添加 ${added.length} 项到${CHARACTER_ROLE_LABELS[role]}`, indices);
+    change([...values.slice(0, at), ...added, ...values.slice(at)], t("character.manager.added", { count: added.length, role: t(`work.role.${role}`) }), indices);
     setOpenRole(role); resetPicks();
     return added;
   }
@@ -280,9 +282,9 @@ export function CharacterCreditManager({
     if (disabled || !indices.length) return;
     const picked = new Set(indices);
     const remaining = values.map((_, index) => index).filter((index) => !picked.has(index));
-    change(remaining.map((index) => values[index]), `已移除 ${indices.length} 项关联`, remaining);
+    change(remaining.map((index) => values[index]), t("character.manager.removed", { count: indices.length }), remaining);
     resetPicks();
-  }, [change, disabled, resetPicks, values]);
+  }, [change, disabled, resetPicks, values, t]);
   function move(indices: number[], role: CharacterRoleKey, before?: number, after = false): boolean {
     if (disabled || !indices.length || (before !== undefined && indices.includes(before))) return false;
     indices = [...indices].sort((a, b) => a - b);
@@ -294,7 +296,7 @@ export function CharacterCreditManager({
     order.splice(at, 0, ...indices);
     if (order.every((index, position) => index === position) && indices.every((index) => values[index].roleKey === role)) return false;
     pendingScroll.current = order.indexOf(indices[0]);
-    change(order.map((index) => picked.has(index) ? { ...values[index], roleKey: role } : values[index]), `已移到${CHARACTER_ROLE_LABELS[role]}`, order);
+    change(order.map((index) => picked.has(index) ? { ...values[index], roleKey: role } : values[index]), t("character.manager.moved", { role: t(`work.role.${role}`) }), order);
     setOpenRole(role); resetPicks();
     return true;
   }
@@ -308,7 +310,7 @@ export function CharacterCreditManager({
       const at = rest.findIndex((index) => values[index].roleKey === role);
       rest.splice(at < 0 ? rest.length : at, 0, ...picked); order = rest;
     }
-    if (!order.every((index, position) => index === position)) change(order.map((index) => values[index]), "选中关联已置于各组最前", order);
+    if (!order.every((index, position) => index === position)) change(order.map((index) => values[index]), t("character.manager.movedFirst"), order);
     resetPicks();
   }
   function endDrag() { drag.current = null; dragOrigin.current = null; setDragging(null); setDragPreview(null); setDropZone(""); }
@@ -380,12 +382,12 @@ export function CharacterCreditManager({
   const nameEditor = useMemo(() => {
     if (editingIndex === null || !values[editingIndex]) return null;
     const index = editingIndex, credit = values[index], name = credit.selection.displayName;
-    return <Input aria-label={`${name} 在本作中的名称`} className="h-[26px] min-w-0 flex-1 rounded-sm px-[3px] py-0 text-xs" disabled={disabled} maxLength={100} title={`${name} · ${credit.selection.originalName}`} ref={nameInput} value={nameValue}
+    return <Input aria-label={t("character.manager.workName", { name })} className="h-[26px] min-w-0 flex-1 rounded-sm px-[3px] py-0 text-xs" disabled={disabled} maxLength={100} title={`${name} · ${credit.selection.originalName}`} ref={nameInput} value={nameValue}
       onChange={(event) => { setNameValue(event.target.value); if (nameDraft.current) nameDraft.current.value = event.target.value; }}
       onCompositionStart={() => { composing.current = true; }} onCompositionEnd={(event) => { composing.current = false; if (nameDraft.current) nameDraft.current.value = event.currentTarget.value; if (document.activeElement !== event.currentTarget) finishName(); }}
       onBlur={(event) => { if (!composing.current && event.relatedTarget !== nameButtons.current.get(index)) finishName(); }}
       onKeyDown={(event) => { if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || composing.current) return; if (event.key === "Enter" || event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finishName(event.key === "Enter", true); } }} />;
-  }, [editingIndex, values, disabled, nameValue, finishName]);
+  }, [editingIndex, values, disabled, nameValue, finishName, t]);
 
   return (
     <Dialog.Root open={open} onOpenChange={(next) => {
@@ -394,7 +396,7 @@ export function CharacterCreditManager({
     }}>
       <Dialog.Trigger asChild>
         <Button className="hidden h-8 min-h-8 shrink-0 px-2.5 text-xs lg:inline-flex" disabled={disabled} size="sm" type="button" variant="outline">
-          <PanelsTopLeft aria-hidden />角色管理器+
+          <PanelsTopLeft aria-hidden />{t("character.manager.open")}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -407,13 +409,13 @@ export function CharacterCreditManager({
           onClickCapture={(event) => { if (suppressClick.current) { event.preventDefault(); event.stopPropagation(); } }}
         >
           <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-            <Dialog.Title className="text-base">管理登场角色</Dialog.Title>
-            <span className="text-xs text-muted">{values.length} 项关联</span>
-            <Dialog.Description className="sr-only">按类别或名称查找角色，拖入身份分组添加，拖回角色库移除。名称可原位编辑。</Dialog.Description>
-            <Dialog.Close asChild><Button aria-label="关闭角色管理" className="ml-auto size-7 min-h-0 p-0" size="icon" type="button" variant="ghost"><X aria-hidden /></Button></Dialog.Close>
+            <Dialog.Title className="text-base">{t("character.manager.title")}</Dialog.Title>
+            <span className="text-xs text-muted">{t("character.manager.count", { count: values.length })}</span>
+            <Dialog.Description className="sr-only">{t("character.manager.instructions")}</Dialog.Description>
+            <Dialog.Close asChild><Button aria-label={t("character.manager.close")} className="ml-auto size-7 min-h-0 p-0" size="icon" type="button" variant="ghost"><X aria-hidden /></Button></Dialog.Close>
           </header>
           <DndContext id={dndId} sensors={sensors} measuring={measuring} collisionDetection={characterCollisionDetection}
-            accessibility={{ screenReaderInstructions: { draggable: "按空格或 Enter 开始拖动，方向键移动，空格或 Enter 确认，Escape 取消。" } }}
+            accessibility={{ screenReaderInstructions: { draggable: t("character.manager.drag") } }}
             onDragStart={startDrag} onDragCancel={cancelDrag} onDragEnd={drop}
             onDragOver={({ over }) => {
               const target = over?.data.current as CharacterDropTarget | undefined;
@@ -423,52 +425,52 @@ export function CharacterCreditManager({
           <DragSession dragging={Boolean(dragging)} onReset={resetDrag} />
           {/* Preserve the original left column width; the extra 100px belongs to the right column. */}
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,calc((100%_-_101px)/2))_minmax(0,1fr)] gap-px bg-border">
-            <CharacterDropZone id="remove" target={{ kind: "remove" }} disabled={disabled} aria-label="角色库" className="relative flex min-h-0 min-w-0 flex-col bg-card">
+            <CharacterDropZone id="remove" target={{ kind: "remove" }} disabled={disabled} aria-label={t("character.manager.library")} className="relative flex min-h-0 min-w-0 flex-col bg-card">
               <header className="flex shrink-0 items-center gap-2 px-3 py-2">
-                <h3 className="text-sm font-semibold">角色库</h3><span className="text-xs text-muted">{suggestions.length} 个角色</span>
-                <Button className="ml-auto min-h-7 px-1.5 text-xs" disabled={disabled || !openRole} size="sm" type="button" variant="ghost" onClick={() => openRole && onCreate(query, openRole)}><Plus aria-hidden />新增角色</Button>
-                <Button aria-label="角色库多选" aria-pressed={multi === "library"} className="size-7 min-h-0 p-0" disabled={disabled} size="icon" title="多选" type="button" variant={multi === "library" ? "default" : "ghost"} onClick={() => toggleMulti("library")}><ListChecks aria-hidden /></Button>
+                <h3 className="text-sm font-semibold">{t("character.manager.library")}</h3><span className="text-xs text-muted">{t("character.manager.characters", { count: suggestions.length })}</span>
+                <Button className="ml-auto min-h-7 px-1.5 text-xs" disabled={disabled || !openRole} size="sm" type="button" variant="ghost" onClick={() => openRole && onCreate(query, openRole)}><Plus aria-hidden />{t("character.manager.new")}</Button>
+                <Button aria-label={t("character.manager.libraryMulti")} aria-pressed={multi === "library"} className="size-7 min-h-0 p-0" disabled={disabled} size="icon" title={t("character.manager.multi")} type="button" variant={multi === "library" ? "default" : "ghost"} onClick={() => toggleMulti("library")}><ListChecks aria-hidden /></Button>
               </header>
               <div className="grid shrink-0 gap-2 px-3 pb-2">
-                <CategoryPicker id={`${id}-category`} mode="membership" disabled={disabled} categories={browseCategories} counts={catalogIndex.counts} emptyLabel="不选择分类" showHeader={false} triggerClassName="h-8 min-h-8 whitespace-nowrap py-0 text-xs [&>span:first-child]:truncate" value={category || null} onValueChange={(next) => {
+                <CategoryPicker id={`${id}-category`} mode="membership" disabled={disabled} categories={browseCategories} counts={catalogIndex.counts} emptyLabel={t("character.manager.noCategory")} showHeader={false} triggerClassName="h-8 min-h-8 whitespace-nowrap py-0 text-xs [&>span:first-child]:truncate" value={category || null} onValueChange={(next) => {
                   setCategory(next ?? ""); setSearchQuery(""); setPickedLibrary(new Set()); catalogScroll.current = 0;
                   if (catalogViewport.current) catalogViewport.current.scrollTop = 0;
                 }} />
                 <div className="relative">
-                  <Input aria-label="搜索全部角色" className="h-8 pr-7 text-xs" disabled={disabled} placeholder="输入中文名、日文名或别名以搜索" value={query} onChange={(event) => setQuery(event.target.value)}
+                  <Input aria-label={t("character.manager.searchAll")} className="h-8 pr-7 text-xs" disabled={disabled} placeholder={t("character.manager.searchHint")} value={query} onChange={(event) => setQuery(event.target.value)}
                   onCompositionStart={() => { searchComposing.current = true; }} onCompositionEnd={() => { searchComposing.current = false; }} onKeyDown={(event) => {
                     if (event.key !== "Enter" || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || searchComposing.current) return;
                     event.preventDefault(); event.stopPropagation();
                     setSearchQuery(query); setCategory(""); setPickedLibrary(new Set()); catalogScroll.current = 0;
                     if (catalogViewport.current) catalogViewport.current.scrollTop = 0;
                   }} />
-                  {query || searchTerm ? <Button aria-label="清除角色搜索" className="absolute right-0 top-0 size-8 min-h-0 p-0" disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => { setQuery(""); setSearchQuery(""); setPickedLibrary(new Set()); }}><X aria-hidden /></Button> : null}
+                  {query || searchTerm ? <Button aria-label={t("character.manager.clearSearch")} className="absolute right-0 top-0 size-8 min-h-0 p-0" disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => { setQuery(""); setSearchQuery(""); setPickedLibrary(new Set()); }}><X aria-hidden /></Button> : null}
                 </div>
                 {category || searchTerm || multi === "library" ? <div className="flex min-h-5 items-center gap-2 text-xs text-muted" aria-live="polite">
-                  <span>{searchTerm ? `全库搜索 · ${catalog.length} 个角色` : category ? `${catalog.length} 个角色` : null}</span>
-                  {multi === "library" ? <Button className="ml-auto min-h-5 px-1 text-xs" disabled={disabled || !catalog.length} size="sm" type="button" variant="ghost" onClick={() => setPickedLibrary(new Set(catalog.map((item) => item.character.id)))}>选择全部</Button> : null}
+                  <span>{searchTerm ? t("character.manager.searchCount", { count: catalog.length }) : category ? t("character.manager.characters", { count: catalog.length }) : null}</span>
+                  {multi === "library" ? <Button className="ml-auto min-h-5 px-1 text-xs" disabled={disabled || !catalog.length} size="sm" type="button" variant="ghost" onClick={() => setPickedLibrary(new Set(catalog.map((item) => item.character.id)))}>{t("character.manager.selectAll")}</Button> : null}
                 </div> : null}
               </div>
               <div data-library-viewport data-drag-viewport className="min-h-0 flex-1 overflow-y-auto px-3 pb-2 [scrollbar-gutter:stable]" ref={(node) => { catalogViewport.current = node; if (node) node.scrollTop = catalogScroll.current; }} onScroll={(event) => { catalogScroll.current = event.currentTarget.scrollTop; }}>
                 <div className={cn("grid grid-cols-3 auto-rows-[38px] content-start gap-[5px]", settlingIds.size > 0 && "pointer-events-none")}>
                   {catalog.map((item) => <LibraryCharacterTile key={item.character.id} item={item} disabled={disabled} multiple={multi === "library"} selected={pickedLibrary.has(item.character.id)} lifted={dragSets.library.has(item.character.id)} settling={settlingIds.has(`library:${item.character.id}`)} onSelect={selectLibrary} />)}
                 </div>
-                {!catalog.length ? <EmptyState className="h-full content-center justify-items-center text-center" title={category || searchTerm ? "没有找到角色" : "选择分类或搜索"} variant="plain" /> : null}
+                {!catalog.length ? <EmptyState className="h-full content-center justify-items-center text-center" title={category || searchTerm ? t("character.manager.noneFound") : t("character.manager.chooseCategory")} variant="plain" /> : null}
               </div>
               <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
-                <span className="min-w-0 flex-1 truncate text-xs text-muted">{pickedLibrary.size ? `已选择 ${pickedLibrary.size} 个角色` : "未选择角色"}</span>
-                {pickedLibrary.size ? <Button className="min-h-7 px-1 text-xs" disabled={disabled} size="sm" type="button" variant="ghost" onClick={() => setPickedLibrary(new Set())}>清空选择</Button> : null}
-                <Button className="min-h-7 text-xs" disabled={disabled || !pickedLibrary.size || !openRole} size="sm" type="button" onClick={() => openRole && add([...pickedLibrary], openRole)}>{openRole ? `加入${CHARACTER_ROLE_LABELS[openRole]}` : "先展开身份分组"}</Button>
+                <span className="min-w-0 flex-1 truncate text-xs text-muted">{pickedLibrary.size ? t("character.manager.pickedLibrary", { count: pickedLibrary.size }) : t("character.manager.noneSelected")}</span>
+                {pickedLibrary.size ? <Button className="min-h-7 px-1 text-xs" disabled={disabled} size="sm" type="button" variant="ghost" onClick={() => setPickedLibrary(new Set())}>{t("character.manager.clear")}</Button> : null}
+                <Button className="min-h-7 text-xs" disabled={disabled || !pickedLibrary.size || !openRole} size="sm" type="button" onClick={() => openRole && add([...pickedLibrary], openRole)}>{openRole ? t("character.manager.addTo", { role: t(`work.role.${openRole}`) }) : t("character.manager.expandFirst")}</Button>
               </footer>
-              {dragging?.from === "work" ? <div aria-hidden className={cn("pointer-events-none absolute inset-1 z-10 flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-card/95 text-sm", dropZone === "remove" && "border-destructive bg-destructive/10 text-destructive")}><Trash2 />从本作移除 {dragging.indices.length} 项关联</div> : null}
+              {dragging?.from === "work" ? <div aria-hidden className={cn("pointer-events-none absolute inset-1 z-10 flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-card/95 text-sm", dropZone === "remove" && "border-destructive bg-destructive/10 text-destructive")}><Trash2 />{t("character.manager.dropRemove", { count: dragging.indices.length })}</div> : null}
             </CharacterDropZone>
-            <section aria-label="本作角色" className="flex min-h-0 min-w-0 flex-col bg-card">
+            <section aria-label={t("character.manager.work")} className="flex min-h-0 min-w-0 flex-col bg-card">
               <header className="flex shrink-0 items-center gap-2 px-3 py-2">
-                <h3 className="text-sm font-semibold">本作角色</h3><span className="text-xs text-muted">{values.length} 项</span>
-                <Button aria-label="本作角色多选" aria-pressed={multi === "work"} className="ml-auto size-7 min-h-0 p-0" disabled={disabled} size="icon" title="多选" type="button" variant={multi === "work" ? "default" : "ghost"} onClick={() => toggleMulti("work")}><ListChecks aria-hidden /></Button>
+                <h3 className="text-sm font-semibold">{t("character.manager.work")}</h3><span className="text-xs text-muted">{t("character.manager.items", { count: values.length })}</span>
+                <Button aria-label={t("character.manager.workMulti")} aria-pressed={multi === "work"} className="ml-auto size-7 min-h-0 p-0" disabled={disabled} size="icon" title={t("character.manager.multi")} type="button" variant={multi === "work" ? "default" : "ghost"} onClick={() => toggleMulti("work")}><ListChecks aria-hidden /></Button>
               </header>
               <div className="grid shrink-0 gap-1 px-3 pb-2">
-                <div className="relative"><Input aria-label="搜索本作角色" className="h-8 pr-7 text-xs" disabled={disabled} placeholder="搜索本作角色或登场名称" value={workQuery} onChange={(event) => setWorkQuery(event.target.value)}
+                <div className="relative"><Input aria-label={t("character.manager.searchWork")} className="h-8 pr-7 text-xs" disabled={disabled} placeholder={t("character.manager.workHint")} value={workQuery} onChange={(event) => setWorkQuery(event.target.value)}
                   onCompositionStart={() => { workSearchComposing.current = true; }} onCompositionEnd={() => { workSearchComposing.current = false; }} onKeyDown={(event) => {
                     if (event.key !== "Enter" || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || workSearchComposing.current) return;
                     event.preventDefault(); event.stopPropagation();
@@ -476,8 +478,8 @@ export function CharacterCreditManager({
                     const term = characterNameKey(workQuery);
                     const match = term ? values.find((credit) => matchesCredit(credit, term, searchNames)) : undefined;
                     if (match) setOpenRole(match.roleKey);
-                  }} />{workQuery || workTerm ? <Button aria-label="清除本作搜索" className="absolute right-0 top-0 size-8 min-h-0 p-0" disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => { setWorkQuery(""); setWorkSearchQuery(""); setPickedWork(new Set()); }}><X aria-hidden /></Button> : null}</div>
-                {workTerm ? <span className="text-xs text-muted" aria-live="polite">筛选结果 · {workRows.length} / {values.length} 项</span> : null}
+                  }} />{workQuery || workTerm ? <Button aria-label={t("character.manager.clearWork")} className="absolute right-0 top-0 size-8 min-h-0 p-0" disabled={disabled} size="icon" type="button" variant="ghost" onClick={() => { setWorkQuery(""); setWorkSearchQuery(""); setPickedWork(new Set()); }}><X aria-hidden /></Button> : null}</div>
+                {workTerm ? <span className="text-xs text-muted" aria-live="polite">{t("character.manager.filtered", { count: workRows.length, total: values.length })}</span> : null}
               </div>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {ROLE_KEYS.map((role) => {
@@ -487,9 +489,9 @@ export function CharacterCreditManager({
                   return <CharacterDropZone key={role} id={`role:${role}`} target={{ kind: "role", role }} disabled={disabled} className={cn("flex min-h-0 flex-col border-t border-border", expanded ? "flex-1" : "shrink-0")}>
                     <h3 data-role-header={role} data-drag-fallback={`role:${role}`} className={cn("flex shrink-0 items-center gap-2 pr-3", expanded && "bg-primary/5", !expanded && dropZone === role && "ring-2 ring-inset ring-primary")}><Button aria-controls={`${id}-role-${role}`} aria-expanded={expanded} className="min-h-9 min-w-0 flex-1 justify-start gap-2 rounded-none px-3 py-1 text-xs"
                       disabled={disabled} type="button" variant="ghost" onClick={() => { finishName(); setOpenRole(expanded ? null : role); }}>
-                      {expanded ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden />}<span className="flex flex-1 items-center gap-2 text-left"><span>{CHARACTER_ROLE_LABELS[role]}</span>{dragging && !expanded ? <span className="text-xs font-normal text-muted">移入此分组</span> : null}</span>
+                      {expanded ? <ChevronDown aria-hidden /> : <ChevronRight aria-hidden />}<span className="flex flex-1 items-center gap-2 text-left"><span>{t(`work.role.${role}`)}</span>{dragging && !expanded ? <span className="text-xs font-normal text-muted">{t("character.manager.dropGroup")}</span> : null}</span>
                     </Button>
-                      {multi === "work" ? <Checkbox aria-label={`${CHARACTER_ROLE_LABELS[role]}全选或取消全选${workTerm ? "当前筛选结果" : ""}`} checked={pickedCount === 0 ? false : pickedCount === rows.length ? true : "indeterminate"} disabled={disabled || !rows.length} onCheckedChange={(checked) => {
+                      {multi === "work" ? <Checkbox aria-label={t("character.manager.selectRole", { role: t(`work.role.${role}`), filtered: workTerm ? "yes" : "no" })} checked={pickedCount === 0 ? false : pickedCount === rows.length ? true : "indeterminate"} disabled={disabled || !rows.length} onCheckedChange={(checked) => {
                         setPickedWork((current) => {
                           const next = new Set(current);
                           for (const { index } of rows) { if (checked === true) next.add(index); else next.delete(index); }
@@ -498,13 +500,13 @@ export function CharacterCreditManager({
                       }} /> : null}
                       <span className="rounded bg-muted/15 px-1.5 py-0.5 text-xs font-normal tabular-nums">{workTerm ? `${rows.length} / ` : ""}{total}</span>
                     </h3>
-                    {expanded ? <div aria-label={`${CHARACTER_ROLE_LABELS[role]}角色区域`} data-role-viewport data-drag-viewport className="min-h-0 flex-1 overflow-y-auto px-3 py-2 [scrollbar-gutter:stable]" id={`${id}-role-${role}`}
+                    {expanded ? <div aria-label={t("character.manager.roleRegion", { role: t(`work.role.${role}`) })} data-role-viewport data-drag-viewport className="min-h-0 flex-1 overflow-y-auto px-3 py-2 [scrollbar-gutter:stable]" id={`${id}-role-${role}`}
                       ref={(node) => { if (node) node.scrollTop = roleScrolls.current.get(role) ?? 0; }} onScroll={(event) => { roleScrolls.current.set(role, event.currentTarget.scrollTop); }}>
                       <SortableContext id={`${id}-role-${role}`} items={sortableIds.get(role)!} strategy={dragSortingStrategy}>
                       <div className={cn("grid grid-cols-3 auto-rows-[38px] content-start gap-[5px]", settlingIds.size > 0 && "pointer-events-none")}>
                         {rows.map(({ credit, index }) => {
                           const selected = pickedWork.has(index), name = credit.selection.displayName;
-                          return <CharacterDragItem key={creditDragId(credit)} id={creditDragId(credit)} source={{ from: "work", index }} target={{ kind: "credit", role, index }} disabled={disabled} packed={dragSets.packed.has(index)} lifted={dragSets.work.has(index)} settling={settlingIds.has(creditDragId(credit))} activateFromContainer data-credit-index={index} role="group" aria-label={`${name}，${CHARACTER_ROLE_LABELS[role]}`}
+                          return <CharacterDragItem key={creditDragId(credit)} id={creditDragId(credit)} source={{ from: "work", index }} target={{ kind: "credit", role, index }} disabled={disabled} packed={dragSets.packed.has(index)} lifted={dragSets.work.has(index)} settling={settlingIds.has(creditDragId(credit))} activateFromContainer data-credit-index={index} role="group" aria-label={`${name} · ${t(`work.role.${role}`)}`}
                             className={cn("relative flex h-[38px] w-full min-w-0 cursor-grab items-center gap-1.5 rounded border border-border px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-primary active:cursor-grabbing [content-visibility:auto] [contain-intrinsic-size:38px]", selected && "border-primary bg-primary/5 ring-1 ring-primary")}
                             onClickCapture={(event) => {
                               if (disabled || !event.ctrlKey || (event.target as Element).closest("input, textarea, [data-drag-no-activate]")) return;
@@ -514,7 +516,7 @@ export function CharacterCreditManager({
                               if (event.target !== event.currentTarget) return;
                               if (event.key === "Delete") { event.preventDefault(); remove(selected ? [...pickedWork] : [index]); }
                               if (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) { event.preventDefault(); const next = ROLE_KEYS[ROLE_KEYS.indexOf(role) + (event.key === "ArrowLeft" ? -1 : 1)]; if (next) move([index], next); }
-                              if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) { event.preventDefault(); const group = values.map((item, i) => ({ item, i })).filter(({ item }) => item.roleKey === role); const position = group.findIndex(({ i }) => i === index), other = group[position + (event.key === "ArrowUp" ? -1 : 1)]; if (other) { const order = values.map((_, i) => i); [order[index], order[other.i]] = [order[other.i], order[index]]; change(order.map((i) => values[i]), "组内顺序已更新", order); resetPicks(); } }
+                              if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) { event.preventDefault(); const group = values.map((item, i) => ({ item, i })).filter(({ item }) => item.roleKey === role); const position = group.findIndex(({ i }) => i === index), other = group[position + (event.key === "ArrowUp" ? -1 : 1)]; if (other) { const order = values.map((_, i) => i); [order[index], order[other.i]] = [order[other.i], order[index]]; change(order.map((i) => values[i]), t("character.manager.orderUpdated"), order); resetPicks(); } }
                             }}>
                             <WorkCharacterContent index={index} credit={credit} selected={selected} multiple={multi === "work"} disabled={disabled}
                               missing={!credit.portrait && (credit.selection.kind === "new" || !suggestionMap.get(credit.selection.characterId)?.defaultPortrait)}
@@ -525,27 +527,27 @@ export function CharacterCreditManager({
                         {librarySlot ? <CharacterDragSlot id={librarySlot} role={role} disabled={disabled} /> : null}
                       </div>
                       </SortableContext>
-                      {!rows.length && !librarySlot ? <EmptyState title={workTerm && total ? "没有符合筛选的关联" : `尚无${CHARACTER_ROLE_LABELS[role]}关联`} variant="plain" /> : null}
+                      {!rows.length && !librarySlot ? <EmptyState title={workTerm && total ? t("character.manager.emptyFilter") : t("character.manager.emptyRole", { role: t(`work.role.${role}`) })} variant="plain" /> : null}
                     </div> : null}
                   </CharacterDropZone>;
                 })}
               </div>
               <footer className="flex shrink-0 flex-wrap items-center gap-1 border-t border-border px-3 py-2">
-                <span className="flex-1 text-xs text-muted">{pickedWork.size ? `已选择 ${pickedWork.size} 项` : openRole ? `${CHARACTER_ROLE_LABELS[openRole]} · ${workGroups.get(openRole)!.total} 项` : "未展开分组"}</span>
+                <span className="flex-1 text-xs text-muted">{pickedWork.size ? t("character.manager.pickedWork", { count: pickedWork.size }) : openRole ? t("character.manager.roleCount", { role: t(`work.role.${openRole}`), count: workGroups.get(openRole)!.total }) : t("character.manager.noGroup")}</span>
                 {pickedWork.size ? <>
-                  <Button className="min-h-7 px-1 text-xs" disabled={disabled} size="sm" type="button" variant="ghost" onClick={() => setPickedWork(new Set())}>清空选择</Button>
-                  <Button className="min-h-7 px-1 text-xs" disabled={disabled} size="sm" type="button" variant="outline" onClick={moveFirst}>置于最前</Button>
-                  <Button className="min-h-7 px-1 text-xs text-destructive" disabled={disabled} size="sm" type="button" variant="ghost" onClick={() => remove([...pickedWork])}>移除</Button>
-                  <div className="flex basis-full gap-1">{ROLE_KEYS.map((role) => <Button key={role} className="min-h-7 px-1.5 text-xs" disabled={disabled} size="sm" type="button" variant="outline" onClick={() => move([...pickedWork], role)}>移到{CHARACTER_ROLE_LABELS[role]}</Button>)}</div>
+                  <Button className="min-h-7 px-1 text-xs" disabled={disabled} size="sm" type="button" variant="ghost" onClick={() => setPickedWork(new Set())}>{t("character.manager.clear")}</Button>
+                  <Button className="min-h-7 px-1 text-xs" disabled={disabled} size="sm" type="button" variant="outline" onClick={moveFirst}>{t("character.manager.moveFirst")}</Button>
+                  <Button className="min-h-7 px-1 text-xs text-destructive" disabled={disabled} size="sm" type="button" variant="ghost" onClick={() => remove([...pickedWork])}>{t("character.manager.remove")}</Button>
+                  <div className="flex basis-full gap-1">{ROLE_KEYS.map((role) => <Button key={role} className="min-h-7 px-1.5 text-xs" disabled={disabled} size="sm" type="button" variant="outline" onClick={() => move([...pickedWork], role)}>{t("character.manager.moveTo", { role: t(`work.role.${role}`) })}</Button>)}</div>
                 </> : null}
               </footer>
             </section>
           </div>
           <footer className="flex min-h-9 shrink-0 items-center gap-2 border-t border-border px-3 py-1 text-xs text-muted">
-            <span role="status" aria-live="polite" className={cn(!notice && pendingPortraits > 0 && "text-destructive")}>{notice || (pendingPortraits ? `${pendingPortraits} 项待选头像` : "")}</span>
+            <span role="status" aria-live="polite" className={cn(!notice && pendingPortraits > 0 && "text-destructive")}>{notice || (pendingPortraits ? t("character.manager.pending", { count: pendingPortraits }) : "")}</span>
             {undo ? <Button className="ml-auto min-h-7 px-1.5 text-xs" disabled={disabled} size="sm" type="button" variant="ghost" onClick={() => {
-              finishName(false); expectedValues.current = undo.values; onRestore(undo.values, undo.files); setUndo(null); resetPicks(); setNotice("已撤销上次修改");
-            }}><Undo2 aria-hidden />撤销</Button> : null}
+              finishName(false); expectedValues.current = undo.values; onRestore(undo.values, undo.files); setUndo(null); resetPicks(); setNotice(t("character.manager.undone"));
+            }}><Undo2 aria-hidden />{t("character.manager.undo")}</Button> : null}
           </footer>
           <SortableOverlay>{dragPreview ? <DragStack {...dragPreview} className="h-[38px] w-full" itemClassName="flex items-center gap-1.5 px-1.5 text-xs" elementRef={dragStack} /> : null}</SortableOverlay>
           {landing ? <DragLanding landing={landing} container={content} onFinish={finishLanding} itemClassName="flex items-center gap-1.5 px-1.5 text-xs" /> : null}
@@ -567,19 +569,20 @@ const WorkCharacterContent = memo(function WorkCharacterContent({ index, credit,
   renderPortrait: (index: number) => ReactNode; onEditPortrait: (index: number, trigger: HTMLButtonElement) => void; onEditName: (index: number) => void;
   onFinishName: (save: boolean, focus: boolean) => void; onSelect: (index: number) => void; onRemove: (indices: number[]) => void;
 }) {
+  const t = useMessages();
   const name = credit.selection.displayName;
   const portrait = useMemo(() => renderPortrait(index), [renderPortrait, index]);
   return <>
-    <Button aria-label={`选择 ${name} 的头像`} aria-haspopup="dialog" aria-controls={portraitDialogId} className={cn("group/portrait relative size-7 min-h-0 shrink-0 overflow-hidden rounded-sm p-0 hover:bg-transparent", missing && "bg-destructive/10")} disabled={disabled} size="icon" title={missing ? `${name} · 待选头像` : `${name} · 选择本作头像`} type="button" variant="ghost" onClick={(event) => onEditPortrait(index, event.currentTarget)}>
+    <Button aria-label={t("upload.character.choosePortrait", { name })} aria-haspopup="dialog" aria-controls={portraitDialogId} className={cn("group/portrait relative size-7 min-h-0 shrink-0 overflow-hidden rounded-sm p-0 hover:bg-transparent", missing && "bg-destructive/10")} disabled={disabled} size="icon" title={missing ? `${name} · ${t("upload.character.portraitPending")}` : t("upload.character.choosePortrait", { name })} type="button" variant="ghost" onClick={(event) => onEditPortrait(index, event.currentTarget)}>
       {portrait}<span aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center bg-black/55 text-white opacity-0 transition-opacity group-hover/portrait:opacity-100 group-focus-visible/portrait:opacity-100 motion-reduce:transition-none"><Pencil className="size-3.5" /></span>
     </Button>
     <div className="flex min-w-0 flex-1 items-center gap-[3px]">
-      {editor ?? (multiple ? <Button aria-label={`选择 ${name}`} aria-pressed={selected} className="h-[26px] min-h-0 min-w-0 flex-1 cursor-grab justify-start overflow-hidden rounded-none p-0 text-xs font-normal hover:bg-transparent active:cursor-grabbing" disabled={disabled} title={`${name} · ${credit.selection.originalName}`} type="button" variant="ghost" onClick={() => onSelect(index)}><span className="truncate">{name}</span></Button>
+      {editor ?? (multiple ? <Button aria-label={t("character.manager.selectNamed", { name })} aria-pressed={selected} className="h-[26px] min-h-0 min-w-0 flex-1 cursor-grab justify-start overflow-hidden rounded-none p-0 text-xs font-normal hover:bg-transparent active:cursor-grabbing" disabled={disabled} title={`${name} · ${credit.selection.originalName}`} type="button" variant="ghost" onClick={() => onSelect(index)}><span className="truncate">{name}</span></Button>
         : <span className="min-w-0 flex-1 truncate text-xs" title={`${name} · ${credit.selection.originalName}`}>{name}</span>)}
-      <Button aria-label={editor ? "保存名称" : `编辑 ${name} 的名称`} data-drag-no-activate className="h-4 min-h-0 w-3.5 shrink-0 rounded-none p-0 text-muted [&_svg]:size-3" disabled={disabled} size="icon" title={editor ? "保存名称" : "编辑名称"} type="button" variant="ghost" ref={(node) => { if (node) nameButtons.current.set(index, node); else nameButtons.current.delete(index); }} onClick={() => editor ? onFinishName(true, true) : onEditName(index)}>{editor ? <Check aria-hidden /> : <Pencil aria-hidden />}</Button>
-      <Button aria-label={`删除 ${name} 的关联`} data-drag-no-activate className="h-4 min-h-0 w-3.5 shrink-0 rounded-none p-0 text-muted hover:text-destructive [&_svg]:size-3" disabled={disabled} size="icon" title="删除关联" type="button" variant="ghost" onClick={() => onRemove([index])}><Trash2 aria-hidden /></Button>
+      <Button aria-label={editor ? t("character.manager.saveName") : t("character.manager.editNamed", { name })} data-drag-no-activate className="h-4 min-h-0 w-3.5 shrink-0 rounded-none p-0 text-muted [&_svg]:size-3" disabled={disabled} size="icon" title={editor ? t("character.manager.saveName") : t("character.manager.editName")} type="button" variant="ghost" ref={(node) => { if (node) nameButtons.current.set(index, node); else nameButtons.current.delete(index); }} onClick={() => editor ? onFinishName(true, true) : onEditName(index)}>{editor ? <Check aria-hidden /> : <Pencil aria-hidden />}</Button>
+      <Button aria-label={t("character.manager.removeNamed", { name })} data-drag-no-activate className="h-4 min-h-0 w-3.5 shrink-0 rounded-none p-0 text-muted hover:text-destructive [&_svg]:size-3" disabled={disabled} size="icon" title={t("character.manager.removeCredit")} type="button" variant="ghost" onClick={() => onRemove([index])}><Trash2 aria-hidden /></Button>
     </div>
-    {multiple ? <Checkbox aria-label={`选择 ${name}`} data-drag-no-activate checked={selected} className="absolute left-6 top-[23px] z-10 size-3 [&_svg]:size-2.5" disabled={disabled} onCheckedChange={() => onSelect(index)} /> : null}
+    {multiple ? <Checkbox aria-label={t("character.manager.selectNamed", { name })} data-drag-no-activate checked={selected} className="absolute left-6 top-[23px] z-10 size-3 [&_svg]:size-2.5" disabled={disabled} onCheckedChange={() => onSelect(index)} /> : null}
   </>;
 });
 const LibraryCharacterTile = memo(function LibraryCharacterTile({ item, disabled, multiple, selected, lifted, settling, onSelect }: {

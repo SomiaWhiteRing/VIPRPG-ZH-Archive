@@ -30,11 +30,11 @@ export async function GET(
         OR EXISTS(SELECT 1 FROM works w WHERE w.id IN (${references}) AND (w.audience<>'public' OR w.status<>'published'))) AS restricted
       FROM blobs b WHERE b.sha256=?`).bind(sha256, sha256, sha256).first<{ status: string; restricted: number }>();
     if (blob?.status === "purging" || blob?.status === "purged")
-      throw new HttpError(404, "图片不存在或无权访问");
+      throw new HttpError(404, "图片不存在或无权访问", undefined, "image.unavailable");
     if (blob?.restricted) {
       const access = workReadCondition(await getCurrentUser(runtime));
       if (!await runtime.db.prepare(`SELECT 1 FROM works w WHERE w.id IN (${references}) AND ${access.sql}`)
-        .bind(sha256, sha256, ...access.binds).first()) throw new HttpError(404, "图片不存在或无权访问");
+        .bind(sha256, sha256, ...access.binds).first()) throw new HttpError(404, "图片不存在或无权访问", undefined, "image.unavailable");
       const object = await streamValidatedImage(runtime, sha256);
       if (request.method === "HEAD") await object.body.cancel();
       return new Response(request.method === "HEAD" ? null : object.body, { headers: {

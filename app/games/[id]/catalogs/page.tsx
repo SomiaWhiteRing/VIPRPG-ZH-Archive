@@ -10,9 +10,11 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -21,22 +23,26 @@ export async function loader(args: LoaderFunctionArgs) {
   if (!work) throwNotFound();
   const page = parseAccountPage(new URL(args.request.url).searchParams.get("page") ?? undefined);
   const result = await paginateCatalogsContainingWork(runtime, workId, page);
-  return { workId, title: work.chineseTitle || work.originalTitle, result };
+  return { workId, title: work.chineseTitle || work.originalTitle, result, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({
-    title: [loaderData?.title || "游戏", "收录了本条目的目录"],
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "work.sidebar.catalogs");
+  return pageMetaDescriptors({
+    title: loaderData?.title ? [loaderData.title, title] : title,
     page: loaderData?.result.page,
-  }, error);
+  }, error, locale);
+};
 
 export default function WorkCatalogsPage() {
+  const t = useMessages();
   const { workId, result } = useLoaderData<typeof loader>();
   return (
     <PageContainer>
       <PageHeader
-        actions={<BackLink href={`/games/${workId}#catalog-card`} label="返回作品" />}
-        title="收录了本条目的目录"
+        actions={<BackLink href={`/games/${workId}#catalog-card`} label={t("relation.backToWork")} />}
+        title={t("work.sidebar.catalogs")}
       />
       {result.items.length ? (
         <ul className="divide-y divide-border border-b border-border">
@@ -44,7 +50,7 @@ export default function WorkCatalogsPage() {
             <li key={catalog.id}><CatalogListRow catalog={catalog} /></li>
           ))}
         </ul>
-      ) : <EmptyState title="暂无收录本条目的公开目录。" />}
+      ) : <EmptyState title={t("work.catalogsEmpty")} />}
       <PaginationLinks
         basePath={`/games/${workId}/catalogs`}
         page={result.page}

@@ -1,4 +1,4 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { EmailInput, PasswordInput } from "@/app/components/auth/auth-input";
@@ -7,12 +7,14 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
 import { getCurrentUser } from "@/app/.server/auth/current-user";
-import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
+import { authReturnUrl, sanitizeRedirectPath } from "@/app/.server/auth/redirect";
 import { redirectPage } from "@/app/.server/http/page-response";
 import { FormField } from "@/app/components/ui/form-field";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
 import { Rm2kButton } from "@/app/components/ui/rm2k-button";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -29,36 +31,40 @@ export async function loader(args: LoaderFunctionArgs) {
   const currentUser = await getCurrentUser(runtime);
 
   if (currentUser) {
-    redirectPage(nextPath);
+    const target = authReturnUrl(nextPath, args.request.url);
+    redirectPage(target.pathname + target.search + target.hash);
   }
 
-  return { params, nextPath };
+  return { params, nextPath, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: "登录" }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "core.login") }, error, locale);
+};
 
 export default function LoginPage() {
   const { params, nextPath } = useLoaderData<typeof loader>();
+  const t = useMessages();
   return (
     <AuthPageShell
-      title="登录"
+      title={t("core.login")}
       footer={
         <>
           <Link to={`/register?next=${encodeURIComponent(nextPath)}`}>
-            注册账户
+            {t("auth.register")}
           </Link>
           <Link to={`/forgot-password?next=${encodeURIComponent(nextPath)}`}>
-            找回密码
+            {t("auth.forgot")}
           </Link>
         </>
       }
     >
-      <RedirectFeedback success={{ reset: "密码已更新，请重新登录。", accountDeleted: "账号已注销。" }} />
+      <RedirectFeedback success={{ reset: t("auth.reset.done"), accountDeleted: t("auth.deleted") }} />
 
-      <RedirectForm action="/api/auth/login" method="post" className="grid gap-4">
+      <RedirectForm action="/api/auth/login" responseType="json" preserveLanguage method="post" className="grid gap-4">
         <input type="hidden" name="next" value={nextPath} />
-        <FormField controlId="login-field-1" label="邮箱">
+        <FormField controlId="login-field-1" label={t("auth.email")}>
           <EmailInput
             id="login-field-1"
             defaultValue={params.email ?? ""}
@@ -67,10 +73,10 @@ export default function LoginPage() {
             required
           />
         </FormField>
-        <FormField controlId="login-field-2" label="密码">
+        <FormField controlId="login-field-2" label={t("auth.password")}>
           <PasswordInput id="login-field-2" name="password" required />
         </FormField>
-        <Rm2kButton type="submit">登录</Rm2kButton>
+        <Rm2kButton type="submit">{t("core.login")}</Rm2kButton>
       </RedirectForm>
     </AuthPageShell>
   );

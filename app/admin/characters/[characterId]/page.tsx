@@ -2,8 +2,11 @@ import { parsePageId, throwNotFound } from "@/app/.server/http/page-response";
 import { pickPageFields } from "@/app/.server/page-data";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { type LoaderFunctionArgs, type MetaFunction, useLoaderData, useLocation, Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { type LoaderFunctionArgs, type MetaFunction, useLoaderData, useLocation } from "react-router";
 import { useEffect, useState } from "react";
 
 
@@ -81,16 +84,14 @@ export async function loader(args: LoaderFunctionArgs) {
     candidates,
     portraitLibrary,
     characterIndex,
+    locale: runtime.uiLocale,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    {
-      title: [loaderData?.character.primaryName || "角色", "角色维护", "控制台"],
-    },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [loaderData?.character.primaryName || translate(locale, "admin.characterIndex.character"), translate(locale, "admin.characterDetail.title"), translate(locale, "admin.characterIndex.console")] }, error, locale);
+};
 
 export default function AdminCharacterEditPage() {
   const data = useLoaderData<typeof loader>();
@@ -108,6 +109,7 @@ function CharacterEditPage({
   portraitLibrary,
   characterIndex,
 }: Awaited<ReturnType<typeof loader>>) {
+  const t = useMessages();
   const { hash } = useLocation();
   const [tab, setTab] = useState("profile");
   const [description, setDescription] = useState(character.description ?? "");
@@ -122,7 +124,7 @@ function CharacterEditPage({
         title={character.primaryName}
         actions={
           <>
-            <BackLink href="/admin/characters" label="返回角色维护" />
+            <BackLink href="/admin/characters" label={t("admin.characterDetail.back")} />
             {CHARACTER_INDEX_PERMISSIONS.some((key) =>
               hasPermission(adminUser, key),
             ) ? (
@@ -130,7 +132,7 @@ function CharacterEditPage({
                 className={buttonVariants({ variant: "outline" })}
                 to={`/admin/characters/index?character=${character.id}`}
               >
-                编辑所属分类
+                {t("admin.characterDetail.editCategory")}
               </Link>
             ) : null}
             {character.workCount > 0 ? (
@@ -138,7 +140,7 @@ function CharacterEditPage({
                 className={buttonVariants({ variant: "outline" })}
                 to={`/games?character=${character.id}`}
               >
-                查看作品
+                {t("admin.characterDetail.viewWorks")}
               </Link>
             ) : null}
           </>
@@ -156,10 +158,10 @@ function CharacterEditPage({
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList aria-label="角色编辑分区">
-          <TabsTrigger value="profile">资料</TabsTrigger>
-          <TabsTrigger value="materials">素材</TabsTrigger>
-          {canMerge ? <TabsTrigger value="merge">合并</TabsTrigger> : null}
+        <TabsList aria-label={t("admin.characterDetail.tabs")}>
+          <TabsTrigger value="profile">{t("admin.characterDetail.profile")}</TabsTrigger>
+          <TabsTrigger value="materials">{t("character.materials")}</TabsTrigger>
+          {canMerge ? <TabsTrigger value="merge">{t("admin.characterDetail.merge")}</TabsTrigger> : null}
         </TabsList>
         {/* 保持编辑器挂载，切换分区不丢失未保存的修改。 */}
         <TabsContent forceMount value="profile" className="data-[state=inactive]:hidden">
@@ -167,19 +169,19 @@ function CharacterEditPage({
             action={`/api/admin/characters/${character.id}/update`}
             className="grid gap-4"
             confirmField="merge_target_id"
-            errorTitle="角色资料保存失败"
+            errorTitle={t("admin.characterDetail.profileFailed")}
             id={CHARACTER_EDIT_FORM_ID}
             method="post"
-            title="确认合并并删除角色"
-            description="目标角色会接收现有关联，当前角色将被删除。此操作不可逆，请确认目标名称正确。"
+            title={t("admin.characterDetail.mergeTitle")}
+            description={t("admin.characterDetail.mergeDescription")}
           >
             <input name="character_id" type="hidden" value={character.id} />
 
-            <Pane heading="基础信息">
+            <Pane heading={t("admin.characterDetail.basic")}>
               <fieldset disabled={!canEdit} className="grid gap-4 md:grid-cols-2">
                 <FormField
                   controlId="admin-characters-characterId--field-1"
-                  label="名称"
+                  label={t("admin.characterList.name")}
                 >
                   <Input
                     id="admin-characters-characterId--field-1"
@@ -190,7 +192,7 @@ function CharacterEditPage({
                 </FormField>
                 <FormField
                   controlId="admin-characters-characterId--field-2"
-                  label="原名"
+                  label={t("upload.metadata.originalTitle")}
                 >
                   <Input
                     id="admin-characters-characterId--field-2"
@@ -201,8 +203,8 @@ function CharacterEditPage({
                 </FormField>
                 <FormField
                   controlId="admin-characters-characterId--field-3"
-                  hint="每行一个；可添加、修改或删除。"
-                  label="日文别名"
+                  hint={t("admin.characterDetail.aliasesHint")}
+                  label={t("character.aliasesJa")}
                 >
                   <Textarea
                     aria-describedby="admin-characters-characterId--field-3-hint"
@@ -217,8 +219,8 @@ function CharacterEditPage({
                 </FormField>
                 <FormField
                   controlId="admin-characters-characterId--field-4"
-                  hint="每行一个；角色名称本身不必重复填写。"
-                  label="中文别名"
+                  hint={t("admin.characterDetail.aliasesNoRepeat")}
+                  label={t("character.aliasesZh")}
                 >
                   <Textarea
                     aria-describedby="admin-characters-characterId--field-4-hint"
@@ -233,8 +235,8 @@ function CharacterEditPage({
                 </FormField>
                 <FormField
                   controlId="character-description"
-                  hint="介绍角色的背景、特点与常见形象。支持换行。"
-                  label="简介"
+                  hint={t("admin.characterDetail.descriptionHint")}
+                  label={t("upload.metadata.description")}
                   wide
                 >
                   <Textarea
@@ -258,21 +260,21 @@ function CharacterEditPage({
                 type="button"
                 variant="ghost"
               >
-                {previewDescription ? "收起预览" : "预览简介"}
+                {previewDescription ? t("admin.characterDetail.hidePreview") : t("admin.characterDetail.showPreview")}
               </Button>
             </div>
             <section
-              aria-label="简介预览"
+              aria-label={t("admin.characterDetail.preview")}
               className="whitespace-pre-wrap rounded-lg border border-border bg-card p-4 text-sm leading-relaxed"
               hidden={!previewDescription}
               id="character-description-preview"
             >
-              {description.trim() || "暂无简介。"}
+              {description.trim() || t("admin.characterDetail.emptyDescription")}
             </section>
 
             {canEdit ? (
               <StickySaveBar>
-                <Button type="submit">保存角色资料</Button>
+                <Button type="submit">{t("admin.characterDetail.saveProfile")}</Button>
               </StickySaveBar>
             ) : null}
           </ConfirmingForm>
@@ -285,7 +287,7 @@ function CharacterEditPage({
             aria-labelledby="material-workbench-heading"
           >
             <h2 id="material-workbench-heading" className="mb-4 text-lg font-bold">
-              素材工作台
+              {t("admin.characterDetail.materialsWorkbench")}
             </h2>
             <PortraitLibraryEditor
               canManage={canManagePortrait}
@@ -309,18 +311,18 @@ function CharacterEditPage({
               action={`/api/admin/characters/${character.id}/update`}
               className="grid gap-4"
               confirmField="merge_target_id"
-              errorTitle="角色合并失败"
+              errorTitle={t("admin.characterDetail.mergeFailed")}
               method="post"
-              title="确认合并并删除角色"
-              description="目标角色会接收现有关联，当前角色将被删除。此操作不可逆，请确认目标名称正确。"
+              title={t("admin.characterDetail.mergeTitle")}
+              description={t("admin.characterDetail.mergeDescription")}
             >
               <input name="character_id" type="hidden" value={character.id} />
-              <Pane heading="合并重复角色" tone="danger">
+              <Pane heading={t("admin.characterDetail.mergeDuplicates")} tone="danger">
                 <FormField
                   controlId="admin-characters-characterId--field-5"
-                  hint="提交后，登场关系会移至目标角色，当前角色会被删除。"
+                  hint={t("admin.characterDetail.mergeHint")}
                   hintId="character-merge-target-hint"
-                  label="目标角色"
+                  label={t("admin.characterDetail.target")}
                 >
                   <CharacterMergeTargetField
                     id="admin-characters-characterId--field-5"
@@ -338,7 +340,7 @@ function CharacterEditPage({
                 </FormField>
               </Pane>
               <StickySaveBar>
-                <Button type="submit" variant="destructive">合并角色</Button>
+                <Button type="submit" variant="destructive">{t("admin.characterDetail.mergeSubmit")}</Button>
               </StickySaveBar>
             </ConfirmingForm>
           </TabsContent>

@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { loadGameLibrary } from "@/app/.server/game-library-page";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { listFavoriteWorkIds } from "@/app/.server/db/user-work-tags";
@@ -6,7 +8,7 @@ import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import { GameLibrary } from "@/app/components/library/game-library";
 import { WorkFavoriteButton } from "@/app/components/work/work-favorite-button";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { useRouteRefresh } from "@/app/components/use-route-refresh";
@@ -20,16 +22,18 @@ export async function loader(args: LoaderFunctionArgs) {
   const data = await loadGameLibrary(runtime, searchParams, { userId: user.id, kind: "favorite" });
   const viewer = await getCurrentUser(runtime);
   const favoriteWorkIds = viewer ? await listFavoriteWorkIds(runtime, viewer.id, data.works.map((work) => work.id)) : [];
-  return { ...data, ownerUserId: user.id, displayName: user.displayName, base: `/users/${user.id}/favorites`, currentUserId: viewer?.id ?? null, favoriteWorkIds };
+  return { locale: runtime.uiLocale, ...data, ownerUserId: user.id, displayName: user.displayName, base: `/users/${user.id}/favorites`, currentUserId: viewer?.id ?? null, favoriteWorkIds };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    { title: [loaderData?.displayName || "用户", "收藏"], page: loaderData?.page },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "timeline.feed.kind.favorite");
+  const name = loaderData?.displayName;
+  return pageMetaDescriptors({ title: name ? [name, title] : title, page: loaderData?.page }, error, locale);
+};
 
 export default function PublicFavorites() {
+  const t = useMessages();
   const { data, refresh } = useRouteRefresh(useLoaderData<typeof loader>());
   const [snapshot, setSnapshot] = useState({ source: data, updates: new Map<number, WorkFavoriteUpdate>() });
   const updates = snapshot.source === data ? snapshot.updates : new Map<number, WorkFavoriteUpdate>();
@@ -44,7 +48,7 @@ export default function PublicFavorites() {
     <GameLibrary
       data={{ ...data, works }}
       basePath={data.base}
-      emptyTitle={data.hasFilters ? "没有找到匹配的收藏作品。" : "还没有收藏。"}
+      emptyTitle={data.hasFilters ? t("publicProfile.noFilteredFavorites") : t("publicProfile.noFavorites")}
       renderWorkActions={(work) => (
         <WorkFavoriteButton
           summary={ownsList ? undefined : "counts"}

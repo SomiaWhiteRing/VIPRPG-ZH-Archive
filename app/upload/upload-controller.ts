@@ -1,3 +1,7 @@
+import { translate } from "@/lib/i18n/core";
+import { formatFeedbackError, UiFeedbackError } from "@/lib/i18n/feedback";
+import type { UiLocale } from "@/lib/i18n/locale";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { apiResponseError, requestResponse, readJsonResponse } from "@/lib/ui/api-response";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
@@ -38,12 +42,14 @@ type ResumeDraftResult =
   | { kind: "unknown"; message: string };
 
 export function useUploadController(accountId: number) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [extraCandidates, setExtraCandidates] = useState<UploadExtraCandidate[]>([]);
   const [extraSourceAvailable, setExtraSourceAvailable] = useState(false);
   const [task, setTask] = useState<BrowserUploadTaskSnapshot | null>(null);
   const [drafts, setDrafts] = useState<UploadRecoveryDraft[]>([]);
   const [committingDraftIds, setCommittingDraftIds] = useState<number[]>([]);
-  const [controllerError, setControllerError] = useState<string | null>(null);
+  const [controllerError, setControllerError] = useState<string | UiFeedbackError | null>(null);
   const [metadataConfirmed, setMetadataConfirmed] = useState(false);
   const [starting, setStarting] = useState(false);
   const [canceling, setCanceling] = useState(false);
@@ -69,7 +75,7 @@ export function useUploadController(accountId: number) {
   function createTaskWorker(
     onPrefill?: (prefill: UploadSourcePrefill) => void,
   ): Worker {
-    if (workerRef.current) throw new Error("当前标签页已有上传任务");
+    if (workerRef.current) throw new UiFeedbackError("upload.draft.tabBusy");
     setExtraCandidates([]);
     setExtraSourceAvailable(false);
     const worker = new Worker(new URL("./upload-worker.ts", import.meta.url), {
@@ -115,13 +121,14 @@ export function useUploadController(accountId: number) {
       }
 
       if (message.type === "draft_save_error") {
-        setControllerError(message.message);
+        setControllerError(message.messageKey ? new UiFeedbackError(message.messageKey) : message.message);
         return;
       }
 
       if (message.type === "cancel_rejected") {
         updateTask(message.task);
-        setControllerError(message.message);
+        const detail = message.task.errorMessage;
+        setControllerError(detail ? new UiFeedbackError(detail.key, detail.values) : message.message);
         resolvePendingCancel(false);
         return;
       }
@@ -157,14 +164,14 @@ export function useUploadController(accountId: number) {
         }
         await draftLock?.release();
         if (workerRef.current !== worker) return;
-        setControllerError("这个上传任务正在另一个标签页中处理。");
+        setControllerError(new UiFeedbackError("upload.draft.taskElsewhere"));
         void cancelTask(false);
       })
       .catch((error: unknown) => {
         if (lockRequestRef.current?.promise === promise)
           lockRequestRef.current = null;
         if (workerRef.current !== worker) return;
-        setControllerError(draftLockErrorMessage(error));
+        setControllerError(formatFeedbackError(error, locale, t("upload.draft.lockFailed")));
         void cancelTask(false);
       });
   }
@@ -191,16 +198,12 @@ export function useUploadController(accountId: number) {
     try {
       await releaseCurrentDraftLock(jobId);
     } catch {
-      setControllerError(
-        "任务已结束，但上传草稿锁释放失败；关闭此标签页后浏览器会自动释放。",
-      );
+      setControllerError(new UiFeedbackError("upload.draft.releaseFailed"));
     } finally {
       resolvePendingCancel(true);
     }
     if (jobId && !message.draftRemoved) {
-      setControllerError(
-        "任务已结束，但本地恢复草稿未能清除；重新打开页面后会再次清理。",
-      );
+      setControllerError(new UiFeedbackError("upload.draft.cleanupFailed"));
     }
   }
 
@@ -246,7 +249,7 @@ export function useUploadController(accountId: number) {
         }
       })
       .catch(() => {
-        if (!stopped) setControllerError("无法读取本地上传草稿。");
+        if (!stopped) setControllerError(new UiFeedbackError("upload.draft.readFailed"));
       });
     return () => {
       stopped = true;
@@ -256,7 +259,7 @@ export function useUploadController(accountId: number) {
   const confirm = useConfirm();
   const active = starting || workerRef.current !== null;
   useNavigationGuard(active, async () => {
-    if (!(await confirm("离开此页将取消当前上传。是否继续？", { title: "离开上传页面", confirmLabel: "取消上传并离开" }))) return false;
+    if (!(await confirm(t("upload.draft.leaveDescription"), { title: t("upload.draft.leaveTitle"), confirmLabel: t("upload.draft.leaveConfirm") }))) return false;
     return cancelTask();
   });
 
@@ -329,7 +332,7 @@ export function useUploadController(accountId: number) {
     if (active || workerRef.current) return false;
     setControllerError(null);
     if (committingDraftIds.includes(draft.serverImportJobId)) {
-      setControllerError("这个上传任务正在提交，暂时不能继续编辑。");
+      setControllerError(new UiFeedbackError("upload.draft.committing"));
       return false;
     }
 
@@ -337,15 +340,15 @@ export function useUploadController(accountId: number) {
     try {
       draftLock = await acquireDraftLock(accountId, draft.serverImportJobId);
     } catch (error) {
-      setControllerError(draftLockErrorMessage(error));
+      setControllerError(formatFeedbackError(error, locale, t("upload.draft.lockFailed")));
       return false;
     }
     if (!draftLock) {
-      setControllerError("这个上传草稿正在另一个标签页中处理。");
+      setControllerError(new UiFeedbackError("upload.draft.draftElsewhere"));
       return false;
     }
 
-    const result = await resumeDraftOnServer(draft);
+    const result = await resumeDraftOnServer(draft, locale);
     if (result.kind !== "ready") {
       if (result.kind === "invalid") {
         await deleteUploadDraft(accountId, draft.serverImportJobId).catch(
@@ -372,7 +375,7 @@ export function useUploadController(accountId: number) {
       await putUploadDraft(restoredDraft);
     } catch {
       await draftLock.release();
-      setControllerError("无法更新本地上传草稿，请刷新页面后重试。");
+      setControllerError(new UiFeedbackError("upload.draft.updateFailed"));
       return false;
     }
     if (disposedRef.current) {
@@ -397,23 +400,23 @@ export function useUploadController(accountId: number) {
   async function discardDraft(draft: UploadRecoveryDraft): Promise<void> {
     setControllerError(null);
     if (committingDraftIds.includes(draft.serverImportJobId)) {
-      setControllerError("这个上传任务正在提交，当前不能放弃。");
+      setControllerError(new UiFeedbackError("upload.draft.discardLocked"));
       return;
     }
     let draftLock: DraftLock | null;
     try {
       draftLock = await acquireDraftLock(accountId, draft.serverImportJobId);
     } catch (error) {
-      setControllerError(draftLockErrorMessage(error));
+      setControllerError(formatFeedbackError(error, locale, t("upload.draft.lockFailed")));
       return;
     }
     if (!draftLock) {
-      setControllerError("这个上传草稿正在另一个标签页中处理。");
+      setControllerError(new UiFeedbackError("upload.draft.draftElsewhere"));
       return;
     }
     try {
       if (!(await cancelOwnedImportJob(draft.serverImportJobId))) {
-        setControllerError("服务端尚未确认取消，上传草稿已保留，请稍后重试。");
+        setControllerError(new UiFeedbackError("upload.draft.cancelNotConfirmed"));
         return;
       }
       await deleteUploadDraft(accountId, draft.serverImportJobId);
@@ -431,7 +434,7 @@ export function useUploadController(accountId: number) {
     const currentTask = taskRef.current;
     if (!workerRef.current) return Promise.resolve(true);
     if (currentTask?.phase === "committing") {
-      setControllerError("任务正在提交，当前不能取消或离开上传页。");
+      setControllerError(new UiFeedbackError("upload.draft.cancelLocked"));
       return Promise.resolve(false);
     }
     if (pendingCancelRef.current) return pendingCancelRef.current.promise;
@@ -477,7 +480,9 @@ export function useUploadController(accountId: number) {
     committingDraftIds,
     active,
     canceling,
-    controllerError,
+    controllerError: controllerError instanceof UiFeedbackError
+      ? t(controllerError.messageKey, controllerError.values)
+      : controllerError,
     metadataConfirmed: metadataConfirmed || Boolean(task?.commitStarted),
     startSource,
     confirmMetadata,
@@ -532,6 +537,7 @@ async function inspectDraftServerState(
 
 async function resumeDraftOnServer(
   draft: UploadRecoveryDraft,
+  locale: UiLocale,
 ): Promise<ResumeDraftResult> {
   const response = await requestResponse(
     `/api/imports/${draft.serverImportJobId}/resume`,
@@ -545,10 +551,10 @@ async function resumeDraftOnServer(
   if (!response) {
     return {
       kind: "unknown",
-      message: "无法连接服务器，上传草稿已保留，请稍后重试。",
+      message: translate(locale, "upload.draft.resumeOffline"),
     };
   }
-  const payload = (await readJsonResponse(response, "上传草稿无法继续", true).catch(() => null)) as
+  const payload = (await readJsonResponse(response, translate(locale, "upload.draft.resumeFailed"), true).catch(() => null)) as
     | {
         ok: true;
         importJob: { status: string; updatedAt: string };
@@ -568,8 +574,8 @@ async function resumeDraftOnServer(
   const message = apiResponseError(
     response.status,
     payload && !payload.ok ? payload : {},
-    "上传草稿无法继续，请重新上传。",
-  ).message;
+    translate(locale, "upload.draft.resumeFailed"),
+  ).messageFor(locale);
   if ([400, 403, 404].includes(response.status))
     return { kind: "invalid", message };
   if (response.status !== 409) return { kind: "unknown", message };
@@ -580,7 +586,7 @@ async function resumeDraftOnServer(
   if (state.kind === "committing") {
     return {
       kind: "committing",
-      message: "这个上传任务正在提交，暂时不能继续编辑。",
+      message: translate(locale, "upload.draft.committing"),
     };
   }
   if (state.kind === "unknown") return { kind: "unknown", message };
@@ -601,12 +607,6 @@ function isTerminalTaskStatus(
   status: BrowserUploadTaskSnapshot["status"],
 ): boolean {
   return status === "completed" || status === "failed" || status === "canceled";
-}
-
-function draftLockErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message
-    ? error.message
-    : "无法锁定上传草稿，请刷新页面后重试。";
 }
 
 function upsertDraft(

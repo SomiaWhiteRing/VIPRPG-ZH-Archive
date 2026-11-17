@@ -1,4 +1,6 @@
 import { emojiText } from "@/lib/face-emojis";
+import { translate } from "@/lib/i18n/core";
+import type { UiLocale } from "@/lib/i18n/locale";
 import { getD1 } from "@/app/.server/db/d1";
 import { commentRecipientReadSql } from "@/app/.server/db/comment-visibility";
 import { getForumRuntime } from "@/app/.server/forum/context";
@@ -81,6 +83,8 @@ type InboxItemRow = {
   work_maintainer_request_id: number | null;
   maintainer_work_id: number | null;
   maintainer_work_title: string | null;
+  maintainer_outcome: string | null;
+  role_request_closed: number;
   maintainer_work_status: string | null;
   maintainer_request_status: MaintainerRequestStatus | null;
   applicant_avatar: string | null;
@@ -100,6 +104,7 @@ function inboxSelect(details: boolean) {
   json_extract(i.metadata_json,'$.reportId') AS report_id,
   (SELECT target_id FROM forum_content_reports WHERE id=json_extract(i.metadata_json,'$.reportId') AND json_extract(i.metadata_json,'$.reportKind')='forum') AS report_target_id,
   i.type,
+  CASE WHEN i.type='system_notice' AND i.event_key GLOB 'role-request-closed:*' THEN 1 ELSE 0 END AS role_request_closed,
   i.work_comment_id,
   i.reply_comment_id,
   i.like_comment_id,
@@ -108,6 +113,7 @@ function inboxSelect(details: boolean) {
   i.work_maintainer_request_id,
   maintainer_request.work_id AS maintainer_work_id,
   json_extract(i.metadata_json,'$.workTitle') AS maintainer_work_title,
+  json_extract(i.metadata_json,'$.maintainerOutcome') AS maintainer_outcome,
   maintainer_work.status AS maintainer_work_status,
   maintainer_request.status AS maintainer_request_status,
 ${details ? `target.avatar_blob_sha256 AS applicant_avatar,
@@ -246,7 +252,7 @@ export async function listInboxItemsForUser(
   const rows = await getD1(runtime)
     .prepare(`${details.sql} SELECT * FROM actionable ORDER BY created_at DESC,id DESC`)
     .bind(...details.binds).all<InboxItemRow>();
-  const items = (rows.results ?? []).map((row) => mapInboxItemRow(row, user));
+  const items = (rows.results ?? []).map((row) => mapInboxItemRow(row, user, runtime.uiLocale));
   await attachInteractions(runtime, items);
   await attachCommentNotifications(runtime, items, rows.results ?? []);
   await attachTimelineNotifications(runtime, items, rows.results ?? []);
@@ -353,7 +359,7 @@ export async function markInboxItemRead(
   if (target && ("eventId" in target
     ? !item.timelineNotification || item.timelineNotification.eventId !== target.eventId || item.timelineNotification.replyId !== target.replyId
     : !item.interaction || item.interaction.topicId !== target.topicId || item.interaction.postNumber !== target.postNumber || item.interaction.commentId !== target.commentId)) {
-    throw new HttpError(409, "提醒对应的内容已变化或不可用。");
+    throw new HttpError(409, "提醒对应的内容已变化或不可用。", undefined, "inbox.action.error.changed");
   }
   const visibility = buildInboxVisibilityClause(input.user);
   await getD1(runtime)
@@ -388,6 +394,7 @@ export async function getInboxItemForUser(
   runtime: AppRuntime,
   itemId: number,
   viewer: ArchiveUser,
+  locale: UiLocale = runtime.uiLocale,
 ): Promise<InboxItem> {
   const visibility = buildInboxVisibilityClause(viewer);
   const query = inboxQuery(viewer, true, {
@@ -400,25 +407,29 @@ export async function getInboxItemForUser(
     .first<InboxItemRow>();
 
   if (!row) {
-    throw new HttpError(404, "提醒不存在或不可访问。");
+    throw new HttpError(404, "提醒不存在或不可访问。", undefined, "inbox.action.error.missing");
   }
 
-  const item = mapInboxItemRow(row, viewer);
+  const item = mapInboxItemRow(row, viewer, locale);
 
-  await attachInteractions(runtime, [item]);
-  await attachCommentNotifications(runtime, [item], [row]);
-  await attachTimelineNotifications(runtime, [item], [row]);
+  await attachInteractions(runtime, [item], locale);
+  await attachCommentNotifications(runtime, [item], [row], locale);
+  await attachTimelineNotifications(runtime, [item], [row], locale);
   return item;
 }
 
-function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser): InboxItem {
+function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser, locale: UiLocale): InboxItem {
+  const friendActionKey = row.friend_action === "added" ? "inbox.event.friendAdded" : "inbox.event.friendReturned";
   const friendNotification: InboxItem["friendNotification"] = row.friend_action === "added" || row.friend_action === "returned" ? {
     userId: row.sender_status === "active" ? row.sender_user_id : null,
     kind: row.friend_action,
-    actorName: row.sender_status === "active" ? row.sender_display_name ?? "用户" : row.sender_status === "disabled" ? "该用户已停用" : "账户已注销",
+    actorName: row.sender_status === "active"
+      ? row.sender_display_name ?? translate(locale, "inbox.actor.user")
+      : translate(locale, row.sender_status === "disabled" ? "inbox.actor.disabled" : "inbox.actor.deleted"),
     actorHref: row.sender_status === "active" && row.sender_user_id !== null ? `/users/${row.sender_user_id}` : null,
     actorAvatar: row.sender_status === "active" ? row.sender_avatar : null,
-    action: row.friend_action === "added" ? "请求与你成为好友" : "通过了你的好友请求",
+    action: translate(locale, friendActionKey),
+    actionKey: friendActionKey,
     isFollowing: !!row.friend_is_following,
     canFollow: row.sender_status === "active" && row.sender_user_id !== null && row.sender_user_id !== viewer.id
       && !row.friend_is_following && hasPermission(viewer, "timeline.follow.create"),
@@ -428,18 +439,23 @@ function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser): InboxItem {
       ? !!row.can_approve_maintainer : row.role_status === "active" && !row.already_assigned),
     canReject: !!row.can_reject,
     maintainerRequest: row.work_maintainer_request_id !== null && row.maintainer_work_id !== null ? {
-      workId: row.maintainer_work_id, workTitle: row.maintainer_work_title ?? '作品',
-      applicant: { id: row.target_user_id!, displayName: row.target_display_name ?? '账户已注销', avatarBlobSha256: row.applicant_avatar },
+      workId: row.maintainer_work_id, workTitle: row.maintainer_work_title ?? translate(locale, "inbox.actor.work"),
+      applicant: { id: row.target_user_id!, displayName: row.target_display_name ?? translate(locale, "inbox.actor.deleted"), avatarBlobSha256: row.applicant_avatar },
       status: row.maintainer_request_status ?? 'closed',
       canWithdraw: !!row.is_recipient && row.maintainer_request_status === 'pending',
     } : null,
     interaction: null,
     friendNotification,
+    ...(row.type === "system_notice" && (row.maintainer_outcome === "approve" || row.maintainer_outcome === "reject")
+      && typeof row.maintainer_work_title === "string"
+      ? { maintainerOutcome: { decision: row.maintainer_outcome, workTitle: row.maintainer_work_title } }
+      : {}),
     commentNotification: null,
     timelineNotification: null,
     report: row.report_kind && row.report_id ? { kind: row.report_kind, id: row.report_id, targetId: row.report_target_id } : null,
     id: row.id,
     type: row.type,
+    ...(row.role_request_closed ? { roleRequestClosed: true } : {}),
     status: row.status,
     senderUserId: row.sender_user_id,
     senderDisplayName: friendNotification?.actorName ?? row.sender_display_name,
@@ -471,7 +487,7 @@ function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser): InboxItem {
   };
 }
 
-async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[]) {
+async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[], locale = runtime.uiLocale) {
   const ids = source.filter((row) => row.work_comment_id !== null || row.reply_comment_id !== null || row.like_comment_id !== null).map((row) => row.id);
   if (!ids.length) return;
   const rows = await getD1(runtime).prepare(`SELECT i.id,c.id AS comment_id,${inboxMentionSql} AS mention,c.body,i.reply_comment_id,i.like_comment_id,c.root_comment_id,
@@ -502,16 +518,18 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
     item.senderUserId = null;
     item.senderDisplayName = null;
     item.contentUnavailable = true;
-    item.title = "相关内容已不可用";
+    item.title = translate(locale, "inbox.contentUnavailable");
     item.body = "";
     const row = byId.get(item.id);
     if (!row) continue;
     item.contentUnavailable = false;
-    const name = row.sender_status === "deleted" ? "账户已注销" : row.display_name;
-    const action = row.mention ? "在评论中提及了你" : row.like_comment_id
-      ? `赞了你的${row.root_comment_id ? "回复" : "评论"}`
-      : row.reply_comment_id ? "回复了你的评论" : row.catalog_id ? "评论了你的目录" : "评论了你上传的作品";
+    const name = row.sender_status === "deleted" ? translate(locale, "inbox.actor.deleted") : row.display_name;
+    const actionKey = row.mention ? "inbox.event.commentMention" : row.like_comment_id
+      ? row.root_comment_id ? "inbox.event.commentLikeReply" : "inbox.event.commentLike"
+      : row.reply_comment_id ? "inbox.event.commentReply" : row.catalog_id ? "inbox.event.catalogComment" : "inbox.event.workComment";
+    const action = translate(locale, actionKey);
     item.title = `${name}${action}`;
+    const excerpt = emojiText(row.body, locale).slice(0, 180);
     item.commentNotification = {
       commentId: row.comment_id,
       rootCommentId: row.root_comment_id ?? row.comment_id,
@@ -519,15 +537,17 @@ async function attachCommentNotifications(runtime: AppRuntime, items: InboxItem[
       actorHref: row.sender_status === "active" ? `/users/${row.sender_id}` : null,
       actorAvatar: row.sender_status === "active" ? row.avatar_blob_sha256 : null,
       action,
+      actionKey,
       kind: row.mention ? "mention" : row.like_comment_id ? "like" : row.reply_comment_id ? "reply" : "comment",
       targetTitle: row.target_title,
       href: `${row.work_id ? `/games/${row.work_id}` : row.creator_id ? `/creators/${row.creator_id}` : row.catalog_id ? `/catalogs/${row.catalog_id}` : `/characters/${row.character_id}`}#sec-comments`,
-      excerpt: emojiText(row.body).slice(0, 180) + (row.image_count ? ` ［${row.image_count} 张图片］` : ""),
+      excerpt: excerpt + (row.image_count ? translate(locale, "inbox.excerpt.images", { count: row.image_count }) : ""),
+      ...(row.image_count ? { imageExcerpt: { text: excerpt, count: row.image_count } } : {}),
     };
   }
 }
 
-async function attachTimelineNotifications(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[]) {
+async function attachTimelineNotifications(runtime: AppRuntime, items: InboxItem[], source: InboxItemRow[], locale = runtime.uiLocale) {
   const ids = source.filter((row) => row.timeline_event_id !== null).map((row) => row.id);
   if (!ids.length) return;
   const rows = await getD1(runtime).prepare(`SELECT i.id,e.id AS event_id,r.id AS reply_id,
@@ -552,24 +572,27 @@ async function attachTimelineNotifications(runtime: AppRuntime, items: InboxItem
     item.senderUserId = null;
     item.senderDisplayName = null;
     item.contentUnavailable = true;
-    item.title = "相关内容已不可用";
+    item.title = translate(locale, "inbox.contentUnavailable");
     item.body = "";
     const row = byId.get(item.id);
     if (!row) continue;
     item.contentUnavailable = false;
-    const action = row.reply_id === null ? "赞了你的吐槽" : "回复了你的吐槽";
+    const actionKey = row.reply_id === null ? "inbox.event.timelineLike" : "inbox.event.timelineReply";
+    const action = translate(locale, actionKey);
     item.title = row.display_name + action;
+    const excerpt = emojiText(row.body, locale).slice(0, 180);
     item.timelineNotification = {
       eventId: row.event_id, replyId: row.reply_id, kind: row.reply_id === null ? "like" : "reply",
       actorName: row.display_name, actorHref: `/users/${row.sender_id}`, actorAvatar: row.avatar_blob_sha256,
-      action, targetTitle: "你的吐槽",
+      action, actionKey, targetTitle: translate(locale, "inbox.event.timelineTarget"),
       href: `/timeline?event=${row.event_id}${row.reply_id === null ? `#timeline-event-${row.event_id}` : `&reply=${row.reply_id}#timeline-reply-item-${row.reply_id}`}`,
-      excerpt: emojiText(row.body).slice(0, 180) + (row.image_count ? ` ［${row.image_count} 张图片］` : ""),
+      excerpt: excerpt + (row.image_count ? translate(locale, "inbox.excerpt.images", { count: row.image_count }) : ""),
+      ...(row.image_count ? { imageExcerpt: { text: excerpt, count: row.image_count } } : {}),
     };
   }
 }
 
-async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
+async function attachInteractions(runtime: AppRuntime, items: InboxItem[], locale = runtime.uiLocale) {
   const interactions = items.filter(
     (item) => item.type === "forum_reply" || item.type === "forum_like",
   );
@@ -613,22 +636,23 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
     item.senderUserId = null;
     item.senderDisplayName = null;
     item.contentUnavailable = true;
-    item.title = "相关内容已不可用";
+    item.title = translate(locale, "inbox.contentUnavailable");
     item.body = "";
     const row = byId.get(item.id);
     if (!row) continue;
     item.contentUnavailable = false;
-    const name = row.actor_status === "deleted" ? "账户已注销" : row.actor_name;
-    const action =
-      row.mention ? "在讨论中提及了你" : item.type === "forum_like"
+    const name = row.actor_status === "deleted" ? translate(locale, "inbox.actor.deleted") : row.actor_name;
+    const actionKey =
+      row.mention ? "inbox.event.forumMention" : item.type === "forum_like"
         ? row.comment_id
-          ? "赞了你的回复"
-          : "赞了你的帖子"
+          ? "inbox.event.forumLikeReply"
+          : "inbox.event.forumLikePost"
         : row.comment_id
           ? row.reply_to_id
-            ? "回复了你的回复"
-            : "回复了你的帖子"
-          : "回复了你的主题";
+            ? "inbox.event.forumReplyToReply"
+            : "inbox.event.forumReplyToPost"
+          : "inbox.event.forumReplyToTopic";
+    const action = translate(locale, actionKey);
     item.title = `${name}${action}`;
     item.interaction = {
       replyAllowed: !row.locked,
@@ -636,9 +660,10 @@ async function attachInteractions(runtime: AppRuntime, items: InboxItem[]) {
       postNumber: row.post_number,
       commentId: row.comment_id,
       topicTitle: row.topic_title,
-      excerpt: emojiText(row.excerpt).slice(0,180),
+      excerpt: emojiText(row.excerpt, locale).slice(0,180),
       actorName: name,
       action,
+      actionKey,
       actorHref:
         row.actor_status === "active" ? `/users/${row.actor_id}` : null,
       actorAvatar: row.actor_status === "active" ? row.actor_avatar : null,

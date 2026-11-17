@@ -5,6 +5,7 @@ import { formatBytes } from "@/lib/format";
 import { engineLabel, languageLabel } from "@/lib/labels";
 import type { ReactNode } from "react";
 import { useArchiveDownload } from "@/app/components/use-archive-download";
+import { useUiLocale } from "@/lib/i18n/react";
 
 export function GameCard({ work, action, children, imagePriority = false, titleAs }: {
   work: GameCardSummary;
@@ -14,6 +15,7 @@ export function GameCard({ work, action, children, imagePriority = false, titleA
   titleAs?: "h2" | "h3";
 }) {
   const { downloadSize } = useArchiveDownload();
+  const locale = useUiLocale();
   const showInteractionData = useShowGameCardInteractionData();
   const sizeBytes = downloadSize(work);
   const title = work.chineseTitle || work.originalTitle;
@@ -22,7 +24,7 @@ export function GameCard({ work, action, children, imagePriority = false, titleA
       ? work.originalTitle
       : null;
   const year = /^\d{4}/.exec(work.originalReleaseDate ?? "")?.[0] ?? null;
-  const language = languageLabel(work.language);
+  const language = languageLabel(work.language, locale);
   const size =
     work.distribution === "archive" && sizeBytes !== null && sizeBytes > 0
       ? formatBytes(sizeBytes)
@@ -34,8 +36,8 @@ export function GameCard({ work, action, children, imagePriority = false, titleA
       title={title}
       originalTitle={originalTitle}
       coverBlobSha256={work.coverBlobSha256}
-      description={[engineLabel(work.engineFamily), language, year, size,
-        showInteractionData ? workPopularityLabel(work) : null,
+      description={[engineLabel(work.engineFamily, locale), language, year, size,
+        showInteractionData ? workPopularityLabel(work, locale) : null,
       ].filter(Boolean).join("，")}
       imagePriority={imagePriority}
       titleAs={titleAs}

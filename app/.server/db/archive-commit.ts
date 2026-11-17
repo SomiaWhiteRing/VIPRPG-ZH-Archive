@@ -91,18 +91,18 @@ export async function commitArchiveImport(
 ): Promise<CommitArchiveImportResult> {
   const job = input.job;
   if (job.status !== "committing") {
-    throw new HttpError(409, "导入任务尚未进入提交阶段");
+    throw new HttpError(409, "导入任务尚未进入提交阶段", undefined, "upload.error.notCommitting");
   }
 
   if (
     typeof input.manifestSha256 !== "string" ||
     typeof input.manifestJson !== "string"
   ) {
-    throw new HttpError(400, "Manifest payload is invalid");
+    throw new HttpError(400, "Manifest payload is invalid", undefined, "upload.error.manifestInput");
   }
 
   if (!/^[a-f0-9]{64}$/i.test(input.manifestSha256)) {
-    throw new HttpError(400, "Manifest SHA-256 is invalid");
+    throw new HttpError(400, "Manifest SHA-256 is invalid", undefined, "upload.error.manifestHashFormat");
   }
   let manifestSha256 = normalizeSha256(input.manifestSha256);
   let manifestJson = input.manifestJson;
@@ -111,7 +111,7 @@ export async function commitArchiveImport(
   );
 
   if (actualManifestSha256 !== manifestSha256) {
-    throw new HttpError(400, "Manifest SHA-256 mismatch");
+    throw new HttpError(400, "Manifest SHA-256 mismatch", undefined, "upload.error.manifestHashMismatch");
   }
 
   const manifest = parseManifestJson(manifestJson);
@@ -127,6 +127,8 @@ export async function commitArchiveImport(
         error instanceof Error
           ? error.message
           : "Manifest or metadata is invalid",
+        undefined,
+        error instanceof Error ? undefined : "upload.error.metadataFields",
       );
     }
   } catch (error) {
@@ -136,11 +138,13 @@ export async function commitArchiveImport(
       error instanceof Error
         ? error.message
         : "Manifest or metadata is invalid",
+      undefined,
+      error instanceof Error ? undefined : "upload.error.metadataFields",
     );
   }
 
   if (metadata.admin && !hasPermission(input.user, "work.distribution.update_any")) {
-    throw new HttpError(403, "没有编辑作品归档内容/外链的权限");
+    throw new HttpError(403, "没有编辑作品归档内容/外链的权限", undefined, "upload.error.editArchivePermission");
   }
   const sourceManifest = sourceManifestFromArchive(manifest);
   await verifySharedPlayerAvailability(runtime, sourceManifest);
@@ -150,7 +154,7 @@ export async function commitArchiveImport(
     !job.source_manifest_sha256 ||
     job.source_manifest_sha256 !== sourceManifestSha256
   ) {
-    throw new HttpError(409, "游戏文件尚未完成服务端校验，请重新上传");
+    throw new HttpError(409, "游戏文件尚未完成服务端校验，请重新上传", undefined, "upload.error.sourceUnverified");
   }
 
   const blobHashes = unique(
@@ -183,6 +187,9 @@ export async function commitArchiveImport(
     throw new HttpError(
       409,
       `Commit blocked by missing objects: ${missingBlobs.length} blobs, ${missingCorePacks.length} core packs`,
+      undefined,
+      "upload.error.missingArchiveObjects",
+      { blobs: missingBlobs.length, corePacks: missingCorePacks.length },
     );
   }
 
@@ -327,6 +334,9 @@ export async function verifyArchiveSourceManifest(
     throw new HttpError(
       409,
       `文件上传尚未完成：缺少 ${missingBlobs.length} 个文件对象和 ${missingCorePacks.length} 个公共文件包`,
+      undefined,
+      "upload.error.missingArchiveObjects",
+      { blobs: missingBlobs.length, corePacks: missingCorePacks.length },
     );
   }
 
@@ -344,27 +354,27 @@ export async function verifyArchiveSourceManifest(
       path: file.path, size: file.size,
       bytes: async () => {
         const archived = manifest.files.find(entry => entry.path === file.path);
-        if (!archived) throw new HttpError(400, `引擎检测文件不能被素材清理移除：${file.path}`);
+        if (!archived) throw new HttpError(400, `引擎检测文件不能被素材清理移除：${file.path}`, undefined, "upload.error.engineFileExcluded", { path: file.path });
         if (archived.storage.kind === "core_pack") {
           const bytes = detectionBytes.get(file.path.toLowerCase());
-          if (!bytes) throw new HttpError(400, `引擎检测文件缺失：${file.path}`);
+          if (!bytes) throw new HttpError(400, `引擎检测文件缺失：${file.path}`, undefined, "upload.error.engineFileMissing", { path: file.path });
           return bytes;
         }
         const object = await getBlob(runtime, file.sha256);
-        if (!object || object.size !== file.size) throw new HttpError(400, `引擎检测文件缺失：${file.path}`);
+        if (!object || object.size !== file.size) throw new HttpError(400, `引擎检测文件缺失：${file.path}`, undefined, "upload.error.engineFileMissing", { path: file.path });
         const bytes = new Uint8Array(await object.arrayBuffer());
-        if (await sha256Hex(bytes.buffer) !== file.sha256) throw new HttpError(400, `引擎检测文件校验失败：${file.path}`);
+        if (await sha256Hex(bytes.buffer) !== file.sha256) throw new HttpError(400, `引擎检测文件校验失败：${file.path}`, undefined, "upload.error.engineFileInvalid", { path: file.path });
         return bytes;
       },
     })));
     if (stableJson(detected) !== stableJson(manifest.archiveVersion.easyRpg)) {
-      throw new HttpError(400, "EasyRPG 运行配置未通过服务器复核，请重新选择原始游戏文件上传");
+      throw new HttpError(400, "EasyRPG 运行配置未通过服务器复核，请重新选择原始游戏文件上传", undefined, "upload.error.engineConfigReview");
     }
   }
   if (scan && cleanup) {
     const allowed = new Set(scan.finish().excluded.map((file) => file.path));
     if (cleanup.excluded.some((file) => !allowed.has(file.path))) {
-      throw new HttpError(400, "素材排除清单未通过服务器引用复核，请关闭素材清理后重新上传");
+      throw new HttpError(400, "素材排除清单未通过服务器引用复核，请关闭素材清理后重新上传", undefined, "upload.error.resourceReview");
     }
   }
   return archiveSourceManifestSha256(manifest);
@@ -432,17 +442,23 @@ function validateBlobReferences(
       throw new HttpError(
         400,
         `Blob size is inconsistent across manifest files: ${sha256}`,
+        undefined,
+        "upload.error.manifestBlobSizeConflict",
+        { hash: sha256 },
       );
     }
     expected.set(sha256, file.size);
   }
   for (const [sha256, expectedSize] of expected) {
     const blob = blobs.get(sha256);
-    if (!blob) throw new HttpError(409, `Blob record is missing: ${sha256}`);
+    if (!blob) throw new HttpError(409, `Blob record is missing: ${sha256}`, undefined, "upload.error.manifestBlobMissing", { hash: sha256 });
     if (blob.sizeBytes !== expectedSize) {
       throw new HttpError(
         400,
         `Blob metadata does not match manifest: ${sha256}`,
+        undefined,
+        "upload.error.manifestBlobMismatch",
+        { hash: sha256 },
       );
     }
   }
@@ -723,16 +739,16 @@ export function parseArchiveSourceManifest(
     !Array.isArray(value.files) ||
     (value.extras !== undefined && !Array.isArray(value.extras))
   ) {
-    throw new HttpError(400, "Source manifest structure is invalid");
+    throw new HttpError(400, "Source manifest structure is invalid", undefined, "upload.error.sourceManifest");
   }
   if (value.schema !== "viprpg-archive.manifest.v1") {
-    throw new HttpError(400, "Source manifest schema is invalid");
+    throw new HttpError(400, "Source manifest schema is invalid", undefined, "upload.error.sourceManifest");
   }
 
   const archiveVersion = value.archiveVersion;
   if (archiveVersion.easyRpg !== undefined) {
     try { parseEasyRpgConfig(archiveVersion.easyRpg); }
-    catch { throw new HttpError(400, "EasyRPG 运行配置无效"); }
+    catch { throw new HttpError(400, "EasyRPG 运行配置无效", undefined, "upload.error.engineConfig"); }
   }
   if (
     typeof archiveVersion.filePolicyVersion !== "string" ||
@@ -747,7 +763,7 @@ export function parseArchiveSourceManifest(
     !isNonNegativeInteger(archiveVersion.excludedFileCount) ||
     !isNonNegativeInteger(archiveVersion.excludedSize)
   ) {
-    throw new HttpError(400, "Source manifest archive fields are invalid");
+    throw new HttpError(400, "Source manifest archive fields are invalid", undefined, "upload.error.sourceManifest");
   }
   for (const corePack of value.corePacks) {
     if (
@@ -760,7 +776,7 @@ export function parseArchiveSourceManifest(
       corePack.format !== "zip" ||
       corePack.compression !== "deflate-low"
     ) {
-      throw new HttpError(400, "Source manifest core pack fields are invalid");
+      throw new HttpError(400, "Source manifest core pack fields are invalid", undefined, "upload.error.sourceManifestEntry");
     }
   }
   for (const file of [...value.files, ...((value.extras ?? []) as unknown[])]) {
@@ -780,11 +796,11 @@ export function parseArchiveSourceManifest(
         !isNullableString(file.pathBytesB64)) ||
       !isRecord(file.storage)
     ) {
-      throw new HttpError(400, "Source manifest file fields are invalid");
+      throw new HttpError(400, "Source manifest file fields are invalid", undefined, "upload.error.sourceManifestEntry");
     }
     if (file.storage.kind === "blob") {
       if (typeof file.storage.blobSha256 !== "string")
-        throw new HttpError(400, "Source manifest blob reference is invalid");
+        throw new HttpError(400, "Source manifest blob reference is invalid", undefined, "upload.error.sourceManifestEntry");
     } else if (file.storage.kind === "core_pack") {
       if (
         typeof file.storage.packId !== "string" ||
@@ -793,9 +809,11 @@ export function parseArchiveSourceManifest(
         throw new HttpError(
           400,
           "Source manifest core pack reference is invalid",
+          undefined,
+          "upload.error.sourceManifestEntry",
         );
     } else {
-      throw new HttpError(400, "Source manifest storage kind is invalid");
+      throw new HttpError(400, "Source manifest storage kind is invalid", undefined, "upload.error.sourceManifestEntry");
     }
   }
 
@@ -807,12 +825,12 @@ function parseManifestJson(manifestJson: string): ArchiveManifest {
   try {
     parsed = JSON.parse(manifestJson);
   } catch {
-    throw new HttpError(400, "Manifest JSON is invalid");
+    throw new HttpError(400, "Manifest JSON is invalid", undefined, "upload.error.manifestInput");
   }
 
   parseArchiveSourceManifest(parsed);
   if (!isRecord(parsed) || !isRecord(parsed.game)) {
-    throw new HttpError(400, "Manifest structure is invalid");
+    throw new HttpError(400, "Manifest structure is invalid", undefined, "upload.error.manifestInput");
   }
   const game = parsed.game;
   if (
@@ -822,7 +840,7 @@ function parseManifestJson(manifestJson: string): ArchiveManifest {
     typeof game.isOriginal !== "boolean" ||
     typeof game.isTranslation !== "boolean"
   ) {
-    throw new HttpError(400, "Manifest game fields are invalid");
+    throw new HttpError(400, "Manifest game fields are invalid", undefined, "upload.error.manifestInput");
   }
   const fullArchiveVersion = parsed.archiveVersion;
   if (
@@ -831,7 +849,7 @@ function parseManifestJson(manifestJson: string): ArchiveManifest {
     !isNullableString(fullArchiveVersion.sourceUrl) ||
     typeof fullArchiveVersion.createdAt !== "string"
   ) {
-    throw new HttpError(400, "Manifest archive fields are invalid");
+    throw new HttpError(400, "Manifest archive fields are invalid", undefined, "upload.error.manifestInput");
   }
 
   return parsed as ArchiveManifest;
@@ -868,7 +886,7 @@ function normalizeMetadata(
     !isRecord(metadata.archiveVersion) ||
     !isRecord(metadata.target)
   ) {
-    throw new HttpError(400, "Upload metadata is incomplete");
+    throw new HttpError(400, "Upload metadata is incomplete", undefined, "upload.error.metadataIncomplete");
   }
 
   const game = metadata.game;
@@ -905,56 +923,56 @@ function normalizeMetadata(
     typeof game.coverBlobSha256 !== "string" ||
     !Array.isArray(game.previewBlobSha256s)
   ) {
-    throw new HttpError(400, "Upload metadata game fields are invalid");
+    throw new HttpError(400, "Upload metadata game fields are invalid", undefined, "upload.error.metadataFields");
   }
   if (!isLanguageCode(game.language)) {
-    throw new HttpError(400, "Unsupported game language");
+    throw new HttpError(400, "Unsupported game language", undefined, "upload.error.language");
   }
   const releaseDate = parseOriginalReleaseDate(game.originalReleaseDate);
   if (!releaseDate || releaseDate.precision !== game.originalReleasePrecision) {
-    throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
+    throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR, undefined, "upload.error.releaseDate");
   }
   if (!isArchiveEngineFamily(game.engineFamily)) {
-    throw new HttpError(400, "非 RPG Maker 2000/2003 系游戏不能通过归档上传");
+    throw new HttpError(400, "非 RPG Maker 2000/2003 系游戏不能通过归档上传", undefined, "upload.error.archiveEngine");
   }
   if (game.isOriginal && game.isTranslation) {
-    throw new HttpError(400, "原创声明与翻译声明不能同时选择");
+    throw new HttpError(400, "原创声明与翻译声明不能同时选择", undefined, "upload.error.originalAndTranslation");
   }
   if (
     game.extra.usesUnsupportedManiac !== undefined &&
     typeof game.extra.usesUnsupportedManiac !== "boolean"
   ) {
-    throw new HttpError(400, "Maniac 语法声明必须为布尔值");
+    throw new HttpError(400, "Maniac 语法声明必须为布尔值", undefined, "upload.error.maniacType");
   }
 
   if (
     !isNullableString(archiveVersion.sourceName) ||
     !isNullableString(archiveVersion.sourceUrl)
   ) {
-    throw new HttpError(400, "Upload metadata archive fields are invalid");
+    throw new HttpError(400, "Upload metadata archive fields are invalid", undefined, "upload.error.metadataFields");
   }
   if (target.mode !== "create" && target.mode !== "update") {
-    throw new HttpError(400, "Invalid upload target mode");
+    throw new HttpError(400, "Invalid upload target mode", undefined, "upload.error.targetMode");
   }
   if (
     (target.mode === "update" &&
       (!Number.isSafeInteger(target.workId) || (target.workId ?? 0) <= 0)) ||
     (target.mode === "create" && target.workId !== null)
   ) {
-    throw new HttpError(400, "Invalid upload target game");
+    throw new HttpError(400, "Invalid upload target game", undefined, "upload.error.targetGame");
   }
   if (
     !Array.isArray(metadata.tags) ||
     !Array.isArray(metadata.workTitles) ||
     !Array.isArray(metadata.workStaff)
   ) {
-    throw new HttpError(400, "Upload metadata lists are invalid");
+    throw new HttpError(400, "Upload metadata lists are invalid", undefined, "upload.error.metadataList");
   }
   if (
     metadata.characters !== undefined &&
     !Array.isArray(metadata.characters)
   ) {
-    throw new HttpError(400, "Upload metadata characters are invalid");
+    throw new HttpError(400, "Upload metadata characters are invalid", undefined, "upload.error.metadataCharacter");
   }
 
   const media = normalizeWorkMedia(game.coverBlobSha256, normalizeOptionalHashList(game.previewBlobSha256s));
@@ -968,10 +986,10 @@ function normalizeMetadata(
         !isNullableString(title.language) ||
         title.titleType !== "alias"
       ) {
-        throw new HttpError(400, "Upload metadata title is invalid");
+        throw new HttpError(400, "Upload metadata title is invalid", undefined, "upload.error.metadataTitle");
       }
       if (title.language !== null && !isLanguageCode(title.language)) {
-        throw new HttpError(400, "Upload metadata title language is invalid");
+        throw new HttpError(400, "Upload metadata title language is invalid", undefined, "upload.error.metadataTitle");
       }
       return {
         title: title.title.trim(),
@@ -999,7 +1017,7 @@ function normalizeMetadata(
       ) ||
       !isNullableString(character.notes)
     ) {
-      throw new HttpError(400, "Upload metadata character is invalid");
+      throw new HttpError(400, "Upload metadata character is invalid", undefined, "upload.error.metadataCharacter");
     }
     return {
       ...parseCharacterCreditSelection({
@@ -1032,7 +1050,7 @@ function normalizeMetadata(
         !isNullableString(staff.roleLabel) ||
         !isNullableString(staff.notes)
       ) {
-        throw new HttpError(400, "Upload metadata staff entry is invalid");
+        throw new HttpError(400, "Upload metadata staff entry is invalid", undefined, "upload.error.metadataStaff");
       }
       return {
         selection: parseCreatorSelection(staff.selection),
@@ -1046,11 +1064,11 @@ function normalizeMetadata(
     !game.isTranslation &&
     workStaff.some((staff) => staff.roleKey === "translator")
   ) {
-    throw new HttpError(400, "非翻译作品不能填写译者。");
+    throw new HttpError(400, "非翻译作品不能填写译者。", undefined, "upload.error.translators");
   }
 
   if (!game.originalTitle.trim()) {
-    throw new HttpError(400, "游戏原名不能为空");
+    throw new HttpError(400, "游戏原名不能为空", undefined, "upload.error.originalTitle");
   }
   let admin: ParsedArchiveCommitMetadata["admin"];
   if (metadata.admin !== undefined) {
@@ -1058,11 +1076,11 @@ function normalizeMetadata(
       (metadata.admin.status !== undefined && !isEnum(metadata.admin.status, ["published", "hidden", "deleted"] as const)) ||
       !Array.isArray(metadata.admin.externalLinks) || metadata.admin.externalLinks.some((link) =>
         !isRecord(link) || typeof link.label !== "string" || typeof link.url !== "string" || typeof link.linkType !== "string")) {
-      throw new HttpError(400, "后台作品设置不合法");
+      throw new HttpError(400, "后台作品设置不合法", undefined, "upload.error.adminSettings");
     }
     const externalLinks = normalizeExternalLinks(metadata.admin.externalLinks);
     if (externalLinks.some((link) => link.linkType === "download_page")) {
-      throw new HttpError(400, "本站归档不能同时填写外部下载地址");
+      throw new HttpError(400, "本站归档不能同时填写外部下载地址", undefined, "upload.error.archiveExternal");
     }
     admin = { status: metadata.admin.status === "hidden" ? "published" : metadata.admin.status, externalLinks };
   }
@@ -1132,35 +1150,35 @@ async function resolveTargetWork(
   const game = metadata.game;
   if (metadata.target.mode === "update") {
     if (existingJobWorkId !== metadata.target.workId) {
-      throw new HttpError(409, "导入任务与更新目标不匹配");
+      throw new HttpError(409, "导入任务与更新目标不匹配", undefined, "upload.error.targetMismatch");
     }
     if (!metadata.target.workId) {
-      throw new HttpError(403, "无权更新此游戏");
+      throw new HttpError(403, "无权更新此游戏", undefined, "upload.error.targetPermission");
     }
     const current = await assertWorkCanReceiveArchive(runtime, metadata.target.workId, user);
     if (current.status === "deleted" && !metadata.admin) {
-      throw new HttpError(403, "已删除作品须从后台维护");
+      throw new HttpError(403, "已删除作品须从后台维护", undefined, "upload.error.targetDeleted");
     }
     const adminEdit = Boolean(metadata.admin) || current.is_uploader !== 1 || !hasPermission(user, "work.update_own");
     const preservedWork = adminEdit && !hasPermission(user, "work.metadata.update_any")
       ? await getWorkForAdminEdit(runtime, metadata.target.workId) : null;
     if (adminEdit && !hasPermission(user, "work.metadata.update_any") && !preservedWork)
-      throw new HttpError(404, "作品不存在");
+      throw new HttpError(404, "作品不存在", undefined, "comment.error.workMissing");
     if (preservedWork) metadata.tags = preservedWork.tags;
     const visibility = parseWorkVisibility(game, metadata.tags, { audience: current.audience, showOnHome: current.show_on_home === 1 });
     const constrainedCurrent = constrainWorkVisibility({ audience: current.audience, showOnHome: current.show_on_home === 1 }, metadata.tags);
     if (adminEdit && !hasPermission(user, "work.status.update_any") &&
       (visibility.audience !== constrainedCurrent.audience || visibility.showOnHome !== constrainedCurrent.showOnHome))
-      throw new HttpError(403, "没有调整作品可见性的权限");
+      throw new HttpError(403, "没有调整作品可见性的权限", undefined, "upload.error.visibilityPermission");
     Object.assign(game, visibility);
     if (adminEdit && (metadata.admin?.status ?? game.status) !== current.status && !hasPermission(user, "work.status.update_any")) {
-      throw new HttpError(403, "没有调整作品状态的权限");
+      throw new HttpError(403, "没有调整作品状态的权限", undefined, "upload.error.statusPermission");
     }
     if (adminEdit) game.originalTitle = current.original_title;
     if (preservedWork) {
       const work = preservedWork;
       if (game.engineFamily !== work.engineFamily) {
-        throw new HttpError(403, "修改游戏引擎需要作品信息编辑权限");
+        throw new HttpError(403, "修改游戏引擎需要作品信息编辑权限", undefined, "upload.error.editEnginePermission");
       }
       Object.assign(game, {
         ...parseWorkVisibility(game, work.tags, work),
@@ -1182,7 +1200,7 @@ async function resolveTargetWork(
 
   if (existingJobWorkId) {
     if (!(await canEditWork(runtime, existingJobWorkId, user))) {
-      throw new HttpError(403, "导入任务对应的游戏不属于当前上传者");
+      throw new HttpError(403, "当前账户无权编辑此上传任务对应的作品", undefined, "upload.error.importOwner");
     }
     const identity = await getD1(runtime)
       .prepare(
@@ -1206,7 +1224,7 @@ async function resolveTargetWork(
       identity.is_original !== (game.isOriginal ? 1 : 0) ||
       identity.is_translation !== (game.isTranslation ? 1 : 0)
     )
-      throw new HttpError(409, "导入任务的游戏身份或语言属性不匹配");
+      throw new HttpError(409, "导入任务的游戏身份或语言属性不匹配", undefined, "upload.error.importIdentity");
     Object.assign(game, parseWorkVisibility(game, metadata.tags, { audience: identity.audience, showOnHome: identity.show_on_home === 1 }));
     return existingJobWorkId;
   }
@@ -1311,7 +1329,7 @@ async function findReusableDraftByManifest(
   }
 
   if (row.purged_at) {
-    throw new HttpError(409, "相同清单的历史快照已最终清理，不能重新提交");
+    throw new HttpError(409, "相同清单的历史快照已最终清理，不能重新提交", undefined, "upload.error.snapshotPurged");
   }
 
   // A failed commit can leave processing state after the immutable row is inserted.
@@ -1320,7 +1338,7 @@ async function findReusableDraftByManifest(
     return row;
   }
 
-  throw new HttpError(409, "相同清单的历史快照已存在，不能覆盖不可变快照");
+  throw new HttpError(409, "相同清单的历史快照已存在，不能覆盖不可变快照", undefined, "upload.error.snapshotExists");
 }
 
 async function finalizeArchiveCommit(
@@ -1751,7 +1769,7 @@ function uniqueStaffEntry(): (
   const seen = new Set<string>();
   return (staff) => {
     const key = `${staff.roleKey}\u0000${creatorSelectionKey(staff.selection)}`;
-    if (seen.has(key)) throw new HttpError(400, "已有这条署名，请移除重复项。");
+    if (seen.has(key)) throw new HttpError(400, "已有这条署名，请移除重复项。", undefined, "upload.error.duplicateCredit");
     seen.add(key);
     return true;
   };
@@ -1778,7 +1796,7 @@ function isEnum<const T extends string>(
 
 function requireString(value: unknown, field: string): string {
   if (typeof value !== "string") {
-    throw new HttpError(400, `Upload metadata ${field} is invalid`);
+    throw new HttpError(400, `Upload metadata ${field} is invalid`, undefined, "upload.error.metadataField", { field });
   }
   return value;
 }

@@ -2,7 +2,7 @@ import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { cn } from "@/lib/ui/cn";
 import type { AriaRole, ReactNode } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 type EmptyStateProps = {
   title: ReactNode;

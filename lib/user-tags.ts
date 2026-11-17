@@ -1,5 +1,5 @@
 import { normalizeEntityName } from "@/lib/entity-name";
-import { HttpError } from "@/lib/http";
+import { UiHttpError } from "@/lib/i18n/feedback";
 
 export type TagSource = "all" | "public" | "user";
 export type UserTagSummary = { name: string; workCount: number };
@@ -22,10 +22,10 @@ export const MAX_USER_TAG_LENGTH = 20;
 export const MAX_FAVORITE_NOTE_LENGTH = 500;
 
 export function parseFavoriteNote(value: unknown): string {
-  if (typeof value !== "string") throw new HttpError(400, "收藏吐槽必须是文本。");
+  if (typeof value !== "string") throw new UiHttpError(400, "favorite.error.noteType");
   const note = value.replace(/\r\n?/g, "\n").trim();
-  if ([...note].length > MAX_FAVORITE_NOTE_LENGTH) throw new HttpError(400, `收藏吐槽最多 ${MAX_FAVORITE_NOTE_LENGTH} 字。`);
-  if (note.includes("\0")) throw new HttpError(400, "收藏吐槽不能包含空字符。");
+  if ([...note].length > MAX_FAVORITE_NOTE_LENGTH) throw new UiHttpError(400, "favorite.error.noteLength");
+  if (note.includes("\0")) throw new UiHttpError(400, "favorite.error.noteNull");
   return note;
 }
 
@@ -42,26 +42,26 @@ export function tagNameKey(value: string): string {
   return normalizeEntityName(value).replace(/[A-Z]/g, (letter) => letter.toLowerCase());
 }
 
-export function validateUserTag(value: string): string | null {
+export function validateUserTag(value: string) {
   const name = normalizeEntityName(value);
-  if (!name) return "标签名称不能为空。";
-  if ([...name].length > MAX_USER_TAG_LENGTH) return `每个标签最多 ${MAX_USER_TAG_LENGTH} 字。`;
-  if ([...name].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) return "标签不能包含控制字符。";
+  if (!name) return "favorite.error.tagEmpty";
+  if ([...name].length > MAX_USER_TAG_LENGTH) return "favorite.error.tagLength";
+  if ([...name].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) return "favorite.error.tagControl";
   return null;
 }
 
 export function parseUserTags(value: unknown): string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-    throw new HttpError(400, `标签必须是最多 ${MAX_USER_TAGS} 项的文字列表。`);
+    throw new UiHttpError(400, "favorite.error.tagList");
   }
   const submittedTags = (value as string[]).filter((item) => tagNameKey(item) !== "viprpg");
   if (submittedTags.length > MAX_USER_TAGS) {
-    throw new HttpError(400, `标签必须是最多 ${MAX_USER_TAGS} 项的文字列表。`);
+    throw new UiHttpError(400, "favorite.error.tagList");
   }
   const tags = new Map<string, string>();
   for (const item of submittedTags) {
     const error = validateUserTag(item);
-    if (error) throw new HttpError(400, error);
+    if (error) throw new UiHttpError(400, error);
     const name = normalizeEntityName(item);
     if (!tags.has(tagNameKey(name))) tags.set(tagNameKey(name), name);
   }

@@ -819,26 +819,26 @@ export async function updateOwnedWork(
   const moreInfo = JSON.stringify(parseWorkMoreInfo(input.moreInfo));
   const referenceDuration = parseWorkReferenceDuration(input.referenceDuration) ?? null;
   const originalTitle = input.originalTitle.trim();
-  if (!originalTitle) throw new HttpError(400, "作品原名不能为空");
+  if (!originalTitle) throw new HttpError(400, "作品原名不能为空", undefined, "upload.error.originalTitle");
   assertPublicationDeclarations(input.isOriginal, input.isTranslation);
-  if (!isLanguageCode(input.language)) throw new HttpError(400, "语言不合法");
+  if (!isLanguageCode(input.language)) throw new HttpError(400, "语言不合法", undefined, "upload.error.language");
   const releaseDate = parseOriginalReleaseDate(input.originalReleaseDate);
   if (!releaseDate)
-    throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
+    throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR, undefined, "upload.error.releaseDate");
   if (input.status !== undefined && input.status !== "published" && input.status !== "hidden") {
-    throw new HttpError(400, "作品状态不合法");
+    throw new HttpError(400, "作品状态不合法", undefined, "upload.error.status");
   }
   if (
     input.distribution === "archive" &&
     !isArchiveEngineFamily(input.engineFamily)
   ) {
-    throw new HttpError(400, "本站归档作品必须使用 RPG Maker 2000/2003 系引擎");
+    throw new HttpError(400, "本站归档作品必须使用 RPG Maker 2000/2003 系引擎", undefined, "upload.error.archiveEngine");
   }
   if (
     input.distribution === "external" &&
     !isEngineFamily(input.engineFamily)
   ) {
-    throw new HttpError(400, "引擎不合法");
+    throw new HttpError(400, "引擎不合法", undefined, "upload.error.engine");
   }
 
   await assertTranslationLanguageChangeAllowed(
@@ -871,7 +871,7 @@ export async function updateOwnedWork(
     },
   );
   if (!input.isTranslation && translatorCredits.length > 0)
-    throw new HttpError(400, "非翻译作品不能填写译者。");
+    throw new HttpError(400, "非翻译作品不能填写译者。", undefined, "upload.error.translators");
   const media = normalizeWorkMedia(input.coverBlobSha256, input.previewBlobSha256s);
   await validateWorkMedia(runtime, [media.coverBlobSha256, ...media.previewBlobSha256s]);
   const downloadUrl =
@@ -879,7 +879,7 @@ export async function updateOwnedWork(
       ? normalizeHttpUrl(input.downloadUrl, "外部下载地址")
       : null;
   if (input.distribution === "external" && !downloadUrl) {
-    throw new HttpError(400, "外部下载地址不能为空");
+    throw new HttpError(400, "外部下载地址不能为空", undefined, "upload.error.downloadUrl");
   }
 
   assertStableDistribution({
@@ -1042,10 +1042,10 @@ export async function updateWorkForAdmin(
   const canUpdateMetadata = hasPermission(actor, "work.metadata.update_any");
   const canUpdateDistribution = hasPermission(actor, "work.distribution.update_any");
   if (!canUpdateMetadata && !canUpdateDistribution) {
-    throw new HttpError(403, "没有编辑作品的权限");
+    throw new HttpError(403, "没有编辑作品的权限", undefined, "upload.error.editPermission");
   }
   const current = await getWorkForAdminEdit(runtime, input.workId);
-  if (!current) throw new HttpError(404, "作品不存在");
+  if (!current) throw new HttpError(404, "作品不存在", undefined, "comment.error.workMissing");
   const lifecycleRequested = Boolean(input.status);
   input = { ...input, ...legacyWorkVisibilityInput(input), status: workStatusFromLegacyInput(input.status, current.status) };
   // Ignore fields outside the actor's grant and never rewrite their tables.
@@ -1065,28 +1065,28 @@ export async function updateWorkForAdmin(
   const canUpdateStatus = hasPermission(actor, "work.status.update_any");
   const canChangeLifecycle = canUpdateStatus && lifecycleRequested;
   if (current.status === "deleted" && !canUpdateStatus)
-    throw new HttpError(403, "已删除作品须由有状态管理权限的账户恢复");
+    throw new HttpError(403, "已删除作品须由有状态管理权限的账户恢复", undefined, "upload.error.restorePermission");
   if (
     input.status &&
     input.status !== current.status &&
     !canUpdateStatus
   ) {
-    throw new HttpError(403, "没有调整作品状态的权限");
+    throw new HttpError(403, "没有调整作品状态的权限", undefined, "upload.error.statusPermission");
   }
   if (!canUpdateStatus) input.status = current.status;
   const visibility = parseWorkVisibility(input, input.tags, current);
   const constrainedCurrent = constrainWorkVisibility(current, input.tags);
   if (!canUpdateStatus && (visibility.audience !== constrainedCurrent.audience || visibility.showOnHome !== constrainedCurrent.showOnHome))
-    throw new HttpError(403, "没有调整作品可见性的权限");
+    throw new HttpError(403, "没有调整作品可见性的权限", undefined, "upload.error.visibilityPermission");
   assertPublicationDeclarations(input.isOriginal, input.isTranslation);
   if (
     !input.isTranslation &&
     input.workStaff.some((credit) => credit.roleKey === "translator")
   ) {
-    throw new HttpError(400, "非翻译作品不能填写译者。");
+    throw new HttpError(400, "非翻译作品不能填写译者。", undefined, "upload.error.translators");
   }
   const releaseDate = parseOriginalReleaseDate(input.originalReleaseDate);
-  if (!releaseDate) throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
+  if (!releaseDate) throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR, undefined, "upload.error.releaseDate");
   assertEnum(
     input.engineFamily,
     [
@@ -1109,7 +1109,7 @@ export async function updateWorkForAdmin(
     "状态",
   );
   if (input.status === "processing" && current.status !== "processing") {
-    throw new HttpError(400, "processing 只能由上传提交流程创建");
+    throw new HttpError(400, "processing 只能由上传提交流程创建", undefined, "upload.error.processing");
   }
   if (!isLanguageCode(input.language)) throw new Error("语言不合法");
   const externalLinks = normalizeExternalLinks(input.externalLinks);
@@ -1127,7 +1127,7 @@ export async function updateWorkForAdmin(
     ).length,
   });
   if (input.distribution === "archive" && externalLinks.some((link) => link.linkType === "download_page")) {
-    throw new HttpError(400, "本站归档不能同时填写外部下载地址");
+    throw new HttpError(400, "本站归档不能同时填写外部下载地址", undefined, "upload.error.archiveExternal");
   }
   const archiveSourceUrl = input.archiveSourceUrl === undefined ? undefined : normalizeHttpUrl(input.archiveSourceUrl, "归档来源");
   await assertTranslationLanguageChangeAllowed(
@@ -1269,17 +1269,17 @@ export async function createExternalWork(
   const moreInfo = parseWorkMoreInfo(input.moreInfo);
   const referenceDuration = parseWorkReferenceDuration(input.referenceDuration) ?? null;
   if (!isEngineFamily(input.engineFamily)) {
-    throw new HttpError(400, "引擎不合法");
+    throw new HttpError(400, "引擎不合法", undefined, "upload.error.engine");
   }
   const originalTitle = input.originalTitle.trim();
-  if (!originalTitle) throw new HttpError(400, "作品原名不能为空");
+  if (!originalTitle) throw new HttpError(400, "作品原名不能为空", undefined, "upload.error.originalTitle");
   assertPublicationDeclarations(input.isOriginal, input.isTranslation);
   const releaseDate = parseOriginalReleaseDate(input.originalReleaseDate);
   if (!releaseDate)
-    throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR);
-  if (!isLanguageCode(input.language)) throw new HttpError(400, "语言不合法");
+    throw new HttpError(400, ORIGINAL_RELEASE_DATE_FORMAT_ERROR, undefined, "upload.error.releaseDate");
+  if (!isLanguageCode(input.language)) throw new HttpError(400, "语言不合法", undefined, "upload.error.language");
   const downloadUrl = normalizeHttpUrl(input.downloadUrl, "外部下载地址");
-  if (!downloadUrl) throw new HttpError(400, "外部下载地址不能为空");
+  if (!downloadUrl) throw new HttpError(400, "外部下载地址不能为空", undefined, "upload.error.downloadUrl");
 
   const media = normalizeWorkMedia(input.coverBlobSha256, input.previewBlobSha256s);
   await validateWorkMedia(runtime, [media.coverBlobSha256, ...media.previewBlobSha256s]);
@@ -1299,7 +1299,7 @@ export async function createExternalWork(
     }),
   );
   if (!input.isTranslation && translatorCredits.length > 0)
-    throw new HttpError(400, "非翻译作品不能填写译者。");
+    throw new HttpError(400, "非翻译作品不能填写译者。", undefined, "upload.error.translators");
   const staffCredits = [
     ...translatorCredits,
     ...(input.extraStaff ?? []),
@@ -1449,7 +1449,7 @@ export async function updateArchiveVersionForAdmin(
 ): Promise<AdminArchiveVersionEdit> {
   assertEnum(input.status, ["processing", "published", "hidden"], "状态");
   if (input.status === "processing") {
-    throw new HttpError(400, "processing 只能由上传提交流程创建");
+    throw new HttpError(400, "processing 只能由上传提交流程创建", undefined, "upload.error.processing");
   }
   const before = await getD1(runtime)
     .prepare(
@@ -1501,7 +1501,7 @@ export async function updateArchiveVersionForAdmin(
 export function parseWorkEditForm(form: FormData): WorkEditInput {
   const distribution = form.get("distribution");
   if (distribution !== null && distribution !== "archive" && distribution !== "external") {
-    throw new HttpError(400, "distribution 不合法");
+    throw new HttpError(400, "distribution 不合法", undefined, "upload.error.distribution");
   }
   return {
     workId: positive(form.get("work_id")),
@@ -2363,9 +2363,9 @@ export function normalizeExternalLinks(
     )
     .map((link, index) => {
       if (!LINK_TYPES.includes(link.linkType as (typeof LINK_TYPES)[number]))
-        throw new HttpError(400, "作品外链类型不合法");
+        throw new HttpError(400, "作品外链类型不合法", undefined, "upload.error.linkType");
       const url = normalizeHttpUrl(link.url, "作品外链");
-      if (!url) throw new HttpError(400, "作品外链不能为空");
+      if (!url) throw new HttpError(400, "作品外链不能为空", undefined, "upload.error.linkUrl");
       return {
         id: index,
         label: link.label.trim(),
@@ -2396,7 +2396,7 @@ async function getWorkDistributionState(
     )
     .bind(workId)
     .first<{ has_current_archive: number }>();
-  if (!row) throw new HttpError(404, "作品不存在");
+  if (!row) throw new HttpError(404, "作品不存在", undefined, "comment.error.workMissing");
   return {
     hasCurrentArchive: row.has_current_archive === 1,
   };
@@ -2488,7 +2488,7 @@ function assertPublicationDeclarations(
   isTranslation: boolean,
 ): void {
   if (isOriginal && isTranslation) {
-    throw new HttpError(400, "原创声明与翻译声明不能同时选择");
+    throw new HttpError(400, "原创声明与翻译声明不能同时选择", undefined, "upload.error.originalAndTranslation");
   }
 }
 

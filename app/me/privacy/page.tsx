@@ -1,4 +1,7 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { translate } from "@/lib/i18n/core";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { routeInput } from "@/app/.server/route-input";
 import { runtimeContext } from "@/app/.server/router-context";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -23,63 +26,67 @@ export async function loader(args: LoaderFunctionArgs) {
   const profileSettings = [
     {
       name: "showBio",
-      label: "简介",
+      label: "work.intro",
       checked: user.profileVisibility.bio,
     },
     {
       name: "showShowcase",
-      label: "喜爱展柜",
+      label: "account.nav.showcase",
       checked: user.profileVisibility.showcase,
     },
     {
       name: "showFriends",
-      label: "好友",
+      label: "account.privacy.friends",
       checked: user.profileVisibility.friends,
     },
     {
       name: "showFavorites",
-      label: "收藏",
+      label: "favorite.label",
       checked: user.profileVisibility.favorites,
     },
     {
       name: "showHistory",
-      label: "游玩历史",
+      label: "account.nav.history",
       checked: user.profileVisibility.history,
     },
     {
       name: "showCatalogs",
-      label: "目录",
+      label: "core.nav.catalogs",
       checked: user.profileVisibility.catalogs,
     },
     {
       name: "showComments",
-      label: "评论",
+      label: "work.stats.commentsShort",
       checked: user.profileVisibility.comments,
     },
     {
       name: "showDiscussions",
-      label: "讨论",
+      label: "account.privacy.discussion",
       checked: user.profileVisibility.discussions,
     },
-  ];
+  ] as const;
 
-  return { params, profileSettings, preferences: user.preferences };
+  return { locale: runtime.uiLocale, params, profileSettings, preferences: user.preferences };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["隐私与偏好", "个人中心"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "account.nav.privacy"), translate(locale, "header.me")] }, error, locale);
+};
 
 export default function PrivacyPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { profileSettings, preferences } = useLoaderData<typeof loader>();
   const [notificationPreferences, setNotificationPreferences] = useState(preferences);
   return (
     <div>
-      <AccountPageHeader title="隐私与偏好" />
-      <RedirectFeedback success={{ settingsUpdated: "隐私与偏好已更新。", privacyUpdated: "隐私设置已更新。", preferencesUpdated: "偏好设置已更新。" }} />
+      <AccountPageHeader title={t("account.nav.privacy")} />
+      <RedirectFeedback success={{ settingsUpdated: t("account.privacy.savedAll"), privacyUpdated: t("account.privacy.saved"), preferencesUpdated: t("account.preferences.saved") }} />
 
-      <RedirectForm action="/api/account/privacy" method="post">
+      <RedirectForm action={`/api/account/privacy?${UI_LOCALE_PARAM}=${locale}`} method="post">
         <input name="section" type="hidden" value="all" />
-        <h2 className="mb-3 text-lg font-semibold">隐私</h2>
+        <h2 className="mb-3 text-lg font-semibold">{t("account.privacy.title")}</h2>
         <input name="showFriends" type="hidden" value="0" />
         <input name="notifyFriendAdditions" type="hidden" value="0" />
         <input name="receivePrivateMessages" type="hidden" value="0" />
@@ -88,24 +95,24 @@ export default function PrivacyPage() {
             <Label className="flex min-h-10 cursor-pointer items-center gap-2">
               <Checkbox name="receivePrivateMessages" value="1" checked={notificationPreferences.receivePrivateMessages}
                 onCheckedChange={checked => setNotificationPreferences(current => ({ ...current, receivePrivateMessages: checked === true }))} />
-              接收私信
+              {t("account.privacy.messages")}
             </Label>
           </div>
           <div className="py-2">
             <Label className="flex min-h-10 cursor-pointer items-center gap-2">
               <Checkbox name="notifyFriendAdditions" value="1" checked={notificationPreferences.notifyFriendAdditions}
                 onCheckedChange={checked => setNotificationPreferences(current => ({ ...current, notifyFriendAdditions: checked === true }))} />
-              接收他人的好友提醒
+              {t("account.privacy.friendAlerts")}
             </Label>
           </div>
           <fieldset className="py-4">
-            <legend className="sr-only">在个人主页展示</legend>
-            <div aria-hidden="true" className="mb-3 text-sm font-semibold">在个人主页展示</div>
+            <legend className="sr-only">{t("account.privacy.profileItems")}</legend>
+            <div aria-hidden="true" className="mb-3 text-sm font-semibold">{t("account.privacy.profileItems")}</div>
             <div className="flex flex-wrap gap-2">
               {profileSettings.map((setting) => (
                 <Label key={setting.name} htmlFor={`profile-${setting.name}`} className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-sm has-data-[state=checked]:border-primary has-data-[state=checked]:bg-primary/10">
                   <Checkbox defaultChecked={setting.checked} id={`profile-${setting.name}`} name={setting.name} value="1" />
-                  {setting.label}
+                  {t(setting.label)}
                 </Label>
               ))}
             </div>
@@ -113,7 +120,7 @@ export default function PrivacyPage() {
         </div>
         <AccountPreferencesFields preferences={notificationPreferences}
           onNotifyUploadedWorkCommentsChange={checked => setNotificationPreferences(current => ({ ...current, notifyUploadedWorkComments: checked }))} />
-        <div className="mt-5"><Rm2kButton type="submit">保存设置</Rm2kButton></div>
+        <div className="mt-5"><Rm2kButton type="submit">{t("account.preferences.save")}</Rm2kButton></div>
       </RedirectForm>
     </div>
   );

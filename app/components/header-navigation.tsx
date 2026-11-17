@@ -3,7 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 const desktopNavigationClassName =
   "inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium";

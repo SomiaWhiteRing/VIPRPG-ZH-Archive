@@ -3,6 +3,7 @@ import { useRouteLoaderData } from "react-router";
 import type { loader as rootLoader } from "@/app/root";
 import { formatElapsedTimestamp, formatExactTimestamp, formatRelativeTimestamp, parseTimestamp } from "@/lib/format";
 import { cn } from "@/lib/ui/cn";
+import { useUiLocale } from "@/lib/i18n/react";
 
 const listeners = new Set<() => void>();
 let now: number | null = null;
@@ -34,6 +35,7 @@ export function Timestamp({ value, className, format = "relative" }: {
   format?: "relative" | "duration";
 }) {
   const serverTime = useRouteLoaderData<typeof rootLoader>("root")?.serverTime ?? null;
+  const locale = useUiLocale();
   // SSR and hydration share the serialized time before the live clock takes over.
   const currentTime = useSyncExternalStore(subscribe, getSnapshot, () => serverTime) ?? serverTime;
   const date = parseTimestamp(value);
@@ -45,8 +47,8 @@ export function Timestamp({ value, className, format = "relative" }: {
       title={exact}
     >
       {currentTime === null ? null : format === "duration"
-        ? formatElapsedTimestamp(value, currentTime)
-        : formatRelativeTimestamp(value, currentTime)}
+        ? formatElapsedTimestamp(value, currentTime, locale)
+        : formatRelativeTimestamp(value, currentTime, locale)}
     </time>
   );
 }

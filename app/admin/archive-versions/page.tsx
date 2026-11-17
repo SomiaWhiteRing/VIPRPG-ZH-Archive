@@ -13,9 +13,12 @@ import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { buttonVariants } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { hasPermission } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
@@ -58,26 +61,30 @@ export async function loader(args: LoaderFunctionArgs) {
     status,
     sort,
     page,
+    locale: runtime.uiLocale,
     result,
     canAccessTrash,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["文件版本维护", "控制台"], page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.archives.title"), translate(locale, "admin.characterIndex.console")], page: loaderData?.page }, error, locale);
+};
 
 export default function AdminArchiveVersionsPage() {
+  const t = useMessages();
   const { adminUser, query, status, sort, page, result, canAccessTrash } =
     useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
         compact
-        title="文件版本维护"
+        title={t("admin.archives.title")}
         subtitle={
           canAccessTrash
-            ? "删除的文件版本会移入回收站，最终清理后无法还原。"
-            : "删除的文件版本会移入回收站，还原需联系管理员。"
+            ? t("admin.archives.cleanupNote")
+            : t("admin.archives.restoreNote")
         }
         actions={
           canAccessTrash ? (
@@ -85,26 +92,26 @@ export default function AdminArchiveVersionsPage() {
               className={buttonVariants({ variant: "outline" })}
               to="/admin/archive-versions/trash"
             >
-              查看回收站
+              {t("admin.archives.viewTrash")}
             </Link>
           ) : null
         }
       />
       <AdminListControls
         action="/admin/archive-versions"
-        noun="文件版本"
+        noun={t("admin.archives.version")}
         query={query}
         sort={sort}
         sortOptions={[
-          { value: "default", label: "最近创建" },
-          { value: "size", label: "容量" },
+          { value: "default", label: t("admin.works.recent") },
+          { value: "size", label: t("admin.archives.capacity") },
         ]}
         status={status}
         statusOptions={[
-          { value: "all", label: "全部状态" },
-          { value: "published", label: "已发布" },
-          { value: "processing", label: "处理中" },
-          { value: "hidden", label: "隐藏" },
+          { value: "all", label: t("admin.works.all") },
+          { value: "published", label: t("upload.own.status.published") },
+          { value: "processing", label: t("admin.works.processing") },
+          { value: "hidden", label: t("upload.own.status.hidden") },
         ]}
         pageSize={PAGE_SIZE}
         total={result.total}

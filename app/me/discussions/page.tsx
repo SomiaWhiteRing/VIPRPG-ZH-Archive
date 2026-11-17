@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import {
   parseAccountPage,
   requireAccountUser,
@@ -24,20 +26,24 @@ export async function loader(args: LoaderFunctionArgs) {
   );
   const result = await ownUserDiscussions(getForumRuntime(runtime), user, {
     page,
+    locale: runtime.uiLocale,
   });
 
-  return { result };
+  return { locale: runtime.uiLocale, result };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: "我的讨论", page: loaderData?.result.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "account.nav.discussions"), page: loaderData?.result.page }, error, locale);
+};
 
 export default function DiscussionsPage() {
+  const t = useMessages();
   const { result } = useLoaderData<typeof loader>();
   return (
     <div>
       <AccountPageHeader
-        title="我的讨论"
+        title={t("account.nav.discussions")}
       />
       <DiscussionList items={result.items} />
       <PaginationLinks

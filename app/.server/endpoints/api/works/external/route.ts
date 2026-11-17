@@ -1,4 +1,5 @@
 import { parseWorkGenre } from "@/app/.server/http/work-genre";
+import { readList, readNullableString, readRequiredString } from "@/app/.server/http/work-form";
 import { parseWorkReferenceDuration } from "@/app/.server/http/work-reference-duration";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { parseCharacterSelectionsJson } from "@/app/.server/db/characters";
@@ -22,7 +23,7 @@ import {
 } from "@/app/.server/storage/work-images";
 import type { CharacterCreditSelection } from "@/lib/character-names";
 import type { CreatorSelection } from "@/lib/creator-names";
-import { HttpError, json, jsonError } from "@/lib/http";
+import { json, jsonError } from "@/lib/http";
 import { workVisibilityFormInput } from "@/lib/work-visibility";
 
 export async function POST(runtime: AppRuntime, request: Request) {
@@ -129,24 +130,4 @@ function parseMetadata(form: FormData): {
     extraStaff: parseExtraStaffJson(form.get("extra_staff")),
     translators: parseTranslatorSelectionsJson(form.get("translators")),
   };
-}
-
-function readRequiredString(value: unknown, field: string): string {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new HttpError(400, `${field} 不能为空`);
-  }
-  return value.trim();
-}
-
-function readNullableString(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "string") throw new HttpError(400, "文本字段格式不合法");
-  return value.trim() || null;
-}
-
-function readList(value: FormDataEntryValue | null): string[] {
-  return String(value ?? "")
-    .split(/[,，\r\n]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
 }

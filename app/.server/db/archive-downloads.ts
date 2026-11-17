@@ -94,7 +94,7 @@ export async function getArchiveNetplayEndpoint(
 }
 
 export function parseArchiveVersionId(value: string): number {
-  return parsePositiveId(value, "archive version id");
+  return parsePositiveId(value, "archive version id", undefined, undefined, "play.install.error.archiveId");
 }
 export async function getPublishedArchiveDownloadRecord(
   runtime: AppRuntime,

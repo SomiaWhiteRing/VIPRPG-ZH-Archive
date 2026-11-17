@@ -2,9 +2,12 @@ import { TZDateMini } from "@date-fns/tz/date/mini";
 import { formatDuration as formatCalendarDuration } from "date-fns/formatDuration";
 import { intervalToDuration } from "date-fns/intervalToDuration";
 import { zhCN } from "date-fns/locale/zh-CN";
+import { enUS } from "date-fns/locale/en-US";
+import { ja } from "date-fns/locale/ja";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "./i18n/locale";
 
-export function formatNumber(value: number): string {
-  return value.toLocaleString("zh-CN");
+export function formatNumber(value: number, locale = "zh-CN"): string {
+  return value.toLocaleString(locale);
 }
 
 export const DISPLAY_TIME_ZONE = "Asia/Shanghai";
@@ -50,7 +53,20 @@ export function formatExactTimestamp(value: string): string {
 
 const durationUnits = ["years", "months", "days", "hours", "minutes", "seconds"] as const;
 
-export function formatElapsedTimestamp(value: string, now: number): string {
+const relativeFormatters = {
+  en: new Intl.RelativeTimeFormat("en", { numeric: "always" }),
+  ja: new Intl.RelativeTimeFormat("ja", { numeric: "always" }),
+};
+const shortDateFormatters = {
+  en: new Intl.DateTimeFormat("en", { timeZone: DISPLAY_TIME_ZONE, month: "short", day: "numeric" }),
+  ja: new Intl.DateTimeFormat("ja", { timeZone: DISPLAY_TIME_ZONE, month: "numeric", day: "numeric" }),
+};
+const fullDateFormatters = {
+  en: new Intl.DateTimeFormat("en", { timeZone: DISPLAY_TIME_ZONE, dateStyle: "medium" }),
+  ja: new Intl.DateTimeFormat("ja", { timeZone: DISPLAY_TIME_ZONE, dateStyle: "medium" }),
+};
+
+export function formatElapsedTimestamp(value: string, now: number, locale: UiLocale = DEFAULT_UI_LOCALE): string {
   const date = parseTimestamp(value);
   if (Number.isNaN(date.getTime())) return value;
   // Calendar months use the same site timezone on the server and in the browser.
@@ -61,17 +77,34 @@ export function formatElapsedTimestamp(value: string, now: number): string {
   const firstUnit = durationUnits.indexOf(durationUnits.find((unit) => duration[unit]) ?? "seconds");
   const format = durationUnits.slice(firstUnit, firstUnit + 2);
   for (const unit of format) duration[unit] ??= 0;
+  if (locale === "en") {
+    const text = formatCalendarDuration(duration, { locale: enUS, format, zero: true, delimiter: ", " });
+    return `${text} ago`;
+  }
+  if (locale === "ja") {
+    const text = formatCalendarDuration(duration, { locale: ja, format, zero: true, delimiter: "" });
+    return `${text}前`;
+  }
   const text = formatCalendarDuration(duration, { locale: zhCN, format, zero: true, delimiter: "" });
   return `${text.replace(/\s+/g, "").replace("个月", "月")}前`;
 }
 
-export function formatRelativeTimestamp(value: string, now: number): string {
+export function formatRelativeTimestamp(value: string, now: number, locale: UiLocale = DEFAULT_UI_LOCALE): string {
   const date = parseTimestamp(value);
   if (Number.isNaN(date.getTime())) return value;
   const p = timestampParts(date);
   const year = timestampParts(new Date(now)).year;
-  if (p.year !== year) return `${p.year}-${p.month}-${p.day}`;
+  if (p.year !== year) return locale === "zh-Hans"
+    ? `${p.year}-${p.month}-${p.day}`
+    : fullDateFormatters[locale].format(date);
   const seconds = Math.max(0, Math.floor((now - date.getTime()) / 1000));
+  if (locale !== "zh-Hans") {
+    const formatter = relativeFormatters[locale];
+    if (seconds < 60) return formatter.format(-seconds, "second");
+    if (seconds < 3600) return formatter.format(-Math.floor(seconds / 60), "minute");
+    if (seconds < 86400) return formatter.format(-Math.floor(seconds / 3600), "hour");
+    return shortDateFormatters[locale].format(date);
+  }
   if (seconds < 60) return `${seconds}秒前`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`;
@@ -93,7 +126,7 @@ export function formatBytes(bytes: number, options?: { precision?: number; maxim
   return `${value.toFixed(exponent === 0 ? 0 : options?.precision ?? (value >= 10 ? 0 : 1))} ${units[exponent]}`;
 }
 
-export function formatDate(value: string | null, options?: { time?: boolean }): string {
+export function formatDate(value: string | null, options?: { time?: boolean; locale?: string }): string {
   if (!value) {
     return "";
   }
@@ -101,7 +134,7 @@ export function formatDate(value: string | null, options?: { time?: boolean }): 
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat("zh-CN", {
+  return new Intl.DateTimeFormat(options?.locale ?? "zh-CN", {
     timeZone: DISPLAY_TIME_ZONE,
     dateStyle: "medium",
     ...(options?.time !== false && { timeStyle: "short" }),

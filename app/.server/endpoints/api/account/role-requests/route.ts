@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { readJsonObject } from "@/app/.server/http/request";
 import { requireUser } from "@/app/.server/auth/guards";
 import { requestRole } from "@/app/.server/db/permissions";
@@ -8,14 +9,14 @@ export async function POST(runtime: AppRuntime, request: Request) {
   const auth = await requireUser(runtime, request);
   if ("response" in auth) return auth.response;
   try {
-    const body = await readJsonObject(request, "请求必须为 JSON 对象") as { roleId?: unknown; reason?: unknown } | null;
+    const body = await readJsonObject(request, translate(runtime.uiLocale, "account.permissions.error.json")) as { roleId?: unknown; reason?: unknown } | null;
     if (!body || typeof body.roleId !== "number" || !Number.isSafeInteger(body.roleId) || body.roleId <= 0 ||
       (body.reason !== undefined && typeof body.reason !== "string")) {
-      return json({ ok: false, detail: "请选择要申请的权限，并以纯文本填写申请理由。" }, { status: 400 });
+      return json({ ok: false, detail: translate(runtime.uiLocale, "account.permissions.error.invalid") }, { status: 400 });
     }
     const item = await requestRole(runtime, auth.user, { roleId: body.roleId, reason: body.reason });
     return json({ ok: true, inboxItem: item });
   } catch (error) {
-    return jsonError("Role request failed", error);
+    return jsonError(translate(runtime.uiLocale, "account.permissions.failed"), error);
   }
 }

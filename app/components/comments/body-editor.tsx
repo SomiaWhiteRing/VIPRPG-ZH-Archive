@@ -1,3 +1,6 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE } from "@/lib/i18n/locale";
 import { requestOk } from "@/lib/ui/api-response";
 
 import { MentionPicker } from "./mention-picker";
@@ -52,6 +55,7 @@ export type BodyEditorHandle = {
 };
 
 function ImageNode({ node, selected, editor, deleteNode }: NodeViewProps) {
+  const t = useMessages();
   return (
     <NodeViewWrapper
       as="span"
@@ -61,7 +65,7 @@ function ImageNode({ node, selected, editor, deleteNode }: NodeViewProps) {
     >
       <img
         src={node.attrs.src}
-        alt="正文图片"
+        alt={t("image.body")}
         width={640}
         height={360}
         draggable
@@ -75,8 +79,8 @@ function ImageNode({ node, selected, editor, deleteNode }: NodeViewProps) {
           size="icon"
           variant="neutral"
           className="absolute top-1 right-1"
-          aria-label="删除选中图片"
-          title="删除图片"
+          aria-label={t("image.deleteSelected")}
+          title={t("image.delete")}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             if (editor.isEditable) {
@@ -121,7 +125,7 @@ const ForumImageNode = TiptapNode.create({
     {
       "data-forum-image": node.attrs.key,
       src: node.attrs.src,
-      alt: "正文图片",
+      alt: translate(DEFAULT_UI_LOCALE, "image.body"),
     },
   ],
   addNodeView: () => ReactNodeViewRenderer(ImageNode, { as: "span" }),
@@ -144,8 +148,8 @@ export function BodyEditor({
   maxLength,
   enforceMaxLength = true,
   inputId = "forum-body",
-  inputLabel = "正文",
-  placeholder = "写下正文……",
+  inputLabel: providedInputLabel,
+  placeholder: providedPlaceholder,
   autoFocus = false,
   emojis = EMPTY_EMOJIS,
   preview = false,
@@ -174,6 +178,15 @@ export function BodyEditor({
   onCompositionChange: (value: boolean) => void;
   ref?: Ref<BodyEditorHandle>;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const inputLabel = providedInputLabel ?? t("editor.body");
+  const placeholder = providedPlaceholder ?? t("editor.placeholder");
+  const placeholderRef = useRef(placeholder);
+  placeholderRef.current = placeholder;
+  const elementPlaceholder = t("forum.element.placeholder");
+  const elementPlaceholderRef = useRef(elementPlaceholder);
+  elementPlaceholderRef.current = elementPlaceholder;
   const limit =
     maxLength ?? (topic ? FORUM_BODY_LENGTH : FORUM_POST_BODY_LENGTH);
   const contentLength = forumElements ? forumBodyLength : bodyLength;
@@ -194,11 +207,11 @@ export function BodyEditor({
       .catch((error) => {
         if (!controller.signal.aborted)
           setEmojiError(
-            error instanceof Error ? error.message : "表情加载失败。",
+            error instanceof Error ? error.message : t("editor.emojiFailure"),
           );
       });
     return () => controller.abort();
-  }, [idsKey, retry]);
+  }, [idsKey, retry, t]);
   const emojiMap = new Map(
     [...emojis, ...loadedEmojis].map((emoji) => [emoji.id, emoji]),
   );
@@ -226,12 +239,15 @@ export function BodyEditor({
       Text,
       HardBreak,
       ...(textOnly ? [] : [ForumImageNode]),
-      ...(forumElements ? [ForumElementNode.configure({ canEdit: canEditElements })] : []),
+      ...(forumElements ? [ForumElementNode.configure({
+        canEdit: canEditElements,
+        fallbackText: () => elementPlaceholderRef.current,
+      })] : []),
       FaceEmojiNode,
       ...(allowMentions ? [UserMentionNode] : []),
       UndoRedo,
       Dropcursor.configure({ color: "var(--color-primary)", width: 2 }),
-      Placeholder.configure({ placeholder }),
+      Placeholder.configure({ placeholder: () => placeholderRef.current }),
       Extension.create({
         name: "forumLimits",
         addProseMirrorPlugins() {
@@ -429,7 +445,7 @@ export function BodyEditor({
       transaction.replaceSelection(slice).scrollIntoView();
       const result = readDocument(transaction.doc, assets);
       if (enforceMaxLength && contentLength(result.body) > limit)
-        throw new Error("正文超过单帖限制，请减少后再插入。");
+        throw new Error(t("editor.insertLimit"));
       editor.view.dispatch(transaction);
       editor.view.dispatch(closeHistory(editor.state.tr));
       requestAnimationFrame(() => {
@@ -437,7 +453,7 @@ export function BodyEditor({
       });
     } catch (error) {
       if (mounted.current)
-        onError(error instanceof Error ? error.message : "图片插入失败。");
+        onError(error instanceof Error ? error.message : t("editor.imageFailure"));
     } finally {
       pending.current = null;
       if (mounted.current) onBusyChange(false);
@@ -446,16 +462,16 @@ export function BodyEditor({
   function insertFiles(files: File[]) {
     if (!files.length) return;
     return insert(async () => {
-      processor.current ??= createImageProcessor();
+      const imageProcessor = (processor.current ??= createImageProcessor());
       if (
         readDocument(editor!.state.doc, assets).images.length + files.length >
         FORUM_IMAGE_COUNT
       )
-        throw new Error("每帖最多 10 张图片。");
-      const added = await selectDraftImages(files, processor.current.process);
+        throw new Error(t("editor.imageLimit"));
+      const added = await selectDraftImages(files, (file) => imageProcessor.process(file, locale), locale);
       if (!mounted.current) {
         for (const image of added) URL.revokeObjectURL(image.preview);
-        throw new Error("图片处理已取消。");
+        throw new Error(t("editor.imageCanceled"));
       }
       for (const image of added) assets.set(image.key, image);
       return new Slice(
@@ -500,10 +516,10 @@ export function BodyEditor({
             type: `image/${source.uploaded!.format}`,
           });
         }
-        const copy = await cloneDraftImage(file);
+        const copy = await cloneDraftImage(file, locale);
         if (!mounted.current) {
           URL.revokeObjectURL(copy.preview);
-          throw new Error("图片处理已取消。");
+          throw new Error(t("editor.imageCanceled"));
         }
         assets.set(copy.key, copy);
         nodes.push(editor!.schema.nodeFromJSON(imageContent(copy)));
@@ -519,7 +535,7 @@ export function BodyEditor({
         const transaction = editor.state.tr.setSelection(selection).replaceSelectionWith(editor.schema.nodes.userMention.create(user));
         transaction.insertText(" ");
         const value = readDocument(transaction.doc, assets);
-        if (enforceMaxLength && contentLength(value.body) > limit) { onError("正文超过字数限制，请减少后再提及。"); return; }
+        if (enforceMaxLength && contentLength(value.body) > limit) { onError(t("editor.mentionLimit")); return; }
         editor.view.dispatch(transaction);
       } else if (selection && restoreFocus) {
         editor.commands.setTextSelection(selection.to);
@@ -576,7 +592,7 @@ export function BodyEditor({
       const selectionStart = from + opening.length + (from === to ? sampleSelectionStart : 0);
       transaction.setSelection(TextSelection.create(transaction.doc, selectionStart, to + prefix.length));
       if (enforceMaxLength && contentLength(readDocument(transaction.doc, assets).body) > limit) {
-        onError("正文超过字数限制，请减少后再插入格式。");
+        onError(t("editor.formatLimit"));
         return;
       }
       editor.view.dispatch(transaction.scrollIntoView());
@@ -587,7 +603,7 @@ export function BodyEditor({
       if (!forumElements || !canEditElements || !editor || busy || pending.current) return;
       const value = readDocument(editor.state.doc, assets);
       if ((value.body.match(/:html_/g)?.length ?? 0) >= FORUM_ELEMENT_COUNT) {
-        onError("每帖最多 5 个浏览器元素。");
+        onError(t("editor.elementLimit"));
         return;
       }
       editor.chain().focus().insertContent({ type: "forumElement", attrs: { source } }).run();
@@ -621,7 +637,7 @@ export function BodyEditor({
             variant="ghost"
             onClick={() => setRetry((value) => value + 1)}
           >
-            重试加载表情
+            {t("editor.retryEmoji")}
           </Button>
         </div>
       ) : null}
@@ -638,7 +654,7 @@ export function BodyEditor({
       {preview ? (
         <div
           role="region"
-          aria-label={`${inputLabel}预览`}
+          aria-label={t("editor.preview", { label: inputLabel })}
           data-topic={topic}
           className={cn("group/body-editor min-w-0 rounded-md border border-border bg-card [[data-forum-fullscreen=true]_&]:flex [[data-forum-fullscreen=true]_&]:flex-1 [[data-forum-fullscreen=true]_&]:flex-col", className)}
         >
@@ -649,7 +665,7 @@ export function BodyEditor({
               interactiveElements={false}
               images={images.map((image, index) => ({
                 offset: image.offset,
-                content: <img key={image.key} src={image.preview} alt={`正文图片 ${index + 1}`} width={640} height={360} className="my-2 block h-auto max-h-64 w-auto max-w-full object-contain" />,
+                content: <img key={image.key} src={image.preview} alt={t("image.bodyIndex", { index: index + 1 })} width={640} height={360} className="my-2 block h-auto max-h-64 w-auto max-w-full object-contain" />,
               }))}
             />
           </div>

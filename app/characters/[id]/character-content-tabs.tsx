@@ -1,4 +1,5 @@
 import { Button } from "@/app/components/ui/button";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import {
   Tabs,
   TabsContent,
@@ -36,6 +37,8 @@ export function CharacterContentTabs({
   sidebar: ReactNode;
   children: ReactNode;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const desktop = useSyncExternalStore(
     subscribeDesktop,
     getDesktop,
@@ -52,7 +55,7 @@ export function CharacterContentTabs({
     <div className="group/character flex items-start gap-x-[clamp(24px,3vw,40px)] pt-1 [transition:column-gap_280ms_ease] data-[collapsed=true]:gap-x-6 [@media(max-width:980px)]:flex-col [@media(max-width:980px)]:gap-[clamp(24px,3vw,40px)] motion-reduce:transition-none" data-collapsed={collapsed}>
       <div className="sticky top-[74px] w-[300px] min-w-0 shrink-0 [transition:width_280ms_ease] min-[981px]:group-data-[collapsed=true]/character:w-0 [@media(max-width:980px)]:static [@media(max-width:980px)]:w-full motion-reduce:transition-none">
         <aside
-          aria-label="角色资料"
+          aria-label={t("character.profile")}
           className="max-h-[calc(100dvh-5.5rem)] overflow-x-hidden overflow-y-auto visible opacity-100 [transition:max-height_280ms_ease,opacity_280ms_ease,visibility_280ms] group-data-[collapsed=true]/character:max-h-0 group-data-[collapsed=true]/character:invisible group-data-[collapsed=true]/character:opacity-0 [@media(max-width:980px)]:max-h-none [@media(max-width:980px)]:overflow-visible motion-reduce:transition-none"
           id={sidebarId}
           inert={collapsed}
@@ -62,10 +65,10 @@ export function CharacterContentTabs({
         <Button
           aria-controls={sidebarId}
           aria-expanded={!collapsed}
-          aria-label={collapsed ? "展开角色资料" : "收起角色资料"}
+          aria-label={t(collapsed ? "character.expandProfile" : "character.collapseProfile")}
           className="absolute top-3 -right-5 z-10 size-10 min-h-0 rounded-full bg-background p-0 [clip-path:inset(-4px)] [transition:clip-path_280ms_ease,background-color_150ms_ease] group-data-[collapsed=true]/character:[clip-path:inset(-4px_-4px_-4px_50%)] [@media(max-width:980px)]:hidden motion-reduce:transition-none"
           onClick={() => setManuallyCollapsed(!collapsed)}
-          title={collapsed ? "展开角色资料" : "收起角色资料"}
+          title={t(collapsed ? "character.expandProfile" : "character.collapseProfile")}
           type="button"
           variant="outline"
         >
@@ -80,15 +83,15 @@ export function CharacterContentTabs({
             setManuallyCollapsed(null);
           }}
         >
-          <TabsList aria-label="角色相关内容">
+          <TabsList aria-label={t("character.content")}>
             {[
-              { value: "works", label: intro ? "简介与登场作品" : "登场作品", count: workCount },
-              { value: "materials", label: "素材", count: materialCount },
+              { value: "works", label: t(intro ? "character.introAndWorks" : "character.works"), count: workCount },
+              { value: "materials", label: t("character.materials"), count: materialCount },
             ].map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
                 {tab.label}
                 <span className="font-mono text-xs">
-                  {formatNumber(tab.count)}
+                  {formatNumber(tab.count, locale)}
                 </span>
               </TabsTrigger>
             ))}
@@ -98,7 +101,7 @@ export function CharacterContentTabs({
             {works}
           </TabsContent>
           <TabsContent value="materials">
-            <section aria-label="角色素材" className="scroll-mt-20" id="sec-materials">
+            <section aria-label={t("character.materialsRegion")} className="scroll-mt-20" id="sec-materials">
               {materials}
             </section>
           </TabsContent>

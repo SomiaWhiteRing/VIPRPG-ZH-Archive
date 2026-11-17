@@ -93,7 +93,7 @@ async function requirePageContext(
 ): Promise<AuthContext> {
   const context = await getAuthContext(runtime);
   const safePath = sanitizeRedirectPath(nextPath);
-  if (!context) redirectPage(`/login?next=${encodeURIComponent(safePath)}`);
+  if (!context) redirectPage(`/login?next=${encodeURIComponent(safePath)}`, runtime.request);
   return context;
 }
 
@@ -103,7 +103,7 @@ export async function requirePagePermission(
   permission: PermissionKey,
 ) {
   const context = await requirePageContext(runtime, nextPath);
-  if (!hasPermission(context.user, permission)) redirectPage("/");
+  if (!hasPermission(context.user, permission)) redirectPage("/", runtime.request);
   return context.user;
 }
 
@@ -116,7 +116,7 @@ export async function requireAnyPagePermission(
   if (
     !permissions.some((permission) => hasPermission(context.user, permission))
   )
-    redirectPage("/");
+    redirectPage("/", runtime.request);
   return context.user;
 }
 
@@ -125,12 +125,12 @@ export async function requireBootstrapAdminPage(
   nextPath: string,
 ) {
   const context = await requirePageContext(runtime, nextPath);
-  if (!context.isBootstrapAdmin) redirectPage("/");
+  if (!context.isBootstrapAdmin) redirectPage("/", runtime.request);
   return context.user;
 }
 
 export async function requireAdministratorPage(runtime: AppRuntime, nextPath: string) {
   const context = await requirePageContext(runtime, nextPath);
-  if (!isAdministrator(context.user)) redirectPage("/");
+  if (!isAdministrator(context.user)) redirectPage("/", runtime.request);
   return context.user;
 }

@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import {
   parseTagEditForm,
@@ -5,7 +6,7 @@ import {
 } from "@/app/.server/db/taxonomy-library";
 import {
   formOrJsonError,
-  redirectResponse,
+  redirectWithParams,
   requestWantsJson,
 } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
@@ -28,7 +29,7 @@ export async function POST(
   let fallbackPath = "/admin/tags";
   try {
     const formData = await request.formData();
-    const input = parseTagEditForm(formData);
+    const input = parseTagEditForm(formData, runtime.uiLocale);
     if (input.originalName) {
       fallbackPath = `/admin/tags/edit?name=${encodeURIComponent(input.originalName)}`;
     }
@@ -40,8 +41,8 @@ export async function POST(
       return json({ ok: true, redirectTo, tag });
     }
 
-    return redirectResponse(new URL(redirectTo, request.url));
+    return redirectWithParams(request, redirectTo, {});
   } catch (error) {
-    return formOrJsonError(request, fallbackPath, "Tag update failed", error);
+    return formOrJsonError(request, fallbackPath, translate(runtime.uiLocale, "admin.tags.error.failed"), error, runtime.uiLocale);
   }
 }

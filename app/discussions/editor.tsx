@@ -1,3 +1,5 @@
+import { useMessages } from "@/lib/i18n/react";
+import { LocaleLink } from "@/app/components/ui/locale-link";
 import { EmojiPicker } from "@/app/components/emojis/picker";
 import { bodyLength, forumBodyLength } from "@/lib/face-emojis";
 import { ALargeSmall, AtSign, Bold, Brackets, ChevronDown, Code2, CodeXml, Dice5, Eye, ImagePlus, ListCollapse, Maximize2, Minimize2, Pencil, Quote, Strikethrough } from "lucide-react";
@@ -67,6 +69,7 @@ export function ForumEditor({
 }) {
   // Local image preparation locks editor actions without marking a publish
   // request in flight or enabling the page's unload guard on an empty draft.
+  const t = useMessages();
   const [processingImages, setProcessingImages] = useState(false);
   const busy = submitting || processingImages;
   const [collapsed, setCollapsed] = useState(draft.collapsed ?? false);
@@ -107,22 +110,22 @@ export function ForumEditor({
     return () => cancelAnimationFrame(frame);
   }, [focusRequest, busy]);
   const label = draft.target
-    ? "保存修改"
+    ? t("comment.saveEdit")
     : topic
-      ? "发布主题"
+      ? t("forum.publish")
       : inline
-        ? "回复"
-        : "发表回复";
+        ? t("comment.reply")
+        : t("forum.editor.postReply");
   const context = draft.target
     ? topic
-      ? "编辑主题"
-      : `编辑 #${draft.postNumber}${inline ? " 的楼内回复" : ""}`
+      ? t("forum.editTopic")
+      : t(inline ? "forum.editor.editNested" : "forum.editor.editFloor", { floor: draft.postNumber ?? "" })
     : topic
-      ? "新主题"
+      ? t("forum.editor.newTopic")
       : inline
-        ? `回复 #${draft.postNumber}`
-        : `回复：${draft.title}`;
-  const compactLabel = draft.target ? "保存" : topic ? "发布" : inline ? "回复" : "发表";
+        ? t("forum.editor.replyFloor", { floor: draft.postNumber ?? "" })
+        : t("forum.editor.replyTitle", { title: draft.title });
+  const compactLabel = draft.target ? t("core.action.save") : topic ? t("forum.editor.publish") : inline ? t("comment.reply") : t("forum.editor.submit");
 
   useLayoutEffect(() => {
     if (!setFullscreen || fullscreen || isCollapsed) return;
@@ -214,8 +217,8 @@ export function ForumEditor({
       type="button"
       variant="ghost"
       size="icon"
-      aria-label={fullscreen ? "退出全屏" : "全屏编辑"}
-      title={fullscreen ? "退出全屏" : "全屏编辑"}
+      aria-label={fullscreen ? t("forum.editor.exitFullscreen") : t("forum.editor.fullscreen")}
+      title={fullscreen ? t("forum.editor.exitFullscreen") : t("forum.editor.fullscreen")}
       aria-pressed={fullscreen}
       onClick={() => {
         if (!fullscreen)
@@ -274,7 +277,7 @@ export function ForumEditor({
           }}
         >
           <span className="line-clamp-2 min-w-0 flex-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
-            {draft.body.trim() || "回复主题……"}
+            {draft.body.trim() || t("forum.replyPlaceholder")}
           </span>
         </Button>
       ) : null}
@@ -332,7 +335,7 @@ export function ForumEditor({
                 onChange={(tags) => onChange({ ...draft, tags })}
               />
               <div>
-                <Label htmlFor="forum-title">标题</Label>
+                <Label htmlFor="forum-title">{t("library.title")}</Label>
                 <Input
                   autoFocus
                   id="forum-title"
@@ -351,7 +354,7 @@ export function ForumEditor({
           ) : null}
           {draft.replyToId ? (
             <div className="flex items-center gap-2 text-sm">
-              回复 {draft.replyName}
+              {t("comment.replyToLabel", { name: draft.replyName ?? t("comment.unavailableReply") })}
               <Button
                 disabled={busy}
                 type="button"
@@ -365,7 +368,7 @@ export function ForumEditor({
                   })
                 }
               >
-                取消定向回复
+                {t("forum.editor.cancelDirected")}
               </Button>
             </div>
           ) : null}
@@ -374,11 +377,11 @@ export function ForumEditor({
               {!topic && replyLayout?.author ? (
                 <>
                   <UserAvatar displayName={replyLayout.author.name} avatarBlobSha256={replyLayout.author.avatar} className="size-6" size={24} />
-                  <span>{draft.target ? context : "回复主题"}</span>
+                  <span>{draft.target ? context : t("forum.editor.replyTopic")}</span>
                 </>
               ) : null}
               <span className={`ml-auto${remaining < 0 ? " text-destructive" : ""}`}>
-                {showRemaining ? (remaining < 0 ? `超出 ${-remaining} 个字符` : `还可输入 ${remaining} 个字符`) : null}
+                {showRemaining ? (remaining < 0 ? t("favorite.exceeded", { count: -remaining }) : t("favorite.remaining", { count: remaining })) : null}
               </span>
               {fullscreenControl}
             </div>
@@ -396,7 +399,7 @@ export function ForumEditor({
               className={topic ? undefined : "sr-only"}
               htmlFor="forum-body"
             >
-              正文
+              {t("editor.body")}
             </Label>
             <div className={fullscreen ? "flex min-h-0 flex-1 flex-col" : "min-w-0"}>
               <BodyEditor
@@ -422,10 +425,11 @@ export function ForumEditor({
                 onChange={(body, images) => onChange({ ...draft, body, images })}
               />
               {bbcodeOpen && !inline ? (
-                <div id={bbcodeId} role="group" aria-label="BBCode 工具栏" className="flex shrink-0 items-center overflow-x-auto rounded-b-md border border-t-0 border-border bg-muted/5 p-1">
+                <div id={bbcodeId} role="group" aria-label={t("forum.editor.bbcode")} className="flex shrink-0 items-center overflow-x-auto rounded-b-md border border-t-0 border-border bg-muted/5 p-1">
                   {FORUM_BBCODES.map((code, index) => {
                     const opening = `[${code.tag}${"parameter" in code ? `=${code.parameter}` : ""}]`;
                     const sample = "sample" in code ? code.sample : "";
+                    const codeLabel = t(`forum.bbcode.${code.tag}`);
                     const Icon = bbcodeIcons[code.tag];
                     return (
                       <Fragment key={code.tag}>
@@ -435,8 +439,8 @@ export function ForumEditor({
                           variant="ghost"
                           size="icon"
                           disabled={busy || previewing}
-                          aria-label={code.label}
-                          title={`${code.label}：${opening}${sample || "…"}[/${code.tag}]`}
+                          aria-label={codeLabel}
+                          title={t("forum.bbcode.example", { label: codeLabel, sample: `${opening}${sample || "…"}[/${code.tag}]` })}
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={() => mixed.current?.wrapText(opening, `[/${code.tag}]`, sample, "sampleSelectionStart" in code ? code.sampleSelectionStart : 0)}
                         >
@@ -446,7 +450,7 @@ export function ForumEditor({
                     );
                   })}
                   {canInsertElements ? (
-                    <Button type="button" variant="ghost" size="icon" aria-label="插入浏览器元素" title="插入浏览器元素" className="md:hidden" disabled={busy || previewing} onClick={() => setElementOpen(true)}><Code2 aria-hidden /></Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label={t("forum.editor.insertElement")} title={t("forum.editor.insertElement")} className="md:hidden" disabled={busy || previewing} onClick={() => setElementOpen(true)}><Code2 aria-hidden /></Button>
                   ) : null}
                 </div>
               ) : null}
@@ -465,14 +469,14 @@ export function ForumEditor({
             >
               <p>{error}</p>
               {loginExpired ? (
-                <a
+                <LocaleLink
                   className="underline"
-                  href="/login?next=%2Fdiscussions"
+                  to="/login?next=%2Fdiscussions"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  在新标签页重新登录
-                </a>
+                  {t("forum.editor.signInNewTab")}
+                </LocaleLink>
               ) : null}
             </div>
           ) : null}
@@ -489,7 +493,7 @@ export function ForumEditor({
           {(trigger) => (
             <div className={`flex shrink-0 items-center gap-0 md:gap-1 ${inline ? "flex-wrap" : "flex-nowrap md:flex-wrap max-[359px]:[&_button[type=button]]:w-9"}`}>
               {trigger}
-                <Button type="button" variant="ghost" size="icon" aria-label="提及用户" title="提及用户" data-mention-trigger="forum-body" disabled={busy || previewing} onClick={() => mixed.current?.mention()}><AtSign aria-hidden /></Button>
+                <Button type="button" variant="ghost" size="icon" aria-label={t("mention.label")} title={t("mention.label")} data-mention-trigger="forum-body" disabled={busy || previewing} onClick={() => mixed.current?.mention()}><AtSign aria-hidden /></Button>
               {!inline ? (
                 <>
                   <Input
@@ -498,7 +502,7 @@ export function ForumEditor({
                     multiple
                     accept="image/png,image/jpeg,image/webp,image/gif"
                     className="hidden"
-                    aria-label="选择图片"
+                    aria-label={t("forum.editor.chooseImages")}
                     disabled={busy || previewing}
                     onChange={(event) => {
                       mixed.current?.insertFiles(
@@ -511,8 +515,8 @@ export function ForumEditor({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label="添加图片"
-                    title="添加图片"
+                    aria-label={t("forum.editor.addImages")}
+                    title={t("forum.editor.addImages")}
                     disabled={busy || previewing}
                     onClick={() => picker.current?.click()}
                   >
@@ -524,7 +528,7 @@ export function ForumEditor({
                     size="icon"
                     disabled={busy}
                     aria-label="BBCode"
-                    title={bbcodeOpen ? "收起 BBCode 工具栏" : "展开 BBCode 工具栏"}
+                    title={bbcodeOpen ? t("forum.editor.collapseBbcode") : t("forum.editor.expandBbcode")}
                     aria-expanded={bbcodeOpen}
                     aria-controls={bbcodeOpen ? bbcodeId : undefined}
                     onMouseDown={(event) => event.preventDefault()}
@@ -536,7 +540,7 @@ export function ForumEditor({
                     <Brackets aria-hidden />
                   </Button>
                   {canInsertElements ? (
-                    <Button type="button" variant="ghost" size="icon" aria-label="插入浏览器元素" title="插入浏览器元素" className="hidden md:inline-flex" disabled={busy || previewing} onClick={() => setElementOpen(true)}><Code2 aria-hidden /></Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label={t("forum.editor.insertElement")} title={t("forum.editor.insertElement")} className="hidden md:inline-flex" disabled={busy || previewing} onClick={() => setElementOpen(true)}><Code2 aria-hidden /></Button>
                   ) : null}
                 </>
               ) : null}
@@ -547,8 +551,8 @@ export function ForumEditor({
                     variant={previewing ? "neutral" : "ghost"}
                     size="icon"
                     disabled={busy}
-                    aria-label={previewing ? "编辑" : "预览"}
-                    title={previewing ? "返回编辑" : "预览正文"}
+                    aria-label={previewing ? t("core.action.edit") : t("forum.editor.preview")}
+                    title={previewing ? t("forum.editor.returnEdit") : t("forum.editor.previewBody")}
                     aria-pressed={previewing}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
@@ -565,8 +569,8 @@ export function ForumEditor({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label="收起回复"
-                    title="收起回复"
+                    aria-label={t("comment.collapse")}
+                    title={t("comment.collapse")}
                     disabled={busy || !!error}
                     onClick={() => {
                       if (fullscreen) {
@@ -591,24 +595,24 @@ export function ForumEditor({
                     disabled={busy}
                     onClick={onCancel}
                   >
-                    关闭
+                    {t("core.action.close")}
                   </Button>
                 ) : null}
                 <Button
                   ref={submitButton}
                   disabled={busy || !canSubmit}
                   type="submit"
-                  title={`${label}（Ctrl+Enter）`}
+                  title={t("forum.editor.submitKey", { action: label })}
                   aria-keyshortcuts="Control+Enter"
                   variant={remaining < 0 ? "neutral" : undefined}
                   className={remaining < 0 ? "disabled:opacity-100" : undefined}
                   aria-label={
                     showRemaining
-                      ? `${label}，${remaining < 0 ? `超出上限 ${-remaining}` : `还可输入 ${remaining}`} 个字符`
+                      ? t("forum.editor.remainingAction", { action: label, remaining: remaining < 0 ? t("favorite.exceeded", { count: -remaining }) : t("favorite.remaining", { count: remaining }) })
                       : label
                   }
                 >
-                  {submitting ? <><span className="md:hidden">保存</span><span className="hidden md:inline">正在保存…</span></> : (
+                  {submitting ? <><span className="md:hidden">{t("core.action.save")}</span><span className="hidden md:inline">{t("forum.editor.saving")}</span></> : (
                     <><span className="max-[359px]:hidden">{label}</span><span className="hidden max-[359px]:inline">{compactLabel}</span></>
                   )}
                   {showRemaining ? (

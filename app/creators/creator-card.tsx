@@ -1,11 +1,13 @@
+import { RichMessage } from "@/app/components/ui/rich-message";
+import { useMessages } from "@/lib/i18n/react";
 import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
 import type { PublicCreatorListItem } from "@/lib/dto/db/creator-library";
-import { formatNumber } from "@/lib/format";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export function CreatorCard({ creator }: {
   creator: Omit<PublicCreatorListItem, "aliases"> & { aliases?: string[] };
 }) {
+  const t = useMessages();
   return (
     <article className="h-full min-w-0">
       <Link
@@ -24,7 +26,7 @@ export function CreatorCard({ creator }: {
           </h2>
           {creator.aliases?.length ? (
             <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted wrap-anywhere sm:text-[13px]">
-              <span className="sr-only">别名：</span>
+              <span className="sr-only">{t("creator.aliases")}</span>
               {creator.aliases.join(" · ")}
             </p>
           ) : null}
@@ -34,11 +36,7 @@ export function CreatorCard({ creator }: {
             </p>
           ) : null}
           <p className="mb-0 mt-3 text-xs text-muted">
-            参与{" "}
-            <span className="font-mono tabular-nums text-foreground">
-              {formatNumber(creator.workCreditCount)}
-            </span>{" "}
-            部作品
+            <RichMessage id="creator.participated" values={{ count: creator.workCreditCount }} components={{ emphasis: children => <span key="count" className="font-mono tabular-nums text-foreground">{children}</span> }} />
           </p>
         </div>
       </Link>

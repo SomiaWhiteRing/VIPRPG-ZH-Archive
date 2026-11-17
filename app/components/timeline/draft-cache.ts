@@ -76,6 +76,8 @@ export function useTimelineDraft({ userId, kind, eventId, onError }: {
     key, draft: { body: "", requestKey: "", images: [] }, ready: key === null,
   });
   const changes = useRef(0);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   useEffect(() => {
     if (key === null) return;
@@ -85,12 +87,12 @@ export function useTimelineDraft({ userId, kind, eventId, onError }: {
       if (active && revision === changes.current) setState({ key, draft: saved ?? { body: "", requestKey: crypto.randomUUID(), images: [] }, ready: true });
     }, () => {
       if (!active) return;
-      onError();
+      onErrorRef.current();
       // A failed read must not overwrite a stored draft with an empty default.
       if (revision === changes.current) setState({ key, draft: { body: "", requestKey: crypto.randomUUID(), images: [] }, ready: true });
     });
     return () => { active = false; };
-  }, [key, onError]);
+  }, [key]);
 
   const ready = key === null || state.key === key && state.ready;
   const draft = state.key === key ? state.draft : { body: "", requestKey: "", images: [] };
@@ -103,8 +105,8 @@ export function useTimelineDraft({ userId, kind, eventId, onError }: {
     current.current = next;
     setState({ key, draft: next, ready: true });
     // Queue each edit immediately, including the last keystroke before navigation.
-    if (key !== null) void saveDraft(key, next).catch(onError);
-  }, [key, onError]);
+    if (key !== null) void saveDraft(key, next).catch(() => onErrorRef.current());
+  }, [key]);
   const setImages = useCallback((images: StatusImageAttachment[]) => {
     changes.current++;
     const previous = current.current;
@@ -112,14 +114,14 @@ export function useTimelineDraft({ userId, kind, eventId, onError }: {
     const next = { ...previous, images, requestKey: unchanged && previous.requestKey ? previous.requestKey : crypto.randomUUID() };
     current.current = next;
     setState({ key, draft: next, ready: true });
-    if (key !== null) void saveDraft(key, next).catch(onError);
-  }, [key, onError]);
+    if (key !== null) void saveDraft(key, next).catch(() => onErrorRef.current());
+  }, [key]);
   const clear = useCallback(async () => {
     changes.current++;
     setState((current) => current.key === key && current.draft.requestKey === draft.requestKey
       ? { key, draft: { body: "", requestKey: crypto.randomUUID(), images: [] }, ready: true } : current);
-    if (key !== null) await clearDraft(key, draft.requestKey).catch(onError);
-  }, [key, draft.requestKey, onError]);
+    if (key !== null) await clearDraft(key, draft.requestKey).catch(() => onErrorRef.current());
+  }, [key, draft.requestKey]);
 
   return { ...draft, ready, setBody, setImages, clear };
 }

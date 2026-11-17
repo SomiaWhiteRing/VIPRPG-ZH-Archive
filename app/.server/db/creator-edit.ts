@@ -35,7 +35,7 @@ export async function editPublicCreator(
     FROM creators WHERE id=? AND ${PUBLIC_CREATOR_SQL}`).bind(creatorId).first<{
       name: string; links_json: string; extra_json: string; avatar_blob_sha256: string | null; aliases: string;
     }>();
-  if (!current) throw new HttpError(404, "作者不存在或尚未公开");
+  if (!current) throw new HttpError(404, "作者不存在或尚未公开", undefined, "creator.edit.error.missing");
   const parsed: unknown = JSON.parse(current.extra_json);
   const extra: Record<string, unknown> = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? { ...parsed } : {};
   const before: CreatorMetadata = {
@@ -95,7 +95,7 @@ export async function editPublicCreator(
     if (result[0].meta.changes !== 1) throw conflict();
   } catch (error) {
     if (/(?:unique|not null) constraint failed: (?:creators|creator_aliases)\.name_key/i.test(error instanceof Error ? error.message : String(error))) {
-      throw new HttpError(409, "名称或别名已被其他作者使用，请核对后修改。", "creator_name_conflict");
+      throw new HttpError(409, "名称或别名已被其他作者使用，请核对后修改。", "creator_name_conflict", "creator.edit.error.nameConflict");
     }
     throw error;
   }
@@ -103,19 +103,19 @@ export async function editPublicCreator(
 
 function normalizeMetadata(input: CreatorMetadata): CreatorMetadata {
   const name = normalizeEntityName(input.name);
-  if (!name || name.length > CREATOR_EDIT_LIMITS.name) throw new HttpError(400, `作者名称须为 1–${CREATOR_EDIT_LIMITS.name} 字`);
+  if (!name || name.length > CREATOR_EDIT_LIMITS.name) throw new HttpError(400, `作者名称须为 1–${CREATOR_EDIT_LIMITS.name} 字`, undefined, "creator.edit.error.nameLength", { max: CREATOR_EDIT_LIMITS.name });
   const aliases = new Map<string, string>();
   for (const raw of input.aliases) {
     const alias = normalizeEntityName(raw);
-    if (alias.length > CREATOR_EDIT_LIMITS.name) throw new HttpError(400, `每个别名最多 ${CREATOR_EDIT_LIMITS.name} 字`);
+    if (alias.length > CREATOR_EDIT_LIMITS.name) throw new HttpError(400, `每个别名最多 ${CREATOR_EDIT_LIMITS.name} 字`, undefined, "creator.edit.error.aliasLength", { max: CREATOR_EDIT_LIMITS.name });
     const key = creatorNameKey(alias);
     if (alias && key !== creatorNameKey(name) && !aliases.has(key)) aliases.set(key, alias);
   }
   const bio = input.bio?.trim() || null;
-  if ((bio?.length ?? 0) > CREATOR_EDIT_LIMITS.bio) throw new HttpError(400, `简介最多 ${CREATOR_EDIT_LIMITS.bio} 字`);
+  if ((bio?.length ?? 0) > CREATOR_EDIT_LIMITS.bio) throw new HttpError(400, `简介最多 ${CREATOR_EDIT_LIMITS.bio} 字`, undefined, "creator.edit.error.bioLength", { max: CREATOR_EDIT_LIMITS.bio });
   return { name, aliases: [...aliases.values()], links: normalizeCreatorLinks(input.links), bio };
 }
 
 function conflict() {
-  return new HttpError(409, "作者资料已被其他人修改。你的输入已保留，请打开最新资料核对后重新编辑。", "creator_edit_conflict");
+  return new HttpError(409, "作者资料已被其他人修改。你的输入已保留，请打开最新资料核对后重新编辑。", "creator_edit_conflict", "creator.edit.error.updatedConflict");
 }

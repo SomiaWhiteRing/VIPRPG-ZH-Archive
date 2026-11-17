@@ -1,3 +1,4 @@
+import { UiHttpError } from "@/lib/i18n/feedback";
 import { getD1 } from "@/app/.server/db/d1";
 import { readCharacterIndexStatic } from "./character-index-static";
 import { auditedEntityBatch, classificationAuditSnapshot } from "@/app/.server/db/entity-audit";
@@ -154,7 +155,7 @@ export async function updateCharacterIndex(
 ): Promise<{ categoryId: string | null; characterId: number | null }> {
   const database = getD1(runtime);
   const permission = characterIndexPermission(body);
-  if (!permission) throw new HttpError(400, "不支持的分类操作");
+  if (!permission) throw new UiHttpError(400, "admin.characterIndex.error.unsupported");
   const save = (statements: D1PreparedStatement[], categoryIds: string[], characterIds: number[], siblingParent?: string | null) =>
     auditedEntityBatch(database, statements, {
       actor, eventType: "admin_character_classification_update", permission, source: "admin", operation: String(body.operation),
@@ -196,7 +197,7 @@ export async function updateCharacterIndex(
   const category = data.categories.find((item) => item.id === categoryId);
   const requireCategory = (id: string | null) => {
     if (!id || !data.categories.some((item) => item.id === id))
-      throw new HttpError(404, "分类已不存在，请刷新后重试");
+      throw new UiHttpError(404, "admin.characterIndex.error.categoryMissing");
     return id;
   };
   const requireCharacter = (id: unknown) => {
@@ -204,7 +205,7 @@ export async function updateCharacterIndex(
       !Number.isSafeInteger(id) ||
       !data.characters.some((item) => item.id === id)
     )
-      throw new HttpError(404, "角色已不存在，请刷新后重试");
+      throw new UiHttpError(404, "admin.characterIndex.error.characterMissing");
     return id as number;
   };
   const selectedNames = (
@@ -221,7 +222,7 @@ export async function updateCharacterIndex(
       (!characterNameOptions(character, "ja").includes(originalName) &&
         originalName !== existing?.originalName)
     )
-      throw new HttpError(400, "请选择该角色已有的中文名和日文名");
+      throw new UiHttpError(400, "admin.characterIndex.error.existingNames");
     return {
       displayName: displayName === character.primaryName ? null : displayName,
       originalName:
@@ -251,7 +252,7 @@ export async function updateCharacterIndex(
     Math.max(-1, ...children(parentId).map((item) => item.sortOrder)) + 1;
   if (body.operation === "saveCategory") {
     if (body.categoryId != null && !category)
-      throw new HttpError(404, "分类已不存在，请刷新后重试");
+      throw new UiHttpError(404, "admin.characterIndex.error.categoryMissing");
     const parentId = text(body.parentId, "上级分类", false, 240);
     if (parentId) requireCategory(parentId);
     if (
@@ -259,7 +260,7 @@ export async function updateCharacterIndex(
       parentId &&
       characterNodeDescendants(data.categories, category.id).has(parentId)
     )
-      throw new HttpError(400, "不能移动到自身或下级分类中");
+      throw new UiHttpError(400, "admin.characterIndex.error.recursiveMove");
     const id = categoryId ?? crypto.randomUUID();
     const label = text(body.label, "分类名称", true);
     const original = text(body.originalName, "日文原名");
@@ -279,7 +280,7 @@ export async function updateCharacterIndex(
         )
         .bind(id, parentId, id, parentId, label, original, source, order, id)], [id], []);
       if (!result.meta.changes)
-        throw new HttpError(409, "分类已不存在，请刷新后重试");
+        throw new UiHttpError(409, "admin.characterIndex.error.categoryMissing");
     } else {
       await save([database
         .prepare(
@@ -292,7 +293,7 @@ export async function updateCharacterIndex(
   if (body.operation === "deleteCategory") {
     requireCategory(categoryId);
     if (children(categoryId).length)
-      throw new HttpError(409, "请先移走分类内的子分类和角色");
+      throw new UiHttpError(409, "admin.characterIndex.error.notEmpty");
     await save([database
       .prepare("DELETE FROM character_categories WHERE id=?")
       .bind(categoryId)], [categoryId!], []);
@@ -305,10 +306,10 @@ export async function updateCharacterIndex(
       !body.characters.length ||
       body.characters.length > 100
     )
-      throw new HttpError(400, "请选择 1 至 100 位角色及使用的名字");
+      throw new UiHttpError(400, "admin.characterIndex.error.memberLimit");
     const selected = body.characters.map((input: unknown) => {
       if (!input || typeof input !== "object" || Array.isArray(input))
-        throw new HttpError(400, "角色选择格式不正确");
+        throw new UiHttpError(400, "admin.characterIndex.error.invalidSelection");
       const value = input as Record<string, unknown>;
       const characterId = requireCharacter(value.characterId);
       return { characterId, ...selectedNames(characterId, value) };
@@ -316,7 +317,7 @@ export async function updateCharacterIndex(
     if (
       new Set(selected.map((item) => item.characterId)).size !== selected.length
     )
-      throw new HttpError(400, "同一分类不能重复选择同一角色");
+      throw new UiHttpError(400, "admin.characterIndex.error.duplicate");
     const order = nextOrder(categoryId);
     await save(
       selected.map((item, index) =>
@@ -347,7 +348,7 @@ export async function updateCharacterIndex(
       (member) =>
         member.categoryId === categoryId && member.characterId === characterId,
     );
-    if (!existing) throw new HttpError(409, "该角色的分类已变化，请刷新后重试");
+    if (!existing) throw new UiHttpError(409, "admin.characterIndex.error.membershipChanged");
     const names = selectedNames(characterId, body, existing);
     const statements: D1PreparedStatement[] = [];
     if (target !== categoryId) {
@@ -358,7 +359,7 @@ export async function updateCharacterIndex(
             member.categoryId === target && member.characterId === characterId,
         )
       )
-        throw new HttpError(409, "该角色已在目标分类中，可直接从当前分类移除");
+        throw new UiHttpError(409, "admin.characterIndex.error.alreadyMember");
       statements.push(
         database
           .prepare(
@@ -388,7 +389,7 @@ export async function updateCharacterIndex(
   if (body.operation === "saveSources") {
     const characterId = requireCharacter(body.characterId);
     if (!Array.isArray(body.sourceUrls) || body.sourceUrls.length > 100)
-      throw new HttpError(400, "来源链接格式不正确，最多 100 个");
+      throw new UiHttpError(400, "admin.characterIndex.error.invalidSources");
     const urls = [
       ...new Set(
         body.sourceUrls.map(
@@ -436,9 +437,9 @@ export async function updateCharacterIndex(
       (item) =>
         item.categoryId === categoryId && item.characterId === characterId,
     );
-    if (index < 0) throw new HttpError(409, "所属分类已变化，请刷新后重试");
+    if (index < 0) throw new UiHttpError(409, "admin.characterIndex.error.parentChanged");
     if (body.direction !== "up" && body.direction !== "down")
-      throw new HttpError(400, "排序方向不正确");
+      throw new UiHttpError(400, "admin.characterIndex.error.invalidDirection");
     const target = index + (body.direction === "up" ? -1 : 1);
     if (target < 0 || target >= siblings.length)
       return { categoryId, characterId };
@@ -466,7 +467,7 @@ export async function updateCharacterIndex(
     const characterId = requireCharacter(body.characterId);
     const targetCharacterId = requireCharacter(body.targetCharacterId);
     if (body.position !== "before" && body.position !== "after")
-      throw new HttpError(400, "排序位置不正确");
+      throw new UiHttpError(400, "admin.characterIndex.error.invalidPosition");
     const parentId = categoryId;
     const siblings = children(parentId);
     const index = siblings.findIndex(
@@ -479,7 +480,7 @@ export async function updateCharacterIndex(
         item.characterId === targetCharacterId,
     );
     if (index < 0 || target < 0)
-      throw new HttpError(409, "分类成员已变化，请刷新后重试");
+      throw new UiHttpError(409, "admin.characterIndex.error.membersChanged");
     if (index === target) return { categoryId, characterId: null };
     const [moved] = siblings.splice(index, 1);
     const insertAt =
@@ -503,5 +504,5 @@ export async function updateCharacterIndex(
     );
     return { categoryId, characterId: null };
   }
-  throw new HttpError(400, "不支持的分类操作");
+  throw new UiHttpError(400, "admin.characterIndex.error.unsupported");
 }

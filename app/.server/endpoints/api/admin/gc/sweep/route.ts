@@ -5,7 +5,10 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import { runGcSweep } from "@/app/.server/storage/admin-storage-checks";
 import { handleManualGc } from "@/app/.server/storage/manual-gc";
 import type { GcJobAction } from "@/lib/archive/gc-job";
-import { HttpError, json, jsonError } from "@/lib/http";
+import { UiHttpError } from "@/lib/i18n/feedback";
+import { translate } from "@/lib/i18n/core";
+import type { UiLocale } from "@/lib/i18n/locale";
+import { json, jsonError } from "@/lib/http";
 
 type SweepRequestBody = {
   action?: GcJobAction;
@@ -23,12 +26,12 @@ export async function POST(runtime: AppRuntime, request: Request) {
   }
 
   try {
-    const body = await readBody(request);
+    const body = await readBody(request, runtime.uiLocale);
 
     if (body.action !== undefined) {
       if (!["start", "scan", "status", "confirm", "run", "retry", "cancel"].includes(body.action)
         || (body.jobId !== undefined && typeof body.jobId !== "string")) {
-        throw new HttpError(400, "无效的清理任务请求");
+        throw new UiHttpError(400, "admin.cleanup.error.invalidRequest");
       }
       return json({ ok: true, job: await handleManualGc(runtime, auth.user, { ...body, action: body.action }) });
     }
@@ -40,6 +43,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
         {
           ok: false,
           error: "GC sweep requires confirm=SWEEP",
+          messageKey: "admin.cleanup.error.confirm",
         },
         { status: 400 },
       );
@@ -77,13 +81,11 @@ export async function POST(runtime: AppRuntime, request: Request) {
   }
 }
 
-async function readBody(request: Request): Promise<SweepRequestBody> {
+async function readBody(request: Request, locale: UiLocale): Promise<SweepRequestBody> {
   const contentType = request.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
-    const body: unknown = await readJsonObject(request, "请求必须为 JSON 对象");
-    if (!body || typeof body !== "object" || Array.isArray(body)) throw new HttpError(400, "请求必须为 JSON 对象");
-    return body as SweepRequestBody;
+    return await readJsonObject(request, translate(locale, "admin.cleanup.error.json")) as SweepRequestBody;
   }
 
   const formData = await request.formData();

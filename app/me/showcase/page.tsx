@@ -1,3 +1,8 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 import { useConfirm } from "@/app/components/ui/confirm-provider";
@@ -18,12 +23,12 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import { Textarea } from "@/app/components/ui/textarea";
 import { useToast } from "@/app/components/ui/toast";
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
-import { SHOWCASE_KINDS, SHOWCASE_LABELS, SHOWCASE_NOTE_LIMIT, type ShowcaseKind, type ShowcaseSnapshot, type ShowcaseTarget } from "@/lib/showcase";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { SHOWCASE_KINDS, SHOWCASE_NOTE_LIMIT, type ShowcaseKind, type ShowcaseSnapshot, type ShowcaseTarget } from "@/lib/showcase";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { cn } from "@/lib/ui/cn";
 import { GripVertical, X } from "lucide-react";
 import { useId, useRef, useState, type FormEvent } from "react";
-import { Link, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
+import { useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { ShowcaseTargetPicker } from "./target-picker";
 import { ShowcasePortraitPicker } from "./portrait-picker";
 import type { CharacterPortraitChoice } from "@/lib/character-names";
@@ -31,11 +36,13 @@ import type { CharacterPortraitChoice } from "@/lib/character-names";
 export async function loader({ context }: LoaderFunctionArgs) {
   const runtime = context.get(runtimeContext);
   const user = await requireAccountUser(runtime, "/me/showcase");
-  return { userId: user.id, snapshot: await readShowcase(runtime, user.id) };
+  return { locale: runtime.uiLocale, userId: user.id, snapshot: await readShowcase(runtime, user.id) };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["喜爱展柜", "个人中心"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "account.nav.showcase"), translate(locale, "header.me")] }, error, locale);
+};
 
 type Slot = {
   kind: ShowcaseKind;
@@ -83,6 +90,9 @@ function ShowcaseEditor({
   userId: number;
   initial: ShowcaseSnapshot;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const navigationLocale = useNavigationLocale();
   const [saved, setSaved] = useState(initial);
   const [slots, setSlots] = useState(() => slotsFor(initial));
   const [busy, setBusy] = useState(false);
@@ -103,7 +113,7 @@ function ShowcaseEditor({
   const confirm = useConfirm();
   const navigateSaved = useNavigationGuard(
     dirty || busy,
-    () => !busy && confirm("展柜尚未保存，确定放弃修改并离开？"),
+    () => !busy && confirm(t("showcase.leave")),
   );
 
   function update(kind: ShowcaseKind, change: Partial<Slot>) {
@@ -116,14 +126,14 @@ function ShowcaseEditor({
   async function reload() {
     if (
       dirty &&
-      !(await confirm("重新读取会丢弃当前尚未保存的修改，确定继续？", { title: "重新读取展柜", confirmLabel: "放弃修改并读取" }))
+      !(await confirm(t("showcase.reloadPrompt"), { title: t("showcase.reloadTitle"), confirmLabel: t("admin.resources.reloadConfirm") }))
     )
       return;
     setBusy(true);
     setError("");
     try {
 
-      const data = (await requestJson("/api/account/showcase")) as ShowcaseSnapshot & {
+      const data = (await requestJson(`/api/account/showcase?${UI_LOCALE_PARAM}=${locale}`)) as ShowcaseSnapshot & {
         detail?: string;
         error?: string;
       };
@@ -133,7 +143,7 @@ function ShowcaseEditor({
       setConflict(false);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "展柜读取失败，请重试。",
+        formatFeedbackError(error, locale, t("showcase.readFailed")),
       );
     } finally {
       setBusy(false);
@@ -147,7 +157,7 @@ function ShowcaseEditor({
     setConflict(false);
     try {
 
-      await requestJson("/api/account/showcase", {
+      await requestJson(`/api/account/showcase?${UI_LOCALE_PARAM}=${locale}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -156,15 +166,15 @@ function ShowcaseEditor({
         }),
       });
 
-      toast.success("喜爱展柜已保存。");
-      await navigateSaved(`/users/${userId}`);
+      toast.success(t("showcase.saved"));
+      await navigateSaved(`/users/${userId}${navigationLocale ? `?${UI_LOCALE_PARAM}=${navigationLocale}` : ""}`);
     } catch (error) {
       if (error instanceof ApiResponseError && error.code === "showcase_conflict") {
         setConflict(true);
-        setError(error.message);
+        setError(error.messageFor(locale));
       }
       toast.error(
-        error instanceof Error ? error.message : "展柜保存失败，请重试。",
+        formatFeedbackError(error, locale, t("showcase.saveFailed")),
       );
     } finally {
       setBusy(false);
@@ -174,7 +184,7 @@ function ShowcaseEditor({
   return (
     <div>
       <AccountPageHeader
-        title="喜爱展柜"
+        title={t("account.nav.showcase")}
       />
       <form onSubmit={save} aria-busy={busy}>
         <DndContext
@@ -182,12 +192,12 @@ function ShowcaseEditor({
           sensors={sensors}
           collisionDetection={closestCenter}
           accessibility={{
-            screenReaderInstructions: { draggable: "按 Enter 开始排序，用方向键移动，按 Enter 确认，按 Escape 取消。" },
+            screenReaderInstructions: { draggable: t("showcase.instructions") },
             announcements: {
-              onDragStart: ({ active }) => `开始排序：最喜欢的${SHOWCASE_LABELS[active.id as ShowcaseKind]}。`,
-              onDragOver: ({ over }) => over ? `移动到第 ${slots.findIndex((slot) => slot.kind === over.id) + 1} 项。` : "已离开排序区域。",
-              onDragEnd: ({ over }) => over ? `排序完成，位于第 ${slots.findIndex((slot) => slot.kind === over.id) + 1} 项。` : "排序取消。",
-              onDragCancel: () => "排序取消。",
+              onDragStart: ({ active }) => t("showcase.start", { label: t(`showcase.favorite.${active.id as ShowcaseKind}`) }),
+              onDragOver: ({ over }) => over ? t("showcase.move", { position: slots.findIndex((slot) => slot.kind === over.id) + 1 }) : t("showcase.outside"),
+              onDragEnd: ({ over }) => over ? t("showcase.end", { position: slots.findIndex((slot) => slot.kind === over.id) + 1 }) : t("showcase.canceled"),
+              onDragCancel: () => t("showcase.canceled"),
             },
           }}
           onDragStart={({ active }) => {
@@ -207,7 +217,7 @@ function ShowcaseEditor({
           }}
         >
           <SortableContext items={slots.map((slot) => slot.kind)} strategy={verticalListSortingStrategy}>
-            <ul className="relative grid gap-4" ref={list} aria-label="喜爱展柜排序">
+            <ul className="relative grid gap-4" ref={list} aria-label={t("showcase.sort")}>
           {slots.map((slot) => (
             <SortableListItem key={slot.kind} id={slot.kind} disabled={busy} className="min-w-0">
               {({ attributes, listeners, setActivatorNodeRef }) => (
@@ -227,7 +237,7 @@ function ShowcaseEditor({
                       )}
                       htmlFor={`showcase-enabled-${slot.kind}`}
                     >
-                      最喜欢的{SHOWCASE_LABELS[slot.kind]}
+                      {t(`showcase.favorite.${slot.kind}`)}
                     </Label>
                   </h2>
                   <div className="flex shrink-0 items-center gap-1.5 pr-2 sm:pr-3">
@@ -254,8 +264,8 @@ function ShowcaseEditor({
                       {...listeners}
                       ref={setActivatorNodeRef}
                       className="size-11 touch-none select-none cursor-grab active:cursor-grabbing"
-                      title={`拖动排序${SHOWCASE_LABELS[slot.kind]}`}
-                      aria-label={`排序${SHOWCASE_LABELS[slot.kind]}`}
+                      title={t("showcase.drag", { label: t(`showcase.favorite.${slot.kind}`) })}
+                      aria-label={t("showcase.sortItem", { label: t(`showcase.favorite.${slot.kind}`) })}
                       disabled={busy}
                       onContextMenu={(event) => event.preventDefault()}
                     >
@@ -298,7 +308,7 @@ function ShowcaseEditor({
                           </>
                         ) : (
                           <p className="min-w-0 flex-1 text-sm text-muted">
-                            原选项已不可公开访问，请重新选择或移除。
+                            {t("showcase.unavailable")}
                           </p>
                         )}
                         <Button
@@ -307,7 +317,7 @@ function ShowcaseEditor({
                           variant="ghost"
                           className="size-11"
                           disabled={locked}
-                          aria-label={`移除${SHOWCASE_LABELS[slot.kind]}`}
+                          aria-label={t("showcase.remove", { label: t(`showcase.favorite.${slot.kind}`) })}
                           onClick={() =>
                             update(slot.kind, {
                               targetId: null,
@@ -324,13 +334,13 @@ function ShowcaseEditor({
                     {slot.kind === "character" ? (
                       <div className="grid gap-1.5">
                         <Label htmlFor="showcase-character-picker">
-                          选择角色
+                          {t("sea.avatar.character")}
                         </Label>
                         <EmojiSourcePicker
                           id="showcase-character-picker"
                           mode="showcase"
                           disabled={locked}
-                          label={slot.target?.name ?? "选择角色"}
+                          label={slot.target?.name ?? t("sea.avatar.character")}
                           character={
                             slot.target
                               ? {
@@ -368,7 +378,7 @@ function ShowcaseEditor({
                     <div className="mt-4 grid gap-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <Label htmlFor={`showcase-note-${slot.kind}`}>
-                          附言
+                          {t("showcase.note")}
                         </Label>
                         <span className="font-mono text-xs text-muted">
                           {slot.note.length}/{SHOWCASE_NOTE_LIMIT}
@@ -380,7 +390,7 @@ function ShowcaseEditor({
                         maxLength={SHOWCASE_NOTE_LIMIT}
                         rows={3}
                         disabled={locked || slot.targetId === null}
-                        placeholder="写下喜欢的理由……"
+                        placeholder={t("showcase.noteHint")}
                         onChange={(event) =>
                           update(slot.kind, { note: event.target.value })
                         }
@@ -399,7 +409,7 @@ function ShowcaseEditor({
         {error ? <Notice className="mt-4">{error}</Notice> : null}
         <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
           {dirty ? (
-            <span className="mr-auto text-sm text-muted">有未保存的修改</span>
+            <span className="mr-auto text-sm text-muted">{t("showcase.dirty")}</span>
           ) : null}
           {conflict ? (
             <Button
@@ -408,7 +418,7 @@ function ShowcaseEditor({
               disabled={locked}
               onClick={() => void reload()}
             >
-              重新读取
+              {t("admin.resources.reload")}
             </Button>
           ) : null}
           <Button asChild variant="outline" disabled={busy}>
@@ -419,11 +429,11 @@ function ShowcaseEditor({
                 if (busy) event.preventDefault();
               }}
             >
-              取消
+              {t("play.save.cancel")}
             </Link>
           </Button>
           <Rm2kButton type="submit" disabled={locked}>
-            {busy ? "正在处理…" : "保存并查看主页"}
+            {busy ? t("upload.cover.processing") : t("showcase.saveView")}
           </Rm2kButton>
         </div>
       </form>

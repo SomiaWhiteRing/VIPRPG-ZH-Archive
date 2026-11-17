@@ -1,3 +1,4 @@
+import { UiHttpError } from "@/lib/i18n/feedback";
 import { getD1 } from './d1';
 import { auditedEntityBatch } from './entity-audit';
 import { userPermissionSql } from '@/app/.server/auth/permission-sql';
@@ -5,6 +6,7 @@ import type { AppRuntime } from '@/app/.server/runtime';
 import type { ArchiveUser } from '@/lib/dto/db/user-access';
 import type { MaintainerApplication, MaintainerRequestStatus, MaintainerUser } from '@/lib/work-maintainers';
 import { hasPermission } from '@/lib/authz/permissions';
+import { translate } from "@/lib/i18n/core";
 import { HttpError } from '@/lib/http';
 import { normalizeRejectionReason } from '@/lib/inbox';
 
@@ -46,7 +48,7 @@ export async function listPublicWorkMaintainers(runtime: AppRuntime, workId: num
 export async function getMaintainerApplication(runtime: AppRuntime, workId: number, actor: ArchiveUser): Promise<MaintainerApplication> {
   const db = getD1(runtime);
   const work = await db.prepare(`SELECT status FROM public_works WHERE id=?`).bind(workId).first<{ status: string }>();
-  if (!work || work.status !== 'published') throw new HttpError(404, '作品不存在或不可申请。');
+  if (!work || work.status !== 'published') throw new UiHttpError(404, "work.maintainer.error.notPublished");
   const recipients = (await db.prepare(eligibleRecipientsSql).bind(workId).all<MaintainerUser>()).results;
   const request = await db.prepare(`SELECT r.id,r.status,i.id AS inboxItemId,r.resolved_at
     FROM work_maintainer_requests r JOIN inbox_items i ON i.work_maintainer_request_id=r.id
@@ -61,13 +63,13 @@ export async function getMaintainerApplication(runtime: AppRuntime, workId: numb
     EXISTS(SELECT 1 FROM work_uploaders WHERE work_id=? AND user_id=?) AS member`)
     .bind(actor.id, actor.id, workId, actor.id, actor.id, workId, actor.id)
     .first<{ recent: number; pending: number; cooling: number; established: number; member: number }>();
-  const unavailableReason = !hasPermission(actor, 'work.update_own') || actor.status !== 'active' ? '当前账户没有作品维护资格。'
-    : limits?.member || hasPermission(actor, 'work.metadata.update_any') || hasPermission(actor, 'work.distribution.update_any') ? '你已拥有这部作品的编辑权限。'
-    : !recipients.length ? '这部作品暂时没有可以接收申请的维护者。'
-    : request?.status === 'pending' ? '申请正在等待维护者处理。'
-    : !limits?.established ? '邮箱验证完成且注册满一天后，可以申请维护。'
-    : limits.cooling ? '这部作品暂时不能再次申请维护。'
-    : limits.recent >= 3 || limits.pending >= 5 ? '申请过于频繁，请稍后再试。' : null;
+  const unavailableReason = !hasPermission(actor, 'work.update_own') || actor.status !== 'active' ? translate(runtime.uiLocale, 'work.maintainer.ineligible')
+    : limits?.member || hasPermission(actor, 'work.metadata.update_any') || hasPermission(actor, 'work.distribution.update_any') ? translate(runtime.uiLocale, 'work.maintainer.already')
+    : !recipients.length ? translate(runtime.uiLocale, 'work.maintainer.noRecipients')
+    : request?.status === 'pending' ? translate(runtime.uiLocale, 'work.maintainer.alreadyPending')
+    : !limits?.established ? translate(runtime.uiLocale, 'work.maintainer.accountAge')
+    : limits.cooling ? translate(runtime.uiLocale, 'work.maintainer.cooling')
+    : limits.recent >= 3 || limits.pending >= 5 ? translate(runtime.uiLocale, 'work.maintainer.rate') : null;
   return { recipients, request: request ? { id: request.id, status: request.status, inboxItemId: request.inboxItemId } : null,
     canApply: unavailableReason === null, unavailableReason };
 }
@@ -75,10 +77,10 @@ export async function getMaintainerApplication(runtime: AppRuntime, workId: numb
 export async function requestWorkMaintainer(runtime: AppRuntime, actor: ArchiveUser, workId: number, recipientIds: number[]) {
   const state = await getMaintainerApplication(runtime, workId, actor);
   if (state.request?.status === 'pending') return state;
-  if (!state.canApply) throw new HttpError(429, state.unavailableReason ?? '暂时无法申请。');
+  if (!state.canApply) throw new HttpError(429, state.unavailableReason ?? translate(runtime.uiLocale, 'work.maintainer.unavailable'));
   const recipientKey = JSON.stringify([...new Set(recipientIds)].sort((a, b) => a - b));
   if (recipientKey !== JSON.stringify(state.recipients.map((user) => user.id)))
-    throw new HttpError(409, '接收申请的维护者已变化，请重新打开申请窗口。');
+    throw new UiHttpError(409, "work.maintainer.error.recipientsChanged");
   const db = getD1(runtime);
   const key = crypto.randomUUID();
   await db.batch([
@@ -117,7 +119,7 @@ export async function requestWorkMaintainer(runtime: AppRuntime, actor: ArchiveU
   ]);
   const result = await getMaintainerApplication(runtime, workId, actor);
   if (!result.request || (result.request.status !== 'pending' && !await db.prepare('SELECT 1 FROM work_maintainer_requests WHERE submission_key=?').bind(key).first()))
-    throw new HttpError(409, '申请条件已变化，请刷新后重试。');
+    throw new UiHttpError(409, "work.maintainer.error.conditionsChanged");
   return result;
 }
 
@@ -134,7 +136,7 @@ function grantStatement(db: D1Database, workId: number, userId: number, conditio
 }
 
 export async function addWorkMaintainer(runtime: AppRuntime, actor: ArchiveUser, workId: number, userId: number) {
-  if (!await canManageWorkMaintainers(runtime, workId, actor)) throw new HttpError(403, '没有添加此作品维护者的权限。');
+  if (!await canManageWorkMaintainers(runtime, workId, actor)) throw new UiHttpError(403, "work.maintainer.error.addDenied");
   const db = getD1(runtime);
   const key = crypto.randomUUID();
   const result = await auditedEntityBatch(db, [
@@ -150,18 +152,18 @@ export async function addWorkMaintainer(runtime: AppRuntime, actor: ArchiveUser,
     snapshot: maintainerSnapshot(workId), permission: hasPermission(actor, 'work.maintainer.manage_any') ? 'work.maintainer.manage_any' : null,
     source: hasPermission(actor, 'work.maintainer.manage_any') ? 'admin' : 'owned', context: { userId, remove: false } });
   if (!result[0].meta.changes && !await db.prepare('SELECT 1 FROM work_uploaders WHERE work_id=? AND user_id=?').bind(workId, userId).first())
-    throw new HttpError(409, '账户或维护权限已变化，请重新选择。');
+    throw new UiHttpError(409, "work.maintainer.error.selectionChanged");
 }
 
 export async function resolveWorkMaintainerRequest(runtime: AppRuntime, actor: ArchiveUser, itemId: number, decision: 'approve' | 'reject' | 'withdraw', rejectionReason?: unknown) {
   const db = getD1(runtime);
   const request = await db.prepare(`SELECT r.* FROM work_maintainer_requests r JOIN inbox_items i ON i.work_maintainer_request_id=r.id WHERE i.id=?`)
     .bind(itemId).first<{ id: number; work_id: number; applicant_user_id: number; status: MaintainerRequestStatus }>();
-  if (!request) throw new HttpError(404, '申请不存在。');
+  if (!request) throw new UiHttpError(404, "work.maintainer.error.requestMissing");
   if (decision === 'withdraw' ? request.applicant_user_id !== actor.id : request.applicant_user_id === actor.id || !await db
     .prepare(`SELECT 1 WHERE ${workMaintainerRecipientSql('?', '?')}`)
     .bind(actor.id, request.work_id, actor.id).first())
-    throw new HttpError(403, '没有处理此申请的权限。');
+    throw new UiHttpError(403, "work.maintainer.error.reviewDenied");
   const reason = decision === 'reject' ? normalizeRejectionReason(rejectionReason) : null;
   const key = crypto.randomUUID();
   const status = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'withdrawn';
@@ -181,10 +183,11 @@ export async function resolveWorkMaintainerRequest(runtime: AppRuntime, actor: A
     WHERE work_maintainer_request_id=? AND EXISTS(SELECT 1 FROM work_maintainer_requests WHERE id=? AND resolution_key=?)`)
     .bind(reason, request.id, request.id, key));
   if (decision !== 'withdraw') statements.push(db.prepare(`INSERT INTO inbox_items(type,sender_user_id,recipient_user_id,title,body,event_key,metadata_json)
-    SELECT 'system_notice',?,r.applicant_user_id,?, '作品《'||COALESCE(NULLIF(w.chinese_title,''),w.original_title)||'》的维护申请'||?,?,json_object('rejectionReason',?)
+    SELECT 'system_notice',?,r.applicant_user_id,?, '作品《'||COALESCE(NULLIF(w.chinese_title,''),w.original_title)||'》的维护申请'||?,?,
+      json_object('rejectionReason',?,'maintainerOutcome',?,'workTitle',COALESCE(NULLIF(w.chinese_title,''),w.original_title))
     FROM work_maintainer_requests r JOIN works w ON w.id=r.work_id WHERE r.id=? AND r.resolution_key=?`)
     .bind(actor.id, decision === 'approve' ? '维护申请已通过' : '维护申请未通过', decision === 'approve' ? '已通过，可从“我的上传”进入编辑。' : '未通过。',
-      `work-maintainer-result:${request.id}`, reason, request.id, key));
+      `work-maintainer-result:${request.id}`, reason, decision, request.id, key));
   statements.push(db.prepare(`INSERT INTO inbox_item_reads(item_id,user_id,read_at)
     SELECT ?,?,CURRENT_TIMESTAMP WHERE EXISTS(SELECT 1 FROM work_maintainer_requests WHERE id=? AND resolution_key=?)
     ON CONFLICT(item_id,user_id) DO NOTHING`).bind(itemId, actor.id, request.id, key));
@@ -193,14 +196,14 @@ export async function resolveWorkMaintainerRequest(runtime: AppRuntime, actor: A
     permission: decision === 'withdraw' ? 'work.update_own' : hasPermission(actor, 'work.maintainer.manage_any') ? 'work.maintainer.manage_any' : null,
     source: decision === 'withdraw' ? 'public' : hasPermission(actor, 'work.maintainer.manage_any') ? 'admin' : 'owned',
     context: { requestId: request.id, decision, ...(reason ? { rejectionReason: reason } : {}) } });
-  if (!result[0].meta.changes) throw new HttpError(409, '申请已被处理，或账户及维护权限已变化，请刷新后查看。');
+  if (!result[0].meta.changes) throw new UiHttpError(409, "work.maintainer.error.reviewChanged");
 }
 
 export async function searchWorkMaintainerCandidates(runtime: AppRuntime, actor: ArchiveUser, workId: number, query: string) {
-  if (!await canManageWorkMaintainers(runtime, workId, actor)) throw new HttpError(403, '没有管理此作品维护者的权限。');
+  if (!await canManageWorkMaintainers(runtime, workId, actor)) throw new UiHttpError(403, "work.maintainer.error.manageDenied");
   const term = query.trim();
   if (!term) return [];
-  if (term.length > 80) throw new HttpError(400, '搜索内容过长。');
+  if (term.length > 80) throw new UiHttpError(400, "work.maintainer.error.searchTooLong");
   const pattern = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
   return (await getD1(runtime).prepare(`SELECT u.id,u.display_name AS displayName,u.avatar_blob_sha256 AS avatarBlobSha256
     FROM users u WHERE ${userPermissionSql('u.id', 'work.update_own')}
@@ -211,7 +214,7 @@ export async function searchWorkMaintainerCandidates(runtime: AppRuntime, actor:
 }
 
 export async function removeWorkMaintainer(runtime: AppRuntime, actor: ArchiveUser, workId: number, userId: number) {
-  if (!hasPermission(actor, 'work.maintainer.manage_any')) throw new HttpError(403, '没有移除作品维护者的权限。');
+  if (!hasPermission(actor, 'work.maintainer.manage_any')) throw new UiHttpError(403, "work.maintainer.error.removeDenied");
   const db = getD1(runtime);
   await auditedEntityBatch(db, [db.prepare(`DELETE FROM work_uploaders WHERE work_id=? AND user_id=?
     AND ${userPermissionSql('?', 'work.maintainer.manage_any')}`).bind(workId, userId, actor.id)],

@@ -3,6 +3,8 @@ import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { Label } from "@/app/components/ui/label";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
+import { useMessages } from "@/lib/i18n/react";
 import { cn } from "@/lib/ui/cn";
 import { ImagePlus, LoaderCircle, Plus, RotateCcw, Upload, X } from "lucide-react";
 import { Slider } from "radix-ui";
@@ -54,6 +56,7 @@ export function CoverPicker({
   onChange: (file: File | null) => void;
   required?: boolean;
 }) {
+  const t = useMessages();
   const id = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadedSourceRef = useRef<CoverPickerCandidate | null>(null);
@@ -74,7 +77,7 @@ export function CoverPicker({
   const toast = useToast();
 
   const candidates = useMemo(() => {
-    const result: CoverPickerCandidate[] = [];
+    const result: (CoverPickerCandidate & { sourceName?: string })[] = [];
     if (uploadedSource) result.push(uploadedSource);
     if (includeSelectedFileCandidate && file && fileUrl) {
       result.push({
@@ -85,11 +88,18 @@ export function CoverPicker({
         src: fileUrl,
       });
     }
-    if (existingCoverBlobSha256) result.push({ key: "existing-cover", label: "当前封面", src: existingImageBaseUrl + existingCoverBlobSha256 });
+    // Keep generated filenames for existing images independent of the UI language.
+    if (existingCoverBlobSha256) result.push({
+      key: "existing-cover",
+      label: t("upload.cover.current"),
+      sourceName: "当前封面",
+      src: existingImageBaseUrl + existingCoverBlobSha256,
+    });
     for (const [index, sha256] of blobSha256s.entries()) {
       result.push({
         key: "existing-" + sha256,
-        label: "已有预览图 " + (index + 1),
+        label: t("upload.preview.existing", { index: index + 1 }),
+        sourceName: "已有预览图 " + (index + 1),
         src: existingImageBaseUrl + sha256,
       });
     }
@@ -120,6 +130,7 @@ export function CoverPicker({
     includeSelectedFileCandidate,
     suppliedCandidates,
     uploadedSource,
+    t,
   ]);
 
   const activeCandidate =
@@ -194,7 +205,7 @@ export function CoverPicker({
   function uploadSource(selected: File) {
     if (disabled || busy) return;
     if (!selected.type.toLowerCase().startsWith("image/")) {
-      toast.error("请选择图片文件。");
+      toast.error(t("upload.cover.chooseFile"));
       return;
     }
     if (uploadedSourceRef.current) {
@@ -228,7 +239,7 @@ export function CoverPicker({
           ? originalFile
           : await cropCoverToFile(
               activeCandidate.src,
-              activeCandidate.label,
+              activeCandidate.sourceName ?? activeCandidate.label,
               activeCandidate.fileType,
               area,
             );
@@ -237,8 +248,8 @@ export function CoverPicker({
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
-          : "无法处理所选图片，请更换图片后重试。",
+          ? error
+          : t("upload.cover.processFailed"),
       );
     } finally {
       setBusy(false);
@@ -248,7 +259,7 @@ export function CoverPicker({
   return (
     <div className="grid gap-2">
       <div className="text-sm font-bold">
-        封面图{required ? <span className="ml-1 text-accent">*</span> : null}
+        {t("upload.cover.cover")}{required ? <span className="ml-1 text-accent">*</span> : null}
       </div>
 
       <Dialog.Root
@@ -271,7 +282,7 @@ export function CoverPicker({
           >
             {triggerSrc ? (
               <img
-                alt={file?.name ?? "当前封面"}
+                alt={file?.name ?? t("upload.cover.current")}
                 className={"absolute inset-0 h-full w-full " + "object-cover"}
                 sizes="(max-width: 1024px) 100vw, 300px"
                 src={triggerSrc}
@@ -280,7 +291,7 @@ export function CoverPicker({
             ) : (
               <span className="grid justify-items-center gap-1.5 text-xs font-semibold">
                 <ImagePlus className="size-6" />
-                选择封面
+                {t("upload.cover.choose")}
               </span>
             )}
           </Button>
@@ -291,14 +302,14 @@ export function CoverPicker({
           <Dialog.Content className="left-1/2 top-1/2 grid h-[min(92vh,720px)] w-[min(calc(100vw-1rem),960px)] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg">
             <header className="flex min-h-14 items-center justify-between border-b border-border px-4">
               <div>
-                <Dialog.Title>设置封面</Dialog.Title>
+                <Dialog.Title>{t("upload.cover.set")}</Dialog.Title>
                 <Dialog.Description className="sr-only">
-                  从候选封面中选择或上传图片，然后拖动和缩放图片完成裁剪。
+                  {t("upload.cover.instructions")}
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
                 <Button
-                  aria-label="关闭"
+                  aria-label={t("core.action.close")}
                   disabled={busy}
                   size="icon"
                   type="button"
@@ -312,16 +323,16 @@ export function CoverPicker({
             <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] md:grid-cols-[336px_minmax(0,1fr)] md:grid-rows-1">
               <aside className="order-2 flex min-h-0 flex-col border-t border-border bg-background/55 md:order-1 md:border-r md:border-t-0">
                 <div className="flex items-baseline justify-between px-3 py-2.5">
-                  <strong className="text-sm">候选封面</strong>
+                  <strong className="text-sm">{t("upload.cover.candidates")}</strong>
                   <span className="text-xs text-muted">
-                    {candidates.length} 张
+                    {t("upload.cover.count", { count: candidates.length })}
                   </span>
                 </div>
                 {candidates.length ? (
                   <div className="flex gap-2 overflow-x-auto px-3 pb-3 md:grid md:flex-1 md:grid-cols-2 md:content-start md:overflow-x-hidden md:overflow-y-auto md:pt-0">
                     {candidates.map((candidate) => (
                       <Button
-                        aria-label={"选择" + candidate.label}
+                        aria-label={t("upload.cover.selectNamed", { label: candidate.label })}
                         aria-pressed={candidate.key === activeCandidate?.key}
                         className={cn(
                           "relative aspect-4/3 min-h-0 w-20 shrink-0 overflow-hidden rounded-sm border-2 bg-black p-0 shadow-none transition-colors hover:bg-black md:w-full",
@@ -349,7 +360,7 @@ export function CoverPicker({
                   </div>
                 ) : (
                   <EmptyState
-                    title="暂无候选图"
+                    title={t("upload.cover.noCandidates")}
                     variant="plain"
                     className="px-3 pb-3 text-xs"
                   />
@@ -359,9 +370,9 @@ export function CoverPicker({
               <main className="order-1 flex min-h-0 min-w-0 flex-col justify-center gap-3 p-3 md:order-2 md:p-5">
                 <div className="mx-auto flex w-full max-w-[640px] items-center justify-between gap-3 text-xs text-muted">
                   <span className="truncate">
-                    {activeCandidate?.label ?? "尚未选择图片"}
+                    {activeCandidate?.label ?? t("upload.cover.unselected")}
                   </span>
-                  <span className="shrink-0">4:3 · 滚轮缩放</span>
+                  <span className="shrink-0">{t("upload.cover.wheel")}</span>
                 </div>
 
                 <div
@@ -401,10 +412,10 @@ export function CoverPicker({
                         <ImagePlus className="size-8 text-primary" />
                         <div>
                           <strong className="block text-sm">
-                            还没有封面图片
+                            {t("upload.cover.noCover")}
                           </strong>
                           <span className="mt-1 block text-xs text-muted">
-                            上传一张图片开始裁剪
+                            {t("upload.cover.start")}
                           </span>
                         </div>
                       </div>
@@ -431,11 +442,11 @@ export function CoverPicker({
                     variant="outline"
                   >
                     <RotateCcw />
-                    重置
+                    {t("upload.cover.reset")}
                   </Button>
 
                   <Label className="col-span-2 row-start-2 grid min-w-0 grid-cols-[auto_minmax(50px,1fr)_auto] items-center gap-2 text-xs sm:col-span-1 sm:row-start-auto">
-                    <span className="text-muted">缩放</span>
+                    <span className="text-muted">{t("upload.cover.zoom")}</span>
                     <Slider.Root
                       className="relative flex h-5 min-w-0 cursor-pointer touch-none select-none items-center data-[disabled]:cursor-not-allowed"
                       disabled={!activeCandidate || busy}
@@ -449,7 +460,7 @@ export function CoverPicker({
                         <Slider.Range className="absolute h-full rounded-full bg-primary" />
                       </Slider.Track>
                       <Slider.Thumb
-                        aria-label="缩放封面"
+                        aria-label={t("upload.cover.zoomCover")}
                         className="block size-4 cursor-grab rounded-full border border-primary bg-card shadow-sm active:cursor-grabbing data-[disabled]:cursor-not-allowed"
                       />
                     </Slider.Root>
@@ -468,7 +479,7 @@ export function CoverPicker({
                     variant="outline"
                   >
                     <Upload />
-                    上传图片
+                    {t("image.upload")}
                   </Button>
                 </div>
               </main>
@@ -477,7 +488,7 @@ export function CoverPicker({
             <footer className="flex min-h-14 justify-end gap-2 border-t border-border px-4 py-2">
               <Dialog.Close asChild>
                 <Button disabled={busy} type="button" variant="outline">
-                  取消
+                  {t("play.save.cancel")}
                 </Button>
               </Dialog.Close>
               <Button
@@ -487,7 +498,7 @@ export function CoverPicker({
                 type="button"
               >
                 {busy ? <LoaderCircle className="animate-spin" /> : null}
-                {busy ? "处理中…" : "使用此封面"}
+                {busy ? t("upload.cover.processing") : t("upload.cover.use")}
               </Button>
             </footer>
           </Dialog.Content>
@@ -577,10 +588,10 @@ async function loadCoverImage(source: string): Promise<HTMLImageElement> {
   try {
     await image.decode();
   } catch {
-    throw new Error("无法读取所选图片，请更换图片后重试。");
+    throw new UiFeedbackError("upload.cover.unreadable");
   }
   if (!image.naturalWidth || !image.naturalHeight) {
-    throw new Error("所选图片没有可读取的尺寸，请更换图片后重试。");
+    throw new UiFeedbackError("upload.cover.noSize");
   }
   return image;
 }
@@ -596,7 +607,7 @@ async function renderCroppedCover(
   canvas.height = Math.max(1, Math.round(area.height));
   const context = canvas.getContext("2d");
   if (!context) {
-    throw new Error("无法创建封面裁剪画布，请更换浏览器后重试。");
+    throw new UiFeedbackError("upload.cover.canvas");
   }
   context.drawImage(
     image,
@@ -624,7 +635,7 @@ async function renderCroppedCover(
     ),
   );
   if (!blob) {
-    throw new Error("无法导出裁剪后的封面，请更换图片后重试。");
+    throw new UiFeedbackError("upload.cover.exportFailed");
   }
 
   const extension =

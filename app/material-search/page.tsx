@@ -1,3 +1,6 @@
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { flushSync } from "react-dom";
 import type { MetaFunction } from "react-router";
@@ -9,10 +12,13 @@ import type { MaterialSearchResponse, MaterialSearchResult } from "@/lib/dto/db/
 import { MAX_IMAGE_BYTES } from "@/lib/image-format";
 import { sha256Hex } from "@/lib/sha256";
 import { requestJson } from "@/lib/ui/api-response";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import "./page.css";
 
-export const meta: MetaFunction = ({ error }) => pageMetaDescriptors({ title: "大镜" }, error);
+export const meta: MetaFunction = ({ error, location, matches }) => {
+  const locale = pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "material.title") }, error, locale);
+};
 
 type Source = { file: File; url: string; previewable: boolean; sha256: string | null };
 type Rect = Pick<DOMRect, "left" | "top" | "width" | "height">;
@@ -28,6 +34,8 @@ const EASING = "cubic-bezier(.2,.7,.2,1)";
 const ACCEPT = ".png,.bmp,.xyz,.jpg,.jpeg,.gif,.ico,.webp";
 
 export default function MaterialSearchPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [view, setView] = useState<View>(INITIAL_VIEW);
   const visibleWorks = useVisibleWorkItems(view.works);
   const [dragging, setDragging] = useState(false);
@@ -107,11 +115,11 @@ export default function MaterialSearchPage() {
     // Hash the original bytes locally; neither the file nor its name is uploaded.
     source.sha256 ??= await sha256Hex(await source.file.arrayBuffer());
     if (controller.signal.aborted) throw new DOMException("搜索已取消", "AbortError");
-    const params = new URLSearchParams({ sha256: source.sha256 });
+    const params = new URLSearchParams({ sha256: source.sha256, [UI_LOCALE_PARAM]: locale });
     if (before !== undefined) params.set("before", String(before));
     const timeout = window.setTimeout(() => controller.abort(), 30_000);
     try {
-      return await requestJson<MaterialSearchResponse>(`/api/material-search?${params}`, { signal: controller.signal }, "素材搜索失败");
+      return await requestJson<MaterialSearchResponse>(`/api/material-search?${params}`, { signal: controller.signal }, t("material.failed"));
     } finally {
       window.clearTimeout(timeout);
     }
@@ -135,10 +143,10 @@ export default function MaterialSearchPage() {
 
   async function selectFiles(files: File[], origin?: Rect) {
     if (!files.length) return;
-    if (files.length !== 1) { toast.error("一次请选择一张素材图"); return; }
+    if (files.length !== 1) { toast.error(t("material.single")); return; }
     const file = files[0];
-    if (!/\.(png|bmp|xyz|jpe?g|gif|ico|webp)$/i.test(file.name)) { toast.error("请选择支持的图片文件"); return; }
-    if (!file.size || file.size > MAX_IMAGE_BYTES) { toast.error("素材图必须非空且不能超过 20 MiB"); return; }
+    if (!/\.(png|bmp|xyz|jpe?g|gif|ico|webp)$/i.test(file.name)) { toast.error(t("material.format")); return; }
+    if (!file.size || file.size > MAX_IMAGE_BYTES) { toast.error(t("material.size")); return; }
     const { controller, version } = beginRequest();
     const url = URL.createObjectURL(file);
     urls.current.add(url);
@@ -216,37 +224,37 @@ export default function MaterialSearchPage() {
       onDragLeave={(event) => { if (isFileDrag(event)) { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false); } }}
       onDragOver={(event) => { if (isFileDrag(event)) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } }}
       onDrop={drop}>
-      <h1 id="material-search-title" className="sr-only">大镜</h1>
-      <input ref={input} type="file" accept={ACCEPT} aria-label="选择 tkool 素材图" className="sr-only" tabIndex={-1}
+      <h1 id="material-search-title" className="sr-only">{t("material.title")}</h1>
+      <input ref={input} type="file" accept={ACCEPT} aria-label={t("material.pick")} className="sr-only" tabIndex={-1}
         onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void selectFiles(files); }} />
       <div className="material-search-body">
         <div className="material-search-stage">
           {view.source ? <Button ref={sourceButton} type="button" variant="ghost" className="material-search-source"
-            aria-label="选择另一张素材图" title="选择另一张素材图" onClick={() => input.current?.click()}>
+            aria-label={t("material.another")} title={t("material.another")} onClick={() => input.current?.click()}>
             {view.source.previewable ? <img src={view.source.url} alt={view.source.file.name} draggable={false} className="material-search-image" />
-              : <span className="material-search-fallback">无法预览</span>}
+              : <span className="material-search-fallback">{t("material.noPreview")}</span>}
           </Button> : null}
           {view.status === "idle" ? <Button ref={prompt} type="button" variant="ghost" className="material-search-prompt" onClick={() => input.current?.click()}>
-            把tkool素材拖到这里
+            {t("material.drop")}
           </Button> : null}
-          {view.status === "searching" ? <p key="searching" role="status" className="material-search-sentence material-search-loading">正在搜索…</p> : null}
+          {view.status === "searching" ? <p key="searching" role="status" className="material-search-sentence material-search-loading">{t("material.searching")}</p> : null}
         </div>
         {!["idle", "searching"].includes(view.status) ? <div ref={results} key={view.status} className="material-search-results">
           <p role="status" className="material-search-sentence">
-            {view.status === "found" ? "这张素材在这些作品里出现过" : null}
-            {view.status === "empty" ? "没有找到包含这张素材的作品" : null}
-            {view.status === "error" ? <Button type="button" variant="ghost" className="material-search-retry" onClick={retry}>搜索失败，请点击重试</Button> : null}
+            {view.status === "found" ? t("material.found") : null}
+            {view.status === "empty" ? t("material.empty") : null}
+            {view.status === "error" ? <Button type="button" variant="ghost" className="material-search-retry" onClick={retry}>{t("material.retry")}</Button> : null}
           </p>
           {view.status === "found" ? <>
-            <div className="material-search-cards" aria-label="包含这张素材的作品">
+            <div className="material-search-cards" aria-label={t("material.results")}>
               {visibleWorks.map((work) => <div key={work.id} className="material-search-card">
                 <WorkCard href={`/games/${work.id}`} title={work.chineseTitle || work.originalTitle} originalTitle={work.originalTitle}
                   coverBlobSha256={work.coverBlobSha256} titleAs="h2" />
               </div>)}
             </div>
             {view.nextCursor !== null ? <Button type="button" variant="ghost" className="material-search-more" disabled={view.loadingMore}
-              onClick={() => void loadMore()}>{view.loadingMore ? "正在加载…" : view.moreError ? "加载失败，请点击重试" : "加载更多"}</Button> : null}
-            <span className="sr-only" role="status">{view.loadingMore ? "正在加载更多作品" : view.moreError ? "加载失败" : `已找到 ${view.works.length} 个作品`}</span>
+              onClick={() => void loadMore()}>{view.loadingMore ? t("admin.portraits.loading") : view.moreError ? t("material.loadRetry") : t("sea.avatar.more")}</Button> : null}
+            <span className="sr-only" role="status">{view.loadingMore ? t("material.loadingMore") : view.moreError ? t("material.loadFailed") : t("material.count", { count: view.works.length })}</span>
           </> : null}
         </div> : null}
       </div>

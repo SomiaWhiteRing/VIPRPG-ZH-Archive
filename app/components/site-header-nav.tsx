@@ -11,7 +11,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
-import { getPageSearchScope } from "@/lib/search";
+import { getPageSearchScope, searchScopeLabel } from "@/lib/search";
 import { ACCOUNT_SHORTCUTS, type AccountPreferences } from "@/lib/account-preferences";
 import { canAccessOwnWorks } from "@/lib/authz/permissions";
 
@@ -24,7 +24,11 @@ import { ChevronDown, Menu, Search, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router";
+import { useLocation } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
+import type { MessageKey } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 type Session = {
@@ -41,104 +45,105 @@ type Props = {
   loginLink: ReactNode;
 };
 
-const PUBLIC_LINKS: HeaderNavigationLink[] = [
-  { href: "/", label: "首页", exact: true },
-  { href: "/games", label: "作品库" },
-  { href: "/characters", label: "角色" },
-  { href: "/discussions", label: "讨论版" },
-  { href: "/timeline", label: "时间线" },
-  { href: "/rakuen", label: "超展开" },
-  { href: "/catalogs", label: "目录" },
-  { href: "/resources", label: "链接" },
-  { href: "/upload", label: "上传" },
+const PUBLIC_LINKS: (Omit<HeaderNavigationLink, "label"> & { label: MessageKey })[] = [
+  { href: "/", label: "core.nav.home", exact: true },
+  { href: "/games", label: "core.nav.games" },
+  { href: "/characters", label: "core.nav.characters" },
+  { href: "/discussions", label: "core.nav.discussions" },
+  { href: "/timeline", label: "core.nav.timeline" },
+  { href: "/rakuen", label: "core.nav.rakuen" },
+  { href: "/catalogs", label: "core.nav.catalogs" },
+  { href: "/resources", label: "core.nav.resources" },
+  { href: "/upload", label: "core.nav.upload" },
 ];
 
-type AdminNavigationLink = HeaderNavigationLink & {
+type AdminNavigationLink = Omit<HeaderNavigationLink, "label"> & {
+  label: MessageKey;
   permission?: PermissionKey;
   anyPermission?: PermissionKey[];
   bootstrapOnly?: boolean;
 };
 
 const ADMIN_NAVIGATION: Array<
-  AdminNavigationLink | { label: string; links: AdminNavigationLink[] }
+  AdminNavigationLink | { label: MessageKey; links: AdminNavigationLink[] }
 > = [
   {
     href: "/admin",
-    label: "仪表盘",
+    label: "admin.nav.dashboard",
     exact: true,
     permission: "system.dashboard.read",
   },
   {
-    label: "作品资料",
+    label: "admin.nav.workData",
     links: [
-      { href: "/admin/works", label: "作品", permission: "work.read_private" },
-      { href: "/admin/home-recommendations", label: "站长推荐", bootstrapOnly: true },
+      { href: "/admin/works", label: "search.scopes.works", permission: "work.read_private" },
+      { href: "/admin/home-recommendations", label: "home.recommended", bootstrapOnly: true },
       {
         href: "/admin/archive-versions",
-        label: "版本管理",
+        label: "admin.nav.versions",
         permission: "archive_version.read_private",
       },
       {
         href: "/admin/creators",
-        label: "作者",
+        label: "search.scopes.creators",
         permission: "creator.read_private",
       },
       {
         href: "/admin/characters",
-        label: "角色",
+        label: "core.nav.characters",
         anyPermission: [...CHARACTER_ADMIN_PERMISSIONS],
       },
-      { href: "/admin/tags", label: "标签", permission: "tag.read_private" },
-      { href: "/admin/genres", label: "类型", permission: "genre.manage" },
+      { href: "/admin/tags", label: "library.tags", permission: "tag.read_private" },
+      { href: "/admin/genres", label: "work.sidebar.genre", permission: "genre.manage" },
       {
         href: "/admin/archive-versions/trash",
-        label: "回收站",
+        label: "admin.nav.trash",
         permission: "archive_version.restore",
       },
     ],
   },
   {
-    label: "社区管理",
+    label: "admin.nav.community",
     links: [
       {
         href: "/admin/discussions",
-        label: "讨论版",
+        label: "core.nav.discussions",
         anyPermission: ["forum.content.moderate_any", "forum.topic.feature_any", "forum.topic.sage_any"],
       },
       {
         href: "/admin/discussion-tags",
-        label: "讨论 TAG",
+        label: "admin.nav.forumTags",
         permission: "forum.tag.manage",
       },
       {
         href: "/admin/emojis",
-        label: "默认表情",
+        label: "admin.nav.defaultEmojis",
         permission: "emoji.defaults.manage",
       },
     ],
   },
   {
-    label: "用户权限",
+    label: "admin.nav.userPermissions",
     links: [
-      { href: "/admin/users", label: "用户", permission: "user.read" },
-      { href: "/admin/permissions", label: "权限", bootstrapOnly: true },
+      { href: "/admin/users", label: "admin.nav.users", permission: "user.read" },
+      { href: "/admin/permissions", label: "admin.nav.permissions", bootstrapOnly: true },
     ],
   },
   {
-    label: "系统维护",
+    label: "admin.nav.maintenanceGroup",
     links: [
-      { href: "/admin/resources", label: "链接", bootstrapOnly: true },
+      { href: "/admin/resources", label: "core.nav.resources", bootstrapOnly: true },
       {
         href: "/admin/maintenance",
-        label: "维护",
+        label: "admin.nav.maintenance",
         permission: "system.maintenance.run",
       },
-      { href: "/admin/audit", label: "审计", permission: "audit.read" },
+      { href: "/admin/audit", label: "admin.nav.audit", permission: "audit.read" },
     ],
   },
 ];
 
-function getAdminNavigation(session: Session | null): HeaderNavigationEntry[] {
+function getAdminNavigation(session: Session | null, t: ReturnType<typeof useMessages>): HeaderNavigationEntry[] {
   if (!session) return [];
 
   const canAccess = (link: AdminNavigationLink) =>
@@ -152,9 +157,9 @@ function getAdminNavigation(session: Session | null): HeaderNavigationEntry[] {
           hasPermissionKey(session.permissionKeys, link.permission);
 
   return ADMIN_NAVIGATION.flatMap<HeaderNavigationEntry>((entry) => {
-    if (!("links" in entry)) return canAccess(entry) ? [entry] : [];
-    const links = entry.links.filter(canAccess);
-    return links.length ? [{ label: entry.label, links }] : [];
+    if (!("links" in entry)) return canAccess(entry) ? [{ ...entry, label: t(entry.label) }] : [];
+    const links = entry.links.filter(canAccess).map((link) => ({ ...link, label: t(link.label) }));
+    return links.length ? [{ label: t(entry.label), links }] : [];
   });
 }
 
@@ -164,10 +169,13 @@ function getAdminLandingHref(entries: HeaderNavigationEntry[]) {
 }
 
 export function SiteHeaderNav({ session, loginLink }: Props) {
+  const locale = useNavigationLocale();
+  const t = useMessages();
   const { pathname, search } = useLocation();
-  const [searchScope, searchLabel] = getPageSearchScope(pathname, search);
+  const uiLocale = useUiLocale();
+  const [searchScope] = getPageSearchScope(pathname, search);
   const searchPlaceholder =
-    searchScope === "discussions" ? "搜索讨论" : `搜索${searchLabel}`;
+    searchScope === "discussions" ? t("header.searchDiscussions") : t("header.searchScope", { scope: searchScopeLabel(searchScope, uiLocale) });
   const inAdmin = pathname.startsWith("/admin");
   const [openPanel, setOpenPanel] = useState<"menu" | "search" | null>(null);
   const headerRef = useRef<HTMLElement>(null);
@@ -175,10 +183,12 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
   const searchButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuOpen = openPanel === "menu";
   const mobileSearchOpen = openPanel === "search";
-  const visibleAdminEntries = getAdminNavigation(session);
-  const publicLinks = session?.preferences.timelineAsHomepage
-    ? PUBLIC_LINKS.map((link) => link.href === "/timeline" ? { href: "/explore", label: "探索" } : link)
-    : PUBLIC_LINKS;
+  const visibleAdminEntries = getAdminNavigation(session, t);
+  const publicLinks = PUBLIC_LINKS.map((link) =>
+    session?.preferences.timelineAsHomepage && link.href === "/timeline"
+      ? { href: "/explore", label: t("core.nav.explore") }
+      : { ...link, label: t(link.label) },
+  );
 
   useEffect(() => {
     const header = headerRef.current;
@@ -254,7 +264,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
           />
           <span className="sr-only min-[360px]:not-sr-only">
             VIPRPG.org
-            {inAdmin ? <span className="hidden sm:inline"> 控制台</span> : null}
+            {inAdmin ? <span className="hidden sm:inline">{" "}{t("header.console")}</span> : null}
           </span>
         </Link>
 
@@ -265,7 +275,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
           variant="ghost"
           type="button"
           onClick={() => setOpenPanel(mobileMenuOpen ? null : "menu")}
-          aria-label={mobileMenuOpen ? "关闭菜单" : "菜单"}
+          aria-label={mobileMenuOpen ? t("header.closeMenu") : t("header.openMenu")}
           aria-controls={mobileMenuOpen ? "mobile-navigation" : undefined}
           aria-expanded={mobileMenuOpen}
           ref={menuButtonRef}
@@ -274,9 +284,9 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
         </Button>
 
         <HeaderNavigation
-          ariaLabel={inAdmin ? "管理导航" : "站点导航"}
+          ariaLabel={inAdmin ? t("header.adminNav") : t("header.siteNav")}
           entries={inAdmin ? visibleAdminEntries : publicLinks}
-          mobileAriaLabel={inAdmin ? "移动端管理导航" : "移动端导航"}
+          mobileAriaLabel={inAdmin ? t("header.mobileAdminNav") : t("header.mobileNav")}
           mobileOpen={mobileMenuOpen}
           onMobileNavigate={() => setOpenPanel(null)}
           pathname={pathname}
@@ -287,7 +297,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
                 to="/register"
                 onClick={() => setOpenPanel(null)}
               >
-                注册账户
+                {t("auth.register")}
               </Link>
             ) : null
           }
@@ -314,12 +324,13 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
             />
             <Button
               className="grid w-10 shrink-0 place-items-center rounded-none border-l border-border bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              aria-label="搜索"
-              title="搜索"
+              aria-label={t("search.submit")}
+              title={t("search.submit")}
               type="submit"
             >
               <Search size={17} aria-hidden />
             </Button>
+            {locale && <input type="hidden" name={UI_LOCALE_PARAM} value={locale} />}
           </form>
         ) : null}
 
@@ -348,7 +359,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
                 className="hidden min-h-8 items-center rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-muted/15 sm:inline-flex"
                 to="/register"
               >
-                注册
+                {t("auth.signUp")}
               </Link>
               {loginLink}
             </>
@@ -383,11 +394,12 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
               />
               <Button
                 className="grid w-10 shrink-0 place-items-center rounded-none border-l border-border bg-primary text-primary-foreground hover:bg-primary/90"
-                aria-label="搜索"
+                aria-label={t("search.submit")}
                 type="submit"
               >
                 <Search size={17} aria-hidden />
               </Button>
+              {locale && <input type="hidden" name={UI_LOCALE_PARAM} value={locale} />}
             </form>
             <Button
               size="icon"
@@ -397,7 +409,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
                 setOpenPanel(null);
                 searchButtonRef.current?.focus();
               }}
-              aria-label="关闭搜索"
+              aria-label={t("header.closeSearch")}
             >
               <X size={20} />
             </Button>
@@ -415,9 +427,10 @@ function UserMenu({
   inAdmin: boolean;
   session: Session;
 }) {
+  const t = useMessages();
   const environment = useClientEnvironment();
   const { unread, messagesUnread } = useInboxUnread();
-  const consoleHref = getAdminLandingHref(getAdminNavigation(session));
+  const consoleHref = getAdminLandingHref(getAdminNavigation(session, t));
   const logoutFormRef = useRef<HTMLFormElement>(null);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const itemClass =
@@ -428,7 +441,7 @@ function UserMenu({
       <DropdownMenu.Root onOpenChange={(open) => { if (open) notifyInboxChanged(); }}>
         <DropdownMenu.Trigger asChild>
           <Button
-            aria-label={`${session.displayName} 用户菜单${unread + messagesUnread > 0 ? `，${unread + messagesUnread} 条未读` : ""}`}
+            aria-label={t("header.accountMenu", { name: session.displayName, unread: unread + messagesUnread })}
             className="max-w-44 gap-1.5 px-2.5"
             size="sm"
             type="button"
@@ -462,7 +475,7 @@ function UserMenu({
           >
             <DropdownMenu.Item asChild>
               <Link className={itemClass} to="/me">
-                <span>个人中心</span>
+                <span>{t("header.me")}</span>
                 {!session.preferences.shortcuts.includes("/me/messages") ? <UnreadBadge count={messagesUnread} /> : null}
               </Link>
             </DropdownMenu.Item>
@@ -472,7 +485,7 @@ function UserMenu({
               return (
                 <DropdownMenu.Item asChild key={href}>
                   <Link className={itemClass} to={href}>
-                    <span>{item.label}</span>
+                    <span>{t(item.label)}</span>
                     {href === "/me/messages" ? <UnreadBadge count={messagesUnread} /> : null}
                   </Link>
                 </DropdownMenu.Item>
@@ -484,27 +497,27 @@ function UserMenu({
                 className={itemClass}
                 to="/inbox"
                 prefetch="none"
-                aria-label={`提醒，${unread} 条未读`}
+                aria-label={t("header.inboxUnread", { count: unread })}
               >
-                <span>提醒</span>
+                <span>{t("header.inbox")}</span>
                 <UnreadBadge count={unread} />
               </Link>
             </DropdownMenu.Item>
             {environment === "browser" ? (
               <DropdownMenu.Item asChild>
-                <Link className={itemClass} to="/installed" prefetch="none">本地游戏库</Link>
+                <Link className={itemClass} to="/installed" prefetch="none">{t("header.installed")}</Link>
               </DropdownMenu.Item>
             ) : null}
             {inAdmin ? (
               <DropdownMenu.Item asChild>
                 <Link className={itemClass} to="/">
-                  返回站点
+                  {t("header.back")}
                 </Link>
               </DropdownMenu.Item>
             ) : consoleHref ? (
               <DropdownMenu.Item asChild>
                 <Link className={itemClass} to={consoleHref}>
-                  控制台
+                  {t("header.console")}
                 </Link>
               </DropdownMenu.Item>
             ) : null}
@@ -517,13 +530,14 @@ function UserMenu({
                 logoutFormRef.current?.requestSubmit();
               }}
             >
-              登出
+              {t("header.logout")}
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
       <RedirectForm
         action="/api/auth/logout"
+        preserveLanguage
         className="hidden"
         method="post"
         onBusyChange={setLogoutBusy}

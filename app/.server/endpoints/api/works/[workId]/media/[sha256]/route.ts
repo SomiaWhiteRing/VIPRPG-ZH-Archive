@@ -20,7 +20,7 @@ export async function GET(runtime: AppRuntime, request: Request, context: { para
         (SELECT 1 FROM work_uploaders wu WHERE wu.work_id=w.id AND wu.user_id=?)))`)
       .bind(workId, sha256, hasPermission(auth.user, "work.read_private") ? 1 : 0,
         hasPermission(auth.user, "work.update_own") ? 1 : 0, auth.user.id).first();
-    if (!allowed) throw new HttpError(404, "图片不存在或无权访问");
+    if (!allowed) throw new HttpError(404, "图片不存在或无权访问", undefined, "image.unavailable");
     const image = await streamValidatedImage(runtime, sha256);
     return new Response(image.body, { headers: {
       "Content-Type": image.contentType, "Content-Length": String(image.size),

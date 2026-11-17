@@ -9,7 +9,7 @@ import type {
   CatalogSummary,
 } from "@/lib/dto/db/catalogs";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
-import { HttpError } from "@/lib/http";
+import { UiHttpError } from "@/lib/i18n/feedback";
 import type { WorkAudience } from "@/lib/work-visibility";
 
 export async function listCatalogs(
@@ -207,15 +207,15 @@ export async function updateCatalogItem(
     !Number.isSafeInteger(workId) ||
     workId <= 0
   )
-    throw new HttpError(400, "目录条目不合法");
+    throw new UiHttpError(400, "catalog.error.itemInvalid");
   if (
     typeof sortOrder !== "number" ||
     !Number.isSafeInteger(sortOrder) ||
     sortOrder < 0
   )
-    throw new HttpError(400, "目录条目排序值必须是 0 或正整数");
+    throw new UiHttpError(400, "catalog.error.itemOrder");
   if (note !== null && note !== undefined && typeof note !== "string")
-    throw new HttpError(400, "目录条目备注必须是字符串");
+    throw new UiHttpError(400, "catalog.error.itemNote");
   const database = getD1(runtime);
   const results = await database.batch([
     database
@@ -233,7 +233,7 @@ export async function updateCatalogItem(
       .bind(catalogId, catalogId, workId),
   ]);
   if (Number(results[0]?.meta.changes ?? 0) !== 1)
-    throw new HttpError(404, "目录条目不存在");
+    throw new UiHttpError(404, "catalog.error.itemMissing");
   return requiredCatalog(runtime, catalogId);
 }
 
@@ -246,13 +246,13 @@ export async function addCatalogItem(
 ): Promise<CatalogDetail> {
   await ownedCatalog(runtime, catalogId, actor, "catalog.reorder_own");
   if (!Number.isSafeInteger(workId) || workId <= 0)
-    throw new HttpError(400, "目录项目不合法");
+    throw new UiHttpError(400, "catalog.error.workInvalid");
   const access = workReadCondition(actor);
   const work = await getD1(runtime)
     .prepare(`SELECT id FROM works w WHERE w.id=? AND ${access.sql} LIMIT 1`)
     .bind(workId, ...access.binds)
     .first<{ id: number }>();
-  if (!work) throw new HttpError(400, "目录只能收录有权访问的已发布游戏");
+  if (!work) throw new UiHttpError(400, "catalog.error.workUnavailable");
   await getD1(runtime).batch([
     getD1(runtime)
       .prepare(
@@ -275,7 +275,7 @@ export async function removeCatalogItem(
 ): Promise<CatalogDetail> {
   await ownedCatalog(runtime, catalogId, actor, "catalog.reorder_own");
   if (!Number.isSafeInteger(workId) || workId <= 0)
-    throw new HttpError(400, "目录项目不合法");
+    throw new UiHttpError(400, "catalog.error.workInvalid");
   await getD1(runtime).batch([
     getD1(runtime)
       .prepare(`DELETE FROM catalog_items WHERE catalog_id=? AND work_id=?`)
@@ -348,7 +348,7 @@ async function requiredCatalog(
   id: number,
 ): Promise<CatalogDetail> {
   const catalog = await getCatalogById(runtime, id);
-  if (!catalog) throw new HttpError(404, "目录不存在");
+  if (!catalog) throw new UiHttpError(404, "catalog.error.missing");
   return catalog;
 }
 async function ownedCatalog(
@@ -381,13 +381,13 @@ async function ownedCatalog(
       description: string | null;
       cover_blob_sha256: string | null;
     }>();
-  if (!row) throw new HttpError(404, "目录不存在");
+  if (!row) throw new UiHttpError(404, "catalog.error.missing");
   if (actor.permissionKeys.includes("catalog.manage_any")) return row;
   if (
     !actor.permissionKeys.includes(ownPermission) ||
     row.owner_user_id !== actor.id
   )
-    throw new HttpError(403, "无权操作此目录");
+    throw new UiHttpError(403, "catalog.error.forbiddenHere");
   return row;
 }
 function assertPermission(actor: ArchiveUser, key: "catalog.create"): void {
@@ -395,7 +395,7 @@ function assertPermission(actor: ArchiveUser, key: "catalog.create"): void {
     !actor.permissionKeys.includes(key) &&
     !actor.permissionKeys.includes("catalog.manage_any")
   )
-    throw new HttpError(403, "无权操作目录");
+    throw new UiHttpError(403, "catalog.error.forbidden");
 }
 function mapSummary(row: Row): CatalogSummary {
   return {
@@ -413,9 +413,9 @@ function mapSummary(row: Row): CatalogSummary {
 }
 function requiredTitle(value: string): string {
   if (typeof value !== "string")
-    throw new HttpError(400, "目录标题必须是字符串");
+    throw new UiHttpError(400, "catalog.error.titleType");
   const title = value.trim();
-  if (!title) throw new HttpError(400, "目录标题不能为空");
+  if (!title) throw new UiHttpError(400, "catalog.error.titleRequired");
   return title.slice(0, 200);
 }
 async function requiredCatalogCover(
@@ -424,7 +424,7 @@ async function requiredCatalogCover(
 ): Promise<string> {
   const sha256 = value.trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(sha256)) {
-    throw new HttpError(400, "目录封面哈希不合法");
+    throw new UiHttpError(400, "catalog.error.coverHash");
   }
   const blob = await getD1(runtime)
     .prepare(
@@ -435,14 +435,14 @@ async function requiredCatalogCover(
     )
     .bind(sha256)
     .first<{ sha256: string }>();
-  if (!blob) throw new HttpError(400, "目录封面不存在或不是可用图片");
+  if (!blob) throw new UiHttpError(400, "catalog.error.coverUnavailable");
   await readValidatedImage(runtime, blob.sha256);
   return blob.sha256;
 }
 function clean(value: string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   if (typeof value !== "string")
-    throw new HttpError(400, "目录说明必须是字符串");
+    throw new UiHttpError(400, "catalog.error.descriptionType");
   const result = value.trim();
   return result || null;
 }

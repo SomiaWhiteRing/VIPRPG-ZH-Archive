@@ -13,7 +13,7 @@ export async function POST(
   try {
     assertSameOrigin(runtime, request);
     const workId = parsePositiveId((await context.params).workId, "work id");
-    if (!await canReadWork(runtime, workId)) throw new HttpError(404, "作品不存在");
+    if (!await canReadWork(runtime, workId)) throw new HttpError(404, "作品不存在", undefined, "comment.error.workMissing");
     await recordView(
       runtime,
       "work",

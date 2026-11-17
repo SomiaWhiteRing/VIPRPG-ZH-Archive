@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { redirect } from "react-router";
 import { requireAccountUser } from "@/app/.server/auth/account-user";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
@@ -20,7 +21,7 @@ export async function readTimelinePage(runtime: AppRuntime, url: URL) {
   const eventId = query.has("event") ? parsePageId(query.get("event")!) : undefined;
   const replyId = eventId && query.has("reply") ? parsePageId(query.get("reply")!) : null;
   const view = eventId ? "all" : query.get("view") ?? settings?.defaultView ?? "all";
-  if (!isTimelineView(view)) throw new Response("时间线范围无效", { status: 400 });
+  if (!isTimelineView(view)) throw new Response(translate(runtime.uiLocale, "timeline.error.scope"), { status: 400 });
   if (view !== "all" && !viewer) await requireAccountUser(runtime, url.pathname + url.search);
   const kind = eventId ? "status" : TIMELINE_FILTER_KINDS.find((value) => value === query.get("kind"));
   const cursor = eventId || (query.has("kind") && !kind) ? null : query.get("cursor");
@@ -32,10 +33,10 @@ export async function readTimelinePage(runtime: AppRuntime, url: URL) {
     query.delete("cursor");
     throw redirect(url.pathname + (query.size ? `?${query}` : ""));
   }
-  if (eventId && !page.items.length) throw new Response("吐槽不存在或已隐藏", { status: 404 });
+  if (eventId && !page.items.length) throw new Response(translate(runtime.uiLocale, "timeline.error.postMissing"), { status: 404 });
   // Start at the addressed reply, even when it is beyond the first page of replies.
   const initialReplies = eventId && replyId ? await listTimelineReplies(runtime, eventId, replyId > 1 ? String(replyId - 1) : null) : undefined;
-  if (replyId && !initialReplies?.items.some((reply) => reply.id === replyId)) throw new Response("回复不存在或已隐藏", { status: 404 });
+  if (replyId && !initialReplies?.items.some((reply) => reply.id === replyId)) throw new Response(translate(runtime.uiLocale, "timeline.error.replyMissing"), { status: 404 });
   const inboxId = eventId && viewer && query.has("inbox") ? parsePageId(query.get("inbox")!) : null;
   const inboxItem = inboxId && viewer ? await getInboxItemForUser(runtime, inboxId, viewer).catch((error: unknown) => {
     if (error instanceof HttpError && error.status === 404) return null;

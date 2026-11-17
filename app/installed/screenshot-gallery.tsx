@@ -8,6 +8,7 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { ScreenshotThumbnail } from "@/app/play/[workId]/web-play-screenshot-gallery";
 import { useScreenshotActions } from "@/app/play/[workId]/web-play-screenshot-actions";
 import type { ScreenshotPreview } from "@/app/play/[workId]/web-play-screenshots";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { formatDate, formatDateKey, parseTimestamp } from "@/lib/format";
 
 export function ScreenshotGallery({ screenshots, loading, title, initialManaging, onDelete, containerRef, activeId, onView }: {
@@ -15,6 +16,8 @@ export function ScreenshotGallery({ screenshots, loading, title, initialManaging
   onDelete: (ids: string[]) => Promise<void>; containerRef: RefObject<HTMLDivElement | null>;
   activeId: string | null; onView: (id: string | null) => void;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [managing, setManaging] = useState(initialManaging);
   const [selected, setSelected] = useState(new Set<string>());
   const trigger = useRef<HTMLButtonElement | null>(null);
@@ -37,40 +40,40 @@ export function ScreenshotGallery({ screenshots, loading, title, initialManaging
     });
   }
 
-  return <section className="local-library-gallery min-w-0" aria-label="本地截图">
+  return <section className="local-library-gallery min-w-0" aria-label={t("installed.screenshot.local")}>
     <div className="local-library-gallery-toolbar">
       <div className="flex min-w-0 items-center gap-3">
-        <h2 className={`${managing ? "max-[640px]:sr-only " : ""}flex items-baseline gap-2 text-sm font-semibold`}>截图 <span className="font-mono text-xs font-normal text-muted">{loading ? "—" : screenshots.length}</span></h2>
-        {managing ? <Label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs"><Checkbox className="bg-transparent shadow-none" disabled={busy || loading || !screenshots.length} aria-label="全选截图"
-          checked={selectedImages.length && selectedImages.length === screenshots.length ? true : selectedImages.length ? "indeterminate" : false} onCheckedChange={checked => select(screenshots, checked === true)} />全选</Label> : null}
+        <h2 className={`${managing ? "max-[640px]:sr-only " : ""}flex items-baseline gap-2 text-sm font-semibold`}>{t("installed.screenshot.heading")} <span className="font-mono text-xs font-normal text-muted">{loading ? "—" : screenshots.length.toLocaleString(locale)}</span></h2>
+        {managing ? <Label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs"><Checkbox className="bg-transparent shadow-none" disabled={busy || loading || !screenshots.length} aria-label={t("installed.screenshot.selectAllNamed")}
+          checked={selectedImages.length && selectedImages.length === screenshots.length ? true : selectedImages.length ? "indeterminate" : false} onCheckedChange={checked => select(screenshots, checked === true)} />{t("installed.screenshot.selectAll")}</Label> : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         {managing ? <>
-          <span className="text-xs tabular-nums text-muted" role="status" aria-label={`已选 ${selectedImages.length} 张`}><span className="hidden sm:inline">已选 </span>{selectedImages.length}<span className="hidden sm:inline"> 张</span></span>
-          <Button type="button" variant="ghost" size="icon" className="size-8" disabled={busy || !selectedImages.length} aria-label="批量下载截图" onClick={() => void downloadScreenshots(selectedImages)}>{downloading ? <LoaderCircle aria-hidden className="animate-spin" /> : <Download aria-hidden />}</Button>
-          <Button type="button" variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" disabled={busy || !selectedImages.length} aria-label="批量删除截图" onClick={async () => { if (await deleteScreenshots(selectedImages, `确认删除所选 ${selectedImages.length} 张截图？删除后无法恢复。`)) setSelected(new Set()); }}>{deleting ? <LoaderCircle aria-hidden className="animate-spin" /> : <Trash2 aria-hidden />}</Button>
+          <span className="text-xs tabular-nums text-muted" role="status" aria-label={t("play.screenshot.selected", { count: selectedImages.length })}><span aria-hidden className="sm:hidden">{selectedImages.length.toLocaleString(locale)}</span><span aria-hidden className="hidden sm:inline">{t("play.screenshot.selected", { count: selectedImages.length })}</span></span>
+          <Button type="button" variant="ghost" size="icon" className="size-8" disabled={busy || !selectedImages.length} aria-label={t("play.screenshot.batchDownload")} onClick={() => void downloadScreenshots(selectedImages)}>{downloading ? <LoaderCircle aria-hidden className="animate-spin" /> : <Download aria-hidden />}</Button>
+          <Button type="button" variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive" disabled={busy || !selectedImages.length} aria-label={t("play.screenshot.batchDelete")} onClick={async () => { if (await deleteScreenshots(selectedImages, t("play.screenshot.confirmBatch", { scope: "selected", count: selectedImages.length }))) setSelected(new Set()); }}>{deleting ? <LoaderCircle aria-hidden className="animate-spin" /> : <Trash2 aria-hidden />}</Button>
         </> : null}
-        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { setManaging(value => !value); setSelected(new Set()); }}>{managing ? "完成" : "管理截图"}</Button>
+        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { setManaging(value => !value); setSelected(new Set()); }}>{managing ? t("installed.screenshot.done") : t("installed.screenshot.manage")}</Button>
       </div>
     </div>
-    {loading ? <p role="status" className="py-12 text-center text-sm text-muted">读取本地截图…</p>
+    {loading ? <p role="status" className="py-12 text-center text-sm text-muted">{t("installed.screenshot.loading")}</p>
       : screenshots.length ? <div className="space-y-6">{[...groups].map(([date, shots]) => {
-        const label = formatDate(shots[0].createdAt, { time: false });
+        const label = formatDate(shots[0].createdAt, { time: false, locale });
         const count = shots.filter(shot => selected.has(shot.id)).length;
         return <section key={date} aria-label={label}>
           <div className="local-library-date mb-2 flex h-6 items-center gap-2">
-            {managing ? <Checkbox className="bg-transparent shadow-none" disabled={busy} aria-label={`全选 ${label} 的截图`} checked={count === shots.length ? true : count ? "indeterminate" : false} onCheckedChange={checked => select(shots, checked === true)} /> : null}
+            {managing ? <Checkbox className="bg-transparent shadow-none" disabled={busy} aria-label={t("installed.screenshot.selectDate", { date: label })} checked={count === shots.length ? true : count ? "indeterminate" : false} onCheckedChange={checked => select(shots, checked === true)} /> : null}
             <h3 className="text-xs font-medium text-muted">{label}</h3>
           </div>
           <ul className="local-library-grid grid grid-cols-3 gap-2.5 min-[641px]:grid-cols-4">{shots.map(shot => {
-            const label = `${title} · 第 ${screenshots.indexOf(shot) + 1} 张`;
+            const label = t("installed.screenshot.numberedNamed", { title, index: screenshots.indexOf(shot) + 1 });
             return <li key={shot.id} className="relative min-w-0" data-selected={managing && selected.has(shot.id)}>
               <ScreenshotThumbnail screenshot={shot} label={label} className="local-library-tile rounded-none" onClick={event => { trigger.current = event.currentTarget; onView(shot.id); }} />
-              {managing ? <Label className="absolute left-1 top-1 flex size-7 cursor-pointer items-center justify-center"><Checkbox className="bg-transparent shadow-none" disabled={busy} aria-label={`选择截图：${label}`} checked={selected.has(shot.id)} onCheckedChange={checked => select([shot], checked === true)} /></Label> : null}
+              {managing ? <Label className="absolute left-1 top-1 flex size-7 cursor-pointer items-center justify-center"><Checkbox className="bg-transparent shadow-none" disabled={busy} aria-label={t("play.screenshot.selectNamed", { label })} checked={selected.has(shot.id)} onCheckedChange={checked => select([shot], checked === true)} /></Label> : null}
             </li>;
           })}</ul>
         </section>;
-      })}</div> : <EmptyState title="没有本地截图。" className="py-16 text-center" />}
+      })}</div> : <EmptyState title={t("installed.screenshot.empty")} className="py-16 text-center" />}
     {activeIndex >= 0 && containerRef.current ? <ScreenshotViewer screenshots={screenshots} title={title} index={activeIndex} container={containerRef.current} trigger={trigger.current}
       onChange={index => onView(screenshots[index].id)} onClose={() => onView(null)} /> : null}
   </section>;
@@ -80,6 +83,8 @@ function ScreenshotViewer({ screenshots, title, index, container, trigger, onCha
   screenshots: ScreenshotPreview[]; title: string; index: number; container: HTMLElement;
   trigger: HTMLButtonElement | null; onChange: (index: number) => void; onClose: () => void;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const activeThumbnail = useRef<HTMLLIElement | null>(null);
   const backButton = useRef<HTMLButtonElement | null>(null);
   useEffect(() => { activeThumbnail.current?.scrollIntoView({ block: "nearest", inline: "center" }); }, [index]);
@@ -89,7 +94,7 @@ function ScreenshotViewer({ screenshots, title, index, container, trigger, onCha
   }, [trigger]);
   const shot = screenshots[index];
   return createPortal(
-      <section aria-label="截图查看器" className="local-library-viewer absolute inset-0 z-10 grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
+      <section aria-label={t("installed.screenshot.viewer")} className="local-library-viewer absolute inset-0 z-10 grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
         onKeyDown={event => {
           if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
             event.preventDefault();
@@ -97,17 +102,17 @@ function ScreenshotViewer({ screenshots, title, index, container, trigger, onCha
           }
         }}>
         <header className="local-library-viewer-toolbar flex min-w-0 items-center justify-between gap-3 px-3 py-3 sm:px-5">
-          <Button ref={backButton} type="button" size="sm" variant="ghost" className="local-library-viewer-back focus-visible:ring-primary focus-visible:ring-offset-0" onClick={onClose}>←返回列表</Button>
-          <span className="shrink-0 font-mono text-xs tabular-nums" role="status">{index + 1} / {screenshots.length}</span>
+          <Button ref={backButton} type="button" size="sm" variant="ghost" className="local-library-viewer-back focus-visible:ring-primary focus-visible:ring-offset-0" onClick={onClose}>{t("installed.screenshot.back")}</Button>
+          <span className="shrink-0 font-mono text-xs tabular-nums" role="status">{(index + 1).toLocaleString(locale)} / {screenshots.length.toLocaleString(locale)}</span>
         </header>
         <div className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 py-1 sm:px-5">
-          <Button type="button" size="icon" variant="ghost" className="local-library-viewer-arrow focus-visible:ring-primary focus-visible:ring-offset-0" disabled={index === 0} onClick={() => onChange(index - 1)} aria-label="上一张截图"><ChevronLeft aria-hidden /></Button>
-          <div className="flex h-full min-h-0 min-w-0 items-center justify-center"><img key={shot.id} src={shot.url} alt={`${title} · 第 ${index + 1} 张`} width={shot.width} height={shot.height} className="local-library-viewer-image h-auto w-auto max-h-full max-w-full object-contain [image-rendering:pixelated]" /></div>
-          <Button type="button" size="icon" variant="ghost" className="local-library-viewer-arrow focus-visible:ring-primary focus-visible:ring-offset-0" disabled={index === screenshots.length - 1} onClick={() => onChange(index + 1)} aria-label="下一张截图"><ChevronRight aria-hidden /></Button>
+          <Button type="button" size="icon" variant="ghost" className="local-library-viewer-arrow focus-visible:ring-primary focus-visible:ring-offset-0" disabled={index === 0} onClick={() => onChange(index - 1)} aria-label={t("installed.screenshot.previous")}><ChevronLeft aria-hidden /></Button>
+          <div className="flex h-full min-h-0 min-w-0 items-center justify-center"><img key={shot.id} src={shot.url} alt={t("installed.screenshot.numberedNamed", { title, index: index + 1 })} width={shot.width} height={shot.height} className="local-library-viewer-image h-auto w-auto max-h-full max-w-full object-contain [image-rendering:pixelated]" /></div>
+          <Button type="button" size="icon" variant="ghost" className="local-library-viewer-arrow focus-visible:ring-primary focus-visible:ring-offset-0" disabled={index === screenshots.length - 1} onClick={() => onChange(index + 1)} aria-label={t("installed.screenshot.next")}><ChevronRight aria-hidden /></Button>
         </div>
-        <nav className="local-library-filmstrip min-w-0 px-1 pb-3 pt-3 sm:px-3" aria-label="截图缩略图">
+        <nav className="local-library-filmstrip min-w-0 px-1 pb-3 pt-3 sm:px-3" aria-label={t("installed.screenshot.thumbnails")}>
           <ul className="flex gap-3 overflow-x-auto overscroll-x-contain scroll-smooth px-4 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden motion-reduce:scroll-auto">{screenshots.map((thumbnail, position) => <li key={thumbnail.id} ref={position === index ? activeThumbnail : undefined} className="w-20 shrink-0 sm:w-24">
-            <ScreenshotThumbnail screenshot={thumbnail} label={`第 ${position + 1} 张`} selected={position === index} onClick={() => onChange(position)} className="rounded-none" />
+            <ScreenshotThumbnail screenshot={thumbnail} label={t("installed.screenshot.numbered", { index: position + 1 })} selected={position === index} onClick={() => onChange(position)} className="rounded-none" />
           </li>)}</ul>
         </nav>
       </section>, container);

@@ -1,5 +1,6 @@
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { Button } from "@/app/components/ui/button";
+import { useMessages } from "@/lib/i18n/react";
 import { useId, useMemo, useState } from "react";
 
 type MergeCandidate = {
@@ -22,6 +23,7 @@ export function CharacterMergeTargetField({
   descriptionId?: string;
   name: string;
 }) {
+  const t = useMessages();
   const generatedId = useId();
   const id = providedId ?? generatedId;
   const [query, setQuery] = useState("");
@@ -46,10 +48,10 @@ export function CharacterMergeTargetField({
       <input name={name} readOnly type="hidden" value={selected?.id ?? ""} />
       <SearchComboBox
         id={id}
-        label="目标角色"
+        label={t("admin.characterDetail.target")}
         query={query}
         onQueryChange={changeQuery}
-        placeholder="输入角色原名、译名或 #ID"
+        placeholder={t("admin.characterDetail.searchTarget")}
         descriptionId={descriptionId}
         items={matches.items}
         getKey={(item) => item.id}
@@ -59,7 +61,7 @@ export function CharacterMergeTargetField({
         emptyState={
           query.trim() ? (
             <p className="p-2 text-sm text-muted" role="status">
-              没有匹配角色
+              {t("admin.characterDetail.noMatch")}
             </p>
           ) : undefined
         }
@@ -69,7 +71,7 @@ export function CharacterMergeTargetField({
               className="border-t border-border p-2 text-xs text-muted"
               role="status"
             >
-              匹配 {matches.total} 个，显示前 {RESULT_LIMIT} 个
+              {t("admin.characterDetail.matching", { count: matches.total, limit: RESULT_LIMIT })}
             </p>
           ) : null
         }
@@ -79,7 +81,7 @@ export function CharacterMergeTargetField({
               {candidate.originalName} · {candidate.primaryName}
             </span>
             <span className="shrink-0 text-xs text-muted">
-              #{candidate.id} · {candidate.workCount} 部作品
+              #{candidate.id} · {t("upload.staff.works", { count: candidate.workCount })}
             </span>
           </>
         )}
@@ -87,24 +89,24 @@ export function CharacterMergeTargetField({
       {selected ? (
         <div className="flex min-h-10 items-center justify-between gap-3 border-y border-border py-2">
           <span className="min-w-0 truncate text-sm font-normal">
-            已选择：{selected.originalName} · {selected.primaryName}
+            {t("admin.characterDetail.selected", { name: `${selected.originalName} · ${selected.primaryName}` })}
             <span className="ml-2 text-xs text-muted">
-              #{selected.id} · {selected.workCount} 部作品
+              #{selected.id} · {t("upload.staff.works", { count: selected.workCount })}
             </span>
           </span>
           <Button
-            aria-label={`清除目标角色 ${selected.originalName} · ${selected.primaryName}`}
+            aria-label={t("admin.characterDetail.clearSelected", { name: `${selected.originalName} · ${selected.primaryName}` })}
             onClick={() => setSelected(null)}
             size="sm"
             type="button"
             variant="ghost"
           >
-            清除
+            {t("admin.list.clear")}
           </Button>
         </div>
       ) : (
         <span className="text-xs font-normal text-muted" role="status">
-          当前不合并
+          {t("admin.characterDetail.noMerge")}
         </span>
       )}
     </div>

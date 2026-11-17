@@ -48,6 +48,7 @@ import { useMissingResourcesPreference, useSharedPlayerPreference } from "@/app/
 import type {
   BrowserUploadTaskSnapshot,
   MetadataBlobUpload,
+  SourceFaceSheetWarning,
   UploadAssociationDefaults as AssociationDefaults,
   UploadFormMetadata as FlatMetadata,
   UploadImageSelections as ImageSelections,
@@ -74,7 +75,11 @@ import { type WorkMoreInfo, moreInfoItemError, normalizeWorkMoreInfo } from "@/l
 import { Check, Link as LinkIcon } from "lucide-react";
 import { type DragEvent, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { formatFeedbackError, UiFeedbackError } from "@/lib/i18n/feedback";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
 
 type EngineFamily = ArchiveCommitMetadata["game"]["engineFamily"];
 type CharacterCredit = NonNullable<ArchiveCommitMetadata["characters"]>[number];
@@ -157,7 +162,18 @@ export function UploadClient({
   };
   suggestions: UploadSuggestions;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const navigationLocale = useNavigationLocale();
   const navigate = useNavigate();
+
+  function navigateWithLocale(path: string) {
+    const target = new URL(path, window.location.href);
+    if (navigationLocale && target.origin === window.location.origin && !target.searchParams.has(UI_LOCALE_PARAM)) {
+      target.searchParams.set(UI_LOCALE_PARAM, navigationLocale);
+    }
+    return navigate(target.origin === window.location.origin ? target.pathname + target.search + target.hash : path);
+  }
   const upload = useUploadController(currentUser.id);
   const editSuggestions = useMemo(() => {
     if (!initialWork) return suggestions;
@@ -218,7 +234,7 @@ export function UploadClient({
   const [characterFaceSheetFiles, setCharacterFaceSheetFiles] =
     useState<CharacterFaceSheetFiles>({});
   const [sourceFaceSheetFiles, setSourceFaceSheetFiles] = useState<File[]>([]);
-  const [sourceFaceSheetWarnings, setSourceFaceSheetWarnings] = useState<string[]>([]);
+  const [sourceFaceSheetWarnings, setSourceFaceSheetWarnings] = useState<SourceFaceSheetWarning[]>([]);
   const [sourceCoverCandidates, setSourceCoverCandidates] = useState<File[]>(
     [],
   );
@@ -274,7 +290,9 @@ export function UploadClient({
       imageSelections,
       characterFaceSheetFiles,
       sourceFaceSheetFiles,
-      sourceFaceSheetWarnings,
+      sourceFaceSheetWarnings: sourceFaceSheetWarnings.map((warning) =>
+        typeof warning === "string" ? warning : `${warning.name}：${warning.detail}`),
+      sourceFaceSheetWarningDetails: sourceFaceSheetWarnings,
       adminSettings,
       coverBlobSha256,
     });
@@ -456,12 +474,12 @@ export function UploadClient({
           (item) => item.relativePath.toLowerCase() === "rpg_rt.lmt",
         )
       ) {
-        throw new Error("所选文件夹根目录缺少 RPG_RT.lmt，请选择游戏根目录。");
+        throw new UiFeedbackError("upload.feedback.rootLmt");
       }
       startSource("folder", source.sourceName, source.files);
     } catch (error) {
       setSubmitError(
-        error instanceof Error ? error.message : "无法读取所选文件夹。",
+        formatFeedbackError(error, locale, t("upload.feedback.readFolder")),
       );
     }
   }
@@ -503,7 +521,7 @@ export function UploadClient({
     setSubmitError(null);
     const extension = file.name.match(/\.(zip|7z)$/i)?.[1].toLowerCase();
     if (extension !== "zip" && extension !== "7z") {
-      setSubmitError("请选择 ZIP 或 7z 压缩包；分卷压缩包请先解压后选择游戏文件夹。");
+      setSubmitError(t("upload.feedback.archiveFormat"));
       return;
     }
     startSource(extension, file.name, [{ file, relativePath: file.name }]);
@@ -536,7 +554,7 @@ export function UploadClient({
       }
     } catch (error) {
       setSubmitError(
-        error instanceof Error ? error.message : "无法读取拖入的游戏文件。",
+        formatFeedbackError(error, locale, t("upload.feedback.readDrop")),
       );
     } finally {
       setPreparing(false);
@@ -586,19 +604,19 @@ export function UploadClient({
       return;
     }
     if (form.isOriginal && form.isTranslation) {
-      setSubmitError("原创声明与翻译声明不能同时选择。");
+      setSubmitError(t("upload.feedback.declarations"));
       return;
     }
     if (
       form.isTranslation &&
       form.translators.some((item) => item !== null && !item.displayName.trim())
     ) {
-      setTranslatorError("请填写译者。");
+      setTranslatorError(t("upload.feedback.translator"));
       document.getElementById("upload-translator")?.focus();
       return;
     }
     if (!form.originalTitle.trim()) {
-      setSubmitError("请填写作品原名。");
+      setSubmitError(t("upload.feedback.originalTitle"));
       return;
     }
     const releaseDate = parseOriginalReleaseDate(form.originalReleaseDate);
@@ -609,11 +627,11 @@ export function UploadClient({
     }
     if (!archiveMode) {
       if (!initialWork && !imageSelections.cover) {
-        setSubmitError("新建外链作品必须选择封面图。");
+        setSubmitError(t("upload.feedback.externalCover"));
         return;
       }
       if (!canSaveWithoutSource && !form.externalDownloadUrl.trim()) {
-        setSubmitError("请填写外部下载地址。");
+        setSubmitError(t("upload.feedback.externalUrl"));
         return;
       }
       setPreparing(true);
@@ -633,8 +651,8 @@ export function UploadClient({
               adminSubmission,
             ),
           );
-          toast.success("作品资料已保存。");
-          navigate(saveRedirectTo);
+          toast.success(t("upload.feedback.saved"));
+          navigateWithLocale(saveRedirectTo);
         } else {
           const result = await submitExternalWork(
             form,
@@ -642,12 +660,12 @@ export function UploadClient({
             faceSheets,
           );
           rememberPublishedTranslators(currentUser.id, result.translators);
-          toast.success("作品已发布。");
-          navigate(`/games/${result.workId}`);
+          toast.success(t("upload.feedback.published"));
+          navigateWithLocale(`/games/${result.workId}`);
         }
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : "作品资料保存失败。",
+          formatFeedbackError(error, locale, t(initialWork ? "upload.feedback.saveFailed" : "upload.feedback.publishExternalFailed")),
         );
       } finally {
         setPreparing(false);
@@ -656,11 +674,11 @@ export function UploadClient({
     }
     const hasArchiveSource = Boolean(existingArchive || upload.active);
     if (!hasArchiveSource && !canSaveWithoutSource) {
-      setSubmitError("请先选择游戏文件。");
+      setSubmitError(t("upload.feedback.filesRequired"));
       return;
     }
     if (!initialWork && !imageSelections.cover) {
-      setSubmitError("新建游戏必须选择封面图。");
+      setSubmitError(t("upload.feedback.newCover"));
       return;
     }
     setPreparing(true);
@@ -680,8 +698,8 @@ export function UploadClient({
             adminSubmission,
           ),
         );
-        toast.success("作品资料已保存。");
-        await navigate(saveRedirectTo);
+        toast.success(t("upload.feedback.saved"));
+        await navigateWithLocale(saveRedirectTo);
         return;
       }
       const images = await prepareSelectedImages(
@@ -701,7 +719,7 @@ export function UploadClient({
       );
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "作品资料确认失败。",
+        formatFeedbackError(error, locale, t("upload.feedback.confirmFailed")),
       );
     } finally {
       setPreparing(false);
@@ -714,7 +732,7 @@ export function UploadClient({
     automaticCoverRef.current = null;
     setSourceCoverCandidates([]);
     setSourceFaceSheetFiles(draft.formDraft?.sourceFaceSheetFiles ?? []);
-    setSourceFaceSheetWarnings(draft.formDraft?.sourceFaceSheetWarnings ?? []);
+    setSourceFaceSheetWarnings(draft.formDraft?.sourceFaceSheetWarningDetails ?? draft.formDraft?.sourceFaceSheetWarnings ?? []);
     if (draft.formDraft) {
       const { status: legacyStatus, ...restoredForm } = draft.formDraft.form;
       setForm({ ...restoredForm, genre: restoredForm.genre ?? "",
@@ -794,7 +812,7 @@ export function UploadClient({
     upload.resetTask();
     if (upload.task?.result && sourceSummary) {
       setExistingArchive({ ...sourceSummary, id: upload.task.result.archiveVersionId, usesSharedPlayer: useSharedPlayer });
-      if (adminOptions) navigate(saveRedirectTo);
+      if (adminOptions) navigateWithLocale(saveRedirectTo);
     }
     setSourceSummary(null);
     setSubmitError(null);
@@ -812,7 +830,7 @@ export function UploadClient({
       {relevantDrafts.length ? (
         <section className="overflow-hidden rounded-lg border border-border bg-card">
           <header className="border-b border-border px-4 py-3">
-            <h2 className="m-0 text-base font-bold">可继续的上传</h2>
+            <h2 className="m-0 text-base font-bold">{t("upload.resumable")}</h2>
           </header>
           <ul className="divide-y divide-border px-4">
             {relevantDrafts.map((draft) => {
@@ -830,8 +848,8 @@ export function UploadClient({
                     </strong>
                     <p className="mt-1 text-sm text-muted">
                       {committing
-                        ? "正在提交，暂时不能继续编辑"
-                        : `游戏文件已就绪 · ${formatDate(draft.updatedAt)}`}
+                        ? t("upload.submittingLocked")
+                        : t("upload.sourceReadyDate", { date: formatDate(draft.updatedAt, { locale }) })}
                     </p>
                   </div>
                   {!committing ? (
@@ -842,7 +860,7 @@ export function UploadClient({
                         size="sm"
                         type="button"
                       >
-                        继续填写
+                        {t("upload.resume")}
                       </Button>
                       <Button
                         onClick={() => void upload.discardDraft(draft)}
@@ -850,7 +868,7 @@ export function UploadClient({
                         type="button"
                         variant="outline"
                       >
-                        放弃
+                        {t("upload.discard")}
                       </Button>
                     </div>
                   ) : null}
@@ -870,23 +888,23 @@ export function UploadClient({
       <form onSubmit={onSubmit}>
         <section className="overflow-visible rounded-lg border border-border bg-card shadow-sm">
           <div className="grid gap-3 border-b border-border px-4 py-3 sm:grid-cols-[84px_minmax(0,1fr)] sm:items-start sm:gap-x-3">
-            <span className="text-sm font-bold sm:pt-2">游戏引擎</span>
+            <span className="text-sm font-bold sm:pt-2">{t("upload.engine")}</span>
             <EnginePicker
               disabled={formDisabled || !canEditMetadata}
               disabledReason={(option) => {
                 const targetArchive = archiveMode && isArchiveEngineFamily(option.value);
                 if (targetArchive !== archiveMode && !canEditDistribution) {
-                  return "切换下载方式需要归档内容/外链编辑权限";
+                  return t("upload.editSourcePermission");
                 }
                 if (targetArchive && !canArchiveUpload && !initialWork) {
-                  return "当前账户没有本站归档上传权限";
+                  return t("upload.archivePermission");
                 }
                 if (!targetArchive && !canExternalPublish) {
-                  return "当前账户没有外链作品发布权限";
+                  return t("upload.externalPermission");
                 }
                 if (targetArchive === archiveMode) return null;
                 if (hasGameFiles)
-                  return "已有游戏文件，不能切换到外链类型";
+                  return t("upload.existingFiles");
                 return null;
               }}
               onValueChange={(engineFamily) => {
@@ -968,7 +986,7 @@ export function UploadClient({
                         <Check className="size-5" />
                       </span>
                       <h2 aria-live="polite" className="m-0 text-lg font-bold">
-                        {uploadResult ? "上传完成" : "作品资料已确认"}
+                        {uploadResult ? t("upload.complete") : t("upload.confirmed")}
                       </h2>
                       <p className="mt-1 text-sm text-muted">
                         {form.chineseTitle.trim() || form.originalTitle.trim()}
@@ -976,7 +994,7 @@ export function UploadClient({
                       {uploadResult ? (
                         <Button asChild className="mt-4" variant="rm2k">
                           <Link to={`/games/${uploadResult.workId}`}>
-                            查看作品
+                            {t("upload.view")}
                           </Link>
                         </Button>
                       ) : null}
@@ -986,7 +1004,7 @@ export function UploadClient({
                   <WorkMetadataFields
                     showUploadTagGuidance={!adminOptions}
                     originalTitleReadOnly={Boolean(adminOptions)}
-                    originalDeclarationLabel={adminOptions ? "本站原创" : undefined}
+                    originalDeclarationLabel={adminOptions ? t("upload.original") : undefined}
                     characterFaceSheetFiles={characterFaceSheetFiles}
                     sourceFaceSheetFiles={sourceFaceSheetFiles}
                     sourceFaceSheetWarnings={sourceFaceSheetWarnings}
@@ -1057,7 +1075,7 @@ export function UploadClient({
                 >
                   <div className="grid gap-2">
                     <span className="text-sm font-bold">
-                      游戏语言 <span className="text-accent">*</span>
+                      {t("upload.language")} <span className="text-accent">*</span>
                     </span>
                     <LanguageField
                       disabled={!canEditMetadata}
@@ -1084,7 +1102,7 @@ export function UploadClient({
                   ) : null}
                   {upload.task?.commitStarted && !upload.task.result ? (
                     <p className="border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-200">
-                      正在提交，资料已锁定，当前不能取消或离开页面。
+                      {t("upload.locked")}
                     </p>
                   ) : null}
                   {uploadResult ? (
@@ -1094,7 +1112,7 @@ export function UploadClient({
                       type="button"
                       variant="rm2k"
                     >
-                      上传完成
+                      {t("upload.complete")}
                     </Button>
                   ) : archiveMode && upload.metadataConfirmed ? (
                     <Button
@@ -1104,7 +1122,7 @@ export function UploadClient({
                       type="button"
                       variant="rm2k"
                     >
-                      {upload.task?.commitStarted ? "正在提交…" : "修改资料"}
+                      {upload.task?.commitStarted ? t("forum.action.submitting") : t("upload.edit")}
                     </Button>
                   ) : (
                     <Button
@@ -1117,13 +1135,13 @@ export function UploadClient({
                     >
                       {preparing
                         ? archiveMode
-                          ? "正在确认…"
-                          : "正在发布…"
+                          ? t("upload.confirming")
+                          : t("upload.publishing")
                         : initialWork
-                          ? adminOptions ? "保存游戏资料" : "保存作品资料"
+                          ? adminOptions ? t("upload.saveGame") : t("upload.saveWork")
                           : archiveMode
-                            ? "确认作品资料"
-                            : "发布外链作品"}
+                            ? t("upload.confirm")
+                            : t("upload.publishExternal")}
                     </Button>
                   )}
                 </div>
@@ -1133,7 +1151,7 @@ export function UploadClient({
         </section>
         {adminOptions && adminSettings ? (
           <fieldset className="mt-4 grid gap-4" disabled={formDisabled}>
-            <Pane heading="管理设置">
+            <Pane heading={t("upload.admin")}>
               <div className="grid gap-4">
                 <fieldset disabled={!canEditDistribution}>
                   <ExternalLinkList values={adminSettings.externalLinks} onChange={(externalLinks) =>
@@ -1141,10 +1159,10 @@ export function UploadClient({
                 </fieldset>
                 {adminOptions.netplaySpace}
                 <details>
-                  <summary className="cursor-pointer text-sm font-bold">已上传封面引用</summary>
+                  <summary className="cursor-pointer text-sm font-bold">{t("upload.coverReference")}</summary>
                   <div className="mt-3 grid gap-4">
-                    <p className="text-sm text-muted">选择新封面后，将优先使用新图片。</p>
-                    <WorkbenchField controlId="admin-cover-hash" label="封面 SHA-256">
+                    <p className="text-sm text-muted">{t("upload.coverPriority")}</p>
+                    <WorkbenchField controlId="admin-cover-hash" label={t("upload.coverHash")}>
                       <Input id="admin-cover-hash" value={coverBlobSha256} onChange={(event) => setCoverBlobSha256(event.target.value)}
                         pattern="[a-fA-F0-9]{64}" disabled={!canEditMetadata || Boolean(imageSelections.cover)} />
                     </WorkbenchField>
@@ -1175,25 +1193,26 @@ function ExternalSourceSection({
   value: string;
   required?: boolean;
 }) {
+  const t = useMessages();
   return (
     <div>
       <header className="mb-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="m-0 text-lg font-bold">外部下载</h2>
+          <h2 className="m-0 text-lg font-bold">{t("upload.external")}</h2>
           {onArchive ? (
             <Button disabled={archiveDisabled} onClick={onArchive} size="sm" type="button" variant="outline">
-              返回游戏文件上传
+              {t("upload.backToUpload")}
             </Button>
           ) : null}
         </div>
         <p className="mt-1 text-sm text-muted">
-          {onArchive ? "您可以提交外部网盘链接。" : "保存库不支持提交RM2k系以外作品，您可以提交外部网盘链接。"}
+          {onArchive ? t("upload.externalHelp") : t("upload.externalOnlyHelp")}
         </p>
       </header>
       <div className="grid grid-cols-[20px_minmax(0,1fr)] items-center gap-2.5">
         <LinkIcon className="size-5 text-muted" />
         <Input
-          aria-label="外部下载地址"
+          aria-label={t("upload.externalUrl")}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
           placeholder="https://"
@@ -1225,18 +1244,19 @@ function ReadinessList({
   sourceSummary: { name: string; fileCount: number; sizeBytes: number } | null;
   task: BrowserUploadTaskSnapshot | null;
 }) {
+  const t = useMessages();
   const items = archiveMode
     ? [
         {
-          label: "游戏文件",
+          label: t("upload.files"),
           value:
             existingArchive || task?.sourceReady
-              ? "已就绪"
+              ? t("upload.ready")
               : task
-                ? uploadPhaseLabel(task.phase)
+                ? uploadPhaseLabel(task.phase, t)
                 : sourceSummary
-                  ? "准备中"
-                  : "尚未选择",
+                  ? t("upload.preparing")
+                  : t("upload.unselected"),
           tone:
             existingArchive || task?.sourceReady
               ? "ready"
@@ -1245,27 +1265,27 @@ function ReadinessList({
                 : "idle",
         },
         {
-          label: "作品资料",
+          label: t("upload.details"),
           value: task?.commitStarted
-            ? "已锁定"
+            ? t("upload.detailsLocked")
             : metadataConfirmed
-              ? "已确认"
-              : "编辑中",
+              ? t("upload.detailsConfirmed")
+              : t("upload.editing"),
           tone: metadataConfirmed ? "ready" : "idle",
         },
         {
-          label: "发布",
+          label: t("upload.publish"),
           value: task?.result
-            ? "已完成"
+            ? t("upload.done")
             : task?.status === "failed"
-              ? "提交失败"
+              ? t("upload.submitFailed")
               : task?.commitStarted
-                ? uploadPhaseLabel(task.phase)
+                ? uploadPhaseLabel(task.phase, t)
                 : task?.sourceReady && !metadataConfirmed
-                  ? "等待作品资料"
+                  ? t("upload.awaitDetails")
                   : !task?.sourceReady && metadataConfirmed
-                    ? "等待游戏文件"
-                    : "等待两项就绪",
+                    ? t("upload.awaitFiles")
+                    : t("upload.awaitBoth"),
           tone: task?.result
             ? "ready"
             : task?.commitStarted
@@ -1275,13 +1295,13 @@ function ReadinessList({
       ]
     : [
         {
-          label: "作品资料",
-          value: preparing ? "正在发布" : "编辑中",
+          label: t("upload.details"),
+          value: preparing ? t("upload.publishingStatus") : t("upload.editing"),
           tone: preparing ? "running" : "idle",
         },
         {
-          label: "发布",
-          value: preparing ? "提交中" : "等待发布",
+          label: t("upload.publish"),
+          value: preparing ? t("upload.submittingStatus") : t("upload.awaitPublish"),
           tone: preparing ? "running" : "idle",
         },
       ];
@@ -1331,7 +1351,7 @@ function translatorStaff(
   return form.translators.filter(
     (selection): selection is CreatorSelection => selection !== null,
   ).map((selection) => {
-    if (!selection?.displayName.trim()) throw new Error("请填写译者。");
+    if (!selection?.displayName.trim()) throw new UiFeedbackError("upload.feedback.translator");
     const credit = existing.get(creatorSelectionKey(selection));
     return {
       selection,
@@ -1561,7 +1581,7 @@ async function prepareSelectedImages(
 ): Promise<PreparedImages> {
   const blobs: MetadataBlobUpload[] = [];
   const coverBlobSha256 = input.cover ? await prepareMetadataImage(input.cover, blobs) : retained?.coverBlobSha256 ?? "";
-  if (!coverBlobSha256) throw new Error("请指定封面图。");
+  if (!coverBlobSha256) throw new UiFeedbackError("upload.feedback.coverRequired");
   const previewBlobSha256s = input.replacePreviews
     ? await Promise.all((input.previewOrder ?? input.browsingImages.map((_, index) => index)).map((entry) => typeof entry === "string" ? entry : prepareMetadataImage(input.browsingImages[entry], blobs)))
     : retained?.previewBlobSha256s ?? [];
@@ -1589,7 +1609,7 @@ async function prepareMetadataImage(
   blobs: MetadataBlobUpload[],
 ): Promise<string> {
   if (!file.type.startsWith("image/"))
-    throw new Error(`${file.name} 不是图片文件。`);
+    throw new UiFeedbackError("upload.feedback.notImage", { name: file.name });
   const sha256 = await sha256Hex(await file.arrayBuffer());
   blobs.push({ sha256, file, contentType: file.type });
   return sha256;
@@ -1600,7 +1620,7 @@ async function submitExternalWork(
   images: ImageSelections,
   faceSheets: PreparedCharacterFaceSheets,
 ): Promise<{ workId: number; translators: ConfirmedCreatorSelection[] }> {
-  if (!images.cover) throw new Error("外链作品必须提供封面图。");
+  if (!images.cover) throw new UiFeedbackError("upload.feedback.externalCoverRequired");
   const body = new FormData();
   body.set("more_info", JSON.stringify(normalizeWorkMoreInfo(form.moreInfo)));
   body.set("original_title", form.originalTitle.trim());
@@ -1645,8 +1665,8 @@ async function submitExternalWork(
     method: "POST",
     body,
     credentials: "same-origin",
-  }, "发布外链作品失败");
-  if (!payload.workId) throw new Error("作品已发布，但服务器未返回作品 ID，请刷新确认。");
+  }, { messageKey: "upload.feedback.publishExternalFailed" });
+  if (!payload.workId) throw new UiFeedbackError("upload.feedback.missingId");
   return { workId: payload.workId, translators: payload.translators };
 }
 
@@ -1725,7 +1745,7 @@ async function submitEditedWork(
     body,
     credentials: "same-origin",
     headers: { Accept: "application/json" },
-  }, "作品资料保存失败");
+  }, { messageKey: "upload.feedback.saveFailed" });
   return payload.translators;
 }
 

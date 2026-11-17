@@ -6,7 +6,7 @@ import { resolveWorkMaintainerRequest } from "@/app/.server/db/work-maintainers"
 import { HttpError, json, jsonError } from "@/lib/http";
 import {
   readRequiredFormString,
-  redirectResponse,
+  redirectWithParams,
 } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 
@@ -34,15 +34,15 @@ export async function POST(
     const decision = readRequiredFormString(form, "decision");
 
     if (decision !== "approve" && decision !== "reject" && decision !== "withdraw") {
-      throw new HttpError(400, "无效的处理操作。");
+      throw new HttpError(400, "无效的处理操作。", undefined, "inbox.action.error.decision");
     }
     const itemId = parsePositiveId(rawItemId, "id", "Invalid inbox item id");
     const item = await getInboxItemForUser(runtime, itemId, auth.user);
     if (item.maintainerRequest) {
-      if (form.get('confirm') !== '1') throw new HttpError(400, '请确认处理申请的后果。');
+      if (form.get('confirm') !== '1') throw new HttpError(400, '请确认处理申请的后果。', undefined, "inbox.action.error.confirm");
       await resolveWorkMaintainerRequest(runtime, auth.user, itemId, decision, form.get('rejection_reason'));
     } else {
-      if (decision === 'withdraw') throw new HttpError(400, '此申请不支持撤回。');
+      if (decision === 'withdraw') throw new HttpError(400, '此申请不支持撤回。', undefined, "inbox.action.error.withdraw");
       await resolveRoleRequest(runtime, { actor: auth.user, itemId, decision, rejectionReason: form.get('rejection_reason') });
     }
 
@@ -50,7 +50,7 @@ export async function POST(
       return json({ ok: true });
     }
 
-    return redirectResponse(new URL("/inbox", request.url));
+    return redirectWithParams(request, "/inbox", {});
   } catch (error) {
     return jsonError("Inbox request resolution failed", error);
   }

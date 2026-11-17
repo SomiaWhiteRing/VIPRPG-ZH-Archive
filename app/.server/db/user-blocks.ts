@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
@@ -38,9 +39,9 @@ export async function listHiddenPostAuthorIds(runtime: AppRuntime, userId: numbe
 
 export async function setUserBlockSettings(runtime: AppRuntime, user: ArchiveUser, peerId: number,
   patch: Partial<UserBlockSettings>, restrictions?: RestrictedInteraction[]): Promise<UserBlockSettings> {
-  if (user.id === peerId) throw new HttpError(400, "不能屏蔽自己");
+  if (user.id === peerId) throw new HttpError(400, translate(runtime.uiLocale, "block.self"), undefined, "block.self");
   if (!await runtime.db.prepare("SELECT 1 FROM users WHERE id=? AND (?=0 OR status<>'deleted')").bind(peerId, restrictions ? 1 : 0).first())
-    throw new HttpError(404, "用户不存在");
+    throw new HttpError(404, translate(runtime.uiLocale, "timeline.error.userNotFound"), undefined, "timeline.error.userNotFound");
   const entries = (Object.keys(patch) as (keyof UserBlockSettings)[]).map(key => ({ column: columns[key], value: patch[key] ? 1 : 0 }));
   const db = runtime.db;
   const statements = entries.length ? [

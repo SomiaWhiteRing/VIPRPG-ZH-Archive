@@ -9,15 +9,15 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { formatBytes, formatDate } from "@/lib/format";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { IMPORT_TASK_STATUS_OPTIONS } from "@/lib/labels";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { IMPORT_TASK_STATUS_OPTIONS, importTaskStatusLabel } from "@/lib/labels";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { useLoaderData } from "react-router";
 
-const STATUS_OPTIONS = [
-  { value: "all", label: "全部状态" },
-  ...IMPORT_TASK_STATUS_OPTIONS,
-];
+const STATUSES = ["all", ...IMPORT_TASK_STATUS_OPTIONS.map(({ value }) => value)] as const;
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -35,7 +35,7 @@ export async function loader(args: LoaderFunctionArgs) {
   const rawStatus = Array.isArray(params.status)
     ? params.status[0]
     : params.status;
-  const status = STATUS_OPTIONS.some((item) => item.value === rawStatus)
+  const status = STATUSES.some((value) => value === rawStatus)
     ? rawStatus
     : "all";
   const result = await searchAdminImportJobs(runtime, {
@@ -44,33 +44,37 @@ export async function loader(args: LoaderFunctionArgs) {
     status,
   });
 
-  return { page, status, result };
+  return { page, status, result, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["上传任务", "控制台"], page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.imports.title"), translate(locale, "admin.characterIndex.console")], page: loaderData?.page }, error, locale);
+};
 
 export default function AdminImportJobsPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { page, status, result } = useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
         compact
-        subtitle="查看上传处理状态、关联作品与任务详情。"
-        title="上传任务"
+        subtitle={t("admin.imports.subtitle")}
+        title={t("admin.imports.title")}
       />
-      <AdminListControls action="/admin/import-jobs" noun="任务" status={status}
-        statusLabel="任务状态" statusOptions={STATUS_OPTIONS} total={result.total} pageSize={result.pageSize} />
+      <AdminListControls action="/admin/import-jobs" noun={t("admin.imports.task")} status={status}
+        statusLabel={t("admin.imports.status")} statusOptions={STATUSES.map((value) => ({ value, label: value === "all" ? t("admin.works.all") : importTaskStatusLabel(value, locale) }))} total={result.total} pageSize={result.pageSize} />
       {result.items.length ? (
-        <TableWrap compact label="上传任务" minWidth={900}>
+        <TableWrap compact label={t("admin.imports.title")} minWidth={900}>
           <thead>
             <tr>
-              <th>任务</th>
-              <th>状态</th>
-              <th>作品</th>
-              <th>上传者</th>
-              <th>文件</th>
-              <th>更新时间</th>
+              <th>{t("admin.imports.task")}</th>
+              <th>{t("admin.list.status")}</th>
+              <th>{t("admin.works.game")}</th>
+              <th>{t("work.sidebar.uploader")}</th>
+              <th>{t("admin.imports.files")}</th>
+              <th>{t("admin.characterList.updated")}</th>
             </tr>
           </thead>
           <tbody>
@@ -78,7 +82,7 @@ export default function AdminImportJobsPage() {
               <tr key={job.id}>
                 <td>
                   <Link className="admin-cell-title" to={`/admin/import-jobs/${job.id}`}>
-                    #{job.id} {job.sourceName || "未知来源"}
+                    #{job.id} {job.sourceName || t("admin.imports.unknown")}
                   </Link>
                 </td>
                 <td>
@@ -90,21 +94,21 @@ export default function AdminImportJobsPage() {
                       {job.workTitle || `#${job.workId}`}
                     </Link>
                   ) : (
-                    "尚未关联"
+                    t("admin.imports.unlinked")
                   )}
                 </td>
-                <td>{job.uploaderName || "未知"}</td>
+                <td>{job.uploaderName || t("play.diagnostic.unknown")}</td>
                 <td>
-                  {job.fileCount.toLocaleString("zh-CN")} ·{" "}
+                  {job.fileCount.toLocaleString(locale)} ·{" "}
                   {formatBytes(job.sourceSizeBytes || 0)}
                 </td>
-                <td className="whitespace-nowrap text-xs text-muted tabular-nums">{formatDate(job.updatedAt)}</td>
+                <td className="whitespace-nowrap text-xs text-muted tabular-nums">{formatDate(job.updatedAt, { locale })}</td>
               </tr>
             ))}
           </tbody>
         </TableWrap>
       ) : (
-        <EmptyState title="没有符合条件的上传任务。" />
+        <EmptyState title={t("admin.imports.empty")} />
       )}
       <PaginationLinks
         basePath="/admin/import-jobs"

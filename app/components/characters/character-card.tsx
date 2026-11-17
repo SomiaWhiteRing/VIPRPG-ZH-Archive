@@ -1,10 +1,10 @@
+import { useMessages } from "@/lib/i18n/react";
 import { Card } from "@/app/components/ui/card";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import type { CharacterIndexEntry } from "@/lib/character-index";
-import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/ui/cn";
 import { FolderPen, Pencil } from "lucide-react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export function CharacterCard({
   canEdit = false,
@@ -30,6 +30,7 @@ export function CharacterCard({
   headingLevel?: 2 | 4;
   onOpen?: () => void;
 }) {
+  const t = useMessages();
   const Heading = headingLevel === 2 ? "h2" : "h4";
   return (
     <Card
@@ -62,24 +63,24 @@ export function CharacterCard({
             </Heading>
             {canEditIndex ? (
               <Link
-                aria-label={`编辑分类信息 ${displayName}`}
+                aria-label={t("character.editCategoryInfoNamed", { name: displayName })}
                 className="relative z-10 inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                 to={`/admin/characters/index?${new URLSearchParams({ character: String(character.id), ...(categoryId ? { category: categoryId } : {}) })}`}
                 onClick={onOpen}
                 prefetch="none"
-                title="编辑分类信息"
+                title={t("character.editCategory")}
               >
                 <FolderPen aria-hidden size={13} />
               </Link>
             ) : null}
             {canEdit ? (
               <Link
-                aria-label={`编辑角色信息 ${displayName}`}
+                aria-label={t("character.editInfoNamed", { name: displayName })}
                 className="relative z-10 inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                 to={`/admin/characters/${character.id}`}
                 onClick={onOpen}
                 prefetch="none"
-                title="编辑角色信息"
+                title={t("character.editInfo")}
               >
                 <Pencil aria-hidden size={13} />
               </Link>
@@ -99,9 +100,9 @@ export function CharacterCard({
         </p>
       ) : null}
       <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/70 pt-2 text-xs tabular-nums text-muted">
-        <span>{formatNumber(character.workCount)} 部作品</span>
-        <span>{formatNumber(character.commentCount)} 条评论</span>
-        <span>{formatNumber(character.materialCount)} 张素材</span>
+        <span>{t("favorite.workCount", { count: character.workCount })}</span>
+        <span>{t("character.commentCount", { count: character.commentCount })}</span>
+        <span>{t("character.materialCount", { count: character.materialCount })}</span>
       </div>
     </Card>
   );

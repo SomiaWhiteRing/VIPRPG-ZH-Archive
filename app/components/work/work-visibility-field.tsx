@@ -2,6 +2,7 @@ import { Checkbox } from "@/app/components/ui/checkbox";
 import { Label } from "@/app/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import { constrainWorkVisibility, hasNonViprpgTag, WORK_AUDIENCE_OPTIONS, type WorkAudience, type WorkVisibility } from "@/lib/work-visibility";
+import { useMessages } from "@/lib/i18n/react";
 
 export function WorkVisibilityField({ value, tags, disabled, onChange }: {
   value: WorkVisibility;
@@ -9,9 +10,10 @@ export function WorkVisibilityField({ value, tags, disabled, onChange }: {
   disabled: boolean;
   onChange: (value: WorkVisibility) => void;
 }) {
+  const t = useMessages();
   const homeDisabled = hasNonViprpgTag(tags) || value.audience === "maintainers";
   return <div className="grid gap-2">
-    <span className="text-sm font-bold" id="upload-visibility-label">可见性</span>
+    <span className="text-sm font-bold" id="upload-visibility-label">{t("upload.visibility.title")}</span>
     <RadioGroup
       aria-labelledby="upload-visibility-label"
       disabled={disabled}
@@ -21,7 +23,7 @@ export function WorkVisibilityField({ value, tags, disabled, onChange }: {
       {WORK_AUDIENCE_OPTIONS.map((option) => (
         <Label className="flex items-center gap-2" key={option.value}>
           <RadioGroupItem value={option.value} />
-          {option.label}
+          {t(`upload.visibility.${option.value}`)}
         </Label>
       ))}
     </RadioGroup>
@@ -29,7 +31,7 @@ export function WorkVisibilityField({ value, tags, disabled, onChange }: {
       <Checkbox id="upload-show-on-home" disabled={disabled || homeDisabled}
         checked={value.showOnHome && !homeDisabled}
         onCheckedChange={(checked) => onChange({ ...value, showOnHome: checked === true })} />
-      <Label htmlFor="upload-show-on-home" className="font-normal">推送到首页</Label>
+      <Label htmlFor="upload-show-on-home" className="font-normal">{t("upload.visibility.home")}</Label>
     </div>
   </div>;
 }

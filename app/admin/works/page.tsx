@@ -16,10 +16,13 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { hasPermission } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatBytes, formatNumber } from "@/lib/format";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { formatBytes } from "@/lib/format";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
@@ -59,53 +62,57 @@ export async function loader(args: LoaderFunctionArgs) {
     status,
     sort,
     page,
+    locale: runtime.uiLocale,
     result,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["作品资料维护", "控制台"], page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.works.title"), translate(locale, "admin.characterIndex.console")], page: loaderData?.page }, error, locale);
+};
 
 export default function AdminWorksPage() {
+  const t = useMessages();
   const { adminUser, query, status, sort, page, result } =
     useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
         compact
-        title="作品资料维护"
-        subtitle="维护作品可见性、分发方式和关联资料。"
+        title={t("admin.works.title")}
+        subtitle={t("admin.works.subtitle")}
       />
       <AdminListControls
         action="/admin/works"
-        noun="作品"
+        noun={t("admin.works.game")}
         query={query}
         sort={sort}
         sortOptions={[
-          { value: "default", label: "最近创建" },
-          { value: "title", label: "标题" },
-          { value: "release", label: "发布日期" },
+          { value: "default", label: t("admin.works.recent") },
+          { value: "title", label: t("admin.works.gameTitle") },
+          { value: "release", label: t("upload.metadata.published") },
         ]}
         status={status}
         statusOptions={[
-          { value: "all", label: "全部状态" },
-          { value: "published", label: "已发布" },
-          { value: "processing", label: "处理中" },
-          { value: "deleted", label: "已删除" },
+          { value: "all", label: t("admin.works.all") },
+          { value: "published", label: t("upload.own.status.published") },
+          { value: "processing", label: t("admin.works.processing") },
+          { value: "deleted", label: t("upload.own.status.deleted") },
         ]}
         pageSize={PAGE_SIZE}
         total={result.total}
       />
 
       {result.items.length > 0 ? (
-        <TableWrap compact label="作品列表" minWidth={980}>
+        <TableWrap compact label={t("admin.works.table")} minWidth={980}>
           <thead>
             <tr>
-              <th>作品</th>
-              <th>状态</th>
-              <th>规模</th>
-              <th>标签</th>
-              <th className="admin-action-column">操作</th>
+              <th>{t("admin.works.game")}</th>
+              <th>{t("admin.list.status")}</th>
+              <th>{t("admin.works.size")}</th>
+              <th>{t("upload.metadata.tags")}</th>
+              <th className="admin-action-column">{t("admin.characterList.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -124,10 +131,10 @@ export default function AdminWorksPage() {
                 </td>
                 <td>
                   {work.distribution === "external" ? (
-                    <span>外部下载</span>
+                    <span>{t("upload.external")}</span>
                   ) : (
                     <>
-                      {formatNumber(work.archiveVersionCount)} 个归档快照
+                      {t("admin.works.snapshots", { count: work.archiveVersionCount })}
                       <span className="admin-cell-meta">
                         {formatBytes(work.totalSizeBytes)}
                       </span>
@@ -143,7 +150,7 @@ export default function AdminWorksPage() {
                         .map((tag) => ({ label: tag.name }))}
                     />
                   ) : (
-                    <span className="admin-cell-meta">未填写</span>
+                    <span className="admin-cell-meta">{t("admin.works.missing")}</span>
                   )}
                 </td>
                 <td className="admin-action-column">
@@ -154,10 +161,10 @@ export default function AdminWorksPage() {
                       className={buttonVariants({ variant: "ghost", size: "sm" })}
                       to={`/admin/works/${work.id}`}
                     >
-                      编辑
+                      {t("admin.works.edit")}
                     </Link>
                   ) : (
-                    <span className="admin-cell-meta">只读</span>
+                    <span className="admin-cell-meta">{t("admin.characterList.readOnly")}</span>
                   )}
                 </td>
               </tr>
@@ -165,7 +172,7 @@ export default function AdminWorksPage() {
           </tbody>
         </TableWrap>
       ) : (
-        <EmptyState title="没有找到匹配的作品。" />
+        <EmptyState title={t("admin.works.empty")} />
       )}
       <PaginationLinks
         basePath="/admin/works"

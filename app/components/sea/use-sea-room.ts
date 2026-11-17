@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SEA_ROOM_LIMIT, type SeaEvent, type SeaWindow } from "@/lib/dto/sea";
 import { requestJson } from "@/lib/ui/api-response";
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM, type UiLocale } from "@/lib/i18n/locale";
 import { loadSeaFont } from "./font";
 
-export function useSeaRoom(initial: SeaWindow) {
+export function useSeaRoom(initial: SeaWindow, locale: UiLocale) {
   const [window, setWindow] = useState(initial);
   const current = useRef(initial);
   const apply = useCallback(async (next: SeaWindow) => {
@@ -14,8 +16,8 @@ export function useSeaRoom(initial: SeaWindow) {
     if (current.current === target) setWindow(target);
   }, []);
   const refresh = useCallback(async (signal?: AbortSignal) => {
-    await apply(await requestJson<SeaWindow>("/api/sea/messages", { signal, cache: "no-store" }, "同步对话失败"));
-  }, [apply]);
+    await apply(await requestJson<SeaWindow>(`/api/sea/messages?${UI_LOCALE_PARAM}=${locale}`, { signal, cache: "no-store" }, translate(locale, "sea.sync")));
+  }, [apply, locale]);
 
   useEffect(() => {
     let active = true;

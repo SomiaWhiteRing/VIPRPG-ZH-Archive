@@ -7,7 +7,7 @@ self.onmessage = async (event: MessageEvent<File>) => {
       sha256,
     });
   } catch {
-    self.postMessage({ error: "无法计算文件校验值，请重新选择文件" });
+    self.postMessage({ error: true });
   }
 };
 export {};

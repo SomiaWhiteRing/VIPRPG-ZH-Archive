@@ -1,3 +1,4 @@
+import { UiFeedbackError, UiHttpError } from "@/lib/i18n/feedback";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { memoizeRequest } from "@/app/.server/runtime";
 import type { ArchiveUser, UserStatus } from "@/lib/dto/db/user-access";
@@ -114,15 +115,15 @@ export function normalizeEmail(value: string): string {
   const email = value.trim().toLowerCase();
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error("邮箱格式不正确");
+    throw new UiFeedbackError("auth.error.email");
   }
 
   return email;
 }
 
 export function normalizeDisplayName(value: string): string {
-  const { displayName, error } = inspectDisplayName(value);
-  if (error) throw new HttpError(400, error);
+  const { displayName, error, messageKey } = inspectDisplayName(value);
+  if (error) throw new HttpError(400, error, undefined, messageKey ?? undefined);
   return displayName;
 }
 
@@ -142,7 +143,7 @@ export async function assertDisplayNameAvailable(
 }
 
 function throwDisplayNameTaken(): never {
-  throw new HttpError(409, "该显示名已被使用，请换一个", "display_name_taken");
+  throw new UiHttpError(409, "auth.error.nameTaken", "display_name_taken");
 }
 
 function rethrowDisplayNameConflict(error: unknown): never {
@@ -310,7 +311,7 @@ export async function authenticateUser(
 
   if (!row || row.status !== "active") {
     await verifyPassword(input.password, null);
-    throw new Error("邮箱或密码不正确");
+    throw new UiFeedbackError("auth.error.credentials");
   }
 
   const passwordLengthValid =
@@ -323,7 +324,7 @@ export async function authenticateUser(
 
   if (!passwordLengthValid || !verified) {
     await recordFailedLogin(runtime, row.id);
-    throw new Error("邮箱或密码不正确");
+    throw new UiFeedbackError("auth.error.credentials");
   }
 
   const upgradedHash = passwordHashNeedsUpgrade(row.password_hash)
@@ -342,7 +343,7 @@ export async function authenticateUser(
     )
     .bind(upgradedHash, upgradedHash, row.id, row.password_hash)
     .run();
-  if (Number(saved.meta.changes) !== 1) throw new Error("邮箱或密码不正确");
+  if (Number(saved.meta.changes) !== 1) throw new UiFeedbackError("auth.error.credentials");
 
   return requiredUserById(runtime, row.id);
 }
@@ -407,10 +408,10 @@ export async function updateOwnProfile(
     ? input.user.displayName
     : normalizeDisplayName(input.displayName);
   if (displayName !== input.user.displayName && !hasPermission(input.user, "user.rename_own"))
-    throw new HttpError(403, "没有修改显示名的权限。");
+    throw new HttpError(403, "没有修改显示名的权限。", undefined, "account.error.renameDenied");
   const bio = input.bio.trim();
   if ([...bio].length > 500)
-    throw new HttpError(400, "简介不能超过 500 个字符");
+    throw new HttpError(400, "简介不能超过 500 个字符", undefined, "account.error.bioLength");
   await assertDisplayNameAvailable(runtime, displayName, input.user.id);
   const database = getD1(runtime);
   const [updated] = await database.batch([
@@ -430,7 +431,7 @@ export async function updateOwnProfile(
       .bind(input.user.id, input.user.email),
   ]).catch(rethrowDisplayNameConflict);
   if ((updated.results[0] as { id: number } | undefined)?.id !== input.user.id)
-    throw new HttpError(403, "账户或改名权限已变化，请刷新后重试。");
+    throw new HttpError(403, "账户或改名权限已变化，请刷新后重试。", undefined, "account.error.renameChanged");
 }
 
 export async function updateOwnProfileVisibility(
@@ -508,7 +509,7 @@ export async function verifyOwnPassword(
     row?.password_hash ?? null,
   );
   if (!row || row.status !== "active" || !validLength || !valid)
-    throw new HttpError(400, "当前密码不正确");
+    throw new UiHttpError(400, "profile.passwordIncorrect");
 }
 
 export async function changeOwnPassword(
@@ -528,6 +529,9 @@ export async function changeOwnPassword(
     throw new HttpError(
       400,
       `新密码长度必须为 ${PASSWORD_MIN_LENGTH} 至 ${PASSWORD_MAX_LENGTH} 个字符`,
+      undefined,
+      "account.error.passwordRange",
+      { min: PASSWORD_MIN_LENGTH, max: PASSWORD_MAX_LENGTH },
     );
   const passwordHash = await hashPassword(input.newPassword);
   await getD1(runtime).batch([
@@ -560,7 +564,7 @@ export async function changeOwnEmail(
   const newEmail = normalizeEmail(input.newEmail);
   const existing = await findUserRowByEmail(runtime, newEmail);
   if (existing && existing.id !== input.user.id)
-    throw new HttpError(409, "该邮箱已被使用");
+    throw new UiHttpError(409, "profile.emailUsed");
   await getD1(runtime).batch([
     getD1(runtime)
       .prepare(
@@ -701,18 +705,18 @@ export async function setUserStatusForAdmin(
   const target = await findUserById(runtime, input.targetUserId);
 
   if (!target) {
-    throw new HttpError(404, "目标用户不存在");
+    throw new HttpError(404, "目标用户不存在", undefined, "account.error.userMissing");
   }
 
   if (
     !hasPermission(input.actor, "user.status.update") ||
     !canManageUser(input.actor, target)
   ) {
-    throw new HttpError(403, "只能管理自己权限范围内的用户");
+    throw new HttpError(403, "只能管理自己权限范围内的用户", undefined, "account.error.scopeDenied");
   }
 
   if (target.status === "deleted" || input.status === "deleted")
-    throw new HttpError(400, "已注销账户不能启用，注销须由本人操作");
+    throw new HttpError(400, "已注销账户不能启用，注销须由本人操作", undefined, "account.error.deletedCannotEnable");
   if (target.status === input.status) {
     return target;
   }
@@ -761,7 +765,7 @@ export async function setUserStatusForAdmin(
   statements.push(userSearchVisibilityStatement(database, target.id));
   const [authorization] = await database.batch(statements);
   if (Number(authorization.meta.changes) !== 1)
-    throw new HttpError(409, "账户或管理权限已变化，请刷新后重试。");
+    throw new HttpError(409, "账户或管理权限已变化，请刷新后重试。", undefined, "account.error.accessChanged");
 
   const updated = await findUserById(runtime, target.id);
 
@@ -919,7 +923,7 @@ export async function deleteOwnAccount(
 ): Promise<void> {
   assertAccountDeletionRequest(user, input.acknowledgement);
   if (!/^[0-9]{6}$/.test(input.code)) {
-    throw new HttpError(400, "请输入 6 位邮箱验证码");
+    throw new HttpError(400, "请输入 6 位邮箱验证码", undefined, "account.error.emailCodeFormat");
   }
   const challenge = {
     userId: user.id,

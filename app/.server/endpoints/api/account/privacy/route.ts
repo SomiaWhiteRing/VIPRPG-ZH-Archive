@@ -1,10 +1,12 @@
 import { getAuthContext } from "@/app/.server/auth/current-user";
 import { assertSameOrigin } from "@/app/.server/auth/origin";
 import { updateOwnProfileVisibility } from "@/app/.server/db/users";
-import { redirectWithParams } from "@/app/.server/http/form";
+import { redirectResponse, redirectWithParams } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { accountPreferencesUpdateStatement } from "@/app/.server/db/account-preferences";
 import { webPushSettingsStatement } from "@/app/.server/push/settings";
+import { translate } from "@/lib/i18n/core";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
 
 export async function POST(runtime: AppRuntime, request: Request) {
   try {
@@ -15,6 +17,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     const form = await request.formData();
     if (form.get("section") === "preferences") {
       await accountPreferencesUpdateStatement(runtime, auth.user.id, form).run();
+      if (form.has("uiLanguage")) return redirectResponse(new URL("/me/privacy?preferencesUpdated=1", request.url));
       return redirectWithParams(request, "/me/privacy", { preferencesUpdated: "1" });
     }
     // Released friend forms include this hidden field; older forms preserve
@@ -38,10 +41,11 @@ export async function POST(runtime: AppRuntime, request: Request) {
         discussions: form.get("showDiscussions") === "1",
       },
     });
+    if (combined && form.has("uiLanguage")) return redirectResponse(new URL("/me/privacy?settingsUpdated=1", request.url));
     return redirectWithParams(request, "/me/privacy", combined ? { settingsUpdated: "1" } : { privacyUpdated: "1" });
   } catch (error) {
     return redirectWithParams(request, "/me/privacy", {
-      error: error instanceof Error ? error.message : "隐私与偏好更新失败",
+      error: formatFeedbackError(error, runtime.uiLocale, translate(runtime.uiLocale, "account.privacy.saveFailed")),
     });
   }
 }

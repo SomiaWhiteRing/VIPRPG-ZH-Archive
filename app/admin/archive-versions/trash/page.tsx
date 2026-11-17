@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { listArchiveVersionsForAdmin } from "@/app/.server/db/archive-maintenance";
 import { pickPageFields } from "@/app/.server/page-data";
@@ -27,21 +29,25 @@ export async function loader(args: LoaderFunctionArgs) {
   return {
     adminUser: pickPageFields(adminUser, ["id", "status", "permissionKeys"]),
     archiveVersions,
+    locale: runtime.uiLocale,
   };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["已删除版本", "控制台"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.archives.trashTitle"), translate(locale, "admin.characterIndex.console")] }, error, locale);
+};
 
 export default function AdminArchiveVersionTrashPage() {
+  const t = useMessages();
   const { adminUser, archiveVersions } = useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
-        title="已删除版本"
-        subtitle="还原后会重新发布；同组没有最新快照时，会自动成为最新快照。"
+        title={t("admin.archives.trashTitle")}
+        subtitle={t("admin.archives.trashSubtitle")}
         actions={
-          <BackLink href="/admin/archive-versions" label="返回版本管理" />
+          <BackLink href="/admin/archive-versions" label={t("admin.archives.back")} />
         }
       />
 

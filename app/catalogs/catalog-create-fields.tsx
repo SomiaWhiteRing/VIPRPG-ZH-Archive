@@ -1,3 +1,5 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 
@@ -22,6 +24,8 @@ export function CatalogCreateFields({
   onCancel: () => void;
   workId?: number;
 }) {
+  const t = useMessages();
+  const locale = useNavigationLocale();
   const navigate = useNavigate();
   const toast = useToast();
   const id = useId();
@@ -29,14 +33,14 @@ export function CatalogCreateFields({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [createdCatalog, setCreatedCatalog] = useState<CatalogSummary | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [addUnconfirmed, setAddUnconfirmed] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || submitting.current || !title.trim()) return;
     submitting.current = true;
     onBusyChange(true);
-    setMessage(null);
+    setAddUnconfirmed(false);
     let catalog = createdCatalog;
     try {
       if (!catalog) {
@@ -45,8 +49,8 @@ export function CatalogCreateFields({
           credentials: "same-origin",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ title, description: description || null }),
-        }, "目录创建失败");
-        if (!body.catalog) throw new Error("目录已创建，但服务器未返回目录资料，请刷新确认。");
+        }, t("catalog.createFailed"));
+        if (!body.catalog) throw new Error(t("catalog.createdMissing"));
         catalog = body.catalog;
         setCreatedCatalog(catalog);
       }
@@ -60,13 +64,13 @@ export function CatalogCreateFields({
         });
 
       }
-      toast.success(workId === undefined ? "目录已创建。" : "目录已创建并加入当前游戏。");
-      navigate(`/catalogs/${catalog.id}`);
+      toast.success(workId === undefined ? t("catalog.created") : t("catalog.createdWithGame"));
+      navigate({ pathname: `/catalogs/${catalog.id}`, search: locale ? new URLSearchParams({ [UI_LOCALE_PARAM]: locale }).toString() : "" });
     } catch (error) {
       if (catalog && workId !== undefined) {
-        setMessage("目录已创建，但尚未确认游戏加入成功。请重试，将继续加入此目录。");
+        setAddUnconfirmed(true);
       } else {
-        toast.error(error instanceof ApiResponseError ? error.message : "网络请求失败。");
+        toast.error(error instanceof ApiResponseError ? error : t("relation.edit.network"));
       }
     } finally {
       submitting.current = false;
@@ -76,7 +80,7 @@ export function CatalogCreateFields({
 
   return (
     <form className="grid gap-4" onSubmit={submit}>
-      <FormField controlId={`${id}-title`} label="标题">
+      <FormField controlId={`${id}-title`} label={t("library.title")}>
         <Input
           id={`${id}-title`}
           required
@@ -85,7 +89,7 @@ export function CatalogCreateFields({
           onChange={(event) => setTitle(event.target.value)}
         />
       </FormField>
-      <FormField controlId={`${id}-description`} label="说明">
+      <FormField controlId={`${id}-description`} label={t("forum.action.explain")}>
         <Textarea
           id={`${id}-description`}
           rows={3}
@@ -94,15 +98,15 @@ export function CatalogCreateFields({
           onChange={(event) => setDescription(event.target.value)}
         />
       </FormField>
-      {message ? <Notice>{message}</Notice> : null}
+      {addUnconfirmed ? <Notice>{t("catalog.retryAdd")}</Notice> : null}
       <div className="flex justify-end gap-2">
         <Button disabled={busy} onClick={onCancel} type="button" variant="outline">
-          取消
+          {t("relation.edit.cancel")}
         </Button>
         <Button disabled={busy || !title.trim()} type="submit">
           {busy
-            ? workId === undefined ? "正在创建…" : "正在创建并加入…"
-            : workId === undefined ? "创建目录" : "创建并加入新目录"}
+            ? workId === undefined ? t("catalog.creating") : t("catalog.creatingAndAdding")
+            : workId === undefined ? t("catalog.create") : t("catalog.createAndAdd")}
         </Button>
       </div>
     </form>

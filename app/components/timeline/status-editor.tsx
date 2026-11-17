@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { BodyEditor, type BodyEditorHandle } from "@/app/components/comments/body-editor";
@@ -22,13 +23,14 @@ export const StatusEditor = forwardRef<StatusEditorHandle, {
   eventId?: number;
   onImagesBusyChange: (busy: boolean) => void;
 }>(function StatusEditor({ id, label, body, busy, onChange, onError, onCompositionChange, beforeCounter, actions, images, onImagesChange, eventId, onImagesBusyChange }, ref) {
+  const t = useMessages();
   const editor = useRef<BodyEditorHandle>(null);
   const attachments = useStatusImages({ images, onChange: onImagesChange, onError, busy, eventId });
   useEffect(() => { onImagesBusyChange(attachments.working); }, [attachments.working, onImagesBusyChange]);
   useImperativeHandle(ref, () => ({ uploadImages: attachments.upload }));
   return <div className="grid min-w-0 gap-2" {...attachments.handlers}>
     <BodyEditor ref={editor} inputId={id} inputLabel={label} body={body} images={[]} busy={busy || attachments.working} topic={false}
-      textOnly allowMentions={false} maxLength={500} placeholder={eventId === undefined ? "写点什么……" : "写下回复……"} autoFocus={eventId !== undefined}
+      textOnly allowMentions={false} maxLength={500} placeholder={eventId === undefined ? t("timeline.ui.compose") : t("timeline.ui.reply")} autoFocus={eventId !== undefined}
       onChange={(value) => onChange(value)} onBusyChange={() => {}} onError={onError} onCompositionChange={onCompositionChange} />
     {attachments.previews}
     {attachments.input}
@@ -48,6 +50,7 @@ export const StatusEditor = forwardRef<StatusEditorHandle, {
 });
 
 export function StatusBody({ segments, collapse = false }: { segments: TimelineBodySegment[]; collapse?: boolean }) {
+  const t = useMessages();
   const contentId = useId();
   const contentRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -81,7 +84,7 @@ export function StatusBody({ segments, collapse = false }: { segments: TimelineB
     </HeightBox>
     {collapsible && <Button type="button" variant="ghost" size="sm" className="mt-1 min-h-8 gap-1 px-1 text-xs font-normal text-secondary"
       aria-controls={contentId} aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
-      {expanded ? "收起" : "展开"}<ChevronDown aria-hidden className={cn("transition-transform duration-300 motion-reduce:transition-none", expanded && "rotate-180")} />
+      {t(expanded ? "library.collapse" : "library.expand")}<ChevronDown aria-hidden className={cn("transition-transform duration-300 motion-reduce:transition-none", expanded && "rotate-180")} />
     </Button>}
   </div>;
 }

@@ -1,4 +1,5 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { runtimeContext } from "@/app/.server/router-context";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { routeInput } from "@/app/.server/route-input";
 import { EmailInput } from "@/app/components/auth/auth-input";
 import { AuthPageShell } from "@/app/components/auth/auth-page-shell";
@@ -9,7 +10,9 @@ import { sanitizeRedirectPath } from "@/app/.server/auth/redirect";
 import { Button } from "@/app/components/ui/button";
 import { FormField } from "@/app/components/ui/form-field";
 import { RedirectFeedback } from "@/app/components/ui/redirect-feedback";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -23,21 +26,24 @@ export async function loader(args: LoaderFunctionArgs) {
   );
   const nextPath = sanitizeRedirectPath(params.next, "/login");
 
-  return { params, nextPath };
+  return { params, nextPath, locale: args.context.get(runtimeContext).uiLocale };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: "找回密码" }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "auth.forgot") }, error, locale);
+};
 
 export default function ForgotPasswordPage() {
   const { params, nextPath } = useLoaderData<typeof loader>();
+  const t = useMessages();
   return (
     <AuthPageShell
-      title="找回密码"
+      title={t("auth.forgot")}
       footer={
         <>
           <Link to={`/login?next=${encodeURIComponent(nextPath)}`}>
-            返回登录
+            {t("auth.backToLogin")}
           </Link>
         </>
       }
@@ -45,11 +51,12 @@ export default function ForgotPasswordPage() {
       <RedirectFeedback />
       <RedirectForm
         action="/api/auth/password-reset/start"
+        preserveLanguage
         method="post"
         className="grid gap-4"
       >
         <input type="hidden" name="next" value={nextPath} />
-        <FormField controlId="forgot-password-field-1" label="邮箱">
+        <FormField controlId="forgot-password-field-1" label={t("auth.email")}>
           <EmailInput
             id="forgot-password-field-1"
             defaultValue={params.email ?? ""}
@@ -58,7 +65,7 @@ export default function ForgotPasswordPage() {
             required
           />
         </FormField>
-        <Button type="submit">发送验证码</Button>
+        <Button type="submit">{t("auth.code.send")}</Button>
       </RedirectForm>
     </AuthPageShell>
   );

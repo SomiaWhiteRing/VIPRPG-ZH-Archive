@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 import type { ToolArtifact } from "./resources";
 
 export const MAX_DOWNLOAD_FILENAME_TEMPLATE_LENGTH = 180;
@@ -7,19 +9,19 @@ function unsafeCharacter(character: string) {
   return code < 32 || code === 127 || /[<>:"/\\|?*]/.test(character);
 }
 
-export function downloadFilenameTemplateError(value: string): string | null {
+export function downloadFilenameTemplateError(value: string, locale: UiLocale = DEFAULT_UI_LOCALE): string | null {
   if (value.length > MAX_DOWNLOAD_FILENAME_TEMPLATE_LENGTH)
-    return "下载文件名模板最多 180 个字符";
+    return translate(locale, "admin.resources.filenameLength");
   const template = value.trim();
   if (!template) return null;
   if (template.replaceAll("${version}", "").includes("${"))
-    return "模板仅支持 ${version}，请检查变量名称和括号";
+    return translate(locale, "admin.resources.filenameVariable", { variable: "${version}" });
   if (Array.from(template).some(unsafeCharacter))
-    return '文件名不能包含控制字符或 < > : " / \\ | ? *';
+    return translate(locale, "admin.resources.filenameUnsafe", { symbols: '< > : " / \\ | ? *' });
   if (/\.(zip|exe|apk)$/i.test(template))
-    return "模板无需填写扩展名，下载时会自动添加安装包的扩展名";
+    return translate(locale, "admin.resources.filenameExtension");
   if (template.startsWith(".") || template.endsWith("."))
-    return "文件名模板不能以句点开头或结尾";
+    return translate(locale, "admin.resources.filenameDot");
   return null;
 }
 

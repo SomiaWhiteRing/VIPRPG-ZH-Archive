@@ -1,7 +1,8 @@
+import { useMessages } from "@/lib/i18n/react";
 import { useEffect, useRef, useState } from "react";
 import { Check, Plus } from "lucide-react";
 import * as Popover from "@/app/components/ui/popover";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
 import { emojiInGroup, type FaceEmoji, type EmojiLibraryData } from "@/lib/face-emojis";
@@ -16,6 +17,7 @@ export function FaceEmojiView({
   emoji: FaceEmoji | null;
   allowCollect?: boolean;
 }) {
+  const t = useMessages();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [addedId, setAddedId] = useState<number | null>(null);
@@ -76,7 +78,7 @@ export function FaceEmojiView({
           ref={trigger}
           type="button"
           className="mx-0.5 inline-flex size-12 cursor-pointer rounded-none align-bottom focus-visible:outline-2 focus-visible:outline-primary"
-          aria-label={allowCollect ? "查看并收藏表情" : "查看表情"}
+          aria-label={allowCollect ? t("emoji.picker.viewCollect") : t("emoji.picker.view")}
           onPointerEnter={(event) => {
             if (
               event.pointerType !== "mouse" ||
@@ -109,7 +111,7 @@ export function FaceEmojiView({
           side="top"
           sideOffset={6}
           collisionPadding={12}
-          aria-label="表情预览"
+          aria-label={t("emoji.picker.preview")}
           onPointerEnter={clearTimers}
           onPointerLeave={closeAfterHover}
           onBlur={(event) => {
@@ -131,7 +133,7 @@ export function FaceEmojiView({
           {emoji.sources.length ? (
             <div
               className="emoji-scroll-viewport flex max-h-20 w-full flex-wrap justify-center gap-x-2 gap-y-1 overflow-y-auto text-center text-sm leading-5 text-muted"
-              aria-label="相关角色"
+              aria-label={t("emoji.picker.characters")}
             >
               {emoji.sources.map((source) => (
                 <Link
@@ -146,7 +148,7 @@ export function FaceEmojiView({
               ))}
             </div>
           ) : (
-            <span className="text-sm text-muted">暂无关联角色</span>
+            <span className="text-sm text-muted">{t("emoji.picker.noCharacters")}</span>
           )}
           <FaceEmojiImage emoji={emoji} size={96} />
           {allowCollect ? (
@@ -178,7 +180,7 @@ export function FaceEmojiView({
                 } catch (error) {
                   collecting.current = false;
                   toast.error(
-                    error instanceof Error ? error.message : "收藏失败。",
+                    error instanceof Error ? error.message : t("emoji.picker.collectFailed"),
                   );
                 } finally {
                   setBusy(false);
@@ -186,7 +188,7 @@ export function FaceEmojiView({
               }}
             >
               {added ? <Check aria-hidden /> : <Plus aria-hidden />}
-              {added ? "已加入表情库" : busy ? "正在加入…" : "加入表情库"}
+              {added ? t("emoji.picker.added") : busy ? t("emoji.picker.adding") : t("emoji.picker.add")}
             </Button>
           ) : null}
           <Popover.Arrow width={12} height={6} className="fill-card" />

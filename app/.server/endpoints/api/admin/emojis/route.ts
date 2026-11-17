@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { requirePermission } from "@/app/.server/auth/authorize";
 import { getD1 } from "@/app/.server/db/d1";
 import { emojiJson, emojiRequestBody } from "@/app/.server/emojis/api";
@@ -7,7 +8,7 @@ import {
   saveDefaults,
 } from "@/app/.server/emojis/service";
 import type { AppRuntime } from "@/app/.server/runtime";
-import { jsonError } from "@/lib/http";
+import { HttpError, jsonError } from "@/lib/http";
 export async function GET(runtime: AppRuntime, request: Request) {
   const auth = await requirePermission(
     runtime,
@@ -25,10 +26,13 @@ export async function POST(runtime: AppRuntime, request: Request) {
   );
   if ("response" in auth) return auth.response;
   try {
-    const body = await emojiRequestBody(request);
+    const body = await emojiRequestBody(request, runtime.uiLocale);
     await saveDefaults(getD1(runtime), auth.user.id, parseCells(body.cells));
     return emojiJson({ emojis: await defaults(getD1(runtime)) });
   } catch (error) {
-    return jsonError("默认表情保存失败", error);
+    return jsonError(translate(runtime.uiLocale, "emoji.error.defaultsFailed"),
+      error instanceof HttpError && error.messageKey
+        ? new HttpError(error.status, translate(runtime.uiLocale, error.messageKey, error.messageValues), error.code, error.messageKey, error.messageValues)
+        : error);
   }
 }

@@ -23,6 +23,9 @@ import {
 import { useNavigationGuard } from "@/app/components/ui/use-navigation-guard";
 import type { CharacterIndexData } from "@/lib/character-index";
 import type { CharacterMaterialKind } from "@/lib/character-materials";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
 import { CHARACTER_MATERIAL_CATEGORIES } from "@/lib/character-materials";
 import type { CharacterPortrait as Portrait } from "@/lib/character-names";
 import type {
@@ -52,8 +55,8 @@ const PAGE_SIZE = 48;
 const MATERIAL_DRAG_TYPE = "application/x-viprpg-workbench-material";
 type Material = AdminCharacterMaterial & {
   key: string;
-  title: string;
-  group: string;
+  title: string | null;
+  group: string | null;
   sourceUrl?: string | null;
   search: string;
 };
@@ -92,6 +95,9 @@ export function PortraitLibraryEditor({
   initialBoundMaterialIds: number[];
   characterIndex: CharacterIndexData;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const navigationLocale = useNavigationLocale();
   const navigateRoute = useNavigate();
 
   const initial = {
@@ -176,9 +182,13 @@ export function PortraitLibraryEditor({
     publicHashes.has(hash)
       ? `/api/media/blobs/${hash}`
       : `${endpoint}?blob=${hash}`;
-  const label = CHARACTER_MATERIAL_CATEGORIES.find(
-    (category) => category.kind === kind,
-  )!.label;
+  const label = t(`character.material.${kind}`);
+  function materialTitle(item: Material) {
+    if (item.title) return item.title;
+    return item.kind === "faceset"
+      ? t("admin.portraits.faceTitle", { id: item.id })
+      : t("admin.portraits.assetTitle", { kind: t(`character.material.${item.kind}`), id: item.id });
+  }
   const boundKeys = useMemo(
     () =>
       new Set([
@@ -233,7 +243,7 @@ export function PortraitLibraryEditor({
     libraryKey,
   ]);
   const visible = boundOnly ? matching.slice(0, limit) : matching;
-  const groups = new Map<string, Material[]>();
+  const groups = new Map<string | null, Material[]>();
   for (const item of visible) {
     const groupKey = boundOnly ? "" : item.group;
     const group = groups.get(groupKey) ?? [];
@@ -242,6 +252,7 @@ export function PortraitLibraryEditor({
   }
   const active =
     matching.find((item) => item.key === activeKey) ?? matching[0] ?? null;
+  const activeTitle = active ? materialTitle(active) : undefined;
   const isBound = Boolean(active && boundKeys.has(active.key));
   const selectedCell =
     active && cell?.key === active.key
@@ -276,7 +287,7 @@ export function PortraitLibraryEditor({
             credentials: "same-origin",
             signal: controller.signal,
           },
-          "素材库读取失败",
+          t("admin.portraits.readFailed"),
         );
         if (controller.signal.aborted) return;
         const items = [
@@ -303,12 +314,12 @@ export function PortraitLibraryEditor({
             key: libraryKey,
             offset: libraryOffset,
             message:
-              reason instanceof Error ? reason.message : "素材库读取失败",
+              formatFeedbackError(reason, locale, t("admin.portraits.readFailed")),
           });
       }
     })();
     return () => controller.abort();
-  }, [boundOnly, endpoint, kind, normalizedQuery, libraryOffset, libraryKey]);
+  }, [boundOnly, endpoint, kind, normalizedQuery, libraryOffset, libraryKey, locale, t]);
 
   function changeQuery(value: string) {
     setQuery(value);
@@ -327,7 +338,7 @@ export function PortraitLibraryEditor({
   const toast = useToast();
   useNavigationGuard(
     dirty || busy,
-    () => !busy && confirm("当前角色的素材修改尚未保存，确定离开？"),
+    () => !busy && confirm(t("admin.portraits.leave")),
   );
 
   function edit(next: Configuration, feedback: string) {
@@ -355,7 +366,7 @@ export function PortraitLibraryEditor({
             ? draft.portrait
             : null,
       },
-      `${bind ? "已添加" : "已解除"} ${items.length} 张素材的绑定`,
+      t("admin.portraits.bindingChanged", { bind: bind ? "yes" : "no", count: items.length }),
     );
   }
 
@@ -392,7 +403,7 @@ export function PortraitLibraryEditor({
       categoryIds.has(id) ? sorted[index++] : id,
     );
     if (next.every((id, position) => id === draft[field][position])) return;
-    edit({ ...draft, [field]: next }, "素材顺序已调整");
+    edit({ ...draft, [field]: next }, t("admin.portraits.order"));
     setActiveKey(sourceKey);
   }
 
@@ -426,7 +437,7 @@ export function PortraitLibraryEditor({
           column: selectedCell.column,
         },
       },
-      "默认头像已更新",
+      t("admin.portraits.defaultUpdated"),
     );
   }
 
@@ -435,7 +446,7 @@ export function PortraitLibraryEditor({
     busyRef.current = true;
     setBusy(true);
     setError("");
-    setMessage("正在保存…");
+    setMessage(t("admin.portraits.saving"));
     try {
       const body = new FormData();
       body.set("face_sheet_ids", JSON.stringify(draft.faceIds));
@@ -453,7 +464,7 @@ export function PortraitLibraryEditor({
       await requestJson(
         endpoint,
         { method: "PUT", body, credentials: "same-origin" },
-        "素材保存失败",
+        t("admin.portraits.saveFailed"),
       );
       const boundMaterials = new Set(draft.materialIds);
       setMaterials((current) =>
@@ -466,9 +477,9 @@ export function PortraitLibraryEditor({
       setSaved(draft);
       setUndo(null);
       setMessage("");
-      toast.success("素材已保存。");
+      toast.success(t("admin.portraits.saved"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "素材保存失败");
+      toast.error(error instanceof Error ? error : t("admin.portraits.saveFailed"));
       setMessage("");
     } finally {
       busyRef.current = false;
@@ -485,7 +496,7 @@ export function PortraitLibraryEditor({
     const failures: string[] = [];
     let succeeded = 0;
     for (const [index, file] of files.entries()) {
-      setMessage(`上传 ${index + 1} / ${files.length} · ${file.name}`);
+      setMessage(t("admin.portraits.uploadProgress", { index: index + 1, count: files.length, name: file.name }));
       try {
         const body = new FormData();
         if (kind === "faceset") {
@@ -493,7 +504,7 @@ export function PortraitLibraryEditor({
           body.set("face_sheet", file);
         } else {
           if (!file.size || file.size > 2 * 1024 * 1024)
-            throw new Error("请选择不超过 2 MiB 的图片");
+            throw new Error(t("admin.portraits.invalidImage"));
           body.set("image", file);
           body.set("kind", kind);
         }
@@ -502,14 +513,14 @@ export function PortraitLibraryEditor({
             ? `/api/admin/characters/${characterId}/face-sheets`
             : endpoint,
           { method: "POST", body, credentials: "same-origin" },
-          "素材上传失败",
+          t("admin.portraits.uploadFailed"),
         );
         const item = payload.sheet
           ? fromSheet(payload.sheet)
           : payload.material
             ? fromMaterial(payload.material)
             : null;
-        if (!item) throw new Error("服务器没有返回素材资料，请刷新确认");
+        if (!item) throw new Error(t("admin.portraits.missingResponse"));
         setMaterials((items) => [
           item,
           ...items.filter((other) => other.key !== item.key),
@@ -530,13 +541,13 @@ export function PortraitLibraryEditor({
         succeeded++;
       } catch (error) {
         failures.push(
-          `${file.name}：${error instanceof Error ? error.message : "上传失败"}`,
+          t("upload.faces.readDetail", { name: file.name, detail: formatFeedbackError(error, locale, t("admin.portraits.uploadFailed")) }),
         );
       }
     }
     setMessage("");
-    if (succeeded) toast.success(`${succeeded} 张素材已上传并保存。`);
-    if (failures.length) toast.error(`${failures.length} 张素材上传失败，详情见失败清单。`);
+    if (succeeded) toast.success(t("admin.portraits.uploaded", { count: succeeded }));
+    if (failures.length) toast.error(t("admin.portraits.uploadFailures", { count: failures.length }));
     setError(failures.join("\n"));
     busyRef.current = false;
     setBusy(false);
@@ -544,7 +555,8 @@ export function PortraitLibraryEditor({
 
   function navigate(id: number) {
     if (busyRef.current) return;
-    const path = `/admin/characters/${id}#portrait-workbench`;
+    const search = navigationLocale ? `?${new URLSearchParams({ [UI_LOCALE_PARAM]: navigationLocale })}` : "";
+    const path = `/admin/characters/${id}${search}#portrait-workbench`;
     if (dirty) setPendingNavigation(path);
     else navigateRoute(path);
   }
@@ -559,7 +571,7 @@ export function PortraitLibraryEditor({
 
   return (
     <div className="grid min-w-0 gap-3">
-      <nav aria-label="角色导航" className="flex flex-wrap items-center gap-2">
+      <nav aria-label={t("admin.portraits.characterNav")} className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <strong className="block truncate text-sm">
             {characterOriginalName} · {characterName}
@@ -575,7 +587,7 @@ export function PortraitLibraryEditor({
       </nav>
 
       <Tabs value={kind} onValueChange={changeKind}>
-        <TabsList aria-label="素材分类" className="overflow-x-auto">
+        <TabsList aria-label={t("admin.portraits.categories")} className="overflow-x-auto">
           {CHARACTER_MATERIAL_CATEGORIES.map((category) => (
             <TabsTrigger
               disabled={busy}
@@ -583,7 +595,7 @@ export function PortraitLibraryEditor({
               value={category.kind}
               className="shrink-0"
             >
-              {category.label}
+              {t(`character.material.${category.kind}`)}
               <span className="rounded bg-muted/10 px-1.5 text-xs tabular-nums">
                 {counts[category.kind]}
               </span>
@@ -640,11 +652,11 @@ export function PortraitLibraryEditor({
           >
             {dragging ? (
               <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-card/95 text-lg font-semibold text-primary">
-                松开即可上传到「{label}」
+                {t("admin.portraits.drop", { label })}
               </div>
             ) : null}
             <section
-              aria-label={`${label}素材库`}
+              aria-label={t("admin.portraits.namedLibrary", { label })}
               className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] border-b border-border lg:border-b-0 lg:border-r"
             >
               <header className="grid gap-3 border-b border-border p-3">
@@ -652,7 +664,7 @@ export function PortraitLibraryEditor({
                   <div
                     className="flex gap-1"
                     role="group"
-                    aria-label="素材范围"
+                    aria-label={t("admin.portraits.scope")}
                   >
                     <Button
                       aria-pressed={boundOnly}
@@ -661,7 +673,7 @@ export function PortraitLibraryEditor({
                       type="button"
                       variant={boundOnly ? "neutral" : "ghost"}
                     >
-                      已绑定 {counts[kind]}
+                      {t("admin.portraits.boundCount", { count: counts[kind] })}
                     </Button>
                     <Button
                       aria-pressed={!boundOnly}
@@ -670,7 +682,7 @@ export function PortraitLibraryEditor({
                       type="button"
                       variant={!boundOnly ? "neutral" : "ghost"}
                     >
-                      素材库
+                      {t("admin.portraits.library")}
                     </Button>
                   </div>
                   {canUpload ? (
@@ -682,16 +694,16 @@ export function PortraitLibraryEditor({
                       variant="outline"
                       title={
                         kind === "faceset"
-                          ? "PNG · 不超过 256 KiB · 48 像素网格"
-                          : "PNG、JPEG、GIF、WebP · 每张不超过 2 MiB"
+                          ? t("admin.portraits.faceFormat")
+                          : t("admin.portraits.imageFormat")
                       }
                     >
                       <ImagePlus size={16} />
-                      上传{label}
+                      {t("admin.portraits.upload", { label })}
                     </Button>
                   ) : null}
                   <input
-                    aria-label={`上传${label}`}
+                    aria-label={t("admin.portraits.upload", { label })}
                     accept={
                       kind === "faceset"
                         ? "image/png"
@@ -716,12 +728,12 @@ export function PortraitLibraryEditor({
                     size={16}
                   />
                   <Input
-                    aria-label={`搜索${label}`}
+                    aria-label={t("admin.portraits.search", { label })}
                     className="pl-9 pr-9"
                     placeholder={
                       kind === "faceset"
-                        ? "回车搜索来源、文件名或 #ID"
-                        : "回车搜索关联角色、#ID 或文件哈希"
+                        ? t("admin.portraits.faceSearch")
+                        : t("admin.portraits.otherSearch")
                     }
                     type="search"
                     enterKeyHint="search"
@@ -743,7 +755,7 @@ export function PortraitLibraryEditor({
                   />
                   {query || submittedQuery ? (
                     <Button
-                      aria-label="清空素材搜索"
+                      aria-label={t("admin.portraits.clearSearch")}
                       className="absolute right-1 top-1 h-8 w-8"
                       onClick={() => changeQuery("")}
                       size="icon"
@@ -756,33 +768,33 @@ export function PortraitLibraryEditor({
                 </div>
                 <span className="text-xs text-muted" role="status">
                   {libraryLoading
-                    ? "加载中…"
+                    ? t("admin.portraits.loading")
                     : !boundOnly
-                      ? `已加载 ${matching.length} 张${label}`
+                      ? t("admin.portraits.loaded", { count: matching.length, label })
                       : submittedQuery
-                        ? `找到 ${matching.length} 张`
-                        : `${matching.length} 张${label}`}
+                        ? t("admin.portraits.found", { count: matching.length })
+                        : t("admin.portraits.categoryCount", { count: matching.length, label })}
                 </span>
               </header>
               <div className="max-h-[440px] min-h-48 overflow-y-auto p-3 lg:max-h-none">
                 {matching.length ? (
                   <div className="grid gap-4">
                     {Array.from(groups, ([group, items]) => (
-                      <section className="grid gap-2" key={group}>
-                        {group ? (
+                      <section className="grid gap-2" key={group === null ? "fallback" : `source:${group}`}>
+                        {group !== "" ? (
                           <div className="flex min-w-0 items-center justify-between gap-2">
                             <strong
                               className="truncate text-xs text-muted"
-                              title={group}
+                              title={group ?? t("admin.portraits.otherSources")}
                             >
-                              {group}
+                              {group ?? t("admin.portraits.otherSources")}
                             </strong>
                           </div>
                         ) : null}
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
                           {items.map((item) => (
                             <Button
-                              aria-label={`${item.title}，${boundKeys.has(item.key) ? "已绑定" : "未绑定"}`}
+                              aria-label={t("admin.portraits.namedBinding", { title: materialTitle(item), status: t(boundKeys.has(item.key) ? "admin.portraits.bound" : "admin.portraits.unbound") })}
                               aria-pressed={active?.key === item.key}
                               aria-keyshortcuts={
                                 canSort
@@ -801,7 +813,7 @@ export function PortraitLibraryEditor({
                               data-material-sortable={canSort}
                               draggable={canSort}
                               title={
-                                canSort ? `拖动排序：${item.title}` : item.title
+                                canSort ? t("admin.portraits.dragOrder", { title: materialTitle(item) }) : materialTitle(item)
                               }
                               onDragStart={(event) => {
                                 if (!canSort) {
@@ -905,14 +917,14 @@ export function PortraitLibraryEditor({
                               ) : null}
                               <span
                                 className="mt-2 block truncate text-xs"
-                                title={item.title}
+                                title={materialTitle(item)}
                               >
-                                {item.title}
+                                {materialTitle(item)}
                               </span>
                               <span className="block text-[11px] text-muted">
                                 {item.kind === "faceset" &&
                                 draft.portrait?.faceSheetId === item.id
-                                  ? "默认头像所在图"
+                                  ? t("admin.portraits.defaultSheet")
                                   : `${item.width} × ${item.height}`}
                               </span>
                             </Button>
@@ -928,8 +940,7 @@ export function PortraitLibraryEditor({
                         type="button"
                         variant="outline"
                       >
-                        再显示 {Math.min(PAGE_SIZE, matching.length - limit)} 张
-                        · 还剩 {matching.length - limit} 张
+                        {t("admin.portraits.showMore", { count: Math.min(PAGE_SIZE, matching.length - limit), remaining: matching.length - limit })}
                       </Button>
                     ) : null}
                     {!boundOnly &&
@@ -942,7 +953,7 @@ export function PortraitLibraryEditor({
                         type="button"
                         variant="outline"
                       >
-                        {libraryLoading ? "加载中…" : "加载更多"}
+                        {libraryLoading ? t("admin.portraits.loading") : t("admin.portraits.loadMore")}
                       </Button>
                     ) : null}
                   </div>
@@ -955,10 +966,10 @@ export function PortraitLibraryEditor({
                     />
                     <p className="text-sm text-muted">
                       {submittedQuery
-                        ? "没有匹配的素材"
+                        ? t("admin.portraits.noMatches")
                         : boundOnly
-                          ? `还没有绑定${label}`
-                          : `素材库暂无${label}`}
+                          ? t("admin.portraits.noneBound", { label })
+                          : t("admin.portraits.noneInLibrary", { label })}
                     </p>
                     {submittedQuery ? (
                       <Button
@@ -967,7 +978,7 @@ export function PortraitLibraryEditor({
                         type="button"
                         variant="outline"
                       >
-                        清空搜索
+                        {t("admin.portraits.clearSearch")}
                       </Button>
                     ) : boundOnly ? (
                       <Button
@@ -976,7 +987,7 @@ export function PortraitLibraryEditor({
                         type="button"
                         variant="outline"
                       >
-                        从素材库添加
+                        {t("admin.portraits.addFromLibrary")}
                       </Button>
                     ) : canUpload ? (
                       <Button
@@ -986,7 +997,7 @@ export function PortraitLibraryEditor({
                         type="button"
                         variant="outline"
                       >
-                        上传第一张
+                        {t("admin.portraits.uploadFirst")}
                       </Button>
                     ) : null}
                   </div>
@@ -1006,7 +1017,7 @@ export function PortraitLibraryEditor({
                       variant="outline"
                     >
                       <RefreshCw aria-hidden size={14} />
-                      重试
+                      {t("admin.portraits.retry")}
                     </Button>
                   </div>
                 ) : null}
@@ -1014,7 +1025,7 @@ export function PortraitLibraryEditor({
             </section>
 
             <section
-              aria-label="素材预览"
+              aria-label={t("admin.portraits.preview")}
               className="grid min-h-[380px] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]"
             >
               <header className="grid gap-3 border-b border-border p-3">
@@ -1022,14 +1033,14 @@ export function PortraitLibraryEditor({
                   <div className="min-w-0">
                     <strong
                       className="block truncate text-sm"
-                      title={active?.title}
+                      title={activeTitle}
                     >
-                      {active?.title ?? "素材预览"}
+                      {activeTitle ?? t("admin.portraits.preview")}
                     </strong>
                     <span className="text-xs text-muted">
                       {active
                         ? `#${active.id} · ${active.width} × ${active.height}`
-                        : "选择一张图片"}
+                        : t("admin.portraits.choose")}
                     </span>
                   </div>
                   {active ? (
@@ -1041,18 +1052,18 @@ export function PortraitLibraryEditor({
                           : "bg-muted/10 text-muted",
                       )}
                     >
-                      {isBound ? "已绑定" : "未绑定"}
+                      {isBound ? t("admin.portraits.bound") : t("admin.portraits.unbound")}
                     </span>
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <SelectField
-                    aria-label="预览缩放"
+                    aria-label={t("admin.portraits.zoom")}
                     triggerClassName="h-8 gap-2 px-2 text-xs"
                     value={zoom}
                     onValueChange={setZoom}
                     options={[
-                      { value: "fit", label: "适应窗口" },
+                      { value: "fit", label: t("admin.portraits.fit") },
                       { value: "1", label: "100%" },
                       { value: "2", label: "200%" },
                       { value: "4", label: "400%" },
@@ -1061,19 +1072,19 @@ export function PortraitLibraryEditor({
                   <div
                     className="flex gap-1"
                     role="group"
-                    aria-label="预览背景"
+                    aria-label={t("admin.portraits.background")}
                   >
                     {[
                       {
                         value: "checker",
-                        label: "透明网格",
+                        label: t("admin.portraits.checker"),
                         color:
                           "bg-[conic-gradient(#ddd_25%,white_0_50%,#ddd_0_75%,white_0)] bg-[length:8px_8px]",
                       },
-                      { value: "light", label: "浅色背景", color: "bg-white" },
+                      { value: "light", label: t("admin.portraits.light"), color: "bg-white" },
                       {
                         value: "dark",
-                        label: "深色背景",
+                        label: t("admin.portraits.dark"),
                         color: "bg-zinc-900",
                       },
                     ].map((swatch) => (
@@ -1107,7 +1118,7 @@ export function PortraitLibraryEditor({
                       target="_blank"
                       rel="noreferrer"
                     >
-                      原图 ↗
+                      {t("admin.portraits.original")}
                     </a>
                   ) : null}
                   {active?.sourceUrl ? (
@@ -1117,7 +1128,7 @@ export function PortraitLibraryEditor({
                       target="_blank"
                       rel="noreferrer"
                     >
-                      来源 ↗
+                      {t("admin.portraits.source")}
                     </Link>
                   ) : null}
                 </div>
@@ -1145,7 +1156,7 @@ export function PortraitLibraryEditor({
                           src={imageUrl(active.blobSha256)}
                           height={active.height}
                           width={active.width}
-                          label={`为${characterName}选择默认头像`}
+                          label={t("admin.portraits.chooseDefault", { name: characterName })}
                           onSelectCell={(row, column) =>
                             setCell({ key: active.key, row, column })
                           }
@@ -1161,7 +1172,7 @@ export function PortraitLibraryEditor({
                         />
                       ) : (
                         <img
-                          alt={active.title}
+                          alt={activeTitle}
                           className={cn(
                             "block object-contain [image-rendering:pixelated]",
                             zoom === "fit"
@@ -1182,7 +1193,7 @@ export function PortraitLibraryEditor({
                   </div>
                 ) : (
                   <div className="grid h-full min-h-60 place-items-center text-sm text-muted">
-                    未选择素材
+                    {t("admin.portraits.noneSelected")}
                   </div>
                 )}
               </div>
@@ -1202,25 +1213,25 @@ export function PortraitLibraryEditor({
                     />
                     <div className="flex-1 text-xs">
                       <strong className="block">
-                        {draft.portrait ? "当前默认头像" : "尚未设置默认头像"}
+                        {draft.portrait ? t("admin.portraits.currentDefault") : t("admin.portraits.noDefault")}
                       </strong>
                       <span className="text-muted">
                         {selectedCell
-                          ? `已选第 ${selectedCell.row + 1} 行 · 第 ${selectedCell.column + 1} 列`
-                          : "待选头像"}
+                          ? t("admin.portraits.selectedCell", { row: selectedCell.row + 1, column: selectedCell.column + 1 })
+                          : t("upload.character.portraitPending")}
                       </span>
                     </div>
                     {draft.portrait && canManage ? (
                       <Button
                         disabled={busy}
                         onClick={() =>
-                          edit({ ...draft, portrait: null }, "已清除默认头像")
+                          edit({ ...draft, portrait: null }, t("admin.portraits.defaultCleared"))
                         }
                         size="sm"
                         type="button"
                         variant="ghost"
                       >
-                        清除
+                        {t("admin.list.clear")}
                       </Button>
                     ) : null}
                   </div>
@@ -1236,10 +1247,10 @@ export function PortraitLibraryEditor({
                       type="button"
                       variant={isBound ? "outline" : "default"}
                     >
-                      {isBound ? "解除绑定" : "绑定当前角色"}
+                      {isBound ? t("admin.portraits.unbind") : t("admin.portraits.bind")}
                     </Button>
                   ) : (
-                    <span className="text-xs text-muted">仅浏览</span>
+                    <span className="text-xs text-muted">{t("admin.portraits.browse")}</span>
                   )}
                   {canManage && kind === "faceset" ? (
                     <Button
@@ -1251,7 +1262,7 @@ export function PortraitLibraryEditor({
                       type="button"
                       variant="neutral"
                     >
-                      {isDefaultCell ? "已是默认头像" : "设为默认头像"}
+                      {isDefaultCell ? t("admin.portraits.alreadyDefault") : t("admin.portraits.setDefault")}
                     </Button>
                   ) : null}
                 </div>
@@ -1275,7 +1286,7 @@ export function PortraitLibraryEditor({
                       )
                     }
                   >
-                    解绑同来源
+                    {t("admin.portraits.unbindSource")}
                   </Button>
                 ) : null}
               </footer>
@@ -1307,8 +1318,8 @@ export function PortraitLibraryEditor({
           {busy
             ? message
             : dirty
-              ? `${message || "素材已修改"} · 待保存`
-              : message || "素材已同步"}
+              ? t("admin.portraits.unsaved", { message: message || t("admin.portraits.modified") })
+              : message || t("admin.portraits.synced")}
         </div>
         {undo && canManage ? (
           <Button
@@ -1316,7 +1327,7 @@ export function PortraitLibraryEditor({
             onClick={() => {
               setDraft(undo);
               setUndo(null);
-              setMessage("已撤销上一步");
+              setMessage(t("admin.portraits.undone"));
               setError("");
             }}
             size="sm"
@@ -1324,7 +1335,7 @@ export function PortraitLibraryEditor({
             variant="ghost"
           >
             <Undo2 size={14} />
-            撤销
+            {t("character.manager.undo")}
           </Button>
         ) : null}
         {canManage ? (
@@ -1334,7 +1345,7 @@ export function PortraitLibraryEditor({
             size="sm"
             type="button"
           >
-            {busy ? "处理中…" : "保存素材"}
+            {busy ? t("core.confirm.working") : t("admin.portraits.save")}
           </Button>
         ) : null}
       </div>
@@ -1345,14 +1356,14 @@ export function PortraitLibraryEditor({
         }}
       >
         <AlertDialogContent>
-          <AlertDialogTitle>放弃未保存的素材修改？</AlertDialogTitle>
+          <AlertDialogTitle>{t("admin.portraits.discardTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
-            当前角色的素材修改尚未保存。
+            {t("admin.portraits.discardDescription")}
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
               <Button type="button" variant="outline">
-                继续编辑
+                {t("admin.portraits.continue")}
               </Button>
             </AlertDialogCancel>
             <AlertDialogAction asChild>
@@ -1366,7 +1377,7 @@ export function PortraitLibraryEditor({
                   setPendingNavigation(null);
                 }}
               >
-                放弃并离开
+                {t("admin.portraits.discard")}
               </Button>
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1393,8 +1404,8 @@ function fromSheet(sheet: AdminFaceSheet): Material {
     key: `faceset:${sheet.id}`,
     relatedNames: "",
     isPublic: Number(sheet.libraryStatus === "approved"),
-    title: filename || `脸图 #${sheet.id}`,
-    group: sheet.sourcePageTitle || "其他来源",
+    title: filename || null,
+    group: sheet.sourcePageTitle || null,
     sourceUrl: sheet.sourcePageUrl,
     search: normalize(
       `${sheet.id} ${sheet.sourcePageTitle ?? ""} ${sheet.sourceSectionTitle ?? ""} ${filename} ${sheet.blobSha256}`,
@@ -1402,13 +1413,10 @@ function fromSheet(sheet: AdminFaceSheet): Material {
   };
 }
 function fromMaterial(material: AdminCharacterMaterial): Material {
-  const label = CHARACTER_MATERIAL_CATEGORIES.find(
-    (category) => category.kind === material.kind,
-  )!.label;
   return {
     ...material,
     key: `material:${material.id}`,
-    title: `${label} #${material.id}`,
+    title: null,
     group: "",
     search: normalize(
       `${material.id} ${material.relatedNames} ${material.blobSha256}`,

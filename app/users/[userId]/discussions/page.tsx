@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { parseAccountPage } from "@/app/.server/auth/account-user";
 import { getForumRuntime } from "@/app/.server/forum/context";
 import { publicUserDiscussions } from "@/app/.server/forum/user-discussions";
@@ -24,26 +26,25 @@ export async function loader(args: LoaderFunctionArgs) {
   const result = await publicUserDiscussions(
     getForumRuntime(runtime),
     user.id,
-    { page },
+    { page, locale: runtime.uiLocale },
   );
 
-  return { user, result };
+  return { locale: runtime.uiLocale, user, result };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    {
-      title: [loaderData?.user.displayName || "用户", "讨论"],
-      page: loaderData?.result.page,
-    },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "publicProfile.discussionTab");
+  const name = loaderData?.user.displayName;
+  return pageMetaDescriptors({ title: name ? [name, title] : title, page: loaderData?.result.page }, error, locale);
+};
 
 export default function PublicDiscussions() {
+  const t = useMessages();
   const { user, result } = useLoaderData<typeof loader>();
   const hidePosts = useIsPostAuthorHidden()(user.id);
   return (
-    <section aria-label="讨论">
+    <section aria-label={t("publicProfile.discussionTab")}>
       {!hidePosts && <DiscussionList items={result.items} />}
       <PaginationLinks
         basePath={`/users/${user.id}/discussions`}

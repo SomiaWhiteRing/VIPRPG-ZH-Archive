@@ -16,7 +16,9 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { uploadInitialWork } from "@/app/upload/initial-work";
 import { UploadClient } from "@/app/upload/upload-client";
 import { hasPermission } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { type LoaderFunctionArgs, type MetaFunction, useLoaderData } from "react-router";
 import type { PageLayoutHandle } from "@/app/components/use-page-layout";
 
@@ -40,24 +42,20 @@ export async function loader(args: LoaderFunctionArgs) {
   return {
     user: pickPageFields(user, ["id", "displayName", "status", "permissionKeys"]),
     work,
+    locale: runtime.uiLocale,
     suggestions,
     fromGameDetail,
     maintainers: await listPublicWorkMaintainers(runtime, workId),
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    {
-      title: [
-        loaderData?.work.chineseTitle || loaderData?.work.originalTitle || "作品",
-        "编辑作品",
-      ],
-    },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [loaderData?.work.chineseTitle || loaderData?.work.originalTitle || translate(locale, "work.detail"), translate(locale, "upload.own.edit")] }, error, locale);
+};
 
 export default function UploadedWorkPage() {
+  const t = useMessages();
   const { user, work, suggestions, fromGameDetail, maintainers } = useLoaderData<typeof loader>();
   return (
     <div key={`${user.id}:${work.id}`}>
@@ -65,14 +63,14 @@ export default function UploadedWorkPage() {
         actions={
           <BackLink
             href={fromGameDetail ? `/games/${work.id}` : "/me/uploads"}
-            label={fromGameDetail ? "返回作品详情" : "返回我的上传"}
+            label={t(fromGameDetail ? "upload.own.backWork" : "upload.own.backUploads")}
           />
         }
-        title={`编辑作品：${work.chineseTitle || work.originalTitle}`}
+        title={t("upload.own.editNamed", { title: work.chineseTitle || work.originalTitle })}
       />
       {work.status === "processing" ? (
         <Notice tone="warning" className="mb-4">
-          这条上传尚未完成。上传失败后，可以重新选择游戏文件并保存资料，也可以删除这条记录；仍在提交时请等待上传结束。
+          {t("upload.own.unfinished")}
         </Notice>
       ) : null}
       <UploadClient
@@ -90,12 +88,12 @@ export default function UploadedWorkPage() {
         action={`/api/works/${work.id}/delete`}
         className="mt-8"
         confirmField="confirm"
-        title="确认删除作品？"
-        description="删除后，作品将从公开页面和“我的上传”中移除，你将无法查看或修改。文件和资料会保留，只有管理员可以恢复。"
+        title={t("upload.own.deleteWorkConfirm")}
+        description={t("upload.own.deleteWorkDescription")}
       >
         <input name="confirm" type="hidden" value="delete" />
         <Button type="submit" variant="destructive">
-          删除作品
+          {t("upload.own.deleteWork")}
         </Button>
       </ConfirmingForm>
     </div>

@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { requirePagePermission } from "@/app/.server/auth/authorize";
 import { runtimeContext } from "@/app/.server/router-context";
 import { PageHeader } from "@/app/components/ui/page-header";
@@ -14,16 +16,18 @@ export async function loader(args: LoaderFunctionArgs) {
     "emoji.defaults.manage",
   );
 
-  return {};
+  return { locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["默认表情", "控制台"] }, error);
-
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "emoji.library.defaultTitle"), translate(locale, "admin.characterIndex.console")] }, error, locale);
+};
 export default function AdminEmojiPage() {
+  const t = useMessages();
   return (
     <main>
-      <PageHeader compact title="默认表情" />
+      <PageHeader compact title={t("emoji.library.defaultTitle")} />
       <EmojiAdminPanel />
     </main>
   );

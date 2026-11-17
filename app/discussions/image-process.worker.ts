@@ -1,10 +1,13 @@
+import { translate } from "@/lib/i18n/core";
+import type { UiLocale } from "@/lib/i18n/locale";
+import { FORUM_IMAGE_BYTES } from "@/lib/forum";
 import { inspectForumImage } from "@/lib/forum-image-format";
 
-async function processImage(file: File): Promise<File> {
+async function processImage(file: File, locale: UiLocale): Promise<File> {
   const original = await file.arrayBuffer();
-  const meta = inspectForumImage(original);
+  const meta = inspectForumImage(original, FORUM_IMAGE_BYTES, locale);
   if (file.type && file.type !== `image/${meta.format}`)
-    throw new Error("文件类型与图片内容不一致。");
+    throw new Error(translate(locale, "forum.image.typeMismatch"));
   if (meta.format === "gif" || meta.animated)
     return new File([original], file.name, { type: `image/${meta.format}` });
 
@@ -14,14 +17,14 @@ async function processImage(file: File): Promise<File> {
   let pixels: ImageData;
   try {
     if (bitmap.width !== meta.width || bitmap.height !== meta.height)
-      throw new Error("浏览器无法保持图片的显示方向及尺寸。");
+      throw new Error(translate(locale, "image.process.orientation"));
     // UPNG 2.1.0 allocates RGBA bytes + 100 for output; tiny palette PNGs
     // can exceed that buffer. Keep the decoded original before encoding.
     if (meta.format === "png" && meta.width * meta.height <= 1024)
       return new File([original], file.name, { type: "image/png" });
     const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("浏览器无法处理此图片。");
+    if (!context) throw new Error(translate(locale, "image.process.canvas"));
     context.drawImage(bitmap, 0, 0);
     pixels = context.getImageData(0, 0, bitmap.width, bitmap.height);
     canvas.width = canvas.height = 0;
@@ -40,14 +43,14 @@ async function processImage(file: File): Promise<File> {
     const { default: encode } = await import("@jsquash/webp/encode");
     encoded = await encode(pixels, { quality: 85, method: 4, lossless: 0, alpha_quality: 100 });
   }
-  const output = inspectForumImage(encoded, Infinity);
+  const output = inspectForumImage(encoded, Infinity, locale);
   if (output.format !== meta.format || output.animated || output.width !== meta.width || output.height !== meta.height || output.orientation !== 1)
-    throw new Error("编码结果的格式或尺寸不正确。");
+    throw new Error(translate(locale, "image.process.encodeFormat"));
   const candidate = new File([encoded], file.name, { type: `image/${meta.format}` });
   const check = await createImageBitmap(candidate);
   try {
     if (check.width !== meta.width || check.height !== meta.height)
-      throw new Error("编码结果无法正确显示。");
+      throw new Error(translate(locale, "image.process.encodeDisplay"));
   } finally {
     check.close();
   }
@@ -57,13 +60,13 @@ async function processImage(file: File): Promise<File> {
 }
 
 const scope = self as unknown as {
-  onmessage: (event: MessageEvent<File>) => void;
+  onmessage: (event: MessageEvent<{ file: File; locale: UiLocale }>) => void;
   postMessage: (message: { file: File } | { error: string }) => void;
 };
-scope.onmessage = async ({ data }) => {
+scope.onmessage = async ({ data: { file, locale } }) => {
   try {
-    scope.postMessage({ file: await processImage(data) });
+    scope.postMessage({ file: await processImage(file, locale) });
   } catch (error) {
-    scope.postMessage({ error: error instanceof Error ? error.message : "图片处理失败，请重试。" });
+    scope.postMessage({ error: error instanceof Error ? error.message : translate(locale, "image.processFailed") });
   }
 };

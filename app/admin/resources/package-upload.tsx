@@ -1,3 +1,6 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Notice } from "@/app/components/ui/notice";
@@ -28,6 +31,8 @@ export function PackageUpload({
   setBusy: (value: boolean) => void;
   onData: (data: ResourceEditorData) => void;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const toast = useToast();
   const windy = data.resource.slug === "windy-translator";
   const android = data.resource.slug === "viprpg-android";
@@ -45,7 +50,7 @@ export function PackageUpload({
     event.preventDefault();
     if (!file || busy) return;
     if (file.size < 1 || file.size > MAX_TOOL_BYTES) {
-      setError("文件需大于 0 且不超过 95 MB");
+      setError(t("admin.package.size"));
       return;
     }
     const form = new FormData(event.currentTarget);
@@ -55,16 +60,16 @@ export function PackageUpload({
       !((target === "windows-x64" && (format === "zip" || format === "exe")) ||
         (target === "android-universal" && format === "apk"))
     ) {
-      setError("Windows 请选择 ZIP 或 EXE 文件，Android 请选择 APK 文件");
+      setError(t("admin.package.format"));
       return;
     }
     if (data.resource.slug === "windy-translator" && (target !== "windows-x64" || format !== "zip")) {
-      setError("Windy 更新仅支持 Windows x64 ZIP");
+      setError(t("admin.package.windyFormat"));
       return;
     }
     setBusy(true);
     setError("");
-    setProgress("正在计算 SHA-256…");
+    setProgress(t("admin.package.calculating"));
     try {
       const metadata = automaticPackage ? await readPackage(file) : null;
       const sha256 = await new Promise<string>((resolve, reject) => {
@@ -78,18 +83,18 @@ export function PackageUpload({
         };
         cancel.current = () => {
           stop();
-          reject(new Error("已取消"));
+          reject(new Error(t("admin.package.canceled")));
         };
         worker.onmessage = (
-          e: MessageEvent<{ sha256?: string; error?: string }>,
+          e: MessageEvent<{ sha256: string } | { error: true }>,
         ) => {
           stop();
-          if (e.data.sha256) resolve(e.data.sha256);
-          else reject(new Error(e.data.error));
+          if ("sha256" in e.data) resolve(e.data.sha256);
+          else reject(new Error(t("admin.package.checksum")));
         };
         worker.onerror = () => {
           stop();
-          reject(new Error("文件校验计算失败"));
+          reject(new Error(t("admin.package.checksum")));
         };
         worker.postMessage(file);
       });
@@ -97,11 +102,11 @@ export function PackageUpload({
         existing &&
         (existing.sha256 !== sha256 || existing.size_bytes !== file.size)
       )
-        throw new Error("所选文件与原登记内容不同，请清理旧记录后重新添加");
+        throw new Error(t("admin.package.different"));
       const registered = existing
         ? { ...data, artifactId: existing.id }
         : await postJson<ResourceEditorData & { artifactId: string }>(
-            `/api/admin/resources/${data.resource.id}/artifacts`,
+            `/api/admin/resources/${data.resource.id}/artifacts?${UI_LOCALE_PARAM}=${locale}`,
             {
               revision: data.resource.revision,
               releaseId,
@@ -123,17 +128,17 @@ export function PackageUpload({
         if (element) scrollElementIntoView(element, { block: "nearest", inline: "nearest" });
       });
       if (artifact?.storage_status === "ready" || savedRelease?.status !== "draft") {
-        setProgress("此安装包已上传，已定位原版本");
+        setProgress(t("admin.package.already"));
         return;
       }
-      if (artifact && artifact.storage_status !== "pending") throw new Error("此安装包已登记，请在原版本中确认上传结果");
-      setProgress("正在上传…");
+      if (artifact && artifact.storage_status !== "pending") throw new Error(t("admin.package.registered"));
+      setProgress(t("admin.package.sending"));
       const result = await new Promise<ResourceEditorData>(
         (resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open(
             "PUT",
-            `/api/admin/resource-artifacts/${registered.artifactId}`,
+            `/api/admin/resource-artifacts/${registered.artifactId}?${UI_LOCALE_PARAM}=${locale}`,
           );
           xhr.setRequestHeader("Content-Type", "application/octet-stream");
           xhr.setRequestHeader(
@@ -143,27 +148,27 @@ export function PackageUpload({
           xhr.upload.onprogress = (e) =>
             setProgress(
               e.lengthComputable
-                ? `已发送 ${Math.round((e.loaded / e.total) * 100)}%，完成后等待校验`
-                : "正在上传…",
+                ? t("admin.package.sent", { percent: Math.round((e.loaded / e.total) * 100) })
+                : t("admin.package.sending"),
             );
           xhr.onload = () => {
             cancel.current = null;
             try {
               const value = JSON.parse(xhr.responseText);
               if (xhr.status >= 200 && xhr.status < 300) resolve(value);
-              else reject(new Error(value.detail || value.error || "上传失败"));
+              else reject(new Error(value.detail || value.error || t("admin.package.failed")));
             } catch (error) {
               reject(error);
             }
           };
           xhr.onerror = () => {
             cancel.current = null;
-            reject(new Error("网络中断，请重新读取后确认上传结果"));
+            reject(new Error(t("admin.package.network")));
           };
           xhr.onabort = () => {
             cancel.current = null;
             reject(
-              new Error("已取消发送，请重新读取并确认服务器是否已收到文件"),
+              new Error(t("admin.package.abort")),
             );
           };
           cancel.current = () => xhr.abort();
@@ -171,10 +176,10 @@ export function PackageUpload({
         },
       );
       onData(result);
-      setProgress("上传与校验完成");
-      toast.success("安装包已校验，可以发布。");
+      setProgress(t("admin.package.done"));
+      toast.success(t("admin.package.ready"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
+      toast.error(formatFeedbackError(error, locale, t("admin.package.failed")));
       setProgress("");
     } finally {
       cancel.current = null;
@@ -188,12 +193,12 @@ export function PackageUpload({
     >
       {error ? <Notice>{error}</Notice> : null}
       <h3 className="font-semibold">
-        {existing ? "重新上传同一文件" : "添加安装包"}
+        {existing ? t("admin.package.reupload") : t("admin.package.add")}
       </h3>
       {!existing && !automaticPackage ? (
         <>
           <Label className="grid gap-2">
-            平台
+            {t("admin.package.platform")}
             <SelectField
               name="target"
               defaultValue="windows-x64"
@@ -205,19 +210,19 @@ export function PackageUpload({
             />
           </Label>
           <details className="rounded border border-border p-2">
-            <summary className="cursor-pointer text-sm">可选：软件更新识别</summary>
+            <summary className="cursor-pointer text-sm">{t("admin.package.detect")}</summary>
             <p className="mt-2 text-sm text-muted">
-              普通下载无需填写。供客户端识别已安装版本；留空仍可上传和下载，但无法自动判断是否有新版。
+              {t("admin.package.detectHelp")}
             </p>
             <Label className="mt-2 grid gap-2">
-              构建标识
+              {t("admin.package.build")}
               <Input name="applicationBuildId" maxLength={200} disabled={busy} />
             </Label>
           </details>
         </>
       ) : null}
       <Label className="grid gap-2">
-        {android ? "GitHub 发布 APK（最多 95 MB）" : windy ? "GitHub 发行 ZIP（最多 95 MB）" : "安装包（ZIP、EXE 或 APK，最多 95 MB）"}
+        {android ? t("admin.package.android") : windy ? t("admin.package.windy") : t("admin.package.package")}
         <input
           type="file"
           accept={android ? ".apk" : windy ? ".zip" : ".zip,.exe,.apk"}
@@ -237,19 +242,19 @@ export function PackageUpload({
                 setBuild(info);
                 setVersion(info.version);
               } catch (error) {
-                if (token === selection.current) setError(error instanceof Error ? error.message : String(error));
+                if (token === selection.current) setError(formatFeedbackError(error, locale, t("admin.package.error.verification")));
               }
             }
           }}
         />
       </Label>
       {automaticPackage && build && !releaseId ? <>
-        <Label className="grid gap-2">版本名<Input name="version" value={version} onChange={(e) => setVersion(e.target.value)} required maxLength={100} disabled={busy} /></Label>
-        <Label className="grid gap-2">更新说明<Textarea name="notes" maxLength={30000} disabled={busy} /></Label>
+        <Label className="grid gap-2">{t("admin.resourceRelease.version")}<Input name="version" value={version} onChange={(e) => setVersion(e.target.value)} required maxLength={100} disabled={busy} /></Label>
+        <Label className="grid gap-2">{t("admin.resourceRelease.notes")}<Textarea name="notes" maxLength={30000} disabled={busy} /></Label>
       </> : null}
       <div className="flex flex-wrap items-center gap-3">
         <Button disabled={busy || !file || (automaticPackage && !build)} size="sm">
-          上传并校验
+          {t("admin.package.submit")}
         </Button>
         {cancel.current ? (
           <Button
@@ -258,7 +263,7 @@ export function PackageUpload({
             size="sm"
             onClick={() => cancel.current?.()}
           >
-            取消
+            {t("play.save.cancel")}
           </Button>
         ) : null}
         <span role="status" className="text-sm text-muted">

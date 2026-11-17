@@ -3,8 +3,9 @@ import { Button } from "@/app/components/ui/button";
 import type { GameMediaAsset } from "@/lib/dto/db/game-library";
 import { Maximize2 } from "lucide-react";
 import { useState } from "react";
+import { useMessages } from "@/lib/i18n/react";
 
-const MEDIA_LABELS = { cover: "封面", preview: "预览图" };
+const mediaLabels = { cover: "upload.cover.cover", preview: "upload.metadata.previews" } as const;
 
 export function WorkMediaGallery({
   items,
@@ -13,19 +14,20 @@ export function WorkMediaGallery({
   items: GameMediaAsset[];
   title: string;
 }) {
+  const t = useMessages();
   const [active, setActive] = useState(-1);
 
   return (
     <>
       <div
-        aria-label="预览图列表"
+        aria-label={t("work.media.list")}
         className="flex snap-x snap-proximity gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin"
       >
         {items.map((item, index) => {
-          const label = MEDIA_LABELS[item.role];
+          const label = t(mediaLabels[item.role]);
           return (
             <Button
-              aria-label={`${label}，点击放大`}
+              aria-label={t("work.media.enlarge", { label })}
               className="block basis-75 shrink-0 snap-start overflow-hidden rounded-lg border-2 border-border bg-card p-0 text-left hover:border-primary focus-visible:border-primary max-[560px]:basis-[min(300px,78vw)]"
               key={`${item.blobSha256}-${item.sortOrder ?? index}`}
               onClick={() => setActive(index)}
@@ -54,7 +56,7 @@ export function WorkMediaGallery({
         <ImageLightbox open close={() => setActive(-1)} index={active}
           slides={items.map((item) => ({
             src: `/api/media/blobs/${item.blobSha256}`,
-            alt: item.altText ?? `${title} ${MEDIA_LABELS[item.role]}`,
+            alt: item.altText ?? `${title} ${t(mediaLabels[item.role])}`,
           }))}
         />
       ) : null}

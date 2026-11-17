@@ -20,7 +20,7 @@ export async function PUT(runtime: AppRuntime, request: Request) {
         ?.toLowerCase()
         .startsWith("image/png")
     )
-      throw new HttpError(415, "头像必须是 PNG 文件");
+      throw new HttpError(415, "头像必须是 PNG 文件", undefined, "avatar.error.png");
     const body = await request.arrayBuffer();
     const sha256 = await storeAvatarPng(runtime, body);
     await updateOwnAvatar(runtime, auth.user, sha256);

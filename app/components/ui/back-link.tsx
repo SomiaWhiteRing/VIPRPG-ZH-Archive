@@ -1,7 +1,7 @@
 import { Button } from "@/app/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { ArrowLeft } from "lucide-react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 type BackLinkProps = {
   href: string;

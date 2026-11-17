@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { Input } from "@/app/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { useRef } from "react";
@@ -23,15 +24,16 @@ export function CustomSelect({
   descriptionId?: string;
   customInputId?: string;
 }) {
+  const t = useMessages();
   const inputRef = useRef<HTMLInputElement>(null);
   const focusCustom = useRef(false);
   const custom = value === customOption;
   return (
     <div className="relative min-w-0">
       {custom ? (
-        <Input id={customInputId} ref={inputRef} aria-label={`${label}自定义名称`}
+        <Input id={customInputId} ref={inputRef} aria-label={t("core.ui.customName", { label })}
           aria-invalid={invalid} aria-describedby={descriptionId}
-          className="pl-2 pr-8 text-xs sm:text-sm" placeholder="自定义" value={customValue}
+          className="pl-2 pr-8 text-xs sm:text-sm" placeholder={t("library.custom")} value={customValue}
           disabled={disabled} required={required} maxLength={maxLength}
           onChange={(event) => onChange(customOption, event.target.value)} />
       ) : null}

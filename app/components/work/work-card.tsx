@@ -1,7 +1,8 @@
 import { WorkThumbnail } from "@/app/components/work/work-thumbnail";
 import { Button } from "@/app/components/ui/button";
 import type { MouseEventHandler, ReactNode } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages } from "@/lib/i18n/react";
 
 const imageMetadataClassName = "absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/45 to-transparent px-2 pb-1.5 pt-6 font-normal text-white min-[641px]:px-3 min-[641px]:pb-2";
 const cardClassName = "group flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-foreground transition-[border-color,box-shadow] hover:border-primary/40 hover:shadow-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -40,6 +41,7 @@ export function WorkCard({
   action?: ReactNode;
   children?: ReactNode;
 } & ({ href: string; onOpen?: never; disabled?: never } | { href?: never; onOpen: MouseEventHandler<HTMLButtonElement>; disabled?: boolean })) {
+  const t = useMessages();
   const content = <>
         <div className="relative grid aspect-4/3 place-items-center overflow-hidden bg-muted/15 font-mono text-xs font-bold text-muted">
           <WorkThumbnail
@@ -47,7 +49,7 @@ export function WorkCard({
             src={coverSrc}
             width={420}
             height={315}
-            fallback="暂无封面"
+            fallback={t("work.noCover")}
             priority={imagePriority}
           />
           {imageMetadata ? (

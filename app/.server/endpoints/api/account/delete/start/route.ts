@@ -16,7 +16,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
   try {
     assertSameOrigin(runtime, request);
     const auth = await getAuthContext(runtime);
-    if (!auth) throw new HttpError(401, "请先登录");
+    if (!auth) throw new HttpError(401, "请先登录", undefined, "timeline.error.login");
     const form = await request.formData();
     assertAccountDeletionRequest(auth.user, String(form.get("acknowledgement") ?? ""));
     const challenge = {

@@ -1,3 +1,5 @@
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
+import { translate } from "@/lib/i18n/core";
 import type { CharacterPortraitRow } from "@/app/.server/db/character-portrait-library";
 import {
   CHARACTER_PORTRAIT_COLUMNS,
@@ -290,13 +292,14 @@ export async function createCharacterForAdmin(
 ): Promise<{ character: AdminCharacterEdit; created: boolean }> {
   const primaryName = normalizeEntityName(input.primaryName);
   if (!primaryName)
-    throw new HttpError(400, "角色中文名不能为空。", "character_name_required");
+    throw new HttpError(400, "角色中文名不能为空。", "character_name_required", "admin.characterDetail.error.primaryRequired");
   const originalName = normalizeEntityName(input.originalName);
   if (!originalName)
     throw new HttpError(
       400,
       "角色日语名不能为空。",
       "character_original_name_required",
+      "admin.characterDetail.error.japaneseRequired",
     );
 
   const database = getD1(runtime);
@@ -321,6 +324,8 @@ export async function createCharacterForAdmin(
       409,
       `日语名“${originalName}”对应多个角色，请先在角色维护页合并重复记录。`,
       "character_name_multiple_matches",
+      "admin.characterDetail.error.multipleMatches",
+      { name: originalName },
     );
   }
 
@@ -351,6 +356,8 @@ export async function createCharacterForAdmin(
         409,
         `日语名“${originalName}”刚刚被其他操作占用，请重新提交以打开已有角色。`,
         "character_name_conflict",
+        "admin.characterDetail.error.japaneseTaken",
+        { name: originalName },
       );
     }
     throw error;
@@ -381,19 +388,21 @@ export async function updateCharacterForAdmin(
 ): Promise<AdminCharacterEdit> {
   const primaryName = normalizeEntityName(input.primaryName);
   if (!primaryName)
-    throw new HttpError(400, "角色名称不能为空。", "character_name_required");
+    throw new HttpError(400, "角色名称不能为空。", "character_name_required", "admin.characterDetail.error.nameRequired");
   const originalName = normalizeEntityName(input.originalName);
   if (!originalName)
     throw new HttpError(
       400,
       "角色原名不能为空。",
       "character_original_name_required",
+      "admin.characterDetail.error.originalRequired",
     );
   if (input.mergeTargetId && input.mergeSourceId) {
     throw new HttpError(
       400,
       "一次只能选择一个合并方向，请取消其中一个合并操作后重试。",
       "character_merge_direction_conflict",
+      "admin.characterDetail.error.mergeDirection",
     );
   }
   if (input.mergeTargetId) {
@@ -404,6 +413,7 @@ export async function updateCharacterForAdmin(
         404,
         "合并目标不存在，请刷新页面后重新选择。",
         "character_merge_target_missing",
+        "admin.characterDetail.error.targetMissing",
       );
     return target;
   }
@@ -412,7 +422,7 @@ export async function updateCharacterForAdmin(
     input.characterId,
   );
   if (!existingCharacter)
-    throw new HttpError(404, "角色不存在，请刷新后重试。", "character_missing");
+    throw new HttpError(404, "角色不存在，请刷新后重试。", "character_missing", "admin.characterDetail.error.missing");
   const aliases = [
     ...normalizeCharacterAliases(input.japaneseAliases, "ja", originalName),
     ...normalizeCharacterAliases(input.chineseAliases, "zh", primaryName),
@@ -476,6 +486,7 @@ export async function updateCharacterForAdmin(
         409,
         "角色原名或日文别名刚刚被其他角色占用。请刷新页面后重试；如果两条记录是同一角色，请使用“合并重复角色”。",
         "character_name_conflict",
+        "admin.characterDetail.error.nameTaken",
       );
     }
     throw error;
@@ -603,7 +614,7 @@ export async function updateTagForAdmin(
 ): Promise<AdminTagEdit> {
   const name = normalizeEntityName(input.originalName);
   if (!name)
-    throw new HttpError(400, "标签名称不能为空。", "tag_name_required");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.tags.error.required"), "tag_name_required", "admin.tags.error.required");
   if (
     !["genre", "theme", "character", "technical", "content", "other"].includes(
       input.namespace,
@@ -611,15 +622,17 @@ export async function updateTagForAdmin(
   )
     throw new HttpError(
       400,
-      "标签命名空间不合法，请重新选择。",
+      translate(runtime.uiLocale, "admin.tags.error.invalid"),
       "tag_namespace_invalid",
+      "admin.tags.error.invalid",
     );
   const original = await getTagForAdminEdit(runtime, input.originalName);
   if (!original) {
     throw new HttpError(
       404,
-      "公共标签不存在，请返回列表后重新进入。",
+      translate(runtime.uiLocale, "admin.tags.error.missing"),
       "tag_not_found",
+      "admin.tags.error.missing",
     );
   }
   const database = getD1(runtime);
@@ -630,7 +643,7 @@ export async function updateTagForAdmin(
     snapshot: tagAuditSnapshot(original.name), permission: "tag.metadata.update_any", source: "admin",
   });
   if (!result.meta.changes) {
-    throw new HttpError(409, "公共标签已变更，请刷新页面后重试。", "tag_changed");
+    throw new HttpError(409, translate(runtime.uiLocale, "admin.tags.error.changed"), "tag_changed", "admin.tags.error.changed");
   }
   const updated = await getTagForAdminEdit(runtime, name);
   if (!updated) throw new Error("标签更新后不可读取");
@@ -638,12 +651,13 @@ export async function updateTagForAdmin(
 }
 export function parseTagEditForm(
   form: FormData,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ): Parameters<typeof updateTagForAdmin>[1] {
   const originalName = normalizeEntityName(String(form.get("original_name") ?? ""));
   const submittedName = form.get("name");
   if ((submittedName !== null && normalizeEntityName(String(submittedName)) !== originalName)
     || String(form.get("merge_target_name") ?? "").trim()) {
-    throw new HttpError(400, "标签名称不能更改，也不支持合并或删除。", "tag_identity_immutable");
+    throw new HttpError(400, translate(locale, "admin.tags.error.immutable"), "tag_identity_immutable", "admin.tags.error.immutable");
   }
   return {
     originalName,
@@ -731,6 +745,7 @@ async function prepareCharacterMerge(
       400,
       "角色合并目标不合法，请重新选择。",
       "character_merge_target_invalid",
+      "admin.characterDetail.error.targetInvalid",
     );
   }
   const statements = [
@@ -932,6 +947,8 @@ function assertAliasLanguagesDoNotOverlap(
         400,
         `别名“${alias.name}”同时填写在日文别名和中文别名中。请只保留在正确的语言栏。`,
         "character_alias_language_conflict",
+        "admin.characterDetail.error.aliasLanguage",
+        { name: alias.name },
       );
     }
     languageByKey.set(key, alias);
@@ -1029,6 +1046,14 @@ function assertCharacterIdentityAvailable(
       409,
       `角色原名“${originalConflict.inputName}”已被角色 #${originalConflict.characterId}“${originalConflict.originalName} · ${originalConflict.primaryName}”用作${occupiedAs}。请修改角色原名；如果两条记录是同一角色，请使用页面下方的“合并重复角色”。`,
       "character_name_conflict",
+      "admin.characterDetail.error.originalConflict",
+      {
+        name: originalConflict.inputName,
+        id: originalConflict.characterId,
+        character: `${originalConflict.originalName} · ${originalConflict.primaryName}`,
+        role: originalConflict.occupiedAs,
+        alias: originalConflict.occupiedName,
+      },
     );
   }
 
@@ -1046,10 +1071,13 @@ function assertCharacterIdentityAvailable(
     );
   }
 
+  const aliases = formatQuotedNames([...new Set(conflicts.map((conflict) => conflict.inputName))]);
   throw new HttpError(
     409,
-    `日文别名${formatQuotedNames([...new Set(conflicts.map((conflict) => conflict.inputName))])}分别归属于多个角色，不能一次合并。请每次只保留属于同一角色的冲突别名，逐个处理。`,
+    `日文别名${aliases}分别归属于多个角色，不能一次合并。请每次只保留属于同一角色的冲突别名，逐个处理。`,
     "character_alias_multiple_conflicts",
+    "admin.characterDetail.error.aliasMultiple",
+    { aliases },
   );
 }
 
@@ -1071,6 +1099,7 @@ function assertConfirmedAliasMerge(
       409,
       "别名占用关系已经变化，未执行合并。请重新保存并确认最新提示。",
       "character_alias_merge_stale",
+      "admin.characterDetail.error.mergeStale",
     );
   }
 }
@@ -1191,6 +1220,7 @@ function positive(value: FormDataEntryValue | null): number {
       400,
       "提交的记录 ID 不合法，请刷新页面后重试。",
       "record_id_invalid",
+      "admin.characterDetail.error.recordId",
     );
   }
   return id;

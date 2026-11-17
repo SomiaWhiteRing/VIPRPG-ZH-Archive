@@ -2,6 +2,7 @@ import { CharacterMembershipPicker, CharacterNameFields } from "./character-memb
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { CharacterCreateButton } from "@/app/admin/characters/character-create-button";
 import { CategoryPicker } from "@/app/components/characters/category-picker";
+import { useMessages } from "@/lib/i18n/react";
 import { SortableCategoryMembers } from "@/app/admin/characters/index/sortable-category-members";
 import { Button, buttonVariants } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
@@ -44,7 +45,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 type CategoryDraft = {
   kind: "category";
@@ -109,6 +110,7 @@ export function CharacterIndexEditor({
   initialCharacterId?: number;
   initialCategoryId?: string;
 }) {
+  const t = useMessages();
   const can = (key: PermissionKey) => hasPermissionKey(permissionKeys, key);
   const [data, setData] = useState(initialData);
   const [draft, setDraft] = useState<Draft>(() => {
@@ -242,12 +244,12 @@ export function CharacterIndexEditor({
     () =>
       !busy &&
       !savingOrder &&
-      confirm("角色分类尚未保存，确定离开？"),
+      confirm(t("admin.characterIndex.leave")),
   );
   async function select(next: Draft) {
     if (
       busy ||
-      (dirty && !(await confirm("当前修改尚未保存。放弃修改并切换？", { title: "切换编辑对象", confirmLabel: "放弃修改并切换" })))
+      (dirty && !(await confirm(t("admin.characterIndex.discardPrompt"), { title: t("admin.characterIndex.switch"), confirmLabel: t("admin.characterIndex.discardSwitch") })))
     )
       return;
     setDraft(next);
@@ -295,7 +297,7 @@ export function CharacterIndexEditor({
     optimisticData?: CharacterIndexData,
   ) {
     if (submitting.current) {
-      toast.info("正在保存，请稍后再操作。");
+      toast.info(t("admin.characterIndex.saveBusy"));
       return;
     }
     submitting.current = true;
@@ -321,7 +323,7 @@ export function CharacterIndexEditor({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         },
-        "保存失败",
+        t("admin.characterIndex.saveFailed"),
       );
       setData(result.data);
       // Sorting changes order only; preserve the current editor and selection.
@@ -369,7 +371,7 @@ export function CharacterIndexEditor({
       });
     } catch (reason) {
       if (optimisticData) setData(previousData);
-      toast.error(reason instanceof Error ? reason.message : "保存失败，请重试。");
+      toast.error(reason instanceof Error ? reason : t("admin.characterIndex.saveRetry"));
     } finally {
       submitting.current = false;
       if (sorting) setSavingOrder(false);
@@ -398,7 +400,7 @@ export function CharacterIndexEditor({
           >
             {node.kind === "category" ? (
               <Button
-                aria-label={`${expanded ? "收起" : "展开"}${node.label}`}
+                aria-label={t(expanded ? "character.collapseGroup" : "character.expandGroup", { label: node.label })}
                 aria-expanded={expanded}
                 className="size-8 min-h-8 shrink-0 p-0"
                 variant="ghost"
@@ -459,9 +461,9 @@ export function CharacterIndexEditor({
       <aside className="admin-workspace-panel w-full shrink-0 border border-border bg-card lg:sticky lg:top-20 lg:w-76">
         <div className="grid gap-3 border-b border-border p-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold">分类与角色</h2>
+            <h2 className="font-semibold">{t("admin.characterIndex.tree")}</h2>
             <span role="status" className="text-xs text-muted">
-              {savingOrder ? "正在保存顺序…" : ""}
+              {savingOrder ? t("admin.characterIndex.savingOrder") : ""}
             </span>
             <Button
               size="sm"
@@ -471,29 +473,28 @@ export function CharacterIndexEditor({
               onClick={() => select(emptyCategory(null))}
             >
               <Plus aria-hidden size={14} />
-              一级分类
+              {t("admin.characterIndex.root")}
             </Button>
           </div>
           <Input
-            aria-label="搜索分类或角色"
+            aria-label={t("admin.characterIndex.search")}
             type="search"
-            placeholder="搜索分类、角色或别名"
+            placeholder={t("admin.characterIndex.searchHint")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
           <p className="text-xs text-muted">
-            {data.categories.length} 个分类 · {data.characters.length} 位角色 ·{" "}
-            {unplaced.length} 位未分类
+            {t("admin.characterIndex.counts", { categories: data.categories.length, characters: data.characters.length, unplaced: unplaced.length })}
           </p>
         </div>
         <nav
-          aria-label="编辑角色分类"
+          aria-label={t("admin.characterIndex.editTree")}
           className="max-h-80 overflow-y-auto p-2 lg:max-h-[calc(100dvh-17rem)]"
         >
           {renderTree(roots, null)}
           {unplaced.length ? (
             <div className="mt-3 border-t border-border pt-2">
-              <h3 className="px-2 py-1 text-xs text-muted">未分类</h3>
+              <h3 className="px-2 py-1 text-xs text-muted">{t("character.uncategorized")}</h3>
               {unplaced
                 .filter((item) =>
                   characterNameKey(
@@ -524,18 +525,18 @@ export function CharacterIndexEditor({
         </nav>
       </aside>
       <section
-        aria-label="编辑分类或角色"
+        aria-label={t("admin.characterIndex.editPanel")}
         className="admin-workspace-panel w-full min-w-0 flex-1 border border-border bg-card"
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div>
             <p className="mb-1 break-words text-xs text-muted">
-              {draft.kind === "character" ? "角色" : "分类"}
+              {draft.kind === "character" ? t("admin.characterIndex.character") : t("admin.characterIndex.category")}
             </p>
             <h2 className="text-lg font-semibold">
               {draft.kind === "character"
                 ? draft.displayName
-                : draft.label || "新建分类"}
+                : draft.label || t("admin.characterIndex.new")}
             </h2>
           </div>
           {canSort ? (
@@ -543,8 +544,8 @@ export function CharacterIndexEditor({
               {(["up", "down"] as const).map((direction) => (
                 <Button
                   key={direction}
-                  aria-label={direction === "up" ? "上移" : "下移"}
-                  title={direction === "up" ? "上移" : "下移"}
+                  aria-label={direction === "up" ? t("admin.characterIndex.up") : t("admin.characterIndex.down")}
+                  title={direction === "up" ? t("admin.characterIndex.up") : t("admin.characterIndex.down")}
                   size="icon"
                   variant="ghost"
                   type="button"
@@ -558,7 +559,7 @@ export function CharacterIndexEditor({
                           draft.kind === "character" ? draft.characterId : null,
                         direction,
                       },
-                      "顺序已更新",
+                      t("admin.characterIndex.orderSaved"),
                     )
                   }
                 >
@@ -578,7 +579,7 @@ export function CharacterIndexEditor({
           onSubmit={(event) => {
             event.preventDefault();
             if (draft.kind === "character" && !draft.targetCategoryId) {
-              setError("请选择所属分类。");
+              setError(t("admin.characterIndex.categoryRequired"));
               return;
             }
             void submit(
@@ -597,7 +598,7 @@ export function CharacterIndexEditor({
                         },
                       ],
                     },
-              "已保存",
+              t("admin.characterIndex.saved"),
             );
           }}
         >
@@ -605,7 +606,7 @@ export function CharacterIndexEditor({
             {draft.kind === "category" ? (
               <>
                 <div>
-                  <Label htmlFor="category-parent">上级分类</Label>
+                  <Label htmlFor="category-parent">{t("character.categoryPicker.parent")}</Label>
                   <CategoryPicker
                     id="category-parent"
                     mode="parent"
@@ -618,7 +619,7 @@ export function CharacterIndexEditor({
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label htmlFor="category-label">分类名称</Label>
+                    <Label htmlFor="category-label">{t("admin.characterIndex.categoryName")}</Label>
                     <Input
                       id="category-label"
                       disabled={!canSaveDetails}
@@ -631,7 +632,7 @@ export function CharacterIndexEditor({
                     />
                   </div>
                   <div>
-                    <Label htmlFor="category-original">日文原名（可选）</Label>
+                    <Label htmlFor="category-original">{t("admin.characterIndex.originalName")}</Label>
                     <Input
                       id="category-original"
                       disabled={!canSaveDetails}
@@ -644,7 +645,7 @@ export function CharacterIndexEditor({
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="category-source">来源链接（可选）</Label>
+                  <Label htmlFor="category-source">{t("admin.characterIndex.sourceUrl")}</Label>
                   <Input
                     id="category-source"
                     disabled={!canSaveDetails}
@@ -671,7 +672,7 @@ export function CharacterIndexEditor({
                       {draft.originalName}
                     </p>
                     <p className="mt-1 text-xs text-muted">
-                      {character.workCount} 部公开作品
+                      {t("admin.characterIndex.publicWorks", { count: character.workCount })}
                     </p>
                   </div>
                   {CHARACTER_DETAIL_PERMISSIONS.some(can) ? (
@@ -682,12 +683,12 @@ export function CharacterIndexEditor({
                       })}
                       to={`/admin/characters/${character.id}`}
                     >
-                      角色资料与素材
+                      {t("admin.characterIndex.profileMaterials")}
                     </Link>
                   ) : null}
                 </div>
                 <div>
-                  <Label htmlFor="character-category">所属分类</Label>
+                  <Label htmlFor="character-category">{t("character.categoryPicker.membership")}</Label>
                   <CategoryPicker
                     id="character-category"
                     mode="membership"
@@ -712,7 +713,7 @@ export function CharacterIndexEditor({
                     member.categoryId !== draft.categoryId,
                 ) ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-muted">同时属于</span>
+                    <span className="text-xs text-muted">{t("admin.characterIndex.alsoIn")}</span>
                     {data.memberships
                       .filter(
                         (member) =>
@@ -761,11 +762,11 @@ export function CharacterIndexEditor({
                 }
               >
                 <Save aria-hidden size={16} />
-                {busy ? "保存中…" : "保存修改"}
+                {busy ? t("admin.characterIndex.saving") : t("admin.characterIndex.save")}
               </Button>
               {dirty ? (
                 <>
-                  <span className="text-xs text-muted">有未保存修改</span>
+                  <span className="text-xs text-muted">{t("admin.characterIndex.unsaved")}</span>
                   <Button
                     type="button"
                     variant="ghost"
@@ -774,7 +775,7 @@ export function CharacterIndexEditor({
                       setError("");
                     }}
                   >
-                    还原修改
+                    {t("admin.characterIndex.restore")}
                   </Button>
                 </>
               ) : null}
@@ -791,9 +792,9 @@ export function CharacterIndexEditor({
                   onClick={async () => {
                     const prompt =
                       draft.kind === "category"
-                        ? `删除空分类“${draft.label}”？`
-                        : `将“${character?.primaryName}”移出“${selectedCategory?.label}”？角色资料会保留。`;
-                    if (await confirm(prompt, { title: draft.kind === "category" ? "删除分类" : "移出分类", confirmLabel: draft.kind === "category" ? "删除分类" : "移出分类", destructive: true }))
+                        ? t("admin.characterIndex.deletePrompt", { name: draft.label })
+                        : t("admin.characterIndex.removePrompt", { name: character?.primaryName ?? "", category: selectedCategory?.label ?? "" });
+                    if (await confirm(prompt, { title: draft.kind === "category" ? t("admin.characterIndex.delete") : t("admin.characterIndex.remove"), confirmLabel: draft.kind === "category" ? t("admin.characterIndex.delete") : t("admin.characterIndex.remove"), destructive: true }))
                       void submit(
                         {
                           operation:
@@ -806,12 +807,12 @@ export function CharacterIndexEditor({
                               ? draft.characterId
                               : null,
                         },
-                        draft.kind === "category" ? "分类已删除" : "已移出分类",
+                        draft.kind === "category" ? t("admin.characterIndex.deleted") : t("admin.characterIndex.removed"),
                       );
                   }}
                 >
                   <Trash2 aria-hidden size={15} />
-                  {draft.kind === "category" ? "删除空分类" : "移出分类"}
+                  {draft.kind === "category" ? t("admin.characterIndex.deleteEmpty") : t("admin.characterIndex.remove")}
                 </Button>
               ) : null}
             </div>
@@ -819,11 +820,11 @@ export function CharacterIndexEditor({
         </form>
         {draft.kind === "character" ? (
           <section
-            aria-label="角色来源"
+            aria-label={t("admin.characterIndex.sources")}
             className="grid gap-3 border-t border-border p-4 sm:p-5"
           >
             <Label htmlFor="character-sources">
-              角色来源链接（每行一个，可选）
+              {t("admin.characterIndex.sourcesLabel")}
             </Label>
             <Textarea
               id="character-sources"
@@ -849,11 +850,11 @@ export function CharacterIndexEditor({
                           .map((url) => url.trim())
                           .filter(Boolean),
                       },
-                      "角色来源已保存",
+                      t("admin.characterIndex.sourcesSaved"),
                     )
                   }
                 >
-                  保存来源
+                  {t("admin.characterIndex.saveSources")}
                 </Button>
               </div>
             ) : null}
@@ -862,10 +863,10 @@ export function CharacterIndexEditor({
         {draft.kind === "category" && draft.categoryId ? (
           <section
             className="grid gap-4 border-t border-border p-4 sm:p-5"
-            aria-label="分类成员"
+            aria-label={t("admin.characterIndex.members")}
           >
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="mr-auto font-semibold">分类成员 · {childCount}</h3>
+              <h3 className="mr-auto font-semibold">{t("admin.characterIndex.membersCount", { count: childCount })}</h3>
               <Button
                 type="button"
                 size="sm"
@@ -874,7 +875,7 @@ export function CharacterIndexEditor({
                 onClick={() => select(emptyCategory(draft.categoryId))}
               >
                 <Plus aria-hidden size={14} />
-                子分类
+                {t("admin.characterIndex.child")}
               </Button>
               {can("character.create") ? (
                 <CharacterCreateButton disabled={busy || dirty} />
@@ -931,13 +932,13 @@ export function CharacterIndexEditor({
                     categoryId: draft.categoryId,
                     ...move,
                   },
-                  "顺序已更新",
+                  t("admin.characterIndex.orderSaved"),
                   optimisticData,
                 );
               }}
             />
             <div className="flex items-center justify-between gap-2">
-              <h4 className="text-sm font-medium">加入已有角色</h4>
+              <h4 className="text-sm font-medium">{t("admin.characterIndex.addExisting")}</h4>
               <Button
                 type="button"
                 size="sm"
@@ -947,8 +948,8 @@ export function CharacterIndexEditor({
                 disabled={busy}
               >
                 {unplacedOnly
-                  ? "显示全部角色"
-                  : `仅看未分类 (${unplaced.length})`}
+                  ? t("admin.characterIndex.showAll")
+                  : t("admin.characterIndex.onlyUncategorized", { count: unplaced.length })}
               </Button>
             </div>
             <CharacterMembershipPicker
@@ -979,12 +980,12 @@ export function CharacterIndexEditor({
                       categoryId: draft.categoryId,
                       characters: batchCharacters,
                     },
-                    "角色已加入分类",
+                    t("admin.characterIndex.memberAdded"),
                   )
                 }
               >
                 <Plus aria-hidden size={16} />
-                加入所选角色
+                {t("admin.characterIndex.addSelected")}
                 {batchCharacters.length ? ` (${batchCharacters.length})` : ""}
               </Button>
             </div>

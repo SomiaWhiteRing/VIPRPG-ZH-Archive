@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { requireAccountUser } from "@/app/.server/auth/account-user";
@@ -5,7 +6,7 @@ import { readInteractionRestrictions } from "@/app/.server/db/interaction-restri
 import { listDirectMessages } from "@/app/.server/db/messages";
 import { parsePageId, throwNotFound } from "@/app/.server/http/page-response";
 import { runtimeContext } from "@/app/.server/router-context";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { HttpError } from "@/lib/http";
 import { MessageThread } from "../thread";
 import type { PageLayoutHandle } from "@/app/components/use-page-layout";
@@ -23,15 +24,18 @@ export async function loader(args: LoaderFunctionArgs) {
       listDirectMessages(runtime, user, userId),
       readInteractionRestrictions(runtime.db, user.id, userId),
     ]);
-    return { viewerId: user.id, initial, interactionRestrictions };
+    return { locale: runtime.uiLocale, viewerId: user.id, initial, interactionRestrictions };
   } catch (error) {
     if (error instanceof HttpError && error.status === 404) throwNotFound();
     throw error;
   }
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: [loaderData?.initial.peer.displayName ?? "短信", "短信箱"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "account.nav.messages");
+  return pageMetaDescriptors({ title: loaderData?.initial.peer.displayName ? [loaderData.initial.peer.displayName, title] : title }, error, locale);
+};
 
 export default function MessagePage() {
   const { viewerId, initial, interactionRestrictions } = useLoaderData<typeof loader>();

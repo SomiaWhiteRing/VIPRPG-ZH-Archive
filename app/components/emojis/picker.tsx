@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import {
   useCallback,
   useEffect,
@@ -53,6 +54,7 @@ export function EmojiPicker({
   onClose?: () => void;
   children: (trigger: ReactNode) => ReactNode;
 }) {
+  const t = useMessages();
   const desktop = useSyncExternalStore(
     subscribeDesktop,
     getDesktop,
@@ -175,7 +177,7 @@ export function EmojiPicker({
       }
     } catch (error) {
       if (!controller.signal.aborted)
-        setError(error instanceof Error ? error.message : "表情加载失败。");
+        setError(error instanceof Error ? error.message : t("emoji.source.failed"));
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
@@ -205,8 +207,8 @@ export function EmojiPicker({
       variant="ghost"
       size="icon"
       disabled={disabled}
-      aria-label={open && !desktop ? "返回键盘" : "表情"}
-      title={open && !desktop ? "返回键盘" : "表情"}
+      aria-label={open && !desktop ? t("emoji.picker.keyboard") : t("emoji.picker.emoji")}
+      title={open && !desktop ? t("emoji.picker.keyboard") : t("emoji.picker.emoji")}
       aria-expanded={open}
       aria-controls={open ? panelId : undefined}
       className={cn(open && "text-primary")}
@@ -230,7 +232,7 @@ export function EmojiPicker({
           <LoaderCircle
             size={14}
             className="shrink-0 animate-spin text-muted motion-reduce:animate-none"
-            aria-label="正在加载"
+            aria-label={t("emoji.picker.loading")}
           />
         ) : null}
         <div className="flex shrink-0 items-center">
@@ -240,7 +242,7 @@ export function EmojiPicker({
               size="icon"
               variant="ghost"
               className="rounded-none"
-              aria-label="返回键盘"
+              aria-label={t("emoji.picker.keyboard")}
               onClick={() => close(true)}
             >
               <Keyboard />
@@ -250,8 +252,8 @@ export function EmojiPicker({
             type="button"
             size="icon"
             variant="ghost"
-            aria-label="管理或添加表情"
-            title="管理或添加表情"
+            aria-label={t("emoji.picker.manage")}
+            title={t("emoji.picker.manage")}
             className="rounded-none sm:rounded-md"
             onClick={() => changeMode("manage")}
           >
@@ -261,8 +263,8 @@ export function EmojiPicker({
             type="button"
             size="icon"
             variant="ghost"
-            aria-label="收起表情"
-            title="收起表情"
+            aria-label={t("emoji.picker.collapse")}
+            title={t("emoji.picker.collapse")}
             className="rounded-none sm:rounded-md"
             onClick={() => close(desktop)}
           >
@@ -286,7 +288,7 @@ export function EmojiPicker({
               size="sm"
               onClick={() => void refresh()}
             >
-              重试
+              {t("core.action.retry")}
             </Button>
           </div>
         ) : null}
@@ -295,7 +297,7 @@ export function EmojiPicker({
             role="status"
             className="m-0 grid h-full place-items-center text-sm text-muted"
           >
-            {loading ? "正在加载…" : error ? "" : "暂无可用表情"}
+            {loading ? t("admin.portraits.loading") : error ? "" : t("emoji.picker.empty")}
           </p>
         ) : (
           <div className="grid grid-cols-4 content-start gap-y-1 @min-[240px]/emoji-picker:grid-cols-5 sm:grid-cols-5">
@@ -306,10 +308,10 @@ export function EmojiPicker({
                 key={emoji.id}
                 type="button"
                 className="grid h-16 w-auto min-w-0 cursor-pointer place-items-center rounded-none hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary disabled:cursor-wait sm:rounded"
-                aria-label={`插入${emoji.sources.map((source) => source.name).join("、") || "脸图"}表情`}
+                aria-label={t("emoji.picker.insert", { name: emoji.sources.map((source) => source.name).join("、") || t("emoji.picker.face") })}
                 title={
                   emoji.sources.map((source) => source.name).join("、") ||
-                  "表情"
+                  t("emoji.picker.emoji")
                 }
                 disabled={disabled}
                 onPointerDown={(event) => event.preventDefault()}
@@ -346,7 +348,7 @@ export function EmojiPicker({
               align="start"
               sideOffset={6}
               collisionPadding={12}
-              aria-label="选择表情"
+              aria-label={t("emoji.picker.choose")}
               onOpenAutoFocus={(event) => {
                 if (!keyboardOpen.current) event.preventDefault();
               }}
@@ -373,7 +375,7 @@ export function EmojiPicker({
               data-mobile-emoji-panel
               id={panelId}
               role="region"
-              aria-label="选择表情"
+              aria-label={t("emoji.picker.choose")}
               height={mobileHeight}
               className="fixed inset-x-0 bottom-0 z-[70] flex min-w-0 flex-col overflow-hidden border-t border-border bg-card pb-[env(safe-area-inset-bottom)] text-card-foreground"
             >
@@ -388,7 +390,7 @@ export function EmojiPicker({
         onOpenChange={(value) => {
           if (!value) showPicker();
         }}
-        title="表情库"
+        title={t("account.nav.emojis")}
         onClose={() => trigger.current?.focus({ preventScroll: true })}
       >
         <EmojiLibrary />

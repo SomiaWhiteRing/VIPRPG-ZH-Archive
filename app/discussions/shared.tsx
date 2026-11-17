@@ -1,3 +1,6 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, parseUiLocale, UI_LOCALE_PARAM } from "@/lib/i18n/locale";
 import { requestJson, type ApiResponsePayload } from "@/lib/ui/api-response";
 
 import { AUTO_LINK_PATTERN, autoLink } from "@/lib/auto-links";
@@ -21,17 +24,25 @@ import { type ForumAuthor, type ForumEditContent, type ForumTag, type ForumTarge
 import { forumSearchMatches } from "@/lib/forum-search";
 import { type KeyboardEventHandler, type ReactNode, Fragment, useEffect, useRef, useState } from "react";
 
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export async function forumRequest<T>(
   url: string,
   input?: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
-  return requestJson<T & ApiResponsePayload>(url, {
+  const locale = parseUiLocale(document.documentElement.lang) ?? DEFAULT_UI_LOCALE;
+  const target = new URL(url, window.location.origin);
+  if (target.origin === window.location.origin && !target.searchParams.has(UI_LOCALE_PARAM)) {
+    const current = new URLSearchParams(window.location.search);
+    if (locale !== DEFAULT_UI_LOCALE || current.has(UI_LOCALE_PARAM)) {
+      target.searchParams.set(UI_LOCALE_PARAM, locale);
+    }
+  }
+  return requestJson<T & ApiResponsePayload>(target.href, {
     method: input ? "POST" : "GET", credentials: "same-origin", cache: "no-store", signal,
     ...(input ? { headers: { "content-type": "application/json" }, body: JSON.stringify(input) } : {}),
-  }, "请求失败");
+  }, translate(locale, "forum.loadError"));
 }
 export function readForumEditContent(target: ForumTarget) {
   return forumRequest<ForumEditContent>(
@@ -110,6 +121,7 @@ export function TopicStatus({
   topic: Pick<ForumTopic, "featured" | "locked" | "pinned" | "saged">;
   compact?: boolean;
 }) {
+  const t = useMessages();
   const className = compact
     ? "min-h-0 rounded bg-[#e1ece5] dark:bg-primary/15 px-[5px] py-0 font-normal leading-[18px] text-primary"
     : undefined;
@@ -124,10 +136,10 @@ export function TopicStatus({
       {topic.saged ? (
         <Badge className={className}>SAGE</Badge>
       ) : topic.pinned ? (
-        <Badge className={className}>置顶</Badge>
+        <Badge className={className}>{t("comment.pinned")}</Badge>
       ) : null}
-      {topic.featured ? <Badge className={className}>★ 精品</Badge> : null}
-      {topic.locked ? <Badge className={className} variant="neutral">已锁定</Badge> : null}
+      {topic.featured ? <Badge className={className}>{t("forum.featuredBadge")}</Badge> : null}
+      {topic.locked ? <Badge className={className} variant="neutral">{t("forum.locked")}</Badge> : null}
     </div>
   );
 }
@@ -166,6 +178,7 @@ export function ForumBody({
   images?: { offset: number; content: ReactNode }[];
   diceKey?: string;
 }) {
+  const t = useMessages();
   const emojiMap = new Map(emojis.map((emoji) => [emoji.id, emoji]));
   function renderText(text: string) {
     return text.split(new RegExp(`(${AUTO_LINK_PATTERN.source}|:face_[1-9]\\d{0,15}:|${FORUM_ELEMENT_PATTERN.source})`, "g")).map((part, index) => {
@@ -198,10 +211,10 @@ export function ForumBody({
       if (node.type === "dice") {
         const expression = node.children.map((child) => child.type === "text" ? child.text : "").join("");
         const diceClassName = "inline-flex max-w-full flex-wrap items-center gap-2 border-l-[3px] border-primary bg-primary/5 px-3 py-2 font-mono text-sm";
-        if (diceKey === undefined) return <span key={index} className={diceClassName} aria-label={`骰子预览：${expression}，点数发布后显示`} title="点数发布后显示。"><Dice5 aria-hidden className="size-4 shrink-0" />{renderNodes(node.children, true)}<span aria-hidden="true">→</span><strong className="text-primary">?</strong></span>;
+        if (diceKey === undefined) return <span key={index} className={diceClassName} aria-label={t("forum.history.dicePreview", { expression })} title={t("forum.history.dicePending")}><Dice5 aria-hidden className="size-4 shrink-0" />{renderNodes(node.children, true)}<span aria-hidden="true">→</span><strong className="text-primary">?</strong></span>;
         const dice = node.children.every((child) => child.type === "text")
           ? forumDice(expression, diceKey, diceOrdinal++) : null;
-        return dice ? <span key={index} className={diceClassName} title="娱乐骰子：同一帖子、骰子位置和表达式的结果固定，刷新不重掷。"><Dice5 aria-hidden className="size-4 shrink-0" />{dice.notation}<span aria-hidden="true">→</span><strong className="min-w-0 wrap-anywhere text-primary">{dice.calculation}</strong></span>
+        return dice ? <span key={index} className={diceClassName} title={t("forum.history.diceFixed")}><Dice5 aria-hidden className="size-4 shrink-0" />{dice.notation}<span aria-hidden="true">→</span><strong className="min-w-0 wrap-anywhere text-primary">{dice.calculation}</strong></span>
           : <Fragment key={index}>[dice]{renderNodes(node.children, true)}[/dice]</Fragment>;
       }
       if (node.type === "url") {
@@ -224,7 +237,7 @@ export function ForumBody({
         case "item": return <li key={index} className="whitespace-normal">{children}</li>;
         case "hr": return <hr key={index} className="my-3 border-border" />;
         case "spoiler":
-        case "collapse": return <details key={index} className="my-2 rounded-md border border-border px-3 py-2"><summary className="cursor-pointer font-semibold focus-visible:outline-2 focus-visible:outline-primary">{node.parameter || "展开折叠内容"}</summary><div className="pt-2">{children}</div></details>;
+        case "collapse": return <details key={index} className="my-2 rounded-md border border-border px-3 py-2"><summary className="cursor-pointer font-semibold focus-visible:outline-2 focus-visible:outline-primary">{node.parameter || t("forum.bbcode.expandContent")}</summary><div className="pt-2">{children}</div></details>;
       }
     });
   }
@@ -257,6 +270,7 @@ export function ForumModal({
   busy?: boolean;
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
 }) {
+  const t = useMessages();
   const returnFocus = useRef<HTMLElement | null>(null);
   return (
     <Dialog.Root
@@ -295,11 +309,11 @@ export function ForumModal({
               <Button
                 type="button"
                 variant="ghost"
-                aria-label="关闭"
-                title="关闭"
+                aria-label={t("core.action.close")}
+                title={t("core.action.close")}
                 disabled={busy}
               >
-                关闭
+                {t("core.action.close")}
               </Button>
             </Dialog.Close>
           </div>
@@ -320,6 +334,8 @@ export function ForumTagEditor({
   disabled?: boolean;
   id: string;
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
@@ -333,7 +349,7 @@ export function ForumTagEditor({
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [tags, setTags] = useState<ForumTag[]>([]);
   const [recommendations, setRecommendations] = useState<string[]>([]);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
@@ -355,18 +371,18 @@ export function ForumTagEditor({
         setTags((old) => (cursor ? [...old, ...result.tags] : result.tags));
         setNextCursor(result.nextCursor);
         if (result.recommendations) setRecommendations(result.recommendations);
-        setError("");
+        setError(false);
       })
       .catch((e) => {
-        if (e.name !== "AbortError") setError("TAG 建议加载失败");
+        if (e.name !== "AbortError") setError(true);
       });
     return () => controller.abort();
   }, [submitted, cursor, retry]);
   return (
     <div className="grid gap-2">
-      <Label htmlFor={id}>TAG</Label>
+      <Label htmlFor={id}>{t("forum.tags.label")}</Label>
       <TokenPicker
-        label="TAG"
+        label={t("forum.tags.label")}
         id={id}
         values={values}
         onChange={onChange}
@@ -376,13 +392,13 @@ export function ForumTagEditor({
             value: t.name,
             meta: "",
           }))}
-        placeholder="选择或创建 TAG"
-        recommendationLabel="推荐tag"
+        placeholder={t("forum.tags.choose")}
+        recommendationLabel={t("forum.tags.recommended")}
         recommendations={recommendations.map((value) => ({ value, meta: "" }))}
         disabled={disabled}
         maxValues={5}
         normalizeValue={normalizeForumTag}
-        validateValue={forumTagError}
+        validateValue={(value) => forumTagError(value, locale)}
         onQueryChange={setQuery}
         sortable
         commitOnBlur
@@ -396,19 +412,19 @@ export function ForumTagEditor({
           size="sm"
           onClick={() => setCursor(nextCursor)}
         >
-          加载更多
+          {t("forum.tags.more")}
         </Button>
       ) : null}
       {error ? (
         <p className="text-sm text-destructive" role="status">
-          {error}
+          {t("forum.tags.suggestFailed")}
           <Button
             size="sm"
             variant="ghost"
             onClick={() => setRetry((n) => n + 1)}
             type="button"
           >
-            重试
+            {t("core.action.retry")}
           </Button>
         </p>
       ) : null}
@@ -428,10 +444,11 @@ export function PopularTagFilter({
   hrefForTags: (tags: ForumTag[]) => string;
   disabled?: boolean;
 }) {
+  const t = useMessages();
   return (
     <div
       role="group"
-      aria-label="常用 TAG"
+      aria-label={t("forum.popularTags")}
       className="flex min-w-0 gap-2 overflow-x-auto py-1 lg:grid lg:overflow-visible lg:py-0"
     >
       {popular.map((tag) => {

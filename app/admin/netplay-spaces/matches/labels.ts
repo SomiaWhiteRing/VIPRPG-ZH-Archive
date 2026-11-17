@@ -1,17 +1,20 @@
+import type { useMessages } from "@/lib/i18n/react";
+import type { MessageKey } from "@/lib/i18n/core";
+
 export const MATCHES_PATH = "/admin/netplay-spaces/matches";
 
-export const END_REASONS: Readonly<Record<string, string>> = {
-  settled: "正常结算",
-  closed: "连接关闭",
-  peer_left: "对手离开",
-  interrupted: "强退后补传",
-  finish_timeout: "终局超时",
-  finish_mismatch: "终局不一致",
-  user_cancel: "取消对局",
-  next_match: "进入下一局",
-  match_end: "对局结束",
+export const END_REASONS: Readonly<Record<string, MessageKey>> = {
+  settled: "admin.netplay.reason.settled",
+  closed: "admin.netplay.reason.closed",
+  peer_left: "admin.netplay.reason.peer_left",
+  interrupted: "admin.netplay.reason.interrupted",
+  finish_timeout: "admin.netplay.reason.finish_timeout",
+  finish_mismatch: "admin.netplay.reason.finish_mismatch",
+  user_cancel: "admin.netplay.reason.user_cancel",
+  next_match: "admin.netplay.reason.next_match",
+  match_end: "admin.netplay.reason.match_end",
 };
 
-export function endReasonLabel(reason: string | null) {
-  return reason ? Object.hasOwn(END_REASONS, reason) ? END_REASONS[reason] : reason : "—";
+export function endReasonLabel(reason: string | null, t: ReturnType<typeof useMessages>) {
+  return reason ? Object.hasOwn(END_REASONS, reason) ? t(END_REASONS[reason]) : reason : "—";
 }

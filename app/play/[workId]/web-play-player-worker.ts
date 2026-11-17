@@ -1,4 +1,5 @@
 import { localRequest } from "@/lib/browser/android-local";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 import { inspectImage, MAX_IMAGE_BYTES } from "@/lib/image-format";
 import type { PlayerScreenshot } from "./web-play-player";
 import { parseSaveImports, saveArchiveBlob, saveArchiveFilename } from "./web-play-save-transfer";
@@ -43,10 +44,10 @@ export function interceptPlayerWorker(
         if (options.signal.aborted) return;
         if (screenshot) {
           try {
-            if (!ArrayBuffer.isView(data.bytes) || data.bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("截图数据无效或过大。");
+            if (!ArrayBuffer.isView(data.bytes) || data.bytes.byteLength > MAX_IMAGE_BYTES) throw new UiFeedbackError("play.diagnostic.invalidScreenshot");
             const bytes = new Uint8Array(data.bytes);
             const image = inspectImage(bytes.buffer);
-            if (image.format !== "png") throw new Error("截图必须为 PNG。");
+            if (image.format !== "png") throw new UiFeedbackError("play.diagnostic.screenshotPng");
             options.onScreenshot({ blob: new Blob([bytes], { type: "image/png" }), width: image.width, height: image.height });
           } catch (error) { options.onError(error); }
           return;
@@ -54,7 +55,7 @@ export function interceptPlayerWorker(
         if (exporting) return;
         exporting = true;
         void (async () => {
-          if (!ArrayBuffer.isView(data.bytes) || data.bytes.byteLength > 16 * 1024 * 1024) throw new Error("存档下载数据无效或超过 16 MiB。");
+          if (!ArrayBuffer.isView(data.bytes) || data.bytes.byteLength > 16 * 1024 * 1024) throw new UiFeedbackError("play.diagnostic.saveDownloadInvalid");
           const bytes = new Uint8Array(data.bytes);
           const saves = await parseSaveImports([new File([bytes], data.filename!)], options.signal);
           options.signal.throwIfAborted();

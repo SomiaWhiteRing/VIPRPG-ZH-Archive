@@ -1,5 +1,6 @@
 import type { EasyRpgConfig } from "@/lib/archive/easyrpg-config";
 import type { InstallMeasurement } from "@/lib/analytics";
+import type { MessageKey } from "@/lib/i18n/core";
 
 export type WebPlayMetadata = {
   easyRpg?: EasyRpgConfig;
@@ -33,6 +34,11 @@ export type WebPlayInstallStatus =
   | "ready"
   | "failed"
   | "deleted";
+
+export type WebPlayInstallErrorMessage = {
+  key: MessageKey;
+  values?: Record<string, string | number>;
+};
 
 export type WebPlayInstallPhase =
   | "metadata"
@@ -74,6 +80,7 @@ export type WebPlayInstallation = {
   storageQuotaBytes: number | null;
   storageUsageBytes: number | null;
   error: string | null;
+  errorMessage?: WebPlayInstallErrorMessage;
 };
 
 export type WebPlayStorageKind = "browser-bucket" | "browser-opfs";
@@ -108,7 +115,7 @@ export type WebPlayInstallWorkerInput =
 export type WebPlayInstallWorkerOutput =
   | { type: "install-measurement"; measurement: InstallMeasurement }
   | { type: "install-finished" }
-  | { type: "install-rejected"; message: string }
+  | { type: "install-rejected"; message: string; errorMessage?: WebPlayInstallErrorMessage }
   | {
       type: "installation";
       installation: WebPlayInstallation;
@@ -118,4 +125,6 @@ export type WebPlayInstallWorkerOutput =
       playKey: string;
       level: "info" | "warning" | "error";
       message: string;
+      errorMessage?: WebPlayInstallErrorMessage;
+      reasonMessage?: WebPlayInstallErrorMessage;
     };

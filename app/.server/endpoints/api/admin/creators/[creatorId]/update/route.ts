@@ -8,6 +8,7 @@ import { redirectResponse } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { storeAvatarFromForm } from "@/app/.server/storage/avatar";
 import { json, jsonError } from "@/lib/http";
+import { translate } from "@/lib/i18n/core";
 
 type RouteContext = {
   params: {
@@ -62,6 +63,6 @@ export async function POST(
       new URL(`/admin/creators/${creator.id}`, request.url),
     );
   } catch (error) {
-    return jsonError("Creator update failed", error);
+    return jsonError(translate(runtime.uiLocale, "admin.creators.updateFailed"), error);
   }
 }

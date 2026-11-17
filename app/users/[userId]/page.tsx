@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { searchCatalogsForOwner } from "@/app/.server/db/catalogs";
 import { searchUserWorks } from "@/app/.server/db/game-library";
 import { searchUserComments } from "@/app/.server/db/work-community";
@@ -17,7 +19,7 @@ import {
 import { DiscussionList } from "@/app/components/profile/discussion-list";
 import { RecentCommentList } from "@/app/components/profile/recent-comment-list";
 import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { CatalogSummaryList } from "@/app/components/profile/catalog-summary-list";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useParams } from "react-router";
@@ -64,6 +66,7 @@ export async function loader(args: LoaderFunctionArgs) {
       visibility.discussions
         ? publicUserDiscussions(getForumRuntime(runtime), user.id, {
             pageSize: 3,
+            locale: runtime.uiLocale,
           })
         : null,
     ]);
@@ -76,6 +79,7 @@ export async function loader(args: LoaderFunctionArgs) {
     visibility.discussions;
 
   return {
+    locale: runtime.uiLocale,
     displayName: user.displayName,
     showcaseEntries,
     canEditShowcase: viewer?.id === user.id,
@@ -89,13 +93,15 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(
-    { title: [loaderData?.displayName || "用户", "个人主页"] },
-    error,
-  );
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "publicProfile.title");
+  const name = loaderData?.displayName;
+  return pageMetaDescriptors({ title: name ? [name, title] : title }, error, locale);
+};
 
 export default function PublicUserPage() {
+  const t = useMessages();
   const {
     base,
     showcaseEntries,
@@ -117,48 +123,48 @@ export default function PublicUserPage() {
         editable={canEditShowcase}
       />
       {played ? (
-        <AccountSection href={`${base}/history`} title="最近游玩">
+        <AccountSection href={`${base}/history`} title={t("publicProfile.history")}>
           {played.items.length ? (
             <AccountWorkGrid items={played.items} showPlayedAt />
           ) : (
-            <AccountEmpty>还没有公开游玩记录。</AccountEmpty>
+            <AccountEmpty>{t("publicProfile.noHistory")}</AccountEmpty>
           )}
         </AccountSection>
       ) : null}
       {favorites ? (
-        <AccountSection href={`${base}/favorites`} title="最近收藏">
+        <AccountSection href={`${base}/favorites`} title={t("publicProfile.favorites")}>
           {favorites.items.length ? (
             <AccountWorkGrid items={favorites.items} />
           ) : (
-            <AccountEmpty>还没有收藏。</AccountEmpty>
+            <AccountEmpty>{t("publicProfile.noFavorites")}</AccountEmpty>
           )}
         </AccountSection>
       ) : null}
       {catalogs ? (
-        <AccountSection href={`${base}/catalogs`} title="公开目录">
+        <AccountSection href={`${base}/catalogs`} title={t("publicProfile.catalogs")}>
           {catalogs.items.length ? (
             <CatalogSummaryList items={catalogs.items} preview />
           ) : (
-            <AccountEmpty>还没有公开目录。</AccountEmpty>
+            <AccountEmpty>{t("publicProfile.noCatalogs")}</AccountEmpty>
           )}
         </AccountSection>
       ) : null}
       {comments && !hidePosts ? (
-        <AccountSection href={`${base}/comments`} title="最近评论">
+        <AccountSection href={`${base}/comments`} title={t("publicProfile.comments")}>
           {comments.items.length ? (
             <RecentCommentList items={comments.items} />
           ) : (
-            <AccountEmpty>还没有公开评论。</AccountEmpty>
+            <AccountEmpty>{t("publicProfile.noComments")}</AccountEmpty>
           )}
         </AccountSection>
       ) : null}
       {discussions && !hidePosts ? (
-        <AccountSection href={`${base}/discussions`} title="最近讨论">
+        <AccountSection href={`${base}/discussions`} title={t("publicProfile.discussions")}>
           <DiscussionList items={discussions.items} compact />
         </AccountSection>
       ) : null}
       {!hasVisibleSections ? (
-        <AccountEmpty>这位用户没有公开其他内容。</AccountEmpty>
+        <AccountEmpty>{t("publicProfile.empty")}</AccountEmpty>
       ) : null}
     </div>
   );

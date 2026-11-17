@@ -32,7 +32,7 @@ export async function POST(
     const formData = await request.formData();
     const file = readCharacterFaceSheet(formData.get("face_sheet"));
     const [stored] = await storeCharacterFaceSheets(runtime, [file]);
-    if (!stored) throw new HttpError(500, "脸图素材表未能写入存储。");
+    if (!stored) throw new HttpError(500, "脸图素材表未能写入存储。", undefined, "admin.portraits.error.sheetStorage");
 
     const sheet = await registerAdminFaceSheetForCharacter(runtime, {
       actorUserId: auth.user.id,

@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { Button } from "@/app/components/ui/button";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
@@ -8,18 +9,19 @@ import {
 } from "react-router";
 import DiscussionNotFound from "./not-found";
 export default function DiscussionError() {
+  const t = useMessages();
   const error = useRouteError();
   const revalidator = useRevalidator();
   if (isRouteErrorResponse(error) && error.status === 404)
     return <DiscussionNotFound />;
   return (
     <PageContainer>
-      <PageHeader compact title="讨论版" />
+      <PageHeader compact title={t("core.nav.discussions")} />
       <p className="my-4" role="alert">
-        讨论加载失败。
+        {t("forum.loadError")}
       </p>
       <Button onClick={() => void revalidator.revalidate()} type="button">
-        重试
+        {t("core.action.retry")}
       </Button>
     </PageContainer>
   );

@@ -11,10 +11,12 @@ import { InboxReadOnView } from "@/app/inbox/read-on-view";
 import { forumHref, forumHistoryHref, forumListReturn, forumPage } from "@/lib/forum";
 import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError } from "@/lib/http";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { DiscussionWorkspace } from "../workspace";
+import { translate } from "@/lib/i18n/core";
+import { parseUiLocale, UI_LOCALE_PARAM } from "@/lib/i18n/locale";
 
 function optionalId(value: unknown) {
   if (value == null) return undefined;
@@ -46,7 +48,7 @@ const loadDetail = async (
     if (error instanceof HttpError && error.status === 404) {
       if (hasPermission(await getCurrentUser(runtime), "forum.content.moderate_any") &&
         await runtime.db.prepare("SELECT id FROM forum_topics WHERE id=? AND status IN('hidden','deleted')").bind(id).first()) {
-        redirectPage(forumHistoryHref({ kind: "topic", id }));
+        redirectPage(forumHistoryHref({ kind: "topic", id }), runtime.request);
       }
       throwNotFound();
     }
@@ -91,6 +93,7 @@ export async function loader(args: LoaderFunctionArgs) {
     from: returnTo,
     reply: initialReply,
     inbox: inboxId,
+    [UI_LOCALE_PARAM]: parseUiLocale(new URL(args.request.url).searchParams.get(UI_LOCALE_PARAM)),
   });
   const incoming = new URLSearchParams();
   for (const [key, value] of Object.entries(query))
@@ -140,7 +143,7 @@ export async function loader(args: LoaderFunctionArgs) {
   );
 
   const pageMetadata = {
-    title: [detail.topic.title, "讨论版"],
+    title: [detail.topic.title, translate(runtime.uiLocale, "core.nav.discussions")],
     page: detail.posts.page,
     description:
       detail.posts.items
@@ -159,11 +162,12 @@ export async function loader(args: LoaderFunctionArgs) {
     displayed,
     renderData0,
     pageMetadata,
+    locale: runtime.uiLocale,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors(loaderData?.pageMetadata, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) =>
+  pageMetaDescriptors(loaderData?.pageMetadata, error, loaderData?.locale ?? pageMetadataLocale(location.search, matches));
 
 export default function TopicPage() {
   const {

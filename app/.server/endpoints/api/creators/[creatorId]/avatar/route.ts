@@ -23,14 +23,20 @@ async function updateAvatar(runtime: AppRuntime, request: Request, context: Rout
   try {
     const creatorId = parsePositiveId(context.params.creatorId, "creator id");
     const previousAvatar = new URL(request.url).searchParams.get("previous");
-    if (previousAvatar === null || (previousAvatar !== "none" && !/^[a-f0-9]{64}$/.test(previousAvatar))) throw new HttpError(400, "缺少头像版本，请刷新后重试");
+    if (previousAvatar === null || (previousAvatar !== "none" && !/^[a-f0-9]{64}$/.test(previousAvatar))) {
+      throw new HttpError(400, "缺少头像版本，请刷新后重试", undefined, "creator.edit.error.avatarVersion");
+    }
     const creator = await getPublicCreatorDetail(runtime, creatorId);
-    if (!creator) throw new HttpError(404, "作者不存在或尚未公开");
+    if (!creator) throw new HttpError(404, "作者不存在或尚未公开", undefined, "creator.edit.error.missing");
     const previous = previousAvatar === "none" ? null : previousAvatar;
-    if (creator.avatarBlobSha256 !== previous) throw new HttpError(409, "头像已被其他人修改，请刷新后重试");
+    if (creator.avatarBlobSha256 !== previous) {
+      throw new HttpError(409, "头像已被其他人修改，请刷新后重试", undefined, "creator.edit.error.avatarConflict");
+    }
     let avatarBlobSha256: string | null = null;
     if (request.method === "PUT") {
-      if (!request.headers.get("content-type")?.toLowerCase().startsWith("image/png")) throw new HttpError(415, "头像必须是 PNG 文件");
+      if (!request.headers.get("content-type")?.toLowerCase().startsWith("image/png")) {
+        throw new HttpError(415, "头像必须是 PNG 文件", undefined, "avatar.error.png");
+      }
       avatarBlobSha256 = await storeAvatarPng(runtime, await request.arrayBuffer());
     }
     await editPublicCreator(runtime, creatorId, auth.user, { avatarBlobSha256, previousAvatar: previous });

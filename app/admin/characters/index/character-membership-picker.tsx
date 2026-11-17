@@ -10,6 +10,7 @@ import {
   type CharacterNameSelection,
 } from "@/lib/character-index";
 import { characterNameKey } from "@/lib/character-names";
+import { useMessages } from "@/lib/i18n/react";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import {
@@ -35,12 +36,13 @@ export function CharacterNameFields({
   ) => void;
   disabled: boolean;
 }) {
+  const t = useMessages();
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {(
         [
-          { language: "zh", field: "displayName", label: "中文显示名" },
-          { language: "ja", field: "originalName", label: "日文显示名" },
+          { language: "zh", field: "displayName", label: t("admin.characterMembers.zhName") },
+          { language: "ja", field: "originalName", label: t("admin.characterMembers.jaName") },
         ] as const
       ).map(({ language, field, label }) => {
         const options = [
@@ -80,6 +82,7 @@ export function CharacterMembershipPicker({
   disabled: boolean;
   excludeIds: number[];
 }) {
+  const t = useMessages();
   const [query, setQuery] = useState("");
   const results = characters.filter(
     (character) =>
@@ -109,7 +112,7 @@ export function CharacterMembershipPicker({
                 {selection.displayName} · {selection.originalName}
               </span>
               <Button
-                aria-label={"取消选择" + selection.displayName}
+                aria-label={t("admin.characterMembers.deselect", { name: selection.displayName })}
                 type="button"
                 size="icon"
                 variant="ghost"
@@ -147,15 +150,15 @@ export function CharacterMembershipPicker({
         onInputChange={setQuery}
         disableAutoFocusFirst
       >
-        <TextField aria-label="搜索要加入分类的角色" isDisabled={disabled}>
+        <TextField aria-label={t("admin.characterMembers.searchMember")} isDisabled={disabled}>
           <AriaInput
-            placeholder="输入中文名、日文名或别名"
+            placeholder={t("admin.characterMembers.searchHint")}
             render={(props) => <Input {...props} />}
           />
         </TextField>
         <ListBox
           items={results.slice(0, 40)}
-          aria-label="可加入分类的角色"
+          aria-label={t("admin.characterMembers.options")}
           selectionMode="none"
           disabledKeys={
             disabled || selected.length >= 100
@@ -169,7 +172,7 @@ export function CharacterMembershipPicker({
           }}
           renderEmptyState={() => (
             <EmptyState
-              title="没有可添加的匹配角色"
+              title={t("admin.characterMembers.empty")}
               variant="plain"
               className="p-3 text-xs"
             />
@@ -193,7 +196,7 @@ export function CharacterMembershipPicker({
       </Autocomplete>
       {results.length > 40 ? (
         <p className="text-xs text-muted">
-          还有 {results.length - 40} 位，请输入名称缩小范围。
+          {t("admin.characterMembers.remaining", { count: results.length - 40 })}
         </p>
       ) : null}
     </div>

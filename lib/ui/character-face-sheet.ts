@@ -1,4 +1,5 @@
 import { sha256Hex } from "@/lib/sha256";
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 export type InspectedCharacterFaceSheet = {
   sha256: string;
   width: number;
@@ -13,17 +14,17 @@ export async function inspectCharacterFaceSheetFile(
   file: File,
 ): Promise<InspectedCharacterFaceSheet> {
   if (file.type.toLowerCase() !== "image/png") {
-    throw new Error("脸图素材表只支持 PNG 文件。");
+    throw new UiFeedbackError("upload.faces.error.png", { kind: "sheet", name: "" });
   }
   if (file.size <= 0 || file.size > MAX_FACE_SHEET_BYTES) {
-    throw new Error("脸图素材表不能超过 256 KiB。");
+    throw new UiFeedbackError("upload.faces.error.sourceSize");
   }
 
   let image: ImageBitmap;
   try {
     image = await createImageBitmap(file);
   } catch {
-    throw new Error("无法读取脸图素材表，请选择有效的 PNG 文件。");
+    throw new UiFeedbackError("upload.faces.error.decode");
   }
   const width = image.width;
   const height = image.height;
@@ -35,9 +36,7 @@ export async function inspectCharacterFaceSheetFile(
     width % FACE_CELL_SIZE !== 0 ||
     height % FACE_CELL_SIZE !== 0
   ) {
-    throw new Error(
-      "脸图素材表宽度必须为 48 至 192 像素，且宽高均为 48 的倍数。",
-    );
+    throw new UiFeedbackError("upload.faces.error.dimensions", { kind: "sheet", name: "" });
   }
 
   const sha256 = await sha256Hex(await file.arrayBuffer());

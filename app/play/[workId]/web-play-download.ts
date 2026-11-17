@@ -1,3 +1,4 @@
+import { UiFeedbackError } from "@/lib/i18n/feedback";
 import { ApiResponseError, requestOk } from "@/lib/ui/api-response";
 
 type ByteChunk = Uint8Array<ArrayBufferLike>;
@@ -5,8 +6,8 @@ type ByteChunk = Uint8Array<ArrayBufferLike>;
 const networkWaitLimitMs = 15_000;
 const maxReconnects = 2;
 
-class DownloadNetworkError extends Error {}
-class DownloadResponseError extends Error {}
+class DownloadNetworkError extends UiFeedbackError {}
+class DownloadResponseError extends UiFeedbackError {}
 
 /** A single ZIP transfer. Reconnecting retains the caller's ZIP and pack buffers. */
 export class WebPlayDownload {
@@ -17,7 +18,7 @@ export class WebPlayDownload {
   private downloadedBytes = 0;
   private reconnects = 0;
   private finished = false;
-  private readonly abort = () => this.controller?.abort(new Error("安装已取消。"));
+  private readonly abort = () => this.controller?.abort(new UiFeedbackError("play.install.error.canceled"));
   totalBytes: number | null = null;
   get reconnectCount(): number { return this.reconnects; }
 
@@ -48,14 +49,14 @@ export class WebPlayDownload {
 
         if (result.done) {
           if (this.totalBytes !== null && this.downloadedBytes !== this.totalBytes) {
-            throw new DownloadNetworkError("ZIP 文件不完整。");
+            throw new DownloadNetworkError("play.install.error.zipIncomplete");
           }
           this.finished = true;
           return result;
         }
 
         if (this.totalBytes !== null && this.downloadedBytes + result.value.byteLength > this.totalBytes) {
-          throw new DownloadResponseError("游戏压缩包中的文件大小异常。");
+          throw new DownloadResponseError("play.install.error.archiveSize");
         }
         this.downloadedBytes += result.value.byteLength;
         // A slow transfer that keeps producing bytes must not consume reconnects.
@@ -87,6 +88,10 @@ export class WebPlayDownload {
       cache: "no-store",
       headers,
       signal: this.controller.signal,
+    }).catch((error: unknown) => {
+      if (error instanceof ApiResponseError && error.status === 404)
+        throw new DownloadResponseError("play.install.error.archiveUnavailable");
+      throw error;
     }));
     try {
       const length = positiveInteger(response.headers.get("Content-Length"));
@@ -97,7 +102,7 @@ export class WebPlayDownload {
         if (response.status !== 206 || response.headers.get("Content-Range") !== expectedRange ||
             etag !== this.range.etag || (length !== null && length !== this.range.size - this.downloadedBytes) ||
             (encoding !== null && encoding.toLowerCase() !== "identity")) {
-          throw new DownloadResponseError("游戏压缩包中的文件大小异常。");
+          throw new DownloadResponseError("play.install.error.archiveSize");
         }
         this.totalBytes = this.range.size;
         this.etag = etag;
@@ -110,15 +115,15 @@ export class WebPlayDownload {
           (length !== null && length !== this.totalBytes! - this.downloadedBytes) ||
           (encoding !== null && encoding.toLowerCase() !== "identity")) {
           // A 200 response may be a new ZIP version. It must never be appended to old bytes.
-          throw new DownloadResponseError("游戏压缩包中的文件大小异常。");
+          throw new DownloadResponseError("play.install.error.archiveSize");
         }
       } else {
-        if (response.status !== 200) throw new DownloadResponseError("游戏压缩包中的文件大小异常。");
+        if (response.status !== 200) throw new DownloadResponseError("play.install.error.archiveSize");
         this.totalBytes = length;
         this.etag = etag;
         this.resumable = length !== null && etag !== null && (encoding === null || encoding.toLowerCase() === "identity");
       }
-      if (!response.body) throw new Error("浏览器无法读取下载内容，请重试。");
+      if (!response.body) throw new UiFeedbackError("play.install.error.noBody");
       this.reader = response.body.getReader();
     } catch (error) {
       this.controller.abort(error);
@@ -134,7 +139,7 @@ export class WebPlayDownload {
     if (this.downloadedBytes > 0 && !this.resumable) throw error;
     if (this.reconnects >= maxReconnects) {
       // A transfer that exhausted its resume budget must not restart all completed packs again.
-      throw new Error("请求失败：无法连接服务器，请检查网络后重试。");
+      throw new UiFeedbackError("play.install.error.network");
     }
     this.reconnects += 1;
     await this.waitForNetwork(new Promise<void>((resolve) => setTimeout(resolve, 500 * this.reconnects)));
@@ -161,9 +166,9 @@ export class WebPlayDownload {
         cleanup();
         reject(error);
       };
-      const abort = () => fail(new Error("安装已取消。"));
+      const abort = () => fail(new UiFeedbackError("play.install.error.canceled"));
       const timer = setTimeout(() => {
-        const error = new DownloadNetworkError("ZIP 文件不完整。");
+        const error = new DownloadNetworkError("play.install.error.zipIncomplete");
         fail(error);
         this.controller?.abort(error);
       }, networkWaitLimitMs);
@@ -178,7 +183,7 @@ export class WebPlayDownload {
   }
 
   private assertNotCanceled(): void {
-    if (this.signal.aborted) throw new Error("安装已取消。");
+    if (this.signal.aborted) throw new UiFeedbackError("play.install.error.canceled");
   }
 }
 

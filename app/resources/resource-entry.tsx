@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { Button, rm2kSurfaceClassName } from "@/app/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { ArrowUpRight, Download } from "lucide-react";
@@ -22,6 +23,7 @@ export function ResourceEntry({
   children,
   actions,
 }: ResourceEntryProps) {
+  const t = useMessages();
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
   useEffect(() => {
     if (highlightKey === undefined || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
@@ -74,8 +76,8 @@ export function ResourceEntry({
           href={sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`${title} 项目网站`}
-          title="项目网站"
+          aria-label={t("resources.projectName", { name: title })}
+          title={t("resources.project")}
           className="absolute top-6 right-2 z-20 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-card text-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:top-8"
         >
           <svg aria-hidden="true" viewBox="0 0 16 16" fill="currentColor" className="size-6">

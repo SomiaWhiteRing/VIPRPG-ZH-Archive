@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { ImageOff } from "lucide-react";
 import type { FaceEmoji } from "@/lib/face-emojis";
 
@@ -8,17 +9,18 @@ export function FaceEmojiImage({
   emoji: FaceEmoji | null;
   size?: number;
 }) {
+  const t = useMessages();
   if (!emoji?.available)
     return (
       <span
         className="inline-flex shrink-0 items-center justify-center overflow-clip rounded border border-border bg-muted/10 p-1 align-middle text-xs"
         style={{ width: size, height: size }}
         role="img"
-        aria-label="表情不可用"
-        title="表情不可用"
+        aria-label={t("emoji.library.unavailable")}
+        title={t("emoji.library.unavailable")}
         data-face-emoji={emoji?.id || undefined}
       >
-        {size <= 24 ? <ImageOff aria-hidden size={16} /> : "表情不可用"}
+        {size <= 24 ? <ImageOff aria-hidden size={16} /> : t("emoji.library.unavailable")}
       </span>
     );
   return (
@@ -26,7 +28,7 @@ export function FaceEmojiImage({
       className="relative inline-block shrink-0 overflow-clip align-middle [image-rendering:pixelated]"
       style={{ width: size, height: size }}
       role="img"
-      aria-label="脸图表情"
+      aria-label={t("core.ui.faceEmoji")}
       data-face-emoji={emoji.id || undefined}
     >
       <img

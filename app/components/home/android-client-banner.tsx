@@ -1,14 +1,17 @@
+import { useMessages } from "@/lib/i18n/react";
 import type { loader as rootLoader } from "@/app/root";
 import { Button } from "@/app/components/ui/button";
 import { useClientEnvironment } from "@/app/components/use-client-environment";
 import { ChevronRight, X } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
-import { Link, useRouteLoaderData } from "react-router";
+import { useRouteLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 const subscribe = () => () => {};
 const serverDismissed = () => false;
 
 export function AndroidClientBanner() {
+  const t = useMessages();
   const environment = useClientEnvironment();
   const session = useRouteLoaderData<typeof rootLoader>("root")?.session;
   const storageKey = session ? `viprpg:android-client-banner-dismissed:${session.id}` : null;
@@ -37,7 +40,7 @@ export function AndroidClientBanner() {
             <rect x="24" y="58.5" width="8" height="1.5" rx=".75" fill="var(--banner-phone-detail)" />
           </g>
         </svg>
-        <span className="android-client-banner-title">网站安卓客户端</span>
+        <span className="android-client-banner-title">{t("home.android")}</span>
         <ChevronRight className="android-client-banner-arrow" aria-hidden="true" />
       </Link>
       {session ? (
@@ -46,7 +49,7 @@ export function AndroidClientBanner() {
           variant="ghost"
           size="icon"
           className="android-client-banner-close min-h-0 size-7 p-0 [&_svg]:size-3.5"
-          aria-label="关闭网站安卓客户端横幅"
+          aria-label={t("home.dismissAndroid")}
           onClick={() => {
             setClosedUser(session.id);
             try { localStorage.setItem(storageKey!, "1"); }

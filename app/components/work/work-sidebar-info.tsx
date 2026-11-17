@@ -1,3 +1,4 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { InfoRow } from "@/app/components/ui/info-row";
 import { Button } from "@/app/components/ui/button";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
@@ -5,11 +6,12 @@ import type {
   GameArchiveVersionDetail,
   GameWorkDetail,
 } from "@/lib/dto/db/game-library";
-import { formatBytes, formatNumber } from "@/lib/format";
+import { formatBytes } from "@/lib/format";
 import { creatorRoleLabel, engineLabel, languageLabel } from "@/lib/labels";
+import { referenceDurationLabel } from "@/lib/work-reference-duration";
 import { ChevronRight } from "lucide-react";
 import { useId, useLayoutEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { useArchiveDownload } from "@/app/components/use-archive-download";
 
 export function WorkSidebarInfo({
@@ -33,6 +35,8 @@ export function WorkSidebarInfo({
   >;
 }) {
   const [filesExpanded, setFilesExpanded] = useState(false);
+  const t = useMessages();
+  const locale = useUiLocale();
   const { downloadSize, includePlayer } = useArchiveDownload();
   const sizeBytes = current ? downloadSize({ ...current, downloadSizeBytes: work.downloadSizeBytes }) : null;
   const filesId = useId();
@@ -43,12 +47,12 @@ export function WorkSidebarInfo({
     avatarBlobSha256: current.uploaderAvatarBlobSha256,
   }] : work.maintainers;
   const peopleInfo = people.length ? (
-    <InfoRow label={current?.uploaderName ? "上传者" : "维护者"}>
+    <InfoRow label={current?.uploaderName ? t("work.sidebar.uploader") : t("work.sidebar.maintainer")}>
       <span className="inline-flex max-w-full flex-wrap gap-x-3 gap-y-1">
         {people.map((person) => person.id ? (
           <span className="inline-flex max-w-full items-center gap-1.5" key={person.id}>
             <Link
-              aria-label={`${person.displayName}的个人主页`}
+              aria-label={t("work.sidebar.profile", { name: person.displayName })}
               className="shrink-0 rounded-full"
               to={`/users/${person.id}`}
             >
@@ -94,19 +98,19 @@ export function WorkSidebarInfo({
     <div>
       <dl className="m-0">
         {work.aliases.length ? (
-          <InfoRow label="别名">{work.aliases.join(" · ")}</InfoRow>
+          <InfoRow label={t("work.sidebar.aliases")}>{work.aliases.join(" · ")}</InfoRow>
         ) : null}
-        {work.genre ? <InfoRow label="类型"><Link className="font-medium text-secondary hover:underline" to={`/games?${new URLSearchParams({ genre: work.genre })}`}>{work.genre}</Link></InfoRow> : null}
-        {work.referenceDuration ? <InfoRow label="参考时长">{work.referenceDuration}</InfoRow> : null}
-        <InfoRow label="引擎">{engineLabel(work.engineFamily)}</InfoRow>
-        <InfoRow label="语言">{languageLabel(work.language)}</InfoRow>
+        {work.genre ? <InfoRow label={t("work.sidebar.genre")}><Link className="font-medium text-secondary hover:underline" to={`/games?${new URLSearchParams({ genre: work.genre })}`}>{work.genre}</Link></InfoRow> : null}
+        {work.referenceDuration ? <InfoRow label={t("library.duration")}>{referenceDurationLabel(work.referenceDuration, locale)}</InfoRow> : null}
+        <InfoRow label={t("work.sidebar.engine")}>{engineLabel(work.engineFamily, locale)}</InfoRow>
+        <InfoRow label={t("library.language")}>{languageLabel(work.language, locale)}</InfoRow>
         {work.originalReleaseDate && work.originalReleasePrecision !== "unknown" ? (
-          <InfoRow label="发布日期" mono>
+          <InfoRow label={t("library.release")} mono>
             {work.originalReleaseDate}
           </InfoRow>
         ) : null}
         {current?.sourceUrl ? (
-          <InfoRow label="发布地址">
+          <InfoRow label={t("work.sidebar.releaseLink")}>
             <a
               className="font-medium text-secondary hover:underline"
               href={current.sourceUrl}
@@ -120,16 +124,16 @@ export function WorkSidebarInfo({
       </dl>
 
       <p className="my-[0.65rem] mb-[0.35rem] font-mono text-xs tracking-[0.08em] text-muted">
-        制作名单
+        {t("work.sidebar.credits")}
       </p>
       <dl className="m-0">
         {!work.creators.some((creator) => creator.roleKey === "author") ? (
-          <InfoRow label="作者">VIPPER</InfoRow>
+          <InfoRow label={t("search.scopes.creators")}>VIPPER</InfoRow>
         ) : null}
         {work.creators.map((creator) => (
           <InfoRow
             key={`${creator.id}-${creator.roleKey}`}
-            label={creator.roleLabel || creatorRoleLabel(creator.roleKey)}
+            label={creator.roleLabel || creatorRoleLabel(creator.roleKey, locale)}
           >
             <Link
               className="font-medium text-secondary hover:underline"
@@ -164,7 +168,7 @@ export function WorkSidebarInfo({
               className={`shrink-0 transition-transform duration-300 ease-in-out motion-reduce:transition-none ${filesExpanded ? "rotate-90" : ""}`}
               size={12}
             />
-            文件信息
+            {t("work.sidebar.fileInfo")}
           </Button>
           <div
             className={`grid transition-[grid-template-rows] duration-300 ease-in-out motion-reduce:transition-none ${filesExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
@@ -174,15 +178,15 @@ export function WorkSidebarInfo({
           >
             <div className="min-h-0 overflow-hidden">
               <dl className="m-0 pt-[0.35rem]">
-                <InfoRow label="文件" mono>
-                  {formatNumber(current.totalFiles + (includePlayer && current.usesSharedPlayer && sizeBytes !== null ? 1 : 0) - (!includePlayer && current.embeddedPlayerSizeBytes > 0 ? 1 : 0))} 个
+                <InfoRow label={t("work.sidebar.files")} mono>
+                  {t("work.sidebar.fileCount", { count: current.totalFiles + (includePlayer && current.usesSharedPlayer && sizeBytes !== null ? 1 : 0) - (!includePlayer && current.embeddedPlayerSizeBytes > 0 ? 1 : 0) })}
                 </InfoRow>
-                <InfoRow label="体积" mono>
-                  {sizeBytes === null ? "共享播放器暂不可用" : formatBytes(sizeBytes)}
+                <InfoRow label={t("work.sidebar.size")} mono>
+                  {sizeBytes === null ? t("work.download.unavailable") : formatBytes(sizeBytes)}
                 </InfoRow>
                 {peopleInfo}
                 {current.publishedAt ? (
-                  <InfoRow label="收录" mono>
+                  <InfoRow label={t("work.sidebar.archived")} mono>
                     {current.publishedAt.slice(0, 10)}
                   </InfoRow>
                 ) : null}

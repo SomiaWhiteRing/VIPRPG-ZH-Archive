@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { formatFeedbackError, UiFeedbackError } from "@/lib/i18n/feedback";
 import { buildAuthCallbackUrl } from "@/app/.server/auth/callback-url";
 import { getAuthContext } from "@/app/.server/auth/current-user";
 import { assertSameOrigin } from "@/app/.server/auth/origin";
@@ -38,9 +40,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     );
     const existing = await findUserByEmail(runtime, newEmail);
     if (existing)
-      throw new Error(
-        existing.id === auth.user.id ? "这已经是当前邮箱" : "该邮箱已被使用",
-      );
+      throw new UiFeedbackError(existing.id === auth.user.id ? "profile.emailSame" : "profile.emailUsed");
     await assertAuthEmailRateLimit(
       runtime,
       `email-change:${auth.user.id}:${newEmail}`,
@@ -88,7 +88,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
   } catch (error) {
     return redirectWithParams(request, "/me/profile/email", {
       newEmail,
-      error: error instanceof Error ? error.message : "验证码发送失败",
+      error: formatFeedbackError(error, runtime.uiLocale, translate(runtime.uiLocale, "profile.codeFailed")),
     });
   }
 }

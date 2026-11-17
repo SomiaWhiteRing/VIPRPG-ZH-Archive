@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { userPermissionSql } from "@/app/.server/auth/permission-sql";
 import { readDirectMessageReport } from "./message-reports";
 import { readUserBlockSettings, setUserBlockSettings } from "./user-blocks";
@@ -26,7 +27,7 @@ function mapMessage(row: MessageRow): DirectMessage {
 }
 
 export async function directMessagePeer(runtime: AppRuntime, user: ArchiveUser, peerId: number): Promise<MessagePeer> {
-  if (peerId === user.id) throw new HttpError(404, "会话不存在");
+  if (peerId === user.id) throw new HttpError(404, translate(runtime.uiLocale, "messages.threadMissing"), undefined, "messages.threadMissing");
   const row = await runtime.db.prepare(`SELECT u.id,u.display_name,u.avatar_blob_sha256,u.status,u.receive_private_messages,
     NOT EXISTS(SELECT 1 FROM user_block_settings b WHERE b.user_id=? AND b.blocked_user_id=u.id AND b.block_private_messages=1) AS receive_messages,
     NOT EXISTS(SELECT 1 FROM user_block_settings b WHERE b.user_id=u.id AND b.blocked_user_id=? AND b.block_private_messages=1) AS accepts_messages,
@@ -35,7 +36,7 @@ export async function directMessagePeer(runtime: AppRuntime, user: ArchiveUser, 
     FROM users u WHERE u.id=?`).bind(user.id, user.id, user.id, user.id, peerId)
     .first<{ id: number; display_name: string; avatar_blob_sha256: string | null; status: string; receive_private_messages: number; has_history: number; receive_messages: number; accepts_messages: number }>();
   if (!row || (!row.has_history && (row.status !== "active" || row.receive_private_messages !== 1)))
-    throw new HttpError(404, "会话不存在");
+    throw new HttpError(404, translate(runtime.uiLocale, "messages.threadMissing"), undefined, "messages.threadMissing");
   const { hidePosts, ...blockSettings } = await readUserBlockSettings(runtime, user.id, peerId);
   void hidePosts;
   return { id: row.id, displayName: row.display_name, avatarBlobSha256: row.avatar_blob_sha256,
@@ -59,7 +60,7 @@ export async function listDirectConversations(runtime: AppRuntime, user: Archive
   const selected = rows.results.slice(0, 30);
   const conversations: DirectConversation[] = selected.map(row => ({
     peer: { id: row.peer_id, displayName: row.display_name, avatarBlobSha256: row.avatar_blob_sha256, receiveMessages: row.receive_messages === 1 },
-    excerpt: row.kind === "image" ? "[图片]" : emojiText(row.body ?? "").slice(0, 120),
+    excerpt: row.kind === "image" ? translate(runtime.uiLocale, "messages.imageExcerpt") : emojiText(row.body ?? "", runtime.uiLocale).slice(0, 120),
     updatedAt: row.created_at, unread: row.unread,
   }));
   return { conversations, nextCursor: rows.results.length > 30 ? selected.at(-1)!.last_id : null };
@@ -130,7 +131,7 @@ export async function findSentDirectMessage(runtime: AppRuntime, senderId: numbe
     .bind(senderId, input.clientId).first<MessageRow>();
   if (!existing) return null;
   if (existing.recipient_user_id !== peerId || existing.kind !== input.kind
-    || (input.kind === "text" && existing.body !== input.body)) throw new HttpError(409, "消息编号已用于其他内容");
+    || (input.kind === "text" && existing.body !== input.body)) throw new HttpError(409, translate(runtime.uiLocale, "messages.error.messageConflict"), undefined, "messages.error.messageConflict");
   return mapMessage(existing);
 }
 
@@ -139,7 +140,7 @@ export async function sendDirectMessage(runtime: AppRuntime, user: ArchiveUser, 
   const existing = await findSentDirectMessage(runtime, user.id, peerId, input);
   if (existing) return existing;
   const peer = await directMessagePeer(runtime, user, peerId);
-  if (!peer.canSend) throw new HttpError(403, "无法向此用户发送短信");
+  if (!peer.canSend) throw new HttpError(403, translate(runtime.uiLocale, "messages.error.cannotSend"), undefined, "messages.error.cannotSend");
   const db = runtime.db;
   await assertInteractionAllowed(db, peerId, user.id, "message");
   const ids = input.kind === "text" ? emojiIds(input.body) : [];
@@ -173,7 +174,7 @@ export async function sendDirectMessage(runtime: AppRuntime, user: ArchiveUser, 
   const sent = await findSentDirectMessage(runtime, user.id, peerId, input);
   if (!sent) {
     await assertInteractionAllowed(db, peerId, user.id, "message");
-    throw new HttpError(429, "发送未完成，请稍后重试");
+    throw new HttpError(429, translate(runtime.uiLocale, "messages.error.sendRetry"), undefined, "messages.error.sendRetry");
   }
   // D1 owns the message. The room only wakes briefly to send a change event.
   runtime.execution.waitUntil(runtime.env.MESSAGE_ROOM.getByName(`${Math.min(user.id, peerId)}:${Math.max(user.id, peerId)}`)

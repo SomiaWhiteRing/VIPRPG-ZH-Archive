@@ -1,5 +1,7 @@
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { Button } from "@/app/components/ui/button";
 import { useToast } from "@/app/components/ui/toast";
@@ -17,6 +19,9 @@ export function ResourceManager({
 }: {
   resources: ResourceRecord[];
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
+  const navigationLocale = useNavigationLocale();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<{
@@ -31,13 +36,15 @@ export function ResourceManager({
     setBusy(true);
     try {
       const data = await postJson<ResourceEditorData>(
-        "/api/admin/resources",
+        `/api/admin/resources?${UI_LOCALE_PARAM}=${locale}`,
         Object.fromEntries(form),
       );
-      toast.success("链接草稿已创建。");
-      window.location.assign(`/admin/resources/${data.resource.id}`);
+      toast.success(t("admin.resources.created"));
+      const target = new URL(`/admin/resources/${data.resource.id}`, window.location.origin);
+      if (navigationLocale) target.searchParams.set(UI_LOCALE_PARAM, navigationLocale);
+      window.location.assign(target.href);
     } catch (error) {
-      toast.error(String(error instanceof Error ? error.message : error));
+      toast.error(error instanceof Error ? error : String(error));
       setBusy(false);
     }
   }
@@ -46,73 +53,73 @@ export function ResourceManager({
     try {
       setReport(
         await requestJson(
-          `/api/admin/resources/storage${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+          `/api/admin/resources/storage?${new URLSearchParams({ [UI_LOCALE_PARAM]: locale, ...(cursor ? { cursor } : {}) })}`,
         ),
       );
     } catch (error) {
-      toast.error(String(error instanceof Error ? error.message : error));
+      toast.error(error instanceof Error ? error : String(error));
     } finally {
       setBusy(false);
     }
   }
   return (
     <main>
-      <PageHeader compact title="链接管理" />
-      <AdminListMeta total={resources.length} noun="链接" />
-      {resources.length ? <TableWrap compact label="链接列表" minWidth={760}>
-        <thead><tr><th>名称</th><th>类型</th><th>状态</th><th>顺序</th><th className="admin-action-column">操作</th></tr></thead>
+      <PageHeader compact title={t("admin.resources.title")} />
+      <AdminListMeta total={resources.length} noun={t("core.nav.resources")} />
+      {resources.length ? <TableWrap compact label={t("admin.resources.list")} minWidth={760}>
+        <thead><tr><th>{t("creator.name")}</th><th>{t("admin.genres.genres")}</th><th>{t("admin.list.status")}</th><th>{t("admin.resources.order")}</th><th className="admin-action-column">{t("admin.characterList.actions")}</th></tr></thead>
         <tbody>{resources.map((resource) => <tr key={resource.id}>
           <td><Link className="admin-cell-title" to={`/admin/resources/${resource.id}`}>{resource.name}</Link>
             <span className="admin-cell-meta font-mono">{resource.slug}</span></td>
-          <td>{resource.kind === "tool" ? "软件" : "网站"}</td>
+          <td>{resource.kind === "tool" ? t("admin.resources.tool") : t("admin.resources.website")}</td>
           <td><Badge variant={resource.visibility === "published" ? "positive" : resource.visibility === "hidden" ? "negative" : "pending"}>
-            {{ draft: "草稿", published: "公开", hidden: "隐藏" }[resource.visibility]}
+            {t(resource.visibility === "published" ? "admin.discussions.public" : resource.visibility === "hidden" ? "admin.discussionTags.hidden" : "admin.resources.draft")}
           </Badge></td>
           <td className="tabular-nums">{resource.sort_order}</td>
-          <td className="admin-action-column"><Button asChild variant="ghost" size="sm"><Link to={`/admin/resources/${resource.id}`}>编辑</Link></Button></td>
+          <td className="admin-action-column"><Button asChild variant="ghost" size="sm"><Link to={`/admin/resources/${resource.id}`}>{t("core.action.edit")}</Link></Button></td>
         </tr>)}</tbody>
-      </TableWrap> : <EmptyState title="暂无链接。" />}
+      </TableWrap> : <EmptyState title={t("admin.resources.empty")} />}
       <details className="admin-panel admin-details">
-      <summary>新增链接</summary>
+      <summary>{t("admin.resources.add")}</summary>
       <form
         onSubmit={create}
         aria-busy={busy}
         className="mt-4 grid gap-4 sm:grid-cols-2"
       >
         <div className="admin-field">
-        <Label htmlFor="resource-name">名称</Label>
+        <Label htmlFor="resource-name">{t("creator.name")}</Label>
         <Input id="resource-name" name="name" maxLength={100} required />
         </div>
         <div className="admin-field">
-        <Label htmlFor="resource-slug">固定名称（创建后不可修改）</Label>
+        <Label htmlFor="resource-slug">{t("admin.resources.slug")}</Label>
         <Input
           id="resource-slug"
           name="slug"
           maxLength={80}
           pattern="[a-z0-9]+(-[a-z0-9]+)*"
-          placeholder="例如 windy-translator"
+          placeholder={t("admin.resources.example")}
           required
         />
         </div>
         <div className="admin-field">
-        <Label htmlFor="resource-kind">类型</Label>
+        <Label htmlFor="resource-kind">{t("admin.genres.genres")}</Label>
         <SelectField
           id="resource-kind"
           name="kind"
           defaultValue="website"
           options={[
-            { value: "website", label: "站外网站" },
-            { value: "tool", label: "软件" },
+            { value: "website", label: t("admin.resources.external") },
+            { value: "tool", label: t("admin.resources.tool") },
           ]}
         />
         </div>
         <div className="flex items-end"><Button disabled={busy}>
-          创建草稿
+          {t("admin.resources.create")}
         </Button></div>
       </form>
       </details>
       <details className="admin-panel admin-details">
-        <summary>安装包存储检查</summary>
+        <summary>{t("admin.resources.storage")}</summary>
         <div className="mt-4 grid gap-3">
         <Button
           variant="outline"
@@ -120,12 +127,12 @@ export function ResourceManager({
           disabled={busy}
           onClick={() => void inspect()}
         >
-          开始检查
+          {t("admin.resources.start")}
         </Button>
         {report ? (
           <>
             <p className="text-sm">
-              {report.phase}：本页检查 {report.scanned} 项。
+              {t("admin.resources.report", { phase: report.phase, count: report.scanned })}
             </p>
             {report.issues.map((issue, i) => (
               <p key={i} className="break-all text-sm">
@@ -133,7 +140,7 @@ export function ResourceManager({
               </p>
             ))}
             {!report.issues.length ? (
-              <p className="text-sm">本页未发现异常。</p>
+              <p className="text-sm">{t("admin.resources.noIssues")}</p>
             ) : null}
             {report.nextCursor ? (
               <Button
@@ -141,7 +148,7 @@ export function ResourceManager({
                 disabled={busy}
                 onClick={() => void inspect(report.nextCursor)}
               >
-                检查下一页
+                {t("admin.resources.next")}
               </Button>
             ) : null}
           </>

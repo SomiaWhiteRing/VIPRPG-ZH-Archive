@@ -15,7 +15,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
   try {
     const body = await readJsonObject(request, "分类编辑请求格式不正确");
     const permission = characterIndexPermission(body);
-    if (!permission) throw new HttpError(400, "不支持的分类操作");
+    if (!permission) throw new HttpError(400, "不支持的分类操作", undefined, "admin.characterIndex.error.unsupported");
     if (!hasPermission(auth.user, permission))
       return json({ ok: false, error: "Permission denied" }, { status: 403 });
     const result = await updateCharacterIndex(runtime, body, auth.user);
@@ -31,7 +31,7 @@ export async function POST(runtime: AppRuntime, request: Request) {
     ) {
       return jsonError(
         "角色分类保存失败",
-        new HttpError(409, "分类或角色已发生变化，请刷新后重试"),
+        new HttpError(409, "分类或角色已发生变化，请刷新后重试", undefined, "admin.characterIndex.error.stateChanged"),
       );
     }
     return jsonError("角色分类保存失败", error);

@@ -17,12 +17,16 @@ import { WorkOverviewSidebar } from "@/app/components/work/work-overview-sidebar
 import { WorkPageHeader } from "@/app/components/work/work-page-header";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { formatNumber } from "@/lib/format";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { tagHref } from "@/lib/user-tags";
-import { CHARACTER_ROLE_LABELS, getPublicRelationCards } from "./public-relations";
+import { getPublicRelationCards, publicRelationLabel } from "./public-relations";
 import { AlertTriangle } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { isCharacterRoleKey } from "@/lib/character-names";
 import { WorkMediaGallery } from "./work-media-gallery";
 import { WorkDescription } from "./work-description";
 import { WorkDiscussionSection, useWorkCollections } from "@/app/components/work/work-discussion-section";
@@ -46,6 +50,8 @@ export async function loader(args: LoaderFunctionArgs) {
   ]);
   return {
     work,
+    canonical: publicWork ? `${runtime.origin}/games/${work.id}` : undefined,
+    locale: runtime.uiLocale,
     sidebar,
     canPinComments,
     title: work.chineseTitle || work.originalTitle,
@@ -59,10 +65,17 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: loaderData?.title || "游戏详情" }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({
+    title: loaderData?.title || translate(locale, "work.detail"),
+    alternates: { canonical: loaderData?.canonical },
+  }, error, locale);
+};
 
 export default function GameDetailPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { work, sidebar, canPinComments, title, current, primaryMedia, media, tags: initialTags, comments, collections: initialCollections, relationCards } = useLoaderData<typeof loader>();
   const { collections, refreshCollections } = useWorkCollections(work.id, initialCollections);
   const favorite = useWorkFavorite(sidebar.community, initialTags);
@@ -89,24 +102,24 @@ export default function GameDetailPage() {
         language={work.language}
         originalTitle={work.originalTitle}
         tabs={[
-          { href: "#sec-intro", label: "概览", active: true },
+          { href: "#sec-intro", label: t("work.overview"), active: true },
           ...(current
             ? [
                 {
                   href: `/play/${work.id}`,
-                  label: "在线游玩",
+                  label: t("work.play"),
                   reloadDocument: true,
                 },
               ]
             : []),
           ...(media.length
-            ? [{ href: "#sec-gallery", label: "画廊", count: media.length }]
+            ? [{ href: "#sec-gallery", label: t("work.gallery"), count: media.length }]
             : []),
           ...(work.characters.length
             ? [
                 {
                   href: "#sec-cast",
-                  label: "角色",
+                  label: t("core.nav.characters"),
                   count: work.characters.length,
                 },
               ]
@@ -115,20 +128,20 @@ export default function GameDetailPage() {
             ? [
                 {
                   href: "#sec-relations",
-                  label: "关联",
+                  label: t("work.relations"),
                   count: relationCards.length,
                 },
               ]
             : []),
           {
             href: "#sec-comments",
-            label: "评论与吐槽",
+            label: t("work.comments"),
           },
         ]}
       />
 
       <DetailPageLayout
-        sidebarLabel="作品操作与资料"
+        sidebarLabel={t("work.sidebar")}
         main={
           <>
             <section
@@ -138,7 +151,7 @@ export default function GameDetailPage() {
             >
               <div className="mb-3.5 flex items-baseline justify-between gap-4">
                 <h2 className="m-0 text-base font-bold" id="intro-title">
-                  简介
+                  {t("work.intro")}
                 </h2>
               </div>
               {work.usesUnsupportedManiac ? (
@@ -151,16 +164,16 @@ export default function GameDetailPage() {
                     className="mt-0.5 shrink-0"
                     size={16}
                   />
-                  <span>该游戏使用了 EasyRPG 不支持的 Maniac 语法，可能无法正常游玩。</span>
+                  <span>{t("work.maniac")}</span>
                 </div>
               ) : null}
               {work.description ? (
                 <WorkDescription key={work.description} description={work.description} />
               ) : (
-                <p className="text-sm text-muted">暂无简介。</p>
+                <p className="text-sm text-muted">{t("work.noDescription")}</p>
               )}
               {tags.length ? (
-                <div aria-label="标签" className="mt-4 flex flex-wrap gap-2">
+                <div aria-label={t("library.tags")} className="mt-4 flex flex-wrap gap-2">
                   {tags.map((tag) => (
                     <Link
                       className={tag.source === "public"
@@ -170,7 +183,7 @@ export default function GameDetailPage() {
                       key={tag.name}
                     >
                       {tag.name}
-                      <small className="font-mono text-[10px] font-normal tabular-nums" aria-label={`${tag.usageCount} 次使用`}>{formatNumber(tag.usageCount)}</small>
+                      <small className="font-mono text-[10px] font-normal tabular-nums" aria-label={t("work.tagUses", { count: tag.usageCount })}>{formatNumber(tag.usageCount, locale)}</small>
                     </Link>
                   ))}
                 </div>
@@ -185,10 +198,10 @@ export default function GameDetailPage() {
               >
                 <div className="mb-3.5 flex items-baseline justify-between gap-4">
                   <h2 className="m-0 text-base font-bold" id="gallery-title">
-                    画廊
+                    {t("work.gallery")}
                   </h2>
                   <span className="shrink-0 whitespace-nowrap font-mono text-xs text-muted">
-                    {media.length} 张
+                    {t("work.galleryCount", { count: media.length })}
                   </span>
                 </div>
                 <WorkMediaGallery items={media} title={title} />
@@ -203,18 +216,18 @@ export default function GameDetailPage() {
               >
                 <div className="mb-3.5 flex items-baseline justify-between gap-4">
                   <h2 className="m-0 text-base font-bold" id="cast-title">
-                    登场角色
+                    {t("work.cast")}
                   </h2>
                   <Link
-                    aria-label="查看全部登场角色"
+                    aria-label={t("work.allCast")}
                     className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline"
                     to={`/games/${work.id}/characters`}
                   >
-                    更多
+                    {t("work.more")}
                   </Link>
                 </div>
                 <div
-                  aria-label="角色列表"
+                  aria-label={t("work.castList")}
                   className="flex gap-2.5 overflow-x-auto pb-1.5 [scroll-snap-type:x_proximity] scrollbar-thin"
                 >
                   {work.characters.map((character, index) => (
@@ -236,7 +249,7 @@ export default function GameDetailPage() {
                       <span
                         className={`inline-flex justify-self-start rounded-full border border-border bg-card px-2 py-[0.05rem] font-mono text-xs text-muted ${character.roleKey === "main" ? "border-primary/40 bg-primary/10 text-secondary" : ""}`}
                       >
-                        {CHARACTER_ROLE_LABELS[character.roleKey] ?? "其他"}
+                        {t(`work.role.${isCharacterRoleKey(character.roleKey) ? character.roleKey : "other"}`)}
                       </span>
                     </Link>
                   ))}
@@ -253,15 +266,15 @@ export default function GameDetailPage() {
                 <span aria-hidden="true" className="sr-only" id="relations" />
                 <div className="mb-3.5 flex items-baseline justify-between gap-4">
                   <h2 className="m-0 text-base font-bold" id="relations-title">
-                    关联作品
+                    {t("work.related")}
                   </h2>
                   {relationCards.length ? (
                     <Link
-                      aria-label="查看全部关联作品"
+                      aria-label={t("work.allRelated")}
                       className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline"
                       to={`/games/${work.id}/related`}
                     >
-                      更多
+                      {t("work.more")}
                     </Link>
                   ) : null}
                 </div>
@@ -273,7 +286,7 @@ export default function GameDetailPage() {
                         key={type}
                       >
                         <h3 className="mb-2 text-sm font-normal text-muted">
-                          {type}
+                          {publicRelationLabel(type, locale)}
                         </h3>
                         <div className="flex gap-3">
                           {relations.map((relation) => (
@@ -290,7 +303,7 @@ export default function GameDetailPage() {
                     ))}
                   </div>
                 ) : (
-                  <EmptyState title="暂无公开关联作品。" variant="plain" />
+                  <EmptyState title={t("work.noRelated")} variant="plain" />
                 )}
               </section>
             ) : null}

@@ -7,6 +7,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import { canMergeWorks, hasPermission } from "@/lib/authz/permissions";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
+import { translate } from "@/lib/i18n/core";
 import { MAX_USER_TAG_LENGTH, MAX_USER_TAGS } from "@/lib/user-tags";
 
 export async function setWorkMaintainer(
@@ -17,14 +18,14 @@ export async function setWorkMaintainer(
   remove: boolean,
 ) {
   if (!hasPermission(actor, "work.maintainer.manage_any"))
-    throw new HttpError(403, "没有管理作品维护者的权限");
+    throw new HttpError(403, "没有管理作品维护者的权限", undefined, "admin.works.maintainersPermission");
   const user = await findUserByEmail(runtime, email);
   if (
     !user ||
     (!remove &&
       (user.status !== "active" || !hasPermission(user, "work.update_own")))
   )
-    throw new HttpError(400, "请选择拥有作品维护权限的正常账户");
+    throw new HttpError(400, "请选择拥有作品维护权限的正常账户", undefined, "admin.works.maintainerAccount");
   if (remove) await removeWorkMaintainer(runtime, actor, workId, user.id);
   else await addWorkMaintainer(runtime, actor, workId, user.id);
 }
@@ -36,7 +37,7 @@ export async function mergeCreators(
   target: number,
 ) {
   if (!hasPermission(actor, "creator.merge_any"))
-    throw new HttpError(403, "无权合并人物");
+    throw new HttpError(403, "无权合并人物", undefined, "admin.works.creatorMergePermission");
   const db = getD1(runtime);
   await requirePair(db, "creators", source, target);
   const conflicts = await db
@@ -50,7 +51,7 @@ export async function mergeCreators(
   if (conflicts)
     throw new HttpError(
       409,
-      "两个人物在同一作品的相同职务中有不同署名或备注，请先统一后再合并",
+      translate(runtime.uiLocale, "admin.creators.creditConflict"),
     );
   await auditedEntityBatch(db, [
     db
@@ -86,7 +87,7 @@ export async function mergeWorks(
   source: number,
   target: number,
 ) {
-  if (!canMergeWorks(actor)) throw new HttpError(403, "无权合并作品");
+  if (!canMergeWorks(actor)) throw new HttpError(403, "无权合并作品", undefined, "admin.works.mergePermission");
   const db = getD1(runtime);
   await requirePair(db, "works", source, target);
   const pair = await db
@@ -106,14 +107,14 @@ export async function mergeWorks(
     a.engine_family !== b.engine_family ||
     [a.status, b.status].includes("processing")
   )
-    throw new HttpError(409, "仅可合并同语言、同引擎且已结束上传的重复作品");
+    throw new HttpError(409, "仅可合并同语言、同引擎且已结束上传的重复作品", undefined, "admin.works.mergeCompatibility");
   if (
     await db
       .prepare(`SELECT 1 FROM works WHERE id=? AND status='deleted'`)
       .bind(target)
       .first()
   )
-    throw new HttpError(409, "请先恢复目标作品");
+    throw new HttpError(409, "请先恢复目标作品", undefined, "admin.works.mergeRestoreTarget");
   if (
     await db
       .prepare(
@@ -122,7 +123,7 @@ export async function mergeWorks(
       .bind(source, target)
       .first()
   )
-    throw new HttpError(409, "作品仍有进行中的上传，请先结束上传");
+    throw new HttpError(409, "作品仍有进行中的上传，请先结束上传", undefined, "admin.works.mergeActiveUpload");
   await assertMergeCover(db, target);
   await assertWorkMergeDeclarations(db, source, target);
   await assertArchiveMergeStates(db, source, target);
@@ -140,16 +141,16 @@ export async function mergeWorks(
       .bind(source, target),
   ]);
   if (conflicts.some((r) => r.results?.length))
-    throw new HttpError(409, "署名／目录备注不同，请先在后台处理冲突后再合并");
+    throw new HttpError(409, "署名／目录备注不同，请先在后台处理冲突后再合并", undefined, "admin.works.mergeCredits");
   if (await db.prepare(`SELECT 1 FROM user_work_entries s JOIN user_work_entries t ON s.user_id=t.user_id
     WHERE s.work_id=? AND t.work_id=? AND s.favorite_note<>'' AND t.favorite_note<>'' AND s.favorite_note<>t.favorite_note LIMIT 1`)
     .bind(source, target).first()) {
-    throw new HttpError(409, "同一用户的两条收藏吐槽不同，请先处理吐槽冲突后再合并。");
+    throw new HttpError(409, "同一用户的两条收藏吐槽不同，请先处理吐槽冲突后再合并。", undefined, "admin.works.mergeFavoriteNotes");
   }
   if (await db.prepare(`SELECT user_id FROM user_work_tags WHERE work_id IN (?,?)
     GROUP BY user_id HAVING COUNT(DISTINCT name)>? OR MAX(length(name))>? LIMIT 1`)
     .bind(source, target, MAX_USER_TAGS, MAX_USER_TAG_LENGTH).first()) {
-    throw new HttpError(409, `合并后的收藏标签不能超过 ${MAX_USER_TAGS} 个，每个最多 ${MAX_USER_TAG_LENGTH} 字，请先处理标签后再合并。`);
+    throw new HttpError(409, `合并后的收藏标签不能超过 ${MAX_USER_TAGS} 个，每个最多 ${MAX_USER_TAG_LENGTH} 字，请先处理标签后再合并。`, undefined, "admin.works.mergeTags", { count: MAX_USER_TAGS, length: MAX_USER_TAG_LENGTH });
   }
   await initializeWorkPlays(runtime, [source, target]);
   const statements: D1PreparedStatement[] = [];
@@ -359,6 +360,8 @@ export async function mergeWorks(
       throw new HttpError(
         409,
         "关联存在冲突，合并已全部撤销；请先在后台统一关联",
+        undefined,
+        "admin.works.mergeRelations",
       );
     throw error;
   }
@@ -383,6 +386,9 @@ async function assertWorkMergeDeclarations(
     throw new HttpError(
       409,
       `作品 #${source} 与 #${target} 的翻译或原创声明不同，请先统一声明后再合并。`,
+      undefined,
+      "admin.works.mergeDeclarations",
+      { source, target },
     );
 }
 
@@ -411,6 +417,14 @@ async function assertArchiveMergeStates(
     throw new HttpError(
       409,
       `归档 #${conflict.source_id}（${conflict.source_purged_at ? "已清理" : conflict.source_status}）与 #${conflict.target_id}（${conflict.target_purged_at ? "已清理" : conflict.target_status}）文件相同但状态不同。请先在后台统一状态后再合并。`,
+      undefined,
+      "admin.works.mergeArchiveStates",
+      {
+        source: conflict.source_id,
+        target: conflict.target_id,
+        sourceStatus: conflict.source_purged_at ? "purged" : conflict.source_status,
+        targetStatus: conflict.target_purged_at ? "purged" : conflict.target_status,
+      },
     );
 }
 
@@ -420,14 +434,14 @@ async function requirePair(
   source: number,
   target: number,
 ) {
-  if (source === target) throw new HttpError(400, "不能合并到自身");
+  if (source === target) throw new HttpError(400, "不能合并到自身", undefined, "admin.works.mergeSelf");
   const row = await db
     .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE id IN (?,?)`)
     .bind(source, target)
     .first<{ n: number }>();
-  if (row?.n !== 2) throw new HttpError(404, "合并来源或目标不存在");
+  if (row?.n !== 2) throw new HttpError(404, "合并来源或目标不存在", undefined, "admin.works.mergeMissing");
 }
 async function assertMergeCover(db: D1Database, target: number) {
   if (!await db.prepare("SELECT 1 FROM work_media_assets WHERE work_id=? AND role='cover'").bind(target).first())
-    throw new HttpError(409, "目标作品缺少封面，请先指定封面再合并");
+    throw new HttpError(409, "目标作品缺少封面，请先指定封面再合并", undefined, "admin.works.mergeCover");
 }

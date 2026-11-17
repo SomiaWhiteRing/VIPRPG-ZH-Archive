@@ -18,9 +18,9 @@ export async function storeAvatarFromForm(
   if (avatar === null) return undefined;
   if (avatar === "remove") return null;
   if (typeof avatar === "string" || avatar.type !== "image/png")
-    throw new HttpError(415, "头像必须是 PNG 文件");
+    throw new HttpError(415, "头像必须是 PNG 文件", undefined, "avatar.error.png");
   if (avatar.size > MAX_AVATAR_BYTES)
-    throw new HttpError(413, "头像文件不能超过 512 KiB");
+    throw new HttpError(413, "头像文件不能超过 512 KiB", undefined, "avatar.error.fileSize");
   return storeAvatarPng(runtime, await avatar.arrayBuffer());
 }
 
@@ -43,9 +43,9 @@ export async function storeAvatarPng(
 
 export function assertAvatarPng(buffer: ArrayBuffer): void {
   if (buffer.byteLength > MAX_AVATAR_BYTES)
-    throw new HttpError(413, "头像文件不能超过 512 KiB");
+    throw new HttpError(413, "头像文件不能超过 512 KiB", undefined, "avatar.error.fileSize");
   const info = inspectWorkImage(buffer);
-  if (info.format !== "png") throw new HttpError(400, "头像必须是 PNG 图片");
+  if (info.format !== "png") throw new HttpError(400, "头像必须是 PNG 图片", undefined, "avatar.error.png");
   if (info.width !== 192 || info.height !== 192)
-    throw new HttpError(400, "头像尺寸必须精确为 192×192");
+    throw new HttpError(400, "头像尺寸必须精确为 192×192", undefined, "avatar.error.dimensions");
 }

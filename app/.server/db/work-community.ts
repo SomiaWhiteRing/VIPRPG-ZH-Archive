@@ -44,6 +44,7 @@ import type {
 } from "@/lib/dto/db/work-community";
 import { hasPermission } from "@/lib/authz/permissions";
 import { HttpError } from "@/lib/http";
+import { UiHttpError } from "@/lib/i18n/feedback";
 import { recordWorkPlay, viewCounts } from "@/app/.server/views/service";
 import { parseFavoriteNote, parseUserTags } from "@/lib/user-tags";
 
@@ -85,7 +86,7 @@ export async function recordWorkPlayed(
   const work = await database.prepare(`SELECT
     (SELECT COUNT(*) FROM user_work_entries WHERE work_id=w.id AND last_played_at IS NOT NULL) AS count
     FROM works w WHERE w.id=? AND ${access.sql}`).bind(workId, ...access.binds).first<{ count: number }>();
-  if (!work) throw new HttpError(404, "作品不存在");
+  if (!work) throw new UiHttpError(404, "comment.error.workMissing");
   const [counter] = await Promise.allSettled([recordWorkPlay(runtime, workId, work.count)]);
   // Personal history must still update when the public counter is unavailable.
   if (userId !== null) {
@@ -108,7 +109,7 @@ export async function recordWorkPlayed(
       )
       .bind(userId, workId, ...access.binds),
     ]);
-    if ((result.meta.changes ?? 0) !== 1) throw new HttpError(404, "作品不存在");
+    if ((result.meta.changes ?? 0) !== 1) throw new UiHttpError(404, "comment.error.workMissing");
   }
   if (counter.status === "rejected") throw counter.reason;
 }
@@ -175,7 +176,7 @@ export async function setWorkFavorite(
       .bind(workId, userId, workId, ...access.binds),
   ]);
   if ((results[1].meta.changes ?? 0) < 1)
-    throw new HttpError(404, "作品不存在");
+    throw new UiHttpError(404, "comment.error.workMissing");
 }
 
 export async function getWorkCommunitySummary(
@@ -210,7 +211,7 @@ export async function getWorkCommunitySummary(
       favorite_count: number;
       favorited_by_me: number;
     }>();
-  if (!row) throw new HttpError(404, "作品不存在");
+  if (!row) throw new UiHttpError(404, "comment.error.workMissing");
   const [views, plays] = await Promise.all([
     viewCounts(runtime, "work", [workId]),
     viewCounts(runtime, "play", [workId], { [workId]: row.legacy_player_count }),
@@ -266,12 +267,12 @@ export async function pinComment(
   user: ArchiveUser,
   pinned: unknown,
 ): Promise<CommentDto> {
-  if (typeof pinned !== "boolean") throw new HttpError(400, "置顶状态无效");
+  if (typeof pinned !== "boolean") throw new UiHttpError(400, "comment.error.pinState");
   const comment = await readCommentForUser(runtime, id, user.id);
   if (comment.target.kind !== "work" || comment.rootCommentId !== null)
-    throw new HttpError(400, "只能置顶游戏主楼评论");
+    throw new UiHttpError(400, "comment.error.pinRoot");
   if (!(await canPinWorkComments(runtime, comment.target.id, user)))
-    throw new HttpError(403, "只有游戏上传者和管理员可以置顶评论");
+    throw new UiHttpError(403, "comment.error.pinPermission");
   const access = commentTargetReadCondition(user);
   const result = await getD1(runtime).prepare(`UPDATE comments SET pinned_at=CASE WHEN ?=1 THEN COALESCE(pinned_at,CURRENT_TIMESTAMP) ELSE NULL END
     WHERE id=? AND id IN (SELECT c.id FROM published_comments c WHERE ${access.sql})
@@ -279,7 +280,7 @@ export async function pinComment(
       AND (?=0 OR NOT EXISTS(SELECT 1 FROM comments other
         WHERE other.work_id=comments.work_id AND other.pinned_at IS NOT NULL AND other.id<>comments.id))`)
     .bind(pinned ? 1 : 0, id, ...access.binds, hasPermission(user, "comment.manage_any") ? 1 : 0, user.id, pinned ? 1 : 0).run();
-  if (result.meta.changes !== 1) throw new HttpError(pinned ? 409 : 404, "评论不可用");
+  if (result.meta.changes !== 1) throw new UiHttpError(pinned ? 409 : 404, "comment.error.unavailable");
   return readCommentForUser(runtime, id, user.id);
 }
 
@@ -347,14 +348,7 @@ export async function listRootComments(
   ]);
   const rowsResult = results[results.length - 1];
   if (!knownPublic && !results[0].results?.length)
-    throw new HttpError(
-      404,
-      target.kind === "work"
-        ? "作品不存在"
-        : target.kind === "creator"
-          ? "作者不存在"
-          : target.kind === "catalog" ? "目录不存在" : "角色不存在",
-    );
+    throw new UiHttpError(404, `comment.error.${target.kind}Missing`);
   const page = await pageFromRows(
     runtime,
     (rowsResult.results ?? []) as CommentRow[],
@@ -430,7 +424,7 @@ export async function listReplies(
       )
       .bind(commentId ?? 0, rootCommentId),
   ]);
-  if (!rootResult.results?.length) throw new HttpError(404, "主楼不存在");
+  if (!rootResult.results?.length) throw new UiHttpError(404, "comment.error.threadMissing");
   const total = (countResult.results as { total: number }[])[0]?.total ?? 0;
   const position =
     (positionResult.results as { position: number }[])[0]?.position ?? 0;
@@ -586,7 +580,7 @@ export async function searchUserComments(
       coverBlobSha256: row.cover_blob_sha256,
       avatarBlobSha256: row.avatar_blob_sha256,
       portrait: mapCharacterPortrait(row),
-      body: emojiText(row.body),
+      body: emojiText(row.body, runtime.uiLocale),
       imageCount: row.image_count,
       status: row.status,
       likeCount: row.like_count,
@@ -644,7 +638,7 @@ export async function createComment(
       replyTarget.status !== "published" ||
       replyTarget.root_status !== "published"
     )
-      throw new HttpError(409, "回复目标不可用");
+      throw new UiHttpError(409, "comment.error.replyUnavailable");
     rootCommentId = replyTarget.root_comment_id ?? replyTarget.id;
     replyToId = replyTarget.root_comment_id === null ? null : replyTarget.id;
     replyRecipientId = replyTarget.user_id;
@@ -653,12 +647,12 @@ export async function createComment(
   const ids = parseCommentImageIds(imagesInput);
   const requestKey = requestKeyInput ?? crypto.randomUUID();
   if (typeof requestKey !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(requestKey))
-    throw new HttpError(400, "评论发布标识无效");
+    throw new UiHttpError(400, "comment.error.invalidSubmissionId");
   const requestHash = await sha256Hex(new TextEncoder().encode(JSON.stringify({ target, body, replyToCommentId, ids })).buffer);
   const previousRequest = async () => {
     const previous = await db.prepare("SELECT id,request_hash FROM comments WHERE user_id=? AND request_key=?")
       .bind(userId, requestKey).first<{ id: number; request_hash: string }>();
-    if (previous && previous.request_hash !== requestHash) throw new HttpError(409, "发布标识对应的评论已变化，请重新发布。");
+    if (previous && previous.request_hash !== requestHash) throw new UiHttpError(409, "comment.error.submissionChanged");
     return previous;
   };
   const previous = await previousRequest();
@@ -718,12 +712,12 @@ export async function createComment(
     const committed = await previousRequest();
     if (committed) return readCommentForUser(runtime, committed.id, userId);
     const valid = await db.prepare(`SELECT 1 AS ok WHERE ${guard.sql}`).bind(...guard.args).first();
-    if (!valid) throw new HttpError(409, "图片不可用或已被其他评论使用，请移除后重新选择。");
+    if (!valid) throw new UiHttpError(409, "comment.error.imageUsedRetry");
     await assertReadableCommentTarget(runtime, target);
     if (rootCommentId !== null && !(await db.prepare(`SELECT id FROM published_comments
       WHERE id=? AND (? IS NULL OR EXISTS(SELECT 1 FROM published_comments target WHERE target.id=?))`)
       .bind(rootCommentId, replyToId, replyToId).first()))
-      throw new HttpError(409, "回复目标不可用");
+      throw new UiHttpError(409, "comment.error.replyUnavailable");
     throw error;
   }
 }
@@ -738,7 +732,7 @@ export async function updateComment(
   const body = normalizeCommentBody(bodyInput);
   const db = getD1(runtime);
   const actor = await findUserById(runtime, userId);
-  if (!actor || actor.status !== "active") throw new HttpError(403, "账号不可用");
+  if (!actor || actor.status !== "active") throw new UiHttpError(403, "comment.error.accountUnavailable");
   const access = commentTargetReadCondition(await getCurrentUser(runtime), "comments");
   const previous = await db
     .prepare(
@@ -746,7 +740,7 @@ export async function updateComment(
     )
     .bind(id, userId, ...access.binds)
     .first<{ body: string }>();
-  if (!previous) throw new HttpError(404, "评论不存在或不可编辑");
+  if (!previous) throw new UiHttpError(404, "comment.error.editUnavailable");
   await validateBodyEmojis(db, body, previous.body);
   await validateMentions(db, userId, body, previous.body);
   const source =
@@ -755,7 +749,7 @@ export async function updateComment(
   const ids = imagesInput === undefined ? undefined : parseCommentImageIds(imagesInput);
   const guard = ids === undefined ? { sql: "1", args: [] } : commentImageGuard(ids, userId, id);
   if (!(await db.prepare(`SELECT 1 WHERE ${guard.sql}`).bind(...guard.args).first()))
-    throw new HttpError(409, "图片不可用或已被其他评论使用。");
+    throw new UiHttpError(409, "comment.error.imageUsed");
   const results = await auditedEntityBatch(db, [
     db
       .prepare(
@@ -777,7 +771,7 @@ export async function updateComment(
   ], { actor, eventType: "comment_edit", targets: [{ type: "comment", id }], snapshot: commentAuditSnapshot(id),
     permission: null, authorizationBasis: "content_author", source: "owned", operation: "edit" });
   if ((results[0].meta.changes ?? 0) !== 1)
-    throw new HttpError(404, "评论不存在或不可编辑");
+    throw new UiHttpError(404, "comment.error.editUnavailable");
   return readCommentForUser(runtime, id, userId);
 }
 
@@ -806,7 +800,7 @@ export async function deleteComment(
   ]);
   const result = results[0];
   if ((result.meta.changes ?? 0) !== 1)
-    throw new HttpError(404, "评论不存在或不可删除");
+    throw new UiHttpError(404, "comment.error.deleteUnavailable");
 }
 
 export async function moderateComment(
@@ -821,7 +815,7 @@ export async function moderateComment(
     .bind(id, ...access.binds)
     .first<{ id: number; user_id: number; status: string }>();
   if (!current || current.status === "deleted")
-    throw new HttpError(404, "评论不存在或不可恢复");
+    throw new UiHttpError(404, "comment.error.restoreUnavailable");
   const database = getD1(runtime);
   await database.batch([
     database
@@ -856,8 +850,8 @@ export async function likeComment(
         SELECT 1 FROM comment_likes WHERE comment_id=c.id AND user_id=?)) AS restricted
       FROM published_comments c WHERE c.id=? AND ${access.sql}`)
     .bind(userId, userId, id, ...access.binds).first<{ restricted: number }>();
-  if (!target) throw new HttpError(404, "评论不存在");
-  if (target.restricted) throw new HttpError(403, "Permission denied");
+  if (!target) throw new UiHttpError(404, "comment.error.missing");
+  if (target.restricted) throw new HttpError(403, "Permission denied", undefined, "core.request.forbidden");
   await db.batch([
     db.prepare(`INSERT OR IGNORE INTO comment_likes(comment_id,user_id)
       SELECT c.id,? FROM published_comments c WHERE c.id=? AND ${access.sql}
@@ -907,7 +901,7 @@ export async function readCommentForUser(
     )
     .bind(...(viewerId ? [viewerId, id] : [id]), ...access.binds)
     .first<CommentRow>();
-  if (!row) throw new HttpError(404, "评论不存在");
+  if (!row) throw new UiHttpError(404, "comment.error.missing");
   return mapComment(row, viewerId, await emojiMap(runtime, [row]), await commentImagesById(getD1(runtime), [row.id]));
 }
 
@@ -920,14 +914,7 @@ export async function assertReadableCommentTarget(
     id: number;
   }>();
   if (!row)
-    throw new HttpError(
-      404,
-      target.kind === "work"
-        ? "作品不存在"
-        : target.kind === "creator"
-          ? "作者不存在"
-          : target.kind === "catalog" ? "目录不存在" : "角色不存在",
-    );
+    throw new UiHttpError(404, `comment.error.${target.kind}Missing`);
 }
 
 function targetMatchesRow(
@@ -1045,11 +1032,11 @@ function tokenizeBody(
 }
 
 function normalizeCommentBody(value: unknown): string {
-  if (typeof value !== "string") throw new HttpError(400, "评论正文必须是文本");
+  if (typeof value !== "string") throw new UiHttpError(400, "comment.error.bodyType");
   const body = value.replace(/\r\n?/g, "\n").trim();
-  if (!body) throw new HttpError(400, "评论正文不能为空");
+  if (!body) throw new UiHttpError(400, "comment.error.bodyEmpty");
   if (bodyLength(body) > MAX_COMMENT_LENGTH)
-    throw new HttpError(400, "评论正文过长");
+    throw new UiHttpError(400, "comment.error.bodyLength");
   return body;
 }
 
@@ -1094,6 +1081,6 @@ function decodeCursor(
   const split = decoded.lastIndexOf("|");
   const id = Number(decoded.slice(split + 1));
   if (split <= 0 || !Number.isSafeInteger(id) || id <= 0)
-    throw new HttpError(400, "cursor 不合法");
+    throw new UiHttpError(400, "comment.error.invalidCursor");
   return { createdAt: decoded.slice(0, split), id };
 }

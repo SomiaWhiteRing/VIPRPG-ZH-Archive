@@ -4,6 +4,7 @@ import { AddInformationButton } from "@/app/components/ui/information-editor";
 import type { CreatorSelection, CreatorSuggestion } from "@/lib/creator-names";
 import type { StaffCredit } from "@/lib/staff-credits";
 import { EXTRA_STAFF_ROLES } from "@/lib/staff-credits";
+import { useMessages } from "@/lib/i18n/react";
 import { useState } from "react";
 
 const roles = [
@@ -23,6 +24,7 @@ export function WorkStaffFields({
   credits: StaffCredit[];
   suggestions: CreatorSuggestion[];
 }) {
+  const t = useMessages();
   const [rows, setRows] = useState<Row[]>(() =>
     credits.map((credit, index) => ({ ...credit, id: `credit-${index}` })),
   );
@@ -34,7 +36,7 @@ export function WorkStaffFields({
   return (
     <fieldset className="grid min-w-0 gap-3">
       <legend className="mb-2 text-sm font-semibold">
-        作者、译者与其他制作人员
+        {t("upload.staff.allStaff")}
       </legend>
       <input
         name="work_staff"
@@ -72,7 +74,7 @@ export function WorkStaffFields({
           id, roleKey: "author", selection: null, roleLabel: null, notes: null,
         }]);
         return `admin-${id}-role`;
-      }}>添加署名</AddInformationButton>
+      }}>{t("upload.staff.addCredit")}</AddInformationButton>
     </fieldset>
   );
 }

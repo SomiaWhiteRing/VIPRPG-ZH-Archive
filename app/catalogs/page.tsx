@@ -1,4 +1,6 @@
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { listCatalogs } from "@/app/.server/db/catalogs";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -8,7 +10,8 @@ import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageContainer } from "@/app/components/ui/page-container";
 import { PageHeader } from "@/app/components/ui/page-header";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -16,30 +19,33 @@ export async function loader(args: LoaderFunctionArgs) {
   const catalogs = await listCatalogs(runtime);
   const user = await getCurrentUser(runtime);
 
-  return { catalogs, isLoggedIn: !!user };
+  return { locale: runtime.uiLocale, catalogs, isLoggedIn: !!user };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: "目录" }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: translate(locale, "core.nav.catalogs") }, error, locale);
+};
 
 export default function CatalogsPage() {
+  const t = useMessages();
   const { catalogs, isLoggedIn } = useLoaderData<typeof loader>();
   return (
     <PageContainer>
       <PageHeader
         compact
-        title="目录"
+        title={t("core.nav.catalogs")}
         actions={
           isLoggedIn ? (
             <CatalogCreateForm />
           ) : (
-            <Link to="/login?next=%2Fcatalogs">登录后创建</Link>
+            <Link to="/login?next=%2Fcatalogs">{t("catalog.loginCreate")}</Link>
           )
         }
       />
       {catalogs.length ? (
         <section
-          aria-label="目录列表"
+          aria-label={t("catalog.list")}
           className="mt-5 divide-y divide-border border-b border-border"
         >
           {catalogs.map((catalog) => (
@@ -48,7 +54,7 @@ export default function CatalogsPage() {
         </section>
       ) : (
         <div className="mt-5">
-          <EmptyState title="还没有公开目录。" />
+          <EmptyState title={t("catalog.emptyPublic")} />
         </div>
       )}
     </PageContainer>

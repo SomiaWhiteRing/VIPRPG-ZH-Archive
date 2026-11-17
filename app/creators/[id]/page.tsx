@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { AUTO_LINK_PATTERN, autoLink } from "@/lib/auto-links";
 import { Fragment } from "react";
 import { getCurrentUser } from "@/app/.server/auth/current-user";
@@ -21,11 +23,11 @@ import { InfoRow } from "@/app/components/ui/info-row";
 import { SectionNavigation } from "@/app/components/ui/section-navigation";
 import { CreatorWorkList } from "@/app/creators/creator-work-list";
 import { canEditPublicCreator } from "@/lib/authz/creator-permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatNumber } from "@/lib/format";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { ExternalLink } from "lucide-react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
@@ -45,6 +47,7 @@ export async function loader(args: LoaderFunctionArgs) {
   );
 
   return {
+    locale: runtime.uiLocale,
     currentUser: pickPageFields(currentUser, ["id"]),
     canEdit: canEditPublicCreator(currentUser),
     creator,
@@ -53,24 +56,27 @@ export async function loader(args: LoaderFunctionArgs) {
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: loaderData?.creator.name || "作者详情" }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: loaderData?.creator.name || translate(locale, "creator.detail") }, error, locale);
+};
 
 export default function CreatorDetailPage() {
+  const t = useMessages();
   const { currentUser, creator, comments, works, canEdit } =
     useLoaderData<typeof loader>();
   return (
     <DetailPageShell>
       <header className="pt-4">
-        <BackLink href="/creators" label="作者列表" variant="text" />
+        <BackLink href="/creators" label={t("creator.list")} variant="text" />
         <h1 className="mt-2 font-serif text-3xl font-bold leading-tight max-[560px]:text-2xl">
           {creator.name}
         </h1>
         <SectionNavigation
           items={[
-            ...(creator.bio ? [{ href: "#sec-intro", label: "概览", active: true }] : []),
-            { href: "#sec-works", label: "参与作品", count: creator.workCreditCount, active: !creator.bio },
-            { href: "#sec-comments", label: "评论" },
+            ...(creator.bio ? [{ href: "#sec-intro", label: t("work.overview"), active: true }] : []),
+            { href: "#sec-works", label: t("creator.credits"), count: creator.workCreditCount, active: !creator.bio },
+            { href: "#sec-comments", label: t("work.stats.commentsShort") },
           ]}
         />
       </header>
@@ -78,7 +84,7 @@ export default function CreatorDetailPage() {
       <DetailPageLayout
         compactSidebar
         sidebarPosition="left"
-        sidebarLabel="作者资料"
+        sidebarLabel={t("creator.details")}
         main={
           <>
             {creator.bio ? (
@@ -88,7 +94,7 @@ export default function CreatorDetailPage() {
                 id="sec-intro"
               >
                 <h2 className="mb-3.5 text-base font-bold" id="intro-title">
-                  简介
+                  {t("work.intro")}
                 </h2>
                 <p className="m-0 whitespace-pre-wrap leading-[1.85] wrap-anywhere">
                   {creator.bio
@@ -114,22 +120,22 @@ export default function CreatorDetailPage() {
             >
               <div className="mb-3.5 flex items-baseline justify-between gap-4">
                 <h2 className="m-0 text-base font-bold" id="works-title">
-                  参与作品
+                  {t("creator.credits")}
                 </h2>
                 {works.length ? (
                   <Link
-                    aria-label="查看全部参与作品"
+                    aria-label={t("creator.allCredits")}
                     className="shrink-0 whitespace-nowrap text-sm font-medium text-secondary hover:underline"
                     to={`/creators/${creator.id}/works`}
                   >
-                    更多
+                    {t("work.more")}
                   </Link>
                 ) : null}
               </div>
               {works.length ? (
                 <CreatorWorkList works={works} creatorName={creator.name} />
               ) : (
-                <EmptyState title="暂无参与作品。" variant="plain" />
+                <EmptyState title={t("creator.emptyCredits")} variant="plain" />
               )}
             </section>
 
@@ -140,14 +146,14 @@ export default function CreatorDetailPage() {
             >
               <div className="mb-3.5 flex items-baseline justify-between gap-4">
                 <h2 className="m-0 text-base font-bold" id="comments-title">
-                  评论
+                  {t("work.stats.commentsShort")}
                 </h2>
               </div>
               <CommentPanel
                 currentUserId={currentUser?.id ?? null}
                 initialComments={comments.items}
                 initialTotal={comments.total}
-                placeholder="写下你对这位作者或其作品的看法……"
+                placeholder={t("creator.commentPlaceholder")}
                 target={{ kind: "creator", id: creator.id }}
               />
             </section>
@@ -165,12 +171,12 @@ export default function CreatorDetailPage() {
               {creator.name}
             </h2>
             <dl className="mt-4">
-              <InfoRow label="作品">{formatNumber(creator.workCreditCount)} 部</InfoRow>
-              <InfoRow label="最近参与">
-                {creator.latestWorkCreditAt?.slice(0, 10) ?? "暂无"}
+              <InfoRow label={t("search.scopes.works")}>{t("favorite.workCount", { count: creator.workCreditCount })}</InfoRow>
+              <InfoRow label={t("creator.latest")}>
+                {creator.latestWorkCreditAt?.slice(0, 10) ?? t("creator.unavailable")}
               </InfoRow>
               {creator.aliases.length ? (
-                <InfoRow label="别名">{creator.aliases.join("、")}</InfoRow>
+                <InfoRow label={t("work.sidebar.aliases")}>{creator.aliases.join("、")}</InfoRow>
               ) : null}
             </dl>
             {canEdit ? (
@@ -179,7 +185,7 @@ export default function CreatorDetailPage() {
                 to={`/history/creator/${creator.id}`}
                 prefetch="none"
               >
-                编辑历史
+                {t("work.sidebar.history")}
               </Link>
             ) : null}
             {creator.links.map((link, index) => (
@@ -196,10 +202,10 @@ export default function CreatorDetailPage() {
             ))}
           </Card>
           {canEdit || !currentUser ? (
-            <div className="flex items-center gap-1 px-2 max-[980px]:w-full" aria-label="作者资料操作">
+            <div className="flex items-center gap-1 px-2 max-[980px]:w-full" aria-label={t("creator.actions")}>
               <Link className="min-w-0 flex-1 shrink px-1 text-center text-sm font-medium text-secondary hover:underline"
                 to={currentUser ? `/creators/${creator.id}/edit` : `/login?next=${encodeURIComponent(`/creators/${creator.id}/edit`)}`}>
-                {currentUser ? "编辑资料" : "登录后编辑"}
+                {currentUser ? t("catalog.editDetails") : t("creator.loginEdit")}
               </Link>
             </div>
           ) : null}

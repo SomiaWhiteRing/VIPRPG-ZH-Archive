@@ -1,27 +1,29 @@
+import type { MessageKey } from "./i18n/core";
+
 export type AccountNavigationItem = {
   href: string;
-  label: string;
-  group?: "收藏与整理" | "活动与创作" | "账户设置";
+  label: MessageKey;
+  group?: "account.group.organize" | "account.group.activity" | "account.group.settings";
   exact?: boolean;
   requiresUpload?: boolean;
   separatorBefore?: boolean;
 };
 
 export const ACCOUNT_NAVIGATION: readonly AccountNavigationItem[] = [
-  { href: "/me", label: "概览", exact: true },
-  { href: "/me/messages", label: "短信箱" },
-  { href: "/me/favorites", label: "收藏", group: "收藏与整理", separatorBefore: true },
-  { href: "/me/catalogs", label: "我的目录", group: "收藏与整理" },
-  { href: "/me/showcase", label: "喜爱展柜", group: "收藏与整理" },
-  { href: "/me/emojis", label: "表情库", group: "收藏与整理" },
-  { href: "/me/history", label: "游玩历史", group: "活动与创作", separatorBefore: true },
-  { href: "/me/comments", label: "我的评论", group: "活动与创作" },
-  { href: "/me/discussions", label: "我的讨论", group: "活动与创作" },
-  { href: "/me/uploads", label: "我的上传", group: "活动与创作", requiresUpload: true },
-  { href: "/me/profile", label: "个人资料", group: "账户设置", separatorBefore: true },
-  { href: "/me/privacy", label: "隐私与偏好", group: "账户设置" },
-  { href: "/me/timeline", label: "时间线", group: "账户设置" },
-  { href: "/me/permissions", label: "权限申请", group: "账户设置" },
+  { href: "/me", label: "account.nav.overview", exact: true },
+  { href: "/me/messages", label: "account.nav.messages" },
+  { href: "/me/favorites", label: "favorite.label", group: "account.group.organize", separatorBefore: true },
+  { href: "/me/catalogs", label: "account.nav.catalogs", group: "account.group.organize" },
+  { href: "/me/showcase", label: "account.nav.showcase", group: "account.group.organize" },
+  { href: "/me/emojis", label: "account.nav.emojis", group: "account.group.organize" },
+  { href: "/me/history", label: "account.nav.history", group: "account.group.activity", separatorBefore: true },
+  { href: "/me/comments", label: "account.nav.comments", group: "account.group.activity" },
+  { href: "/me/discussions", label: "account.nav.discussions", group: "account.group.activity" },
+  { href: "/me/uploads", label: "account.nav.uploads", group: "account.group.activity", requiresUpload: true },
+  { href: "/me/profile", label: "account.nav.profile", group: "account.group.settings", separatorBefore: true },
+  { href: "/me/privacy", label: "account.nav.privacy", group: "account.group.settings" },
+  { href: "/me/timeline", label: "core.nav.timeline", group: "account.group.settings" },
+  { href: "/me/permissions", label: "account.nav.permissions", group: "account.group.settings" },
 ] as const;
 
 export function isAccountNavigationActive(item: AccountNavigationItem, pathname: string) {

@@ -1,3 +1,4 @@
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { Button } from "@/app/components/ui/button";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Camera, Settings2 } from "lucide-react";
 import type { KeyboardEvent, PointerEvent, ReactNode, RefObject } from "react";
@@ -29,10 +30,10 @@ type Props = {
 const overlayButtonClass = "border-white/35 bg-black/65 text-white hover:border-white hover:bg-black/80 hover:text-white";
 const controlButtonClass = "h-full min-h-0 w-full touch-none select-none rounded-full border-2 border-white/80 bg-zinc-800 p-0 text-white hover:bg-zinc-600 hover:text-white data-[pressed=true]:border-white data-[pressed=true]:bg-zinc-500 [&_svg]:size-[45%]";
 const directions = [
-  { key: "up", label: "上", Icon: ArrowUp, className: "col-start-2 row-start-1" },
-  { key: "left", label: "左", Icon: ArrowLeft, className: "col-start-1 row-start-2" },
-  { key: "right", label: "右", Icon: ArrowRight, className: "col-start-3 row-start-2" },
-  { key: "down", label: "下", Icon: ArrowDown, className: "col-start-2 row-start-3" },
+  { key: "up", Icon: ArrowUp, className: "col-start-2 row-start-1" },
+  { key: "left", Icon: ArrowLeft, className: "col-start-1 row-start-2" },
+  { key: "right", Icon: ArrowRight, className: "col-start-3 row-start-2" },
+  { key: "down", Icon: ArrowDown, className: "col-start-2 row-start-3" },
 ] as const;
 const buttonKeys: PlayerButton[] = ["up", "left", "right", "down", "decision", "cancel", "shift", "menu", "debug", "highlight", "log", "fastForward3", "fastForward10", "digit1", "digit2", "digit3", "digit4"];
 const clampPosition = (value: number) => Math.max(0, Math.min(1, value));
@@ -44,6 +45,8 @@ export function WebPlaySurface({
   playerRef, playerHostRef, toolbar, placeholder, feedback, onCaptureScreenshot, captureDisabled,
   touchEnabled, onTouchEnabledChange,
 }: Props) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [windowScale, setWindowScale] = useState(0);
   const [maximumScale, setMaximumScale] = useState(0);
   const screenRef = useRef<HTMLDivElement>(null);
@@ -298,7 +301,7 @@ export function WebPlaySurface({
     if (!editing || (target === "screen" && !portrait)) return null;
     return (
       <Button
-        aria-label={`${target === "screen" ? "上下" : "自由"}移动${label}`}
+        aria-label={t(target === "screen" ? "play.touch.moveScreen" : "play.touch.moveControl", { label })}
         aria-pressed={target !== "screen" && target === selected}
         className="absolute inset-0 z-20 h-full w-full touch-none cursor-move select-none rounded-lg border-2 border-dashed border-white/70 bg-transparent p-0 text-white hover:bg-white/10 hover:text-white aria-pressed:border-yellow-300 aria-pressed:ring-2 aria-pressed:ring-yellow-300"
         onPointerDown={(event) => {
@@ -364,13 +367,13 @@ export function WebPlaySurface({
       >
         <div ref={screenRef} className={showControls && portrait ? "absolute left-0 top-(--screen-y) z-0 h-(--screen-height) w-full" : immersive && !mobile ? "absolute left-1/2 top-1/2 z-0 h-full w-full -translate-x-1/2 -translate-y-1/2" : "absolute inset-0 z-0"}>
           <div className={editing || !touchEnabled ? "pointer-events-none h-full w-full" : "h-full w-full"} id="web-player-host" ref={playerHostRef} />
-          {dragHandle("screen", "游戏画面")}
+          {dragHandle("screen", t("play.touch.screen"))}
         </div>
         {immersive ? placeholder : null}
 
         {showControls ? getLayoutControlIds(positions).filter((id) => positions.buttons[id].visible).map((id) => {
           const DirectionIcon = directions.find(({ key }) => key === id)?.Icon;
-          const label = getControlLabel(positions, id);
+          const label = getControlLabel(positions, id, locale);
           return (
             <div
               className={`absolute left-(--control-x) top-(--control-y) h-(--control-height) w-(--control-width) ${editing && selected === id ? "z-20" : "z-10"}`}
@@ -379,7 +382,7 @@ export function WebPlaySurface({
             >
               {id === "dpad" ? (
                 <div
-                  aria-label="方向键"
+                  aria-label={t("play.touch.directions")}
                   className="grid h-full w-full touch-none select-none grid-cols-3 grid-rows-3 opacity-(--control-opacity)"
                   onPointerDown={(event) => {
                     if (editing || event.button !== 0) return;
@@ -398,10 +401,10 @@ export function WebPlaySurface({
                   onLostPointerCapture={endPointer}
                   role="group"
                 >
-                  {directions.map(({ key, label, Icon, className }) => (
+                  {directions.map(({ key, Icon, className }) => (
                     <Button
                       {...inputProps(key)}
-                      aria-label={label}
+                      aria-label={t(`play.touch.${key}`)}
                       className={`${controlButtonClass} rounded-sm ${className}`}
                       key={key}
                       onPointerDown={undefined}
@@ -413,7 +416,7 @@ export function WebPlaySurface({
                 </div>
               ) : id === "screenshot" ? (
                 <Button
-                  aria-label="截取图片"
+                  aria-label={t("play.touch.capture")}
                   className={`${controlButtonClass} opacity-(--control-opacity)`}
                   disabled={!editing && captureDisabled}
                   onClick={() => { if (!editing) onCaptureScreenshot(); }}
@@ -424,7 +427,7 @@ export function WebPlaySurface({
               ) : (
                 <Button
                   {...inputProps(id)}
-                  aria-label={id === "decision" ? "A 确认" : id === "cancel" ? "B 取消或菜单" : label}
+                  aria-label={id === "decision" ? t("play.touch.decision") : id === "cancel" ? t("play.touch.cancel") : label}
                   className={`${controlButtonClass} ${DirectionIcon ? "rounded-sm" : ""} text-(length:--control-font-size) opacity-(--control-opacity)`}
                   type="button"
                   variant="outline"
@@ -445,13 +448,13 @@ export function WebPlaySurface({
             ref={toolbarRef}
           >
             {!mobile && running ? (
-              <Button aria-label="切换游戏画面缩放倍率" className={`${overlayButtonClass} min-w-10 px-2`} disabled={!maximumScale} onClick={cycleWindowScale} title="游戏画面缩放：Full → ×1 → ×2 → … → Full" type="button" variant="outline">
+              <Button aria-label={t("play.touch.scale")} className={`${overlayButtonClass} min-w-10 px-2`} disabled={!maximumScale} onClick={cycleWindowScale} title={t("play.touch.scaleHint")} type="button" variant="outline">
                 {windowScale && maximumScale ? `×${Math.min(windowScale, maximumScale)}` : "Full"}
               </Button>
             ) : null}
             {toolbar}
             {showControls ? (
-              <Button aria-label="调整按钮布局" className={overlayButtonClass} onClick={() => { setSelected("decision"); setDraft(layout); }} size="icon" title="调整布局" type="button" variant="outline">
+              <Button aria-label={t("play.touch.edit")} className={overlayButtonClass} onClick={() => { setSelected("decision"); setDraft(layout); }} size="icon" title={t("play.touch.editTitle")} type="button" variant="outline">
                 <Settings2 aria-hidden />
               </Button>
             ) : null}

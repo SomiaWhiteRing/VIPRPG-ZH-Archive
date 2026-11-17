@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useMessages } from "@/lib/i18n/react";
 import { Settings } from "lucide-react";
 import { drawSeaDialogue, SEA_ASSETS, SEA_WINDOW_HEIGHT, SEA_WINDOW_WIDTH, seaBitmap, type SeaDialogueSide } from "@/lib/ui/eternal-sea";
 import type { SeaFont, SeaMessage } from "@/lib/dto/sea";
@@ -10,6 +11,7 @@ export function RpgDialogue({ glyphs, font, faceIndex = 0, avatarUrl, side = "le
   faceIndex?: number;
   side?: SeaDialogueSide;
 }) {
+  const t = useMessages();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string>();
@@ -40,7 +42,7 @@ export function RpgDialogue({ glyphs, font, faceIndex = 0, avatarUrl, side = "le
           </span>
         : <img src={avatarUrl} width={48} height={48} alt="" className="sea-dialogue-avatar" onError={() => setFailedAvatarUrl(imageUrl)} />)}
       {failed && <p className="sea-dialogue-fallback">{glyphs.map(glyph => glyph.character).join("")}</p>}
-      {anonymous && !failed && <span className="sea-dialogue-mark" role="img" aria-label="匿名">
+      {anonymous && !failed && <span className="sea-dialogue-mark" role="img" aria-label={t("sea.anonymousMarker")}>
         <Settings aria-hidden="true" />
       </span>}
     </article>

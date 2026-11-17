@@ -3,6 +3,10 @@
 @import "./shared.css";
 @source "../lib";
 
+html[lang="ja"] {
+  --font-sans: "Inter", "Noto Sans JP", "Hiragino Sans", "Yu Gothic", Meiryo, "Noto Sans CJK JP", "Noto Sans SC", system-ui, sans-serif;
+}
+
 /* Website homepage: the Android client banner below HomeCommunity's directory. */
 .android-client-banner {
   --banner-surface: #e8f1eb;

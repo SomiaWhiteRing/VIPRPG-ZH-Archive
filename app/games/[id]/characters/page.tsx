@@ -6,33 +6,40 @@ import { BackLink } from "@/app/components/ui/back-link";
 import { CharacterPortrait } from "@/app/components/ui/character-portrait";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { PageHeader } from "@/app/components/ui/page-header";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
-import { CHARACTER_ROLE_LABELS } from "../public-relations";
+import { useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { isCharacterRoleKey } from "@/lib/character-names";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const workId = parsePositiveId(args.params.id ?? "", "work id");
   const work = await getGameWorkDetail(runtime, workId);
   if (!work) throwNotFound();
-  return { workId, title: work.chineseTitle || work.originalTitle, characters: work.characters };
+  return { workId, title: work.chineseTitle || work.originalTitle, characters: work.characters, locale: runtime.uiLocale };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: [loaderData?.title || "游戏", "登场角色"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  const title = translate(locale, "work.cast");
+  return pageMetaDescriptors({ title: loaderData?.title ? [loaderData.title, title] : title }, error, locale);
+};
 
 export default function WorkCharactersPage() {
+  const t = useMessages();
   const { workId, title, characters } = useLoaderData<typeof loader>();
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-5 sm:py-8">
       <PageHeader
-        actions={<BackLink href={`/games/${workId}#sec-cast`} label="返回作品" />}
+        actions={<BackLink href={`/games/${workId}#sec-cast`} label={t("relation.backToWork")} />}
         subtitle={title}
-        title="登场角色"
+        title={t("work.cast")}
       />
       {characters.length ? (
-        <div aria-label="角色列表" className="flex flex-wrap gap-x-2.5 gap-y-5">
+        <div aria-label={t("work.castList")} className="flex flex-wrap gap-x-2.5 gap-y-5">
                   {characters.map((character, index) => (
                     <Link
                       className="group grid basis-24 shrink-0 content-start gap-1 text-foreground"
@@ -52,12 +59,12 @@ export default function WorkCharactersPage() {
                       <span
                         className={`inline-flex justify-self-start rounded-full border border-border bg-card px-2 py-[0.05rem] font-mono text-xs text-muted ${character.roleKey === "main" ? "border-primary/40 bg-primary/10 text-secondary" : ""}`}
                       >
-                        {CHARACTER_ROLE_LABELS[character.roleKey] ?? "其他"}
+                        {t(`work.role.${isCharacterRoleKey(character.roleKey) ? character.roleKey : "other"}`)}
                       </span>
                     </Link>
                   ))}
         </div>
-      ) : <EmptyState title="暂无登场角色。" />}
+      ) : <EmptyState title={t("work.castEmpty")} />}
     </main>
   );
 }

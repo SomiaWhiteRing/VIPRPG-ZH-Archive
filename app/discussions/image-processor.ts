@@ -1,28 +1,31 @@
+import { translate } from "@/lib/i18n/core";
+import type { UiLocale } from "@/lib/i18n/locale";
+
 export function createImageProcessor() {
   let worker: Worker | undefined;
   let disposed = false;
-  let rejectCurrent: ((error: Error) => void) | undefined;
+  let rejectCurrent: (() => void) | undefined;
   let queue: Promise<unknown> = Promise.resolve();
   return {
-    process(file: File): Promise<File> {
+    process(file: File, locale: UiLocale): Promise<File> {
       const task = queue.then(
         () =>
           new Promise<File>((resolve, reject) => {
             if (disposed) {
-              reject(new Error("图片处理已取消。"));
+              reject(new Error(translate(locale, "image.process.canceled")));
               return;
             }
             worker ??= new Worker(
               new URL("./image-process.worker.ts", import.meta.url),
               { type: "module" },
             );
-            rejectCurrent = reject;
+            rejectCurrent = () => reject(new Error(translate(locale, "image.process.canceled")));
             worker.onmessage = ({
               data,
             }: MessageEvent<{ file?: File; error?: string }>) => {
               rejectCurrent = undefined;
               if (data.file) resolve(data.file);
-              else reject(new Error(data.error ?? "图片处理失败。"));
+              else reject(new Error(data.error ?? translate(locale, "image.processFailed")));
             };
             worker.onerror = () => {
               worker?.terminate();
@@ -30,11 +33,11 @@ export function createImageProcessor() {
               rejectCurrent = undefined;
               reject(
                 new Error(
-                  "图片处理失败，可能超出浏览器处理能力。请重试或选择其他图片。",
+                  translate(locale, "image.process.browserFailed"),
                 ),
               );
             };
-            worker.postMessage(file);
+            worker.postMessage({ file, locale });
           }),
       );
       queue = task.catch(() => undefined);
@@ -44,7 +47,7 @@ export function createImageProcessor() {
       disposed = true;
       worker?.terminate();
       worker = undefined;
-      rejectCurrent?.(new Error("图片处理已取消。"));
+      rejectCurrent?.();
       rejectCurrent = undefined;
     },
   };

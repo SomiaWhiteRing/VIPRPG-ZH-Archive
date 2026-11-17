@@ -1,4 +1,5 @@
 import { readZipEntry, type PackageReader } from "./package-zip";
+import { UiFeedbackError } from "./i18n/feedback";
 
 export type AndroidBuildInfo = {
   version: string;
@@ -7,7 +8,7 @@ export type AndroidBuildInfo = {
   target: "android-universal";
 };
 
-const invalid = () => new Error("无法识别 VIPRPG Android 安装包，请上传 GitHub 构建的原始发布 APK");
+const invalid = () => new UiFeedbackError("admin.package.error.invalidAndroid");
 const androidNamespace = "http://schemas.android.com/apk/res/android";
 
 // Android's compiled XML stores strings separately and attributes as typed values.

@@ -1,3 +1,6 @@
+import { UiFeedbackDOMException, UiFeedbackError } from "@/lib/i18n/feedback";
+import { isMessageKey, translate, type MessageKey } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE } from "@/lib/i18n/locale";
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 import { formatBytes, formatDuration } from "@/lib/format";
 
@@ -89,6 +92,7 @@ self.onmessage = (event: MessageEvent<WebPlayInstallWorkerInput>) => {
       postMessage({
         type: "install-rejected",
         message: error instanceof Error ? error.message : "安装失败",
+        errorMessage: installErrorMessage(error),
       } satisfies WebPlayInstallWorkerOutput);
     });
     return;
@@ -144,10 +148,17 @@ async function runInstall(
         const delayMs = retryDelayMs(attempt);
         const message = error instanceof Error ? error.message : "安装失败";
 
-        postLog(
+        postInstallationLog(
           metadata.playKey,
           "warning",
-          `安装遇到可重试错误：${message}。${formatDuration(delayMs, { precision: 2, compact: true })} 后自动重试（${attempt + 1}/${maxInstallAttempts}）。`,
+          "play.install.log.retry",
+          {
+            reason: message,
+            delay: formatDuration(delayMs, { precision: 2, compact: true }),
+            attempt: attempt + 1,
+            total: maxInstallAttempts,
+          },
+          installErrorMessage(error),
         );
         await observeInstallTask("retry.wait", () => delay(delayMs, controller.signal), { attempt, nextAttempt: attempt + 1, delayMs, restartsFromZero: true });
         assertNotCanceled(metadata.playKey);
@@ -155,11 +166,13 @@ async function runInstall(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "安装失败";
+    const errorMessage = installErrorMessage(error);
     const failed: WebPlayInstallation = {
       ...((await observeInstallTask("idb.failed-read", () => getWebPlayInstallation(metadata.playKey))) ?? installation),
       status: canceledPlayKeys.has(metadata.playKey) ? "deleted" : "failed",
       updatedAt: new Date().toISOString(),
       error: message,
+      errorMessage,
     };
 
     await observeInstallTask("idb.failed-save", () => saveWebPlayInstallation(failed));
@@ -168,7 +181,7 @@ async function runInstall(
       type: "installation",
       installation: failed,
     } satisfies WebPlayInstallWorkerOutput);
-    postLog(metadata.playKey, "error", message);
+    postLog(metadata.playKey, "error", message, errorMessage);
   } finally {
     installAbortControllers.delete(metadata.playKey);
   }
@@ -186,10 +199,11 @@ async function runInstallAttempt(input: {
   assertNotCanceled(metadata.playKey);
 
   if (attempt > 1) {
-    postLog(
+    postInstallationLog(
       metadata.playKey,
       "info",
-      `正在重新安装游戏文件（${attempt}/${maxInstallAttempts}）。`,
+      "play.install.log.reinstall",
+      { attempt, total: maxInstallAttempts },
     );
   }
 
@@ -256,10 +270,10 @@ async function runInstallAttempt(input: {
     true,
   );
 
-  postLog(
+  postInstallationLog(
     metadata.playKey,
     "info",
-    "游戏文件已安装到浏览器，可以启动游戏。",
+    "play.install.log.ready",
   );
 
   return installation;
@@ -295,7 +309,7 @@ async function tryDeltaInstall(input: {
     if (index.schema !== 1 || index.archiveVersionId !== metadata.archiveVersionId || index.workId !== metadata.workId ||
         index.manifestSha256 !== metadata.manifestSha256 || !Number.isSafeInteger(index.zipSize) || index.zipSize <= 0 ||
         typeof index.etag !== "string" || !/^"[^"\r\n]+"$/.test(index.etag) ||
-        !Array.isArray(index.files) || index.files.length !== metadata.installTotalFiles) throw new Error("游戏压缩包中的文件大小异常。");
+        !Array.isArray(index.files) || index.files.length !== metadata.installTotalFiles) throw new UiFeedbackError("play.install.error.archiveSize");
     const keys = new Set<string>();
     let bytes = 0;
     for (const file of index.files) {
@@ -304,10 +318,10 @@ async function tryDeltaInstall(input: {
           shouldSkipWebPlayLocalWrite(file.path) || keys.has(packLookupKey(file.path)) ||
           !Number.isSafeInteger(file.size) || file.size < 0 || !Number.isSafeInteger(file.offset) || file.offset < 0 ||
           file.offset + file.size > index.zipSize || !Number.isInteger(file.crc32) || file.crc32 < 0 || file.crc32 > 0xffffffff)
-        throw new Error("游戏压缩包中的文件大小异常。");
+        throw new UiFeedbackError("play.install.error.archiveSize");
       keys.add(packLookupKey(file.path)); bytes += file.size;
     }
-    if (bytes !== metadata.installTotalSizeBytes) throw new Error("游戏压缩包中的文件大小异常。");
+    if (bytes !== metadata.installTotalSizeBytes) throw new UiFeedbackError("play.install.error.archiveSize");
     const local = new Map<string, { pack: Blob; start: number; end: number; crc32?: number }>();
     for (const pack of packages) for (const file of pack.metadata.files)
       local.set(packLookupKey(file.filename.slice(1)), { pack: pack.blob, start: file.start, end: file.end, crc32: file.crc32 });
@@ -347,7 +361,7 @@ async function tryDeltaInstall(input: {
           } finally { download.close(); }
         }
         if (crc.digest() !== file.crc32) {
-          if (!blob) throw new Error(`游戏文件校验失败：${file.path}`);
+          if (!blob) throw new UiFeedbackError("play.install.error.checkFile", { path: file.path });
           damagedLocalFile = true;
           break;
         }
@@ -493,12 +507,16 @@ async function streamZipToPacks(input: {
       return;
     }
 
-    postLog(
+    postInstallationLog(
       input.metadata.playKey,
       "info",
-      `正在安装游戏文件：已下载 ${formatBytes(downloadedBytes, { precision: 2, maximumUnit: "GB" })} / ${formatBytes(installation.downloadBytesTotal || input.metadata.installTotalSizeBytes, { precision: 2, maximumUnit: "GB" })}；已安装 ${installedFiles.toLocaleString(
-        "zh-CN",
-      )} / ${input.metadata.installTotalFiles.toLocaleString("zh-CN")} 个文件。`,
+      "play.install.log.progress",
+      {
+        downloaded: formatBytes(downloadedBytes, { precision: 2, maximumUnit: "GB" }),
+        downloadTotal: formatBytes(installation.downloadBytesTotal || input.metadata.installTotalSizeBytes, { precision: 2, maximumUnit: "GB" }),
+        files: installedFiles,
+        fileTotal: input.metadata.installTotalFiles,
+      },
     );
 
     lastDiagnosticAt = now;
@@ -510,10 +528,10 @@ async function streamZipToPacks(input: {
     logDiagnostics();
   });
 
-  postLog(
+  postInstallationLog(
     input.metadata.playKey,
     "info",
-    "正在安装游戏文件…",
+    "play.install.log.start",
   );
 
   try {
@@ -529,11 +547,11 @@ async function streamZipToPacks(input: {
       installObserver?.event("zip.entry", { path: normalizedPath ?? entry.name, dataOffset: reader.offset, ...entry, installedFiles });
 
       if (entry.compression !== zipMethodStore) {
-        throw new Error(`游戏压缩包使用了暂不支持的压缩方式：${normalizedPath ?? entry.name}`);
+        throw new UiFeedbackError("play.install.error.compression", { path: normalizedPath ?? entry.name });
       }
 
       if (entry.compressedSize !== entry.uncompressedSize) {
-        throw new Error(`游戏压缩包中的文件大小异常：${normalizedPath ?? entry.name}`);
+        throw new UiFeedbackError("play.install.error.archiveFileSize", { path: normalizedPath ?? entry.name });
       }
 
       if (!normalizedPath) {
@@ -555,7 +573,7 @@ async function streamZipToPacks(input: {
       const lookupKey = packLookupKey(normalizedPath);
 
       if (packIndex.files[lookupKey]) {
-        throw new Error(`游戏文件路径冲突：${normalizedPath}`);
+        throw new UiFeedbackError("play.install.error.conflict", { path: normalizedPath });
       }
 
       await observeInstallTask("zip.install-entry", () => reader.pipeBytes(entry.compressedSize, async (chunk) => {
@@ -635,7 +653,7 @@ class PackWriter {
     }
 
     if (!this.currentPack) {
-      throw new Error("无法保存游戏文件，请重新安装。");
+      throw new UiFeedbackError("play.install.error.saveFile");
     }
 
     return {
@@ -646,7 +664,7 @@ class PackWriter {
 
   async write(chunk: ByteChunk): Promise<void> {
     if (!this.currentPack) {
-      throw new Error("无法保存游戏文件，请重新安装。");
+      throw new UiFeedbackError("play.install.error.saveFile");
     }
 
     this.pendingChunks.push(chunk);
@@ -685,7 +703,7 @@ class PackWriter {
 
   private async flush(): Promise<void> {
     if (!this.writable) {
-      throw new Error("无法保存游戏文件，请重新安装。");
+      throw new UiFeedbackError("play.install.error.saveFile");
     }
 
     if (this.pendingBytes === 0) {
@@ -727,7 +745,7 @@ class ZipStreamReader {
     }
 
     if (this.buffer.byteLength < 4) {
-      throw new Error("ZIP 文件不完整（文件头被截断）。");
+      throw new UiFeedbackError("play.install.error.truncatedHeader");
     }
 
     const signature = readUint32(this.buffer, 0);
@@ -740,7 +758,7 @@ class ZipStreamReader {
     }
 
     if (signature !== localFileHeaderSignature) {
-      throw new Error(`ZIP 文件头损坏：0x${signature.toString(16)}`);
+      throw new UiFeedbackError("play.install.error.badHeader", { signature: `0x${signature.toString(16)}` });
     }
 
     const fixed = await this.readBytes(30);
@@ -753,7 +771,7 @@ class ZipStreamReader {
     const extraLength = readUint16(fixed, 28);
 
     if ((flags & zipDataDescriptorFlag) !== 0) {
-      throw new Error("ZIP 使用了暂不支持的格式，无法边下载边安装。");
+      throw new UiFeedbackError("play.install.error.unsupportedZip");
     }
 
     const nameBytes = await this.readBytes(nameLength);
@@ -796,7 +814,7 @@ class ZipStreamReader {
       }
 
       if (this.buffer.byteLength === 0) {
-        throw new Error("ZIP 内的文件不完整。");
+        throw new UiFeedbackError("play.install.error.entryIncomplete");
       }
 
       const take = Math.min(remaining, this.buffer.byteLength);
@@ -828,7 +846,7 @@ class ZipStreamReader {
         return false;
       }
 
-      throw new Error("ZIP 文件不完整。");
+      throw new UiFeedbackError("play.install.error.zipIncomplete");
     }
 
     return true;
@@ -938,7 +956,7 @@ function normalizeZipEntryPath(path: string): string | null {
     normalized === ".." ||
     /^[a-z]+:/i.test(normalized)
   ) {
-    throw new Error(`ZIP 中存在非法路径：${path}`);
+    throw new UiFeedbackError("play.install.error.invalidPath", { path });
   }
 
   return normalized
@@ -953,7 +971,7 @@ function packLookupKey(path: string): string {
 
 function assertNotCanceled(playKey: string): void {
   if (canceledPlayKeys.has(playKey)) {
-    throw new Error("安装已取消。");
+    throw new UiFeedbackError("play.install.error.canceled");
   }
 }
 
@@ -1001,12 +1019,12 @@ function retryDelayMs(attempt: number): number {
 }
 
 async function delay(durationMs: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) throw new Error("安装已取消。");
+  if (signal.aborted) throw new UiFeedbackError("play.install.error.canceled");
   await new Promise<void>((resolve, reject) => {
     const abort = () => {
       clearTimeout(timer);
       signal.removeEventListener("abort", abort);
-      reject(new Error("安装已取消。"));
+      reject(new UiFeedbackError("play.install.error.canceled"));
     };
     const timer = setTimeout(() => {
       signal.removeEventListener("abort", abort);
@@ -1052,10 +1070,10 @@ function nowMs(): number {
 
 function decodeZipPath(playKey: string, bytes: Uint8Array, flags: number): string {
   if ((flags & 0x0800) === 0) {
-    postLog(
+    postInstallationLog(
       playKey,
       "warning",
-      "部分游戏文件名无法识别；如在线游玩出现问题，请下载 ZIP。",
+      "play.install.log.filenameEncoding",
     );
   }
 
@@ -1075,15 +1093,44 @@ function readUint32(bytes: Uint8Array, offset: number): number {
   ) >>> 0;
 }
 
+function installErrorMessage(error: unknown) {
+  if (error instanceof UiFeedbackError) return { key: error.messageKey, values: error.values };
+  if (error instanceof UiFeedbackDOMException) return { key: error.messageKey };
+  if (error instanceof DOMException && error.name === "QuotaExceededError") {
+    return { key: "play.install.error.quota" as const };
+  }
+  if (error instanceof ApiResponseError) {
+    if (isMessageKey(error.payload.messageKey)) return { key: error.payload.messageKey, values: error.messageValues };
+    if (error.code === "network_error") return { key: "play.install.error.network" as const };
+    if (error.status === 401) return { key: "core.request.session" as const };
+    if (error.status === 403) return { key: "core.request.forbidden" as const };
+  }
+  if (!(error instanceof Error)) return { key: "play.install.status.failed" as const };
+}
+
+function postInstallationLog(
+  playKey: string,
+  level: "info" | "warning",
+  key: MessageKey,
+  values?: Record<string, string | number>,
+  reasonMessage?: WebPlayInstallation["errorMessage"],
+) {
+  postLog(playKey, level, translate(DEFAULT_UI_LOCALE, key, values), { key, values }, reasonMessage);
+}
+
 function postLog(
   playKey: string,
   level: "info" | "warning" | "error",
   message: string,
+  errorMessage?: WebPlayInstallation["errorMessage"],
+  reasonMessage?: WebPlayInstallation["errorMessage"],
 ): void {
   postMessage({
     type: "log",
     playKey,
     level,
     message,
+    ...(errorMessage ? { errorMessage } : {}),
+    ...(reasonMessage ? { reasonMessage } : {}),
   } satisfies WebPlayInstallWorkerOutput);
 }

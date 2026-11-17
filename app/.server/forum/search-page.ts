@@ -29,6 +29,7 @@ export async function loadDiscussionSearch(
       tags: [],
       featured: false,
       page,
+      locale: runtime.uiLocale,
     });
   } catch (caught) {
     if (!(caught instanceof HttpError) || caught.status !== 400) throw caught;

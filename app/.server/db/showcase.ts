@@ -1,3 +1,5 @@
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
+import { translate } from "@/lib/i18n/core";
 import {
   CHARACTER_PORTRAIT_COLUMNS,
   DEFAULT_CHARACTER_PORTRAIT_JOINS,
@@ -17,7 +19,6 @@ import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { HttpError } from "@/lib/http";
 import {
   isShowcaseKind,
-  SHOWCASE_LABELS,
   SHOWCASE_NOTE_LIMIT,
   type ShowcaseEntry,
   type ShowcaseKind,
@@ -80,7 +81,7 @@ export async function findShowcaseTargets(
   const source = sources[kind];
   const query = input.query?.trim() ?? "";
   if (query.length > 100)
-    throw new HttpError(400, "搜索内容不能超过 100 个字符");
+    throw new HttpError(400, translate(runtime.uiLocale, "showcase.public.queryLength"));
   const search = source.names
     .map((name) => `instr(lower(${name}),lower(?))>0`)
     .join(" OR ");
@@ -166,35 +167,35 @@ export async function readShowcase(
   };
 }
 
-export function parseShowcaseInput(body: Record<string, unknown>): {
+export function parseShowcaseInput(body: Record<string, unknown>, locale: UiLocale = DEFAULT_UI_LOCALE): {
   revision: number;
   entries: Array<
     Pick<ShowcaseEntry, "kind" | "targetId" | "note" | "portrait">
   >;
 } {
   if (!Number.isSafeInteger(body.revision) || Number(body.revision) < 0)
-    throw new HttpError(400, "展柜版本不合法，请重新读取");
+    throw new HttpError(400, translate(locale, "showcase.public.revision"));
   if (!Array.isArray(body.entries) || body.entries.length > 3)
-    throw new HttpError(400, "作品、角色和作者最多各展示一项");
+    throw new HttpError(400, translate(locale, "showcase.public.limit"));
   const seen = new Set<ShowcaseKind>();
   const entries = body.entries.map((entry: unknown) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry))
-      throw new HttpError(400, "展柜内容格式不合法");
+      throw new HttpError(400, translate(locale, "showcase.public.payload"));
     const { kind, targetId, note, portrait } = entry as Record<string, unknown>;
     if (!isShowcaseKind(kind) || seen.has(kind))
-      throw new HttpError(400, "作品、角色和作者最多各展示一项");
+      throw new HttpError(400, translate(locale, "showcase.public.limit"));
     if (
       typeof targetId !== "number" ||
       !Number.isSafeInteger(targetId) ||
       targetId <= 0
     )
-      throw new HttpError(400, "请选择有效的展柜内容");
+      throw new HttpError(400, translate(locale, "showcase.public.target"));
     if (
       typeof note !== "string" ||
       note.length > SHOWCASE_NOTE_LIMIT ||
       note.includes("\0")
     )
-      throw new HttpError(400, `附言不能超过 ${SHOWCASE_NOTE_LIMIT} 个字符`);
+      throw new HttpError(400, translate(locale, "showcase.public.noteLength", { max: SHOWCASE_NOTE_LIMIT }));
     seen.add(kind);
     let choice: CharacterPortraitChoice | null = null;
     if (portrait !== null) {
@@ -204,7 +205,7 @@ export function parseShowcaseInput(body: Record<string, unknown>): {
         typeof portrait !== "object" ||
         Array.isArray(portrait)
       )
-        throw new HttpError(400, "角色头像选择不合法");
+        throw new HttpError(400, translate(locale, "showcase.public.badPortrait"));
       const { blobSha256, row, column } = portrait as Record<string, unknown>;
       if (
         typeof blobSha256 !== "string" ||
@@ -218,7 +219,7 @@ export function parseShowcaseInput(body: Record<string, unknown>): {
         column < 0 ||
         column > 3
       )
-        throw new HttpError(400, "角色头像选择不合法");
+        throw new HttpError(400, translate(locale, "showcase.public.badPortrait"));
       choice = { blobSha256, row, column };
     }
     return { kind, targetId, note: note.trim(), portrait: choice };
@@ -239,13 +240,13 @@ export async function saveShowcase(
     )
       throw new HttpError(
         400,
-        `所选${SHOWCASE_LABELS[entry.kind]}已不可公开访问，请重新选择或移除`,
+        translate(runtime.uiLocale, "showcase.public.targetGone"),
       );
     if (
       entry.portrait &&
       !(await showcasePortraitAvailable(db, entry.targetId, entry.portrait))
     )
-      throw new HttpError(400, "所选头像已不可用，请重新选择。");
+      throw new HttpError(400, translate(runtime.uiLocale, "showcase.public.portraitGone"));
   }
   try {
     await db.batch([
@@ -307,14 +308,16 @@ export async function saveShowcase(
     if (message.includes("users.showcase_revision"))
       throw new HttpError(
         409,
-        "展柜已在其他页面更新，当前输入已保留。请重新读取后再编辑。",
+        translate(runtime.uiLocale, "showcase.public.revisionConflict"),
         "showcase_conflict",
+        "showcase.public.revisionConflict",
       );
     if (/CHECK constraint|FOREIGN KEY constraint/i.test(message))
       throw new HttpError(
         409,
-        "所选内容的状态已变化，请重新读取后再选择。",
+        translate(runtime.uiLocale, "showcase.public.targetConflict"),
         "showcase_conflict",
+        "showcase.public.targetConflict",
       );
     throw error;
   }

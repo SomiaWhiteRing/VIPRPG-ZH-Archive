@@ -6,9 +6,10 @@ import type { ArchiveActor } from "@/lib/authz/archive-permissions";
 import { canDeleteArchiveVersion } from "@/lib/authz/archive-permissions";
 import { hasPermission } from "@/lib/authz/permissions";
 import type { AdminArchiveVersion } from "@/lib/dto/db/archive-maintenance";
-import { formatBytes, formatDate, formatNumber } from "@/lib/format";
+import { formatBytes, formatDate } from "@/lib/format";
 import { languageLabel } from "@/lib/labels";
-import { Link } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { RedirectForm } from "@/app/components/ui/redirect-form";
 
 export function ArchiveVersionTable({
@@ -20,21 +21,23 @@ export function ArchiveVersionTable({
   archiveVersions: AdminArchiveVersion[];
   mode: "active" | "trash";
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   if (archiveVersions.length === 0) {
     return (
-      <EmptyState title={mode === "trash" ? "回收站为空" : "暂无文件版本"} />
+      <EmptyState title={mode === "trash" ? t("admin.archives.trashEmpty") : t("admin.archives.empty")} />
     );
   }
 
   return (
-    <TableWrap compact label="文件版本列表" minWidth={1040}>
+    <TableWrap compact label={t("admin.archives.table")} minWidth={1040}>
       <thead>
         <tr>
-          <th>文件版本</th>
-          <th>状态</th>
-          <th>规模</th>
-          <th>时间</th>
-          <th className="admin-action-column">操作</th>
+          <th>{t("admin.archives.version")}</th>
+          <th>{t("admin.list.status")}</th>
+          <th>{t("admin.works.size")}</th>
+          <th>{t("admin.archives.time")}</th>
+          <th className="admin-action-column">{t("admin.characterList.actions")}</th>
         </tr>
       </thead>
       <tbody>
@@ -43,7 +46,7 @@ export function ArchiveVersionTable({
             <td>
               <strong className="admin-cell-title">{archiveVersion.workTitle}</strong>
               <span className="admin-cell-meta font-mono">
-                #{archiveVersion.id} / {languageLabel(archiveVersion.language)}
+                #{archiveVersion.id} / {languageLabel(archiveVersion.language, locale)}
               </span>
             </td>
             <td>
@@ -53,32 +56,30 @@ export function ArchiveVersionTable({
                 value={archiveVersion.status}
               />
               {archiveVersion.isCurrent ? (
-                <span className="admin-cell-meta">当前版本</span>
+                <span className="admin-cell-meta">{t("admin.archives.current")}</span>
               ) : null}
             </td>
             <td>
-              {formatNumber(archiveVersion.totalFiles)} 文件
+              {t("admin.archives.files", { count: archiveVersion.totalFiles })}
               <span className="admin-cell-meta">
-                {formatBytes(archiveVersion.totalSizeBytes)} / 约{" "}
-                {formatNumber(archiveVersion.estimatedR2GetCount)}{" "}
-                次对象存储读取
+                {t("admin.archives.storage", { size: formatBytes(archiveVersion.totalSizeBytes), count: archiveVersion.estimatedR2GetCount })}
               </span>
             </td>
             <td>
-              {formatDate(archiveVersion.createdAt)}
+              {formatDate(archiveVersion.createdAt, { locale })}
               {archiveVersion.deletedAt ? (
                 <span className="admin-cell-meta">
-                  放入回收站：{formatDate(archiveVersion.deletedAt)}
+                  {t("admin.archives.deletedAt", { date: formatDate(archiveVersion.deletedAt, { locale }) })}
                 </span>
               ) : null}
               {archiveVersion.purgedAt ? (
                 <span className="admin-cell-meta">
-                  最终清理：{formatDate(archiveVersion.purgedAt)}
+                  {t("admin.archives.purgedAt", { date: formatDate(archiveVersion.purgedAt, { locale }) })}
                 </span>
               ) : null}
               {archiveVersion.uploaderName ? (
                 <span className="admin-cell-meta">
-                  上传者：{archiveVersion.uploaderName}
+                  {t("admin.archives.uploader", { name: archiveVersion.uploaderName })}
                 </span>
               ) : null}
             </td>
@@ -105,26 +106,28 @@ function ArchiveActions({
   archiveVersion: AdminArchiveVersion;
   mode: "active" | "trash";
 }) {
+  const t = useMessages();
   const canRestore = hasPermission(actor, "archive_version.restore");
   const canUpdateArchive = hasPermission(actor, "archive_version.update");
   const canSetCurrent = hasPermission(actor, "archive_version.set_current");
 
   if (archiveVersion.status === "deleted") {
     if (archiveVersion.purgedAt) {
-      return <span className="admin-cell-meta">已最终清理，不能还原</span>;
+      return <span className="admin-cell-meta">{t("admin.archives.cannotRestore")}</span>;
     }
 
     if (!canRestore) {
-      return <span className="admin-cell-meta">需要管理员还原</span>;
+      return <span className="admin-cell-meta">{t("admin.archives.adminRestore")}</span>;
     }
 
     return (
       <RedirectForm
         action={`/api/admin/archive-versions/${archiveVersion.id}/restore`}
+        preserveLanguage
         method="post"
         className="inline-flex"
       >
-        <Button size="sm" type="submit">还原</Button>
+        <Button size="sm" type="submit">{t("admin.archives.restore")}</Button>
       </RedirectForm>
     );
   }
@@ -142,7 +145,7 @@ function ArchiveActions({
           className={buttonVariants({ variant: "ghost", size: "sm" })}
           to={`/admin/archive-versions/${archiveVersion.id}`}
         >
-          编辑版本
+          {t("admin.archives.edit")}
         </Link>
       ) : null}
       {canSetCurrent &&
@@ -150,22 +153,24 @@ function ArchiveActions({
       !archiveVersion.isCurrent ? (
         <RedirectForm
           action={`/api/admin/archive-versions/${archiveVersion.id}/current`}
+          preserveLanguage
           method="post"
           className="inline-flex"
         >
           <Button size="sm" variant="outline" type="submit">
-            设为当前
+            {t("admin.archives.setCurrent")}
           </Button>
         </RedirectForm>
       ) : null}
       {canDelete ? (
         <RedirectForm
           action={`/api/admin/archive-versions/${archiveVersion.id}/delete`}
+          preserveLanguage
           method="post"
           className="inline-flex"
         >
           <Button variant="outline" type="submit">
-            删除
+            {t("admin.archives.delete")}
           </Button>
         </RedirectForm>
       ) : null}

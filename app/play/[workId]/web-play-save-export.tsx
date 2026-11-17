@@ -5,6 +5,8 @@ import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { useToast } from "@/app/components/ui/toast";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { useEffect, useId, useRef, useState } from "react";
 import { acquireGameSaveTransferLock } from "./web-play-locks";
 import {
@@ -24,12 +26,14 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy, 
   onBusyChange?: (busy: boolean) => void;
   exportNames?: string[];
 }) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const toast = useToast();
   const [hasSaves, setHasSaves] = useState(false);
   const [operation, setOperation] = useState<"export" | "read" | "import" | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [overwrite, setOverwrite] = useState<Set<string>>(new Set());
-  const [readError, setReadError] = useState<string | null>(null);
+  const [readError, setReadError] = useState(false);
   const operationRef = useRef<AbortController | null>(null);
   const refreshLocksRef = useRef<(() => Promise<void>) | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -52,12 +56,12 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy, 
         const available = await hasSaveFiles(workId);
         if (current) {
           setHasSaves(available);
-          setReadError(null);
+          setReadError(false);
         }
       } catch {
         if (current) {
           setHasSaves(false);
-          setReadError("读取本地存档失败，请检查浏览器存储权限后重试。");
+          setReadError(true);
         }
       } finally { reading = false; }
     };
@@ -102,9 +106,9 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy, 
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 30_000);
       }
-      toast.success(`已导出 ${files.length} 个存档。`);
+      toast.success(t("play.save.exported", { count: files.length }));
     } catch (error) {
-      if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : "导出存档失败，请重试。");
+      if (!controller.signal.aborted) toast.error(formatFeedbackError(error, locale, t("play.save.exportFailed")));
     } finally {
       if (!controller.signal.aborted) finish();
     }
@@ -127,7 +131,7 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy, 
       setOperation(null);
     } catch (error) {
       if (!controller.signal.aborted) {
-        toast.error(error instanceof Error ? error.message : "读取存档失败，请重试。");
+        toast.error(formatFeedbackError(error, locale, t("play.save.readFailed")));
         finish();
       }
     }
@@ -144,9 +148,9 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy, 
       controller.signal.throwIfAborted();
       setHasSaves(true);
       onChanged?.();
-      toast.success(`已为「${title}」导入 ${count} 个存档。启动游戏后可读取。`);
+      toast.success(t("play.save.imported", { title, count }));
     } catch (error) {
-      if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : "导入存档失败，请重试。");
+      if (!controller.signal.aborted) toast.error(formatFeedbackError(error, locale, t("play.save.importFailed")));
     } finally {
       if (!controller.signal.aborted) finish();
     }
@@ -156,32 +160,35 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy, 
   return (
     <>
       <Button disabled={!hasSaves || busy || playerBusy} onClick={() => void exportSaves()} size="sm"
-        title={playerBusy ? "请先停止游戏，等待存档写入完成" : hasSaves ? "导出当前游戏的存档" : "没有可导出的存档"}
+        title={playerBusy ? t("play.save.stopFirst") : hasSaves ? t("play.save.exportHint") : t("play.save.empty")}
         type="button" variant="outline">
-        {operation === "export" ? "正在导出…" : exportNames ? "导出所选" : "导出存档"}
+        {operation === "export" ? t("play.save.exporting") : exportNames ? t("play.save.exportSelected") : t("play.save.export")}
       </Button>
       <Button aria-controls={dialogId} aria-expanded={preview !== null} aria-haspopup="dialog"
         disabled={busy || playerBusy} onClick={() => inputRef.current?.click()} ref={importButtonRef} size="sm"
-        title={playerBusy ? "请先停止游戏，等待存档写入完成" : "导入当前游戏的 LSD 或 ZIP 存档"}
+        title={playerBusy ? t("play.save.stopFirst") : t("play.save.importHint")}
         type="button" variant="outline">
-        {operation === "read" ? "正在读取…" : operation === "import" ? "正在导入…" : "导入存档"}
+        {operation === "read" ? t("play.save.reading") : operation === "import" ? t("play.save.importing") : t("play.save.import")}
       </Button>
-      <input accept=".lsd,.zip" aria-label="选择要导入的存档" className="hidden" multiple ref={inputRef} type="file"
+      <input accept=".lsd,.zip" aria-label={t("play.save.choose")} className="hidden" multiple ref={inputRef} type="file"
         onChange={event => {
           const files = Array.from(event.currentTarget.files ?? []);
           event.currentTarget.value = "";
           void prepareImport(files);
         }} />
-      {playerBusy ? <span className="w-full text-xs text-muted">导入或导出前请先停止游戏，等待存档写入完成。</span> : null}
-      {readError ? <span className="w-full text-sm text-destructive" role="alert">{readError}</span> : null}
+      {playerBusy ? <span className="w-full text-xs text-muted">{t("play.save.busy")}</span> : null}
+      {readError ? <span className="w-full text-sm text-destructive" role="alert">{t("play.save.localRead")}</span> : null}
       <AlertDialog open={preview !== null} onOpenChange={open => { if (!open && operation !== "import") finish(); }}>
         <AlertDialogContent id={dialogId} onEscapeKeyDown={event => { if (operation === "import") event.preventDefault(); }}
           onCloseAutoFocus={event => { event.preventDefault(); importButtonRef.current?.focus(); }}>
-          <AlertDialogTitle>{preview?.conflicts.length ? "选择要覆盖的存档" : "导入存档？"}</AlertDialogTitle>
+          <AlertDialogTitle>{preview?.conflicts.length ? t("play.save.overwrite") : t("play.save.confirm")}</AlertDialogTitle>
           <AlertDialogDescription>
-            将为「{title}」导入存档。LSD 和 ZIP 不包含可验证的游戏身份，请确认来源属于此游戏。
-            {preview?.conflicts.length ? ` 未勾选的保留本地存档；另有 ${fresh} 个新存档将导入。` : ` 共 ${preview?.incoming.length ?? 0} 个新存档。`}
-            导入后启动游戏读取，导入不会自动载入进度。
+            {t("play.save.description", {
+              title,
+              details: preview?.conflicts.length
+                ? t("play.save.conflicts", { count: fresh })
+                : t("play.save.new", { count: preview?.incoming.length ?? 0 }),
+            })}
           </AlertDialogDescription>
           {preview?.conflicts.length ? <ul className="m-0 grid max-h-64 list-none gap-3 overflow-y-auto p-0">
             {preview.conflicts.map(file => <li className="flex items-center gap-3" key={file.name}>
@@ -192,16 +199,16 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy, 
                   return next;
                 })} />
               <Label className="cursor-pointer break-all text-sm" htmlFor={`${dialogId}-${file.name}`}>
-                {file.name}<span className="block text-xs text-muted">本地：{file.timestamp?.toLocaleString("zh-CN") ?? "时间未知"}</span>
+                {file.name}<span className="block text-xs text-muted">{t("play.save.localTime", { time: file.timestamp?.toLocaleString(locale) ?? t("play.save.unknownTime") })}</span>
               </Label>
             </li>)}
           </ul> : null}
           <AlertDialogFooter>
             <AlertDialogCancel asChild>
-              <Button disabled={operation === "import"} type="button" variant="outline">取消</Button>
+              <Button disabled={operation === "import"} type="button" variant="outline">{t("play.save.cancel")}</Button>
             </AlertDialogCancel>
             <Button disabled={operation === "import" || fresh + overwrite.size === 0} onClick={() => void confirmImport()} type="button">
-              {operation === "import" ? "正在导入…" : "导入"}
+              {operation === "import" ? t("play.save.importing") : t("play.save.submit")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

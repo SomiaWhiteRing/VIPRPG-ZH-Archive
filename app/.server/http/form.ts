@@ -1,12 +1,17 @@
-import { jsonError, publicErrorDetail } from "@/lib/http";
+import { translate, type MessageKey } from "@/lib/i18n/core";
+import { formatFeedbackError, UiFeedbackError } from "@/lib/i18n/feedback";
+import { HttpError, jsonError } from "@/lib/http";
+import { preserveUiLocale, type UiLocale } from "@/lib/i18n/locale";
 
 export function readRequiredFormString(
   formData: FormData,
   name: string,
+  messageKey?: MessageKey,
 ): string {
   const value = formData.get(name);
 
   if (typeof value !== "string" || value.trim() === "") {
+    if (messageKey) throw new UiFeedbackError(messageKey);
     throw new Error(`Missing ${name}`);
   }
 
@@ -16,7 +21,7 @@ export function readRequiredFormString(
 export function readRequiredPassword(formData: FormData, name: string): string {
   const value = formData.get(name);
   if (typeof value !== "string" || value.length === 0) {
-    throw new Error("请输入密码");
+    throw new UiFeedbackError("auth.error.passwordRequired");
   }
   return value;
 }
@@ -26,7 +31,8 @@ export function redirectWithParams(
   path: string,
   params: Record<string, string | null | undefined>,
 ): Response {
-  const url = new URL(path, request.url);
+  const source = new URL(request.url);
+  const url = preserveUiLocale(new URL(path, source), source);
 
   applySearchParams(url, params);
 
@@ -51,14 +57,14 @@ export function redirectBack(request: Request, fallbackPath: string): Response {
       const refererUrl = new URL(referer);
 
       if (refererUrl.origin === requestUrl.origin) {
-        return redirectResponse(refererUrl);
+        return redirectResponse(preserveUiLocale(refererUrl, requestUrl));
       }
     } catch {
       // An invalid Referer falls through to the trusted fallback path.
     }
   }
 
-  return redirectResponse(new URL(fallbackPath, requestUrl));
+  return redirectResponse(preserveUiLocale(new URL(fallbackPath, requestUrl), requestUrl));
 }
 
 export function formOrJsonError(
@@ -66,10 +72,14 @@ export function formOrJsonError(
   fallbackPath: string,
   message: string,
   error: unknown,
+  locale: UiLocale,
 ): Response {
   if (requestWantsJson(request)) return jsonError(message, error);
+  const fallback = translate(locale, "core.request.internal");
   return redirectWithParams(request, fallbackPath, {
-    error: publicErrorDetail(error),
+    error: error instanceof HttpError || error instanceof UiFeedbackError
+      ? formatFeedbackError(error, locale, fallback)
+      : fallback,
   });
 }
 

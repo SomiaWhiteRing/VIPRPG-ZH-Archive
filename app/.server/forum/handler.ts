@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { json as jsonResponse, HttpError, jsonError } from "@/lib/http";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { forumPage } from "@/lib/forum";
@@ -44,13 +45,14 @@ function result(data: object) {
 
 async function read(runtime: AppRuntime, request: Request) {
   const ctx = getForumRequestRuntime(runtime);
+  const locale = runtime.uiLocale;
   const p = new URL(request.url).searchParams;
   const id = (key: string) => parsePositiveId(p.get(key) ?? "");
   const tags = p.getAll("tag").map((v) => parsePositiveId(v));
   switch (p.get("op")) {
     case "history": {
-      const auth = await requireForumUser(ctx, request, ["forum.content.moderate_any"]);
-      const target = forumTarget({ kind: p.get("kind"), id: id("id") });
+      const auth = await requireForumUser(ctx, request, ["forum.content.moderate_any"], locale);
+      const target = forumTarget({ kind: p.get("kind"), id: id("id") }, locale);
       return result({ history: await forumHistory(ctx, auth.user, target, forumPage(p.get("page"))) });
     }
     case "detail": {
@@ -94,6 +96,7 @@ async function read(runtime: AppRuntime, request: Request) {
           featured: p.get("featured") === "1",
           page: forumPage(p.get("page")),
           query: p.get("q") ?? "",
+          locale: runtime.uiLocale,
         }),
       );
     case "comments": {
@@ -122,8 +125,8 @@ async function read(runtime: AppRuntime, request: Request) {
       });
     }
     case "edit": {
-      const auth = await requireForumUser(ctx, request);
-      const target = forumTarget({ kind: p.get("kind"), id: id("id") });
+      const auth = await requireForumUser(ctx, request, undefined, locale);
+      const target = forumTarget({ kind: p.get("kind"), id: id("id") }, locale);
       const row = await rawContent(ctx, target);
       const topic = await publicTopic(
         ctx,
@@ -131,7 +134,7 @@ async function read(runtime: AppRuntime, request: Request) {
         forumViewer(auth.user),
       );
       if (!row.public || row.user_id !== auth.user.id) unavailable();
-      if (topic.locked) throw new HttpError(409, "主题已锁定。");
+      if (topic.locked) throw new HttpError(409, translate(locale, "forum.locked"));
       return result({
         body: row.body,
         images: contentImages(row),
@@ -139,14 +142,15 @@ async function read(runtime: AppRuntime, request: Request) {
       });
     }
     default:
-      throw new HttpError(400, "查询无效。");
+      throw new HttpError(400, translate(locale, "forum.write.invalidQuery"));
   }
 }
 
 async function write(runtime: AppRuntime, request: Request) {
   const ctx = getForumRequestRuntime(runtime);
+  const locale = runtime.uiLocale;
   assertForumOrigin(ctx, request);
-  const input = await readForumJson(request);
+  const input = await readForumJson(request, locale);
   if (input.op === "view") {
     const topicId = parsePositiveId(String(input.topicId));
     await recordView(runtime, "topic", topicId);
@@ -158,12 +162,13 @@ async function write(runtime: AppRuntime, request: Request) {
     input.op === "moderate"
       ? ["forum.content.moderate_any", "forum.topic.feature_any", "forum.topic.sage_any"]
       : undefined,
+    locale,
   );
   if (input.op === "publish" || input.op === "edit") {
     const saved =
       input.op === "publish"
-        ? await publishForum(ctx, user, input)
-        : await editForum(ctx, user, input);
+        ? await publishForum(ctx, user, input, runtime.uiLocale)
+        : await editForum(ctx, user, input, runtime.uiLocale);
     const row =
       saved.target.kind === "comment"
         ? await ctx.db
@@ -191,23 +196,23 @@ async function write(runtime: AppRuntime, request: Request) {
     );
   }
   if (input.op === "delete") {
-    await deleteForum(ctx, user, input);
+    await deleteForum(ctx, user, input, runtime.uiLocale);
     return result({});
   }
-  if (input.op === "like") return result(await likeForum(ctx, user, input));
-  if (input.op === "report") return result(await reportForum(ctx, user, input));
+  if (input.op === "like") return result(await likeForum(ctx, user, input, runtime.uiLocale));
+  if (input.op === "report") return result(await reportForum(ctx, user, input, runtime.uiLocale));
   if (input.op === "moderate") {
-    await moderateForum(ctx, user, input);
+    await moderateForum(ctx, user, input, runtime.uiLocale);
     return result({});
   }
-  throw new HttpError(400, "操作无效。");
+  throw new HttpError(400, translate(locale, "forum.write.invalidOperation"));
 }
 
 export async function GET(runtime: AppRuntime, request: Request) {
   try {
     return await read(runtime, request);
   } catch (error) {
-    return jsonError("论坛请求失败。", error);
+    return jsonError(translate(runtime.uiLocale, "forum.write.requestFailed"), error);
   }
 }
 
@@ -215,6 +220,6 @@ export async function POST(runtime: AppRuntime, request: Request) {
   try {
     return await write(runtime, request);
   } catch (error) {
-    return jsonError("论坛请求失败。", error);
+    return jsonError(translate(runtime.uiLocale, "forum.write.requestFailed"), error);
   }
 }

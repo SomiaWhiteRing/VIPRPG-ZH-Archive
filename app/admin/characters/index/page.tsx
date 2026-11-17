@@ -6,9 +6,12 @@ import { runtimeContext } from "@/app/.server/router-context";
 import { buttonVariants } from "@/app/components/ui/button";
 import { PageHeader } from "@/app/components/ui/page-header";
 import { CHARACTER_INDEX_PERMISSIONS } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages } from "@/lib/i18n/react";
 import { CharacterIndexEditor } from "./editor";
 
 export async function loader(args: LoaderFunctionArgs) {
@@ -26,34 +29,38 @@ export async function loader(args: LoaderFunctionArgs) {
   return {
     user: pickPageFields(user, ["permissionKeys"]),
     params,
+    locale: runtime.uiLocale,
     renderData0,
   };
 }
 
-export const meta: MetaFunction = ({ error }) =>
-  pageMetaDescriptors({ title: ["角色分类", "控制台"] }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.characterIndex.title"), translate(locale, "admin.characterIndex.console")] }, error, locale);
+};
 
 export default function CharacterIndexAdminPage() {
+  const t = useMessages();
   const { user, params, renderData0 } = useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
         compact
-        title="角色分类"
+        title={t("admin.characterIndex.title")}
         actions={
           <>
             <Link
               className={buttonVariants({ variant: "outline" })}
               to="/admin/characters"
             >
-              角色资料
+              {t("admin.characterIndex.profiles")}
             </Link>
             <Link
               className={buttonVariants({ variant: "outline" })}
               to="/characters"
               target="_blank"
             >
-              查看公开索引
+              {t("admin.characterIndex.publicIndex")}
             </Link>
           </>
         }

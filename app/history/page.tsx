@@ -1,3 +1,7 @@
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
+import { useMessages, useNavigationLocale } from "@/lib/i18n/react";
 import { parseAccountPage, requireAccountUser } from "@/app/.server/auth/account-user";
 import { requireAnyPagePermission } from "@/app/.server/auth/authorize";
 import { searchAdminAuditLogs } from "@/app/.server/db/admin-audit";
@@ -17,10 +21,10 @@ import { Label } from "@/app/components/ui/label";
 import { CREATOR_PUBLIC_EDIT_PERMISSIONS } from "@/lib/authz/creator-permissions";
 import { CHARACTER_EDIT_PERMISSIONS, hasPermission } from "@/lib/authz/permissions";
 import { AUDIT_TARGET_LABELS, auditRecord, entityAuditTargets } from "@/lib/entity-audit";
-import { entryHistoryChanges, entryHistoryRangeChanges, entryHistorySnapshots, entryHistorySummary, type EntryHistoryKind, type EntryHistoryValue } from "@/lib/entry-history";
+import { entryHistoryChanges, entryHistoryFieldLabel, entryHistoryRangeChanges, entryHistorySnapshots, entryHistorySummary, type EntryHistoryKind, type EntryHistoryValue } from "@/lib/entry-history";
 import { formatExactTimestamp } from "@/lib/format";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { Form, Link, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { Form, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { useState } from "react";
 
 const entries = {
@@ -46,7 +50,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const entry = await runtime.db.prepare(entries[kind].sql).bind(id).first<{
     name: string; createdAt: string; status?: string; publicAt?: string | null;
   }>();
-  if (kind === "work" && !await getWorkEditInfoHref(runtime, id, user, entry?.status === "deleted")) redirectPage("/");
+  if (kind === "work" && !await getWorkEditInfoHref(runtime, id, user, entry?.status === "deleted")) redirectPage("/", request);
   if (kind === "creator" && !entry?.publicAt && !hasPermission(user, "creator.metadata.update_any")) throwNotFound();
 
   const oldParam = url.searchParams.get("oldid");
@@ -76,7 +80,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
         || (kind === "work" && (log.eventType === "external_work_created"
           || (log.eventType === "archive_work_commit" && auditRecord(detail?.context)?.mode === "create")));
       const historicalName = auditRecord(detail?.actor)?.displayName;
-      const actorName = typeof historicalName === "string" ? historicalName : log.actorName ?? (log.userId ? "用户" : null);
+      const actorName = typeof historicalName === "string" ? historicalName : log.actorName ?? (log.userId ? translate(runtime.uiLocale, "admin.nav.users") : null);
       if (creation && !snapshots?.after) {
         recordedCreation = { createdAt: log.createdAt, actorId: log.userId, actorName };
         continue;
@@ -84,7 +88,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
       if (!snapshots || (!snapshots.before && !snapshots.after)) continue;
       candidates.push({
         id: log.id, createdAt: log.createdAt, actorId: log.userId,
-        actorName: actorName ?? (creation ? null : "系统"),
+        actorName: actorName ?? (creation ? null : translate(runtime.uiLocale, "admin.audit.system")),
         snapshots, creation,
       });
     }
@@ -100,7 +104,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   });
   const creation = recordedCreation ?? (entry ? { createdAt: entry.createdAt, actorId: null, actorName: null } : null);
   const creationMarker = creation && !revisions.some(item => item.creation)
-    ? { ...creation, id: "creation" as const, hasPrevious: false, summary: "创建条目" } : null;
+    ? { ...creation, id: "creation" as const, hasPrevious: false, summary: translate(runtime.uiLocale, "entryHistory.created") } : null;
   const earliest = revisions.at(-1);
   let selection = null;
   if (oldId !== null) {
@@ -116,32 +120,33 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     const previous = diff === "prev" ? revisions[olderIndex + 1] ?? creationMarker : null;
     if (diff === "prev" && !previous) throw new Response(null, { status: 400 });
     let fields;
-    if (diff === null) fields = entryHistoryChanges(null, newer.snapshots.after, kind, id, names);
+    if (diff === null) fields = entryHistoryChanges(null, newer.snapshots.after, kind, id, names, runtime.uiLocale);
     else if (diff === "prev") fields = newer.changes;
     else {
       // A hidden edit can replace an internal relation ID used by later snapshots.
       // With no creation snapshot, the earliest visible edit's before-state is the comparison base.
       const end = "candidateIndex" in older ? older.candidateIndex : earliest!.candidateIndex + 1;
       const edits = candidates.slice(newer.candidateIndex, end).reverse().map(item => item.snapshots);
-      fields = entryHistoryRangeChanges(edits, kind, id, names);
+      fields = entryHistoryRangeChanges(edits, kind, id, names, runtime.uiLocale);
     }
     selection = {
       oldId: (previous ?? older).id, newId: newer.id, snapshot: diff === null,
       oldDate: (previous ?? older).createdAt, newDate: newer.createdAt,
-      fields,
+      fields: fields.map(change => ({ ...change, field: entryHistoryFieldLabel(change.field, runtime.uiLocale) })),
     };
   }
   const items = [
     ...revisions.map(({ snapshots: _snapshots, candidateIndex: _candidateIndex, changes, creation, ...item }) => ({
       ...item,
       hasPrevious: item.id !== earliest?.id || creationMarker !== null,
-      summary: creation ? "创建条目" : entryHistorySummary(changes),
+      summary: creation ? translate(runtime.uiLocale, "entryHistory.created") : entryHistorySummary(changes, runtime.uiLocale),
     })),
     ...(creationMarker ? [creationMarker] : []),
   ];
   const page = Math.min(parseAccountPage(url.searchParams.get("page") ?? undefined), Math.max(1, Math.ceil(items.length / PAGE_SIZE)));
   const offset = (page - 1) * PAGE_SIZE;
   return {
+    locale: runtime.uiLocale,
     title: entry?.name ?? oldName ?? AUDIT_TARGET_LABELS[kind],
     entryHref: entry ? `/${entries[kind].path}/${id}` : null,
     basePath: `/history/${kind}/${id}`,
@@ -153,12 +158,20 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
 }
 
 export function headers() { return { "Cache-Control": "private, no-store" }; }
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) => [
-  ...pageMetaDescriptors({ title: [loaderData?.title ?? "条目", "编辑历史"], page: loaderData?.page }, error),
-  { name: "robots", content: "noindex" },
-];
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return [
+    ...pageMetaDescriptors({
+      title: [loaderData?.title ?? translate(locale, "entryHistory.entry"), translate(locale, "work.sidebar.history")],
+      page: loaderData?.page,
+    }, error, locale),
+    { name: "robots", content: "noindex" },
+  ];
+};
 
 export default function EntryHistoryPage() {
+  const t = useMessages();
+  const navigationLocale = useNavigationLocale();
   const history = useLoaderData<typeof loader>();
   const revisions = history.items;
   const selection = history.selection;
@@ -178,15 +191,15 @@ export default function EntryHistoryPage() {
     return `${history.basePath}?${params}`;
   }
   return <PageContainer>
-    {history.entryHref ? <BackLink className="mb-4" href={history.entryHref} label="返回条目" variant="text" /> : null}
-    <PageHeader compact title={`${history.title} · 编辑历史`} />
-    {selection ? <section className="mt-5 min-w-0" aria-label={selection.snapshot ? "版本内容" : "版本差异"}>
+    {history.entryHref ? <BackLink className="mb-4" href={history.entryHref} label={t("entryHistory.back")} variant="text" /> : null}
+    <PageHeader compact title={t("entryHistory.title", { name: history.title })} />
+    {selection ? <section className="mt-5 min-w-0" aria-label={selection.snapshot ? t("entryHistory.snapshot") : t("entryHistory.diff")}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">{selection.snapshot ? "版本内容" : "版本差异"}</h2>
+        <h2 className="text-lg font-semibold">{selection.snapshot ? t("entryHistory.snapshot") : t("entryHistory.diff")}</h2>
       </div>
       <div className={selection.snapshot ? "border-b border-border py-2 text-sm" : "grid grid-cols-2 gap-3 border-b border-border py-2 text-sm"}>
         {!selection.snapshot && <p className="flex flex-wrap items-baseline gap-x-2">
-          <span>{selection.oldDate ? formatExactTimestamp(selection.oldDate) : "此前版本"}</span><HistoryEditor entry={olderEditor} />
+          <span>{selection.oldDate ? formatExactTimestamp(selection.oldDate) : t("entryHistory.earlier")}</span><HistoryEditor entry={olderEditor} />
         </p>}
         <p className="flex flex-wrap items-baseline gap-x-2"><span>{formatExactTimestamp(selection.newDate)}</span><HistoryEditor entry={newerEditor} /></p>
       </div>
@@ -200,13 +213,14 @@ export default function EntryHistoryPage() {
             <HistoryValues field={change.field} values={change.after} />
           </div>
         </div>
-      </div>) : <EmptyState title="没有字段差异。" variant="plain" />}
+      </div>) : <EmptyState title={t("entryHistory.noDiff")} variant="plain" />}
     </section> : null}
-    {history.items.length ? <Form method="get" className="mt-5" aria-label="比较历史版本">
+    {history.items.length ? <Form method="get" className="mt-5" aria-label={t("entryHistory.compare")}>
+      {navigationLocale ? <input type="hidden" name={UI_LOCALE_PARAM} value={navigationLocale} /> : null}
       {history.page > 1 && <input type="hidden" name="page" value={history.page} />}
       {history.latestId !== undefined && <>
-        <Button type="submit" variant="outline" disabled={choice.newerIndex < 0 || choice.olderIndex <= choice.newerIndex}>比较所选版本</Button>
-        <div className="mt-3 flex gap-2 text-xs text-muted" aria-hidden><span className="w-8 text-center">较旧</span><span className="w-8 text-center">较新</span></div>
+        <Button type="submit" variant="outline" disabled={choice.newerIndex < 0 || choice.olderIndex <= choice.newerIndex}>{t("entryHistory.selected")}</Button>
+        <div className="mt-3 flex gap-2 text-xs text-muted" aria-hidden><span className="w-8 text-center">{t("entryHistory.older")}</span><span className="w-8 text-center">{t("entryHistory.newer")}</span></div>
       </>}
       <ol className="mt-1 min-w-0 border-y border-border py-1">
         {revisions.map((entry, index) => {
@@ -216,34 +230,35 @@ export default function EntryHistoryPage() {
               <Input type="radio" name="oldid" value={entry.id} required disabled={index <= choice.newerIndex}
                 checked={index >= 0 && index === choice.olderIndex}
                 onChange={() => setPicked({ ...choice, olderIndex: index })}
-                aria-label={`较旧版本：${formatExactTimestamp(entry.createdAt)}`} className="size-4 shrink-0 accent-primary p-0 shadow-none" />
+                aria-label={t("entryHistory.olderAt", { date: formatExactTimestamp(entry.createdAt) })} className="size-4 shrink-0 accent-primary p-0 shadow-none" />
             </Label>
             <Label className="flex size-8 items-center justify-center">
               <Input type="radio" name="diff" value={entry.id} required disabled={entry.id === "creation" || (choice.olderIndex >= 0 && index >= choice.olderIndex)}
                 checked={index >= 0 && index === choice.newerIndex}
                 onChange={() => setPicked({ ...choice, newerIndex: index })}
-                aria-label={`较新版本：${formatExactTimestamp(entry.createdAt)}`} className="size-4 shrink-0 accent-primary p-0 shadow-none" />
+                aria-label={t("entryHistory.newerAt", { date: formatExactTimestamp(entry.createdAt) })} className="size-4 shrink-0 accent-primary p-0 shadow-none" />
             </Label>
           </div>}
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 py-1">
             {history.latestId !== undefined && <span className="whitespace-nowrap text-primary">(
-              {entry.id !== history.latestId ? <Link to={revisionHref(entry.id, "cur")} className="hover:underline">当前</Link> : <span className="text-muted">当前</span>}
-              {" | "}{entry.hasPrevious ? <Link to={revisionHref(entry.id, "prev")} className="hover:underline">前次</Link> : <span className="text-muted">前次</span>}
+              {entry.id !== history.latestId ? <Link to={revisionHref(entry.id, "cur")} className="hover:underline">{t("entryHistory.current")}</Link> : <span className="text-muted">{t("entryHistory.current")}</span>}
+              {" | "}{entry.hasPrevious ? <Link to={revisionHref(entry.id, "prev")} className="hover:underline">{t("entryHistory.previous")}</Link> : <span className="text-muted">{t("entryHistory.previous")}</span>}
             )</span>}
             {entry.id === "creation" ? <span className="font-mono tabular-nums">{formatExactTimestamp(entry.createdAt)}</span>
               : <Link to={revisionHref(entry.id)} className="font-mono tabular-nums text-primary hover:underline">{formatExactTimestamp(entry.createdAt)}</Link>}
             <HistoryEditor entry={entry} />
-            <span className="min-w-0 wrap-anywhere text-muted">（{entry.summary}）</span>
+            <span className="min-w-0 wrap-anywhere text-muted">{t("entryHistory.summary", { text: entry.summary })}</span>
           </div>
         </li>; })}
       </ol>
-    </Form> : <EmptyState title="暂无编辑历史。" />}
+    </Form> : <EmptyState title={t("entryHistory.empty")} />}
     <PaginationLinks basePath={history.basePath} page={history.page} pageSize={history.pageSize} total={history.total} />
   </PageContainer>;
 }
 
 function HistoryValues({ field, values }: { field: string; values: EntryHistoryValue[] }) {
-  if (!values.length) return <span className="text-muted">（空）</span>;
+  const t = useMessages();
+  if (!values.length) return <span className="text-muted">{t("entryHistory.blank")}</span>;
   return <div className="flex flex-wrap gap-x-4 gap-y-3">
     {values.map(({ text, image, cell }, index) => <div key={index} className={text ? "flex min-w-0 basis-full items-start gap-2" : "min-w-0 max-w-full"}>
       {image && (cell ? (

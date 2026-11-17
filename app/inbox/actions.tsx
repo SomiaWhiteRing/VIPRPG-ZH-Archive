@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 import { Button } from "@/app/components/ui/button";
@@ -6,7 +7,6 @@ import { notifyInboxChanged } from "@/lib/inbox-events";
 import { createRef, useId, useState, useTransition } from "react";
 import { useRevalidator } from "react-router";
 import { useConfirm } from '@/app/components/ui/confirm-provider';
-import { MAINTAINER_GRANT_DESCRIPTION } from '@/lib/work-maintainers';
 import type { InboxItem } from '@/lib/dto/db/inbox';
 import { FormField } from '@/app/components/ui/form-field';
 import { Textarea } from '@/app/components/ui/textarea';
@@ -30,6 +30,7 @@ export function InboxActions({
   };
   all?: boolean;
 }) {
+  const t = useMessages();
   const revalidator = useRevalidator();
   const toast = useToast();
   const confirm = useConfirm();
@@ -45,12 +46,12 @@ export function InboxActions({
         const request = item?.maintainerRequest;
         const reasonInput = createRef<HTMLTextAreaElement>();
         await confirm(request
-          ? `确定驳回“${request.applicant.displayName}”对《${request.workTitle}》的维护申请？申请人不会获得维护资格，30 天内不能再次申请本作；维护者仍可主动添加。`
-          : `确定驳回“${item?.targetDisplayName ?? '申请人'}”的${item?.title ?? '权限申请'}？申请人不会获得本次申请的权限。`, {
-          title: request ? '驳回维护申请？' : '驳回权限申请？', confirmLabel: '确认驳回', destructive: true,
-          content: <FormField controlId={reasonInputId} label="驳回理由（选填）" hint={`填写后申请人会看到此理由，最多 ${MAX_REJECTION_REASON_LENGTH} 字。`}>
+          ? t("inbox.action.rejectMaintainer", { name: request.applicant.displayName, work: request.workTitle })
+          : t("inbox.action.rejectPermission", { name: item?.targetDisplayName ?? t("inbox.action.applicant"), title: item?.title ?? t("account.nav.permissions") }), {
+          title: request ? t("inbox.action.rejectMaintainerTitle") : t("inbox.action.rejectPermissionTitle"), confirmLabel: t("inbox.action.confirmReject"), destructive: true,
+          content: <FormField controlId={reasonInputId} label={t("inbox.action.reason")} hint={t("inbox.action.reasonHint", { max: MAX_REJECTION_REASON_LENGTH })}>
             <Textarea ref={reasonInput} id={reasonInputId} name="rejection_reason" maxLength={MAX_REJECTION_REASON_LENGTH}
-              rows={4} aria-describedby={`${reasonInputId}-hint`} placeholder="可说明未通过申请的原因。" />
+              rows={4} aria-describedby={`${reasonInputId}-hint`} placeholder={t("inbox.action.reasonPlaceholder")} />
           </FormField>,
           action: async () => {
             let reason: string;
@@ -64,15 +65,15 @@ export function InboxActions({
       if (item?.maintainerRequest && action !== 'read') {
         const request = item.maintainerRequest;
         const accepted = await confirm(action === 'approve'
-          ? `确定通过“${request.applicant.displayName}”对《${request.workTitle}》的维护申请？\n\n${MAINTAINER_GRANT_DESCRIPTION}`
-          : `确定撤回对《${request.workTitle}》的维护申请？撤回后维护者将无法通过这条申请，30 天内不能再次申请本作。`,
-        { title: action === 'approve' ? '通过维护申请？' : '撤回维护申请？',
-          confirmLabel: action === 'approve' ? '确认通过' : '确认撤回', destructive: action !== 'approve' });
+          ? [t("inbox.action.approveMaintainer", { name: request.applicant.displayName, work: request.workTitle }), t("work.maintainer.grant")].join("\n\n")
+          : t("inbox.action.withdrawMaintainer", { work: request.workTitle }),
+        { title: action === 'approve' ? t("inbox.action.approveTitle") : t("inbox.action.withdrawTitle"),
+          confirmLabel: action === 'approve' ? t("inbox.action.confirmApprove") : t("inbox.action.confirmWithdraw"), destructive: action !== 'approve' });
         if (!accepted) return;
       }
       await perform(action);
     } catch (failure) {
-      toast.error(failure instanceof Error ? failure.message : '操作失败，请重试。');
+      toast.error(failure instanceof Error ? failure : t("core.confirm.failed"));
     } finally {
       setBusy(false);
     }
@@ -81,7 +82,7 @@ export function InboxActions({
   async function perform(action: InboxAction, rejectionReason?: string) {
     if (action === 'friend') {
       const friend = item?.friendNotification;
-      if (!friend?.canFollow || friend.userId === null) throw new Error('暂时无法同意这位用户的好友请求。');
+      if (!friend?.canFollow || friend.userId === null) throw new Error(t("inbox.action.friendUnavailable"));
       await requestJson(`/api/users/${friend.userId}/follow`, { method: 'PUT' });
     } else {
       const data = new FormData();
@@ -109,13 +110,13 @@ export function InboxActions({
     }
       notifyInboxChanged();
       toast.success(
-        action === 'friend' ? '已同意好友请求。' : action === "read"
+        action === 'friend' ? t("inbox.action.friendAccepted") : action === "read"
           ? all
-            ? "已将全部提醒标记为已读。"
-            : item?.friendNotification?.kind === 'added' ? '已忽略这条好友请求。' : "已标记为已读。"
+            ? t("inbox.action.allRead")
+            : item?.friendNotification?.kind === 'added' ? t("inbox.action.friendIgnored") : t("inbox.action.readDone")
           : action === "approve"
-            ? "申请已通过。"
-            : action === 'withdraw' ? '申请已撤回。' : "申请已驳回。",
+            ? t("inbox.action.approved")
+            : action === 'withdraw' ? t("inbox.action.withdrawn") : t("inbox.action.rejected"),
       );
       document.getElementById("inbox-controls")?.focus({ preventScroll: true });
       startTransition(() => revalidator.revalidate());
@@ -124,8 +125,8 @@ export function InboxActions({
     <div className="min-w-0" aria-busy={disabled}>
       <div className="flex flex-wrap items-center gap-2">
         {item?.friendNotification?.kind === 'added' ? (
-          item.friendNotification.isFollowing ? <span className="text-sm text-accent">已同意</span> :
-          item.friendNotification.canFollow ? <Button size="sm" disabled={disabled} onClick={() => void act('friend')}>同意</Button> : null
+          item.friendNotification.isFollowing ? <span className="text-sm text-accent">{t("inbox.action.accepted")}</span> :
+          item.friendNotification.canFollow ? <Button size="sm" disabled={disabled} onClick={() => void act('friend')}>{t("inbox.action.accept")}</Button> : null
         ) : null}
         {item?.canApprove ? (
           <Button
@@ -133,7 +134,7 @@ export function InboxActions({
             disabled={disabled}
             onClick={() => void act("approve")}
           >
-            通过
+            {t("inbox.action.approve")}
           </Button>
         ) : null}
         {item?.canReject ? (
@@ -143,10 +144,10 @@ export function InboxActions({
             disabled={disabled}
             onClick={() => void act("reject")}
           >
-            驳回
+            {t("inbox.action.reject")}
           </Button>
         ) : null}
-        {item?.maintainerRequest?.canWithdraw ? <Button size="sm" variant="outline" disabled={disabled} onClick={() => void act('withdraw')}>撤回申请</Button> : null}
+        {item?.maintainerRequest?.canWithdraw ? <Button size="sm" variant="outline" disabled={disabled} onClick={() => void act('withdraw')}>{t("inbox.action.withdraw")}</Button> : null}
         {all || (item && !item.readAt) ? (
           <Button
             size="sm"
@@ -154,7 +155,7 @@ export function InboxActions({
             disabled={disabled}
             onClick={() => void act("read")}
           >
-            {all ? "全部标记已读" : item?.friendNotification?.kind === 'added' ? "忽略" : "标记已读"}
+            {all ? t("inbox.action.markAll") : item?.friendNotification?.kind === 'added' ? t("inbox.action.ignore") : t("inbox.action.markRead")}
           </Button>
         ) : null}
       </div>

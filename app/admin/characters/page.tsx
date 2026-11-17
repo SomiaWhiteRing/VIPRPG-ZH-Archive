@@ -20,10 +20,13 @@ import {
   CHARACTER_INDEX_PERMISSIONS,
   hasPermission,
 } from "@/lib/authz/permissions";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
-import { formatDate, formatNumber } from "@/lib/format";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { formatDate } from "@/lib/format";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 
 const PAGE_SIZE = 50;
 
@@ -56,22 +59,27 @@ export async function loader(args: LoaderFunctionArgs) {
     query,
     sort,
     page,
+    locale: runtime.uiLocale,
     result,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["登场角色维护", "控制台"], page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.characterList.title"), translate(locale, "admin.characterIndex.console")], page: loaderData?.page }, error, locale);
+};
 
 export default function AdminCharactersPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { adminUser, query, sort, page, result } =
     useLoaderData<typeof loader>();
   return (
     <main>
       <PageHeader
         compact
-        title="登场角色维护"
-        subtitle="维护角色名称、说明和作品关联。"
+        title={t("admin.characterList.title")}
+        subtitle={t("admin.characterList.subtitle")}
         actions={
           <>
             {hasPermission(adminUser, "character.admin.read") ||
@@ -82,7 +90,7 @@ export default function AdminCharactersPage() {
                 className={buttonVariants({ variant: "outline" })}
                 to="/admin/characters/index"
               >
-                角色分类
+                {t("admin.characterIndex.title")}
               </Link>
             ) : null}
             {hasPermission(adminUser, "character.create") ? (
@@ -92,32 +100,32 @@ export default function AdminCharactersPage() {
               className={buttonVariants({ variant: "outline" })}
               to="/characters"
             >
-              查看公开列表
+              {t("admin.characterList.public")}
             </Link>
           </>
         }
       />
       <AdminListControls
         action="/admin/characters"
-        noun="角色"
+        noun={t("admin.characterIndex.character")}
         query={query}
         sort={sort}
         sortOptions={[
-          { value: "default", label: "最近更新" },
-          { value: "name", label: "名称" },
-          { value: "works", label: "登场作品数" },
+          { value: "default", label: t("admin.characterList.recent") },
+          { value: "name", label: t("admin.characterList.name") },
+          { value: "works", label: t("admin.characterList.workCount") },
         ]}
         pageSize={PAGE_SIZE}
         total={result.total}
       />
       {result.items.length > 0 ? (
-        <TableWrap compact label="角色列表" minWidth={900}>
+        <TableWrap compact label={t("admin.characterList.table")} minWidth={900}>
           <thead>
             <tr>
-              <th>角色</th>
-              <th>登场作品</th>
-              <th>更新时间</th>
-              <th className="admin-action-column">操作</th>
+              <th>{t("admin.characterIndex.character")}</th>
+              <th>{t("character.works")}</th>
+              <th>{t("admin.characterList.updated")}</th>
+              <th className="admin-action-column">{t("admin.characterList.actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -131,8 +139,8 @@ export default function AdminCharactersPage() {
                     </span>
                   ) : null}
                 </td>
-                <td>{formatNumber(character.workCount)}</td>
-                <td className="whitespace-nowrap text-xs text-muted tabular-nums">{formatDate(character.updatedAt)}</td>
+                <td>{character.workCount.toLocaleString(locale)}</td>
+                <td className="whitespace-nowrap text-xs text-muted tabular-nums">{formatDate(character.updatedAt, { locale })}</td>
                 <td className="admin-action-column">
                   {CHARACTER_DETAIL_PERMISSIONS.some((key) =>
                     hasPermission(adminUser, key),
@@ -141,10 +149,10 @@ export default function AdminCharactersPage() {
                       className={buttonVariants({ variant: "ghost", size: "sm" })}
                       to={`/admin/characters/${character.id}`}
                     >
-                      查看与维护
+                      {t("admin.characterList.manage")}
                     </Link>
                   ) : (
-                    <span className="admin-cell-meta">只读</span>
+                    <span className="admin-cell-meta">{t("admin.characterList.readOnly")}</span>
                   )}
                 </td>
               </tr>
@@ -152,7 +160,7 @@ export default function AdminCharactersPage() {
           </tbody>
         </TableWrap>
       ) : (
-        <EmptyState title="没有找到匹配的角色。" />
+        <EmptyState title={t("admin.characterList.empty")} />
       )}
       <PaginationLinks
         basePath="/admin/characters"

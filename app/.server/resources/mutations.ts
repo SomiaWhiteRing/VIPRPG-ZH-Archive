@@ -12,11 +12,13 @@ import { verifyArtifactObject } from "./objects";
 import { verifyPackageArtifact } from "./packages";
 import { parseResourceContent } from "@/lib/resource-content";
 import { downloadFilenameTemplateError, MAX_DOWNLOAD_FILENAME_TEMPLATE_LENGTH } from "@/lib/resource-filename";
+import { translate } from "@/lib/i18n/core";
 
 export type Actor = Pick<ArchiveUser, "id" | "email">;
 const rootSql = `EXISTS(SELECT 1 FROM users u JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id
  WHERE u.id=? AND u.status='active' AND r.kind='bootstrap_admin' AND r.status='active')`;
-export function textField(
+function textField(
+  locale: AppRuntime["uiLocale"],
   data: Record<string, unknown>,
   key: string,
   max: number,
@@ -28,10 +30,11 @@ export function textField(
     value.length > max ||
     (required && !value.trim())
   )
-    throw new HttpError(400, `${key} 格式或长度不正确`);
+    throw new HttpError(400, translate(locale, "admin.resources.error.text", { field: key }), undefined, "admin.resources.error.text", { field: key });
   return value.trim();
 }
 export function integer(
+  locale: AppRuntime["uiLocale"],
   value: unknown,
   min = 0,
   max = Number.MAX_SAFE_INTEGER,
@@ -41,16 +44,16 @@ export function integer(
     Number(value) < min ||
     Number(value) > max
   )
-    throw new HttpError(400, "数字参数不正确");
+    throw new HttpError(400, translate(locale, "admin.resources.error.number"), undefined, "admin.resources.error.number");
   return Number(value);
 }
-function webUrl(value: string, allowAppProtocol = false) {
+function webUrl(locale: AppRuntime["uiLocale"], value: string, allowAppProtocol = false) {
   if (!value) return "";
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    throw new HttpError(400, "请输入完整的链接地址");
+    throw new HttpError(400, translate(locale, "admin.resources.error.url"), undefined, "admin.resources.error.url");
   }
   if (
     (allowAppProtocol
@@ -62,8 +65,8 @@ function webUrl(value: string, allowAppProtocol = false) {
     throw new HttpError(
       400,
       allowAppProtocol
-        ? "不支持此链接地址"
-        : "仅支持 HTTP／HTTPS 网站地址",
+        ? translate(locale, "admin.resources.error.unsupportedUrl")
+        : translate(locale, "admin.resources.error.http"),
     );
   return url.protocol === "http:" || url.protocol === "https:" ? url.href : value;
 }
@@ -109,7 +112,9 @@ export async function batchMutation(
     )
       throw new HttpError(
         409,
-        "资料、上传状态或权限已变化，或版本／平台已存在。请刷新后重试。",
+        translate(runtime.uiLocale, "admin.resources.error.conflict"),
+        undefined,
+        "admin.resources.error.conflict",
       );
     throw error;
   }
@@ -119,12 +124,12 @@ export async function createResource(
   actor: Actor,
   data: Record<string, unknown>,
 ) {
-  const name = textField(data, "name", 100, true);
-  const slug = textField(data, "slug", 80, true);
+  const name = textField(runtime.uiLocale, data, "name", 100, true);
+  const slug = textField(runtime.uiLocale, data, "slug", 80, true);
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))
-    throw new HttpError(400, "固定名称只能使用小写字母、数字和连字符");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.slug"), undefined, "admin.resources.error.slug");
   if (data.kind !== "tool" && data.kind !== "website")
-    throw new HttpError(400, "链接类型不正确");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.kind"), undefined, "admin.resources.error.kind");
   const id = crypto.randomUUID();
   try {
     await runtime.db.batch([
@@ -141,7 +146,7 @@ export async function createResource(
     ]);
   } catch (error) {
     if (/constraint/i.test(String(error)))
-      throw new HttpError(409, "固定名称已存在或权限已变化");
+      throw new HttpError(409, translate(runtime.uiLocale, "admin.resources.error.duplicate"), undefined, "admin.resources.error.duplicate");
     throw error;
   }
   return id;
@@ -153,59 +158,59 @@ export async function editResource(
   data: Record<string, unknown>,
 ) {
   const resource = await getResource(runtime, id);
-  const revision = integer(data.revision, 1);
-  const action = textField(data, "action", 40, true);
+  const revision = integer(runtime.uiLocale, data.revision, 1);
+  const action = textField(runtime.uiLocale, data, "action", 40, true);
   const db = runtime.db;
   const statements: D1PreparedStatement[] = [];
   const detail: Record<string, unknown> = {};
   if (action === "save") {
     const downloadFilenameTemplate = resource.kind === "tool" && data.downloadFilenameTemplate !== undefined
-      ? textField(data, "downloadFilenameTemplate", MAX_DOWNLOAD_FILENAME_TEMPLATE_LENGTH)
+      ? textField(runtime.uiLocale, data, "downloadFilenameTemplate", MAX_DOWNLOAD_FILENAME_TEMPLATE_LENGTH)
       : resource.download_filename_template;
-    const templateError = downloadFilenameTemplateError(downloadFilenameTemplate);
+    const templateError = downloadFilenameTemplateError(downloadFilenameTemplate, runtime.uiLocale);
     if (templateError) throw new HttpError(400, templateError);
-    const visibility = textField(data, "visibility", 20, true);
+    const visibility = textField(runtime.uiLocale, data, "visibility", 20, true);
     if (!["draft", "published", "hidden"].includes(visibility))
-      throw new HttpError(400, "显示状态不正确");
+      throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.visibility"), undefined, "admin.resources.error.visibility");
     let links: ResourceLink[];
     try {
-      const input: unknown = JSON.parse(textField(data, "linksJson", Infinity, true));
+      const input: unknown = JSON.parse(textField(runtime.uiLocale, data, "linksJson", Infinity, true));
       if (!Array.isArray(input)) throw new Error();
       links = input.map((link) => {
         if (!link || typeof link !== "object" || Array.isArray(link)) throw new Error();
         return {
-          label: textField(link, "label", Infinity, true),
-          url: webUrl(textField(link, "url", 2048, true), true),
+          label: textField(runtime.uiLocale, link, "label", Infinity, true),
+          url: webUrl(runtime.uiLocale, textField(runtime.uiLocale, link, "url", 2048, true), true),
         };
       });
     } catch {
-      throw new HttpError(400, "请为每个网站填写按钮文案和有效的访问地址");
+      throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.buttons"), undefined, "admin.resources.error.buttons");
     }
     let summary: string;
     try {
-      summary = JSON.stringify(parseResourceContent(textField(data, "summaryJson", Infinity, true)));
+      summary = JSON.stringify(parseResourceContent(textField(runtime.uiLocale, data, "summaryJson", Infinity, true)));
     } catch {
-      throw new HttpError(400, "卡片介绍格式不正确或包含无效链接");
+      throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.description"), undefined, "admin.resources.error.description");
     }
     if (
       visibility === "published" &&
       (!resource.icon_blob_sha256 || (resource.kind === "website" && !links.length))
     )
-      throw new HttpError(400, "公开前请上传图标并填写访问地址");
+      throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.public"), undefined, "admin.resources.error.public");
     statements.push(
       db
         .prepare(
           `UPDATE resources SET name=?,summary_json=?,links_json=?,windows_button_label=?,android_button_label=?,download_filename_template=?,source_url=?,sort_order=?,visibility=? WHERE id=?`,
         )
         .bind(
-          textField(data, "name", 100, true),
+          textField(runtime.uiLocale, data, "name", 100, true),
           summary,
           JSON.stringify(links),
-          resource.kind === "tool" ? textField(data, "windowsButtonLabel", Infinity, true) : resource.windows_button_label,
-          resource.kind === "tool" ? textField(data, "androidButtonLabel", Infinity, true) : resource.android_button_label,
+          resource.kind === "tool" ? textField(runtime.uiLocale, data, "windowsButtonLabel", Infinity, true) : resource.windows_button_label,
+          resource.kind === "tool" ? textField(runtime.uiLocale, data, "androidButtonLabel", Infinity, true) : resource.android_button_label,
           downloadFilenameTemplate,
-          webUrl(textField(data, "sourceUrl", 2048)),
-          integer(data.sortOrder, -100000, 100000),
+          webUrl(runtime.uiLocale, textField(runtime.uiLocale, data, "sourceUrl", 2048)),
+          integer(runtime.uiLocale, data.sortOrder, -100000, 100000),
           visibility,
           id,
         ),
@@ -215,7 +220,7 @@ export async function editResource(
       detail.downloadFilenameTemplate = { before: resource.download_filename_template, after: downloadFilenameTemplate };
   } else {
     if (resource.kind !== "tool")
-      throw new HttpError(400, "网站链接没有软件版本");
+      throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.website"), undefined, "admin.resources.error.website");
     if (action === "createRelease") {
       const releaseId = crypto.randomUUID();
       statements.push(
@@ -226,22 +231,22 @@ export async function editResource(
           .bind(
             releaseId,
             id,
-            textField(data, "version", 100, true),
-            textField(data, "notes", 30000),
+            textField(runtime.uiLocale, data, "version", 100, true),
+            textField(runtime.uiLocale, data, "notes", 30000),
           ),
       );
       detail.releaseId = releaseId;
     } else if (action === "recommend") {
-      const target = textField(data, "target", 40, true);
+      const target = textField(runtime.uiLocale, data, "target", 40, true);
       if (
         !RESOURCE_TARGETS.includes(target as (typeof RESOURCE_TARGETS)[number])
       )
-        throw new HttpError(400, "平台不正确");
-      const artifactId = textField(data, "artifactId", 80) || null;
+        throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.platform"), undefined, "admin.resources.error.platform");
+      const artifactId = textField(runtime.uiLocale, data, "artifactId", 80) || null;
       if (artifactId) {
         const a = await getArtifact(runtime, artifactId);
         if (a.resource_id !== id)
-          throw new HttpError(400, "安装包不属于该链接");
+          throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.package"), undefined, "admin.resources.error.package");
         await verifyArtifactObject(runtime, a);
       }
       const before = await db
@@ -257,12 +262,12 @@ export async function editResource(
         after: artifactId,
       });
     } else {
-      const releaseId = textField(data, "releaseId", 80, true);
+      const releaseId = textField(runtime.uiLocale, data, "releaseId", 80, true);
       const release = await db
         .prepare("SELECT * FROM tool_releases WHERE id=? AND resource_id=?")
         .bind(releaseId, id)
         .first<ToolRelease>();
-      if (!release) throw new HttpError(404, "版本不存在");
+      if (!release) throw new HttpError(404, translate(runtime.uiLocale, "admin.resources.error.release"), undefined, "admin.resources.error.release");
       detail.releaseId = releaseId;
       if (action === "saveRelease") {
         statements.push(
@@ -271,17 +276,17 @@ export async function editResource(
               "UPDATE tool_releases SET version_label=?,notes=? WHERE id=?",
             )
             .bind(
-              textField(data, "version", 100, true),
-              textField(data, "notes", 30000),
+              textField(runtime.uiLocale, data, "version", 100, true),
+              textField(runtime.uiLocale, data, "notes", 30000),
               releaseId,
             ),
         );
       } else if (action === "publish") {
         if (release.status === "published") return;
         if (release.status !== "draft")
-          throw new HttpError(409, "撤回的版本不能重新发布");
+          throw new HttpError(409, translate(runtime.uiLocale, "admin.resources.error.withdrawn"), undefined, "admin.resources.error.withdrawn");
         if (["windy-translator", "viprpg-android"].includes(resource.slug) && data.version !== undefined) {
-          statements.push(db.prepare("UPDATE tool_releases SET version_label=?,notes=? WHERE id=?").bind(textField(data, "version", 100, true), textField(data, "notes", 30000), releaseId));
+          statements.push(db.prepare("UPDATE tool_releases SET version_label=?,notes=? WHERE id=?").bind(textField(runtime.uiLocale, data, "version", 100, true), textField(runtime.uiLocale, data, "notes", 30000), releaseId));
         }
         const artifacts = (
           await db
@@ -291,16 +296,16 @@ export async function editResource(
             .bind(releaseId)
             .all<{ id: string }>()
         ).results;
-        if (!artifacts.length) throw new HttpError(400, "请先上传安装包");
+        if (!artifacts.length) throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.uploadFirst"), undefined, "admin.resources.error.uploadFirst");
         for (const row of artifacts) {
           const a = await getArtifact(runtime, row.id);
           if (a.storage_status !== "ready")
-            throw new HttpError(409, "所有安装包均需校验完成");
+            throw new HttpError(409, translate(runtime.uiLocale, "admin.resources.error.verify"), undefined, "admin.resources.error.verify");
           await verifyArtifactObject(runtime, a);
           await verifyPackageArtifact(runtime, a);
         }
         if (data.visible === true && !resource.icon_blob_sha256)
-          throw new HttpError(400, "公开链接前请上传图标");
+          throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.icon"), undefined, "admin.resources.error.icon");
         statements.push(
           db
             .prepare(
@@ -336,8 +341,8 @@ export async function editResource(
       } else if (action === "withdraw") {
         if (release.status === "withdrawn") return;
         if (release.status !== "published")
-          throw new HttpError(409, "仅已发布版本可撤回");
-        detail.reason = textField(data, "reason", 1000, true);
+          throw new HttpError(409, translate(runtime.uiLocale, "admin.resources.error.withdraw"), undefined, "admin.resources.error.withdraw");
+        detail.reason = textField(runtime.uiLocale, data, "reason", 1000, true);
         statements.push(
           db
             .prepare(
@@ -351,7 +356,7 @@ export async function editResource(
             .prepare("UPDATE tool_releases SET status='withdrawn' WHERE id=?")
             .bind(releaseId),
         );
-      } else throw new HttpError(400, "未知操作");
+      } else throw new HttpError(400, translate(runtime.uiLocale, "admin.resources.error.unknown"), undefined, "admin.resources.error.unknown");
     }
   }
   await batchMutation(runtime, actor, id, revision, action, statements, detail);
@@ -376,22 +381,22 @@ export async function registerArtifact(
   data: Record<string, unknown>,
 ) {
   const resource = await getResource(runtime, id);
-  if (resource.kind !== "tool") throw new HttpError(400, "网站链接没有安装包");
-  let releaseId = textField(data, "releaseId", 80);
+  if (resource.kind !== "tool") throw new HttpError(400, translate(runtime.uiLocale, "admin.package.error.website"), undefined, "admin.package.error.website");
+  let releaseId = textField(runtime.uiLocale, data, "releaseId", 80);
   const statements: D1PreparedStatement[] = [];
-  if (!releaseId && !["windy-translator", "viprpg-android"].includes(resource.slug)) throw new HttpError(400, "请选择版本草稿");
+  if (!releaseId && !["windy-translator", "viprpg-android"].includes(resource.slug)) throw new HttpError(400, translate(runtime.uiLocale, "admin.package.error.chooseDraft"), undefined, "admin.package.error.chooseDraft");
   const release = releaseId ? await runtime.db
     .prepare(
       "SELECT id FROM tool_releases WHERE id=? AND resource_id=? AND status='draft'",
     )
     .bind(releaseId, id)
     .first() : null;
-  if (releaseId && !release) throw new HttpError(409, "草稿不存在");
-  const target = textField(data, "target", 40, true),
-    sha = textField(data, "sha256", 64, true);
-  const filename = textField(data, "filename", 180, true),
+  if (releaseId && !release) throw new HttpError(409, translate(runtime.uiLocale, "admin.package.error.missingDraft"), undefined, "admin.package.error.missingDraft");
+  const target = textField(runtime.uiLocale, data, "target", 40, true),
+    sha = textField(runtime.uiLocale, data, "sha256", 64, true);
+  const filename = textField(runtime.uiLocale, data, "filename", 180, true),
     format = filename.toLowerCase().split(".").pop() || "",
-    buildId = textField(data, "applicationBuildId", 200) || null;
+    buildId = textField(runtime.uiLocale, data, "applicationBuildId", 200) || null;
   if (
     !/^[a-f0-9]{64}$/.test(sha) ||
     !(
@@ -399,30 +404,30 @@ export async function registerArtifact(
       (target === "android-universal" && format === "apk")
     )
   )
-    throw new HttpError(400, "平台、文件格式或摘要不正确");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.package.error.metadata"), undefined, "admin.package.error.metadata");
   if (
     resource.slug === "windy-translator" &&
     (target !== "windows-x64" || format !== "zip" || !buildId || !/^windy:[A-Za-z0-9:.-]{1,194}$/.test(buildId))
   )
-    throw new HttpError(400, "Windy 更新仅支持 Windows x64 ZIP");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.package.windyFormat"), undefined, "admin.package.windyFormat");
   if (resource.slug === "viprpg-android" && (target !== "android-universal" || format !== "apk" || !buildId || !/^org\.viprpg\.archive:[1-9][0-9]{0,9}$/.test(buildId) || Number(buildId.split(":")[1]) > 2100000000))
-    throw new HttpError(400, "VIPRPG Android 更新仅支持本站发布 APK");
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.package.error.androidFormat"), undefined, "admin.package.error.androidFormat");
   if (buildId) {
     const duplicate = await runtime.db.prepare(`SELECT a.id,a.sha256,a.size_bytes FROM tool_artifacts a JOIN tool_releases r ON r.id=a.release_id WHERE r.resource_id=? AND a.target=? AND a.application_build_id=? AND (a.storage_status<>'cleaned' OR r.published_at IS NOT NULL) LIMIT 1`).bind(id, target, buildId).first<{ id: string; sha256: string; size_bytes: number }>();
     if (duplicate) {
-      if (duplicate.sha256 !== sha || duplicate.size_bytes !== data.sizeBytes) throw new HttpError(409, "同一构建已登记不同文件，请上传原始安装包");
+      if (duplicate.sha256 !== sha || duplicate.size_bytes !== data.sizeBytes) throw new HttpError(409, translate(runtime.uiLocale, "admin.package.error.conflict"), undefined, "admin.package.error.conflict");
       return duplicate.id;
     }
   }
   if (["windy-translator", "viprpg-android"].includes(resource.slug)) {
     if (!releaseId) {
       releaseId = crypto.randomUUID();
-      const version = textField(data, "version", 100, true);
+      const version = textField(runtime.uiLocale, data, "version", 100, true);
       const names = new Set((await runtime.db.prepare("SELECT version_label FROM tool_releases WHERE resource_id=?").bind(id).all<{ version_label: string }>()).results.map((r) => r.version_label));
       let label = version;
       let suffix = 1;
       while (names.has(label)) label = `${version.slice(0, 70)} (${new Date().toISOString().slice(0, 10)}${suffix++ > 1 ? `-${suffix - 1}` : ""})`;
-      statements.push(runtime.db.prepare("INSERT INTO tool_releases(id,resource_id,version_label,notes) VALUES(?,?,?,?)").bind(releaseId, id, label, textField(data, "notes", 30000)));
+      statements.push(runtime.db.prepare("INSERT INTO tool_releases(id,resource_id,version_label,notes) VALUES(?,?,?,?)").bind(releaseId, id, label, textField(runtime.uiLocale, data, "notes", 30000)));
     }
   }
   if (
@@ -433,14 +438,14 @@ export async function registerArtifact(
     /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(filename) ||
     !filename.toLowerCase().endsWith(`.${format}`)
   )
-    throw new HttpError(400, "文件名不安全或与格式不符");
-  const size = integer(data.sizeBytes, 1, MAX_TOOL_BYTES),
+    throw new HttpError(400, translate(runtime.uiLocale, "admin.package.error.filename"), undefined, "admin.package.error.filename");
+  const size = integer(runtime.uiLocale, data.sizeBytes, 1, MAX_TOOL_BYTES),
     artifactId = crypto.randomUUID();
   await batchMutation(
     runtime,
     actor,
     id,
-    integer(data.revision, 1),
+    integer(runtime.uiLocale, data.revision, 1),
     "artifact_register",
     [
       ...statements,

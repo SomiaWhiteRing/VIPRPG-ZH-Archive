@@ -11,7 +11,7 @@ export async function GET(runtime: AppRuntime, request: Request) {
     try {
       sha256 = normalizeSha256(params.get("sha256") ?? "");
     } catch {
-      throw new HttpError(400, "素材哈希不合法");
+      throw new HttpError(400, "素材哈希不合法", undefined, "material.error.hash");
     }
     const cursor = params.get("before");
     const before = cursor === null ? undefined : parsePositiveId(cursor, "cursor", "分页位置不合法");

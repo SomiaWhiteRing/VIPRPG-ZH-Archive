@@ -1,3 +1,4 @@
+import { useMessages } from "@/lib/i18n/react";
 import { Button } from "@/app/components/ui/button";
 import * as Popover from "@/app/components/ui/popover";
 import { isAndroidClient } from "@/lib/browser/client-environment";
@@ -20,13 +21,14 @@ const subscribeDesktop = (onChange: () => void) => {
 };
 
 export function ResourceDownload({ resource }: { resource: PublicResource }) {
+  const t = useMessages();
   const target = useSyncExternalStore(subscribe, browserTarget, serverTarget);
   const desktop = useSyncExternalStore(subscribeDesktop, browserDesktop, serverDesktop);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const current = resource.downloads.find((download) => download.target === target)
     ?? resource.downloads.find((download) => download.target === "windows-x64")
     ?? resource.downloads[0];
-  if (!current) return <span className="text-sm text-muted">暂未提供下载</span>;
+  if (!current) return <span className="text-sm text-muted">{t("resources.noDownload")}</span>;
 
   const alternatives = resource.downloads.filter((download) => download.id !== current.id);
   const android = resource.downloads.find((download) => download.target === "android-universal");
@@ -34,9 +36,12 @@ export function ResourceDownload({ resource }: { resource: PublicResource }) {
     ? new URL(`/api/tool-artifacts/${android.id}/download`, window.location.origin).href
     : null;
   const expandable = alternatives.length > 0 || qrUrl !== null;
-  const label = (target: ResourceTarget) => target === "windows-x64"
-    ? resource.windows_button_label
-    : resource.android_button_label;
+  const label = (target: ResourceTarget) => {
+    if (target === "windows-x64") {
+      return resource.windows_button_label === "下载 Windows 版" ? t("resources.windows") : resource.windows_button_label;
+    }
+    return resource.android_button_label === "下载 Android 版" ? t("resources.android") : resource.android_button_label;
+  };
 
   return (
     <div className="inline-flex items-stretch">
@@ -58,14 +63,14 @@ export function ResourceDownload({ resource }: { resource: PublicResource }) {
               type="button"
               size="sm"
               className="min-h-10 rounded-l-none border-l border-primary-foreground/30 px-2 sm:min-h-9 [&[data-state=open]>svg]:rotate-180"
-              aria-label={`${resource.name} 下载方式`}
+              aria-label={t("resources.options", { name: resource.name })}
             >
               <ChevronDown aria-hidden="true" />
             </Button>
           </Popover.Trigger>
           <Popover.Portal anchorRef={triggerRef}>
             <Popover.Content
-              aria-label={`${resource.name} 下载方式`}
+              aria-label={t("resources.options", { name: resource.name })}
               align="end"
               sideOffset={4}
               collisionPadding={16}
@@ -93,10 +98,10 @@ export function ResourceDownload({ resource }: { resource: PublicResource }) {
                     marginSize={4}
                     bgColor="#ffffff"
                     fgColor="#000000"
-                    title={`${resource.name} Android 下载二维码`}
+                    title={t("resources.qr", { name: resource.name })}
                     className="mx-auto size-40 max-w-full"
                   />
-                  <p className="mt-2 text-center text-sm text-muted">手机扫码下载</p>
+                  <p className="mt-2 text-center text-sm text-muted">{t("resources.scan")}</p>
                 </div>
               ) : null}
             </Popover.Content>

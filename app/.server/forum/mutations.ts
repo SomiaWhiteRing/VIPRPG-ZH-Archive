@@ -1,3 +1,5 @@
+import { translate } from "@/lib/i18n/core";
+import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 import { mentionNotificationStatements, validateMentions } from "@/app/.server/mentions";
 import { assertInteractionAllowed, interactionRestrictedSql } from "@/app/.server/db/interaction-restrictions";
 import { validateBodyEmojis } from "@/app/.server/emojis/service";
@@ -36,15 +38,16 @@ const publicTopicSql =
 const rateSql = `((SELECT COUNT(*) FROM forum_posts WHERE user_id=? AND created_at>=datetime('now','-1 minute'))+
   (SELECT COUNT(*) FROM forum_post_comments WHERE user_id=? AND created_at>=datetime('now','-1 minute'))+
   (SELECT COUNT(*) FROM forum_content_reports WHERE user_id=? AND created_at>=datetime('now','-1 minute'))) < ${FORUM_WRITES_PER_MINUTE}`;
-export function forumText(value: unknown, max: number, label: string): string {
+export function forumText(value: unknown, max: number, label: string, errorMessage?: string): string {
   if (typeof value !== "string" || !value.trim() || (label === "正文" ? forumBodyLength(value.trim()) : value.trim().length) > max)
-    throw new HttpError(400, `${label}需要 1–${max} 个字符。`);
+    throw new HttpError(400, errorMessage ?? `${label}需要 1–${max} 个字符。`);
   return value.trim().replace(/\r\n?/g, "\n");
 }
 function mixedBody(
   value: unknown,
   images: string[],
   kind: "topic" | "post" | "comment",
+  locale: UiLocale,
 ) {
   const limit =
     kind === "topic"
@@ -52,19 +55,19 @@ function mixedBody(
       : kind === "post"
         ? FORUM_POST_BODY_LENGTH
         : FORUM_COMMENT_LENGTH;
-  if (!images.length) return forumText(value, limit, "正文");
+  if (!images.length) return forumText(value, limit, "正文", translate(locale, "forum.write.bodyLength", { max: limit }));
   if (typeof value !== "string" || forumBodyLength(value) > limit || value.includes("\r"))
-    throw new HttpError(400, "正文长度或换行格式无效。");
+    throw new HttpError(400, translate(locale, "forum.write.bodyFormat"));
   return value;
 }
-function elementGuard(body: string, kind: ForumTarget["kind"], actor: ArchiveUser) {
+function elementGuard(body: string, kind: ForumTarget["kind"], actor: ArchiveUser, locale: UiLocale) {
   const elements = [...body.matchAll(FORUM_ELEMENT_PATTERN)];
   if (body.replace(FORUM_ELEMENT_PATTERN, "").includes(":html_") ||
     elements.length > FORUM_ELEMENT_COUNT || elements.some((match) => readForumElement(match[0]) === null))
-    throw new HttpError(400, "浏览器元素格式无效，每帖最多 5 个，每个源码最多 12000 个字符。");
+    throw new HttpError(400, translate(locale, "forum.write.elementsFormat"));
   if (!elements.length) return { sql: "1", args: [] as Bind[] };
-  if (kind === "comment") throw new HttpError(400, "楼内回复不支持浏览器元素。");
-  if (!canInsertForumElements(actor)) throw new HttpError(403, "只有超级管理员可以保存浏览器元素。");
+  if (kind === "comment") throw new HttpError(400, translate(locale, "forum.write.commentElements"));
+  if (!canInsertForumElements(actor)) throw new HttpError(403, translate(locale, "forum.write.elementPermission"));
   // Recheck the root role in the guarded write, so a stale auth snapshot cannot
   // add executable content after role revocation.
   return {
@@ -72,41 +75,41 @@ function elementGuard(body: string, kind: ForumTarget["kind"], actor: ArchiveUse
     args: [actor.id] as Bind[],
   };
 }
-function contentGuard(images: string[], actor: ArchiveUser, body: string, kind: ForumTarget["kind"], postId = 0) {
+function contentGuard(images: string[], actor: ArchiveUser, body: string, kind: ForumTarget["kind"], locale: UiLocale, postId = 0) {
   const attachments = imageGuard(images, actor.id, postId);
-  const elements = elementGuard(body, kind, actor);
+  const elements = elementGuard(body, kind, actor, locale);
   return { sql: `(${attachments.sql}) AND (${elements.sql})`, args: [...attachments.args, ...elements.args] };
 }
-function id(value: unknown): number {
+function id(value: unknown, locale: UiLocale = DEFAULT_UI_LOCALE): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1)
-    throw new HttpError(400, "目标无效。");
+    throw new HttpError(400, translate(locale, "forum.write.target"));
   return value;
 }
-export function forumTarget(value: unknown): ForumTarget {
+export function forumTarget(value: unknown, locale: UiLocale = DEFAULT_UI_LOCALE): ForumTarget {
   if (!value || typeof value !== "object")
-    throw new HttpError(400, "目标无效。");
+    throw new HttpError(400, translate(locale, "forum.write.target"));
   const item = value as Record<string, unknown>;
   if (item.kind !== "topic" && item.kind !== "post" && item.kind !== "comment")
-    throw new HttpError(400, "目标类型无效。");
-  return { kind: item.kind, id: id(item.id) };
+    throw new HttpError(400, translate(locale, "forum.write.targetKind"));
+  return { kind: item.kind, id: id(item.id, locale) };
 }
-export function conflict(): never {
+export function conflict(locale: UiLocale = DEFAULT_UI_LOCALE): never {
   throw new HttpError(
     409,
-    "内容或权限已变化。请保留输入，重新载入当前版本后确认。",
+    translate(locale, "admin.discussions.revisionConflict"),
     "forum_conflict",
   );
 }
-export function checkPermission(actor: ArchiveUser, permission: PermissionKey) {
+export function checkPermission(actor: ArchiveUser, permission: PermissionKey, locale: UiLocale = DEFAULT_UI_LOCALE) {
   if (!hasPermission(actor, permission))
-    throw new HttpError(403, "没有此操作权限。");
+    throw new HttpError(403, translate(locale, "admin.discussions.permissionDenied"));
 }
-async function requestIdentity(input: Record<string, unknown>) {
+async function requestIdentity(input: Record<string, unknown>, locale: UiLocale) {
   if (
     typeof input.requestKey !== "string" ||
     !/^[a-zA-Z0-9-]{16,100}$/.test(input.requestKey)
   )
-    throw new HttpError(400, "提交标识无效。");
+    throw new HttpError(400, translate(locale, "forum.write.requestKey"));
   const data = new TextEncoder().encode(JSON.stringify(input));
   const hash = await sha256Hex(data);
   return { key: input.requestKey, hash };
@@ -121,13 +124,14 @@ async function prepareTags(
   ctx: ForumRuntime,
   value: unknown,
   topicId?: number,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ): Promise<TagsInput> {
   if (!Array.isArray(value) || value.length > 5)
-    throw new HttpError(400, "每个主题最多使用 5 个 TAG。");
+    throw new HttpError(400, translate(locale, "forum.write.tagLimit"));
   const tags: TagsInput = [];
   for (const raw of value) {
-    if (typeof raw !== "string") throw new HttpError(400, "TAG 无效。");
-    const error = forumTagError(raw);
+    if (typeof raw !== "string") throw new HttpError(400, translate(locale, "admin.discussions.invalidTag"));
+    const error = forumTagError(raw, locale);
     if (error) throw new HttpError(400, error);
     const name = normalizeForumTag(raw),
       key = forumTagKey(name);
@@ -150,7 +154,7 @@ async function prepareTags(
     )
       throw new HttpError(
         400,
-        "此 TAG 当前不可选用。",
+        translate(locale, "forum.write.tagUnavailable"),
         "forum_tag_unavailable",
       );
     tags.push({
@@ -280,12 +284,13 @@ export async function publishForum(
   ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ) {
-  checkPermission(actor, "forum.use");
-  const identity = await requestIdentity(input);
+  checkPermission(actor, "forum.use", locale);
+  const identity = await requestIdentity(input, locale);
   const kind = input.kind;
   if (kind !== "topic" && kind !== "post" && kind !== "comment")
-    throw new HttpError(400, "发布类型无效。");
+    throw new HttpError(400, translate(locale, "forum.write.publishKind"));
   const table =
     kind === "topic"
       ? "forum_topics"
@@ -302,25 +307,25 @@ export async function publishForum(
       request_hash: string;
     }>();
   if (existing) {
-    if (existing.request_hash !== identity.hash) conflict();
+    if (existing.request_hash !== identity.hash) conflict(locale);
     return { target: { kind, id: existing.id } as ForumTarget };
   }
   const count = await ctx.db
     .prepare(`SELECT ${rateSql} AS allowed`)
     .bind(actor.id, actor.id, actor.id)
     .first<{ allowed: number }>();
-  if (!count?.allowed) throw new HttpError(429, "操作过于频繁，请稍后再试。");
-  const images = imageIds(input.images, kind === "comment");
-  const body = mixedBody(input.body, images, kind);
-  const attachments = contentGuard(images, actor, body, kind);
+  if (!count?.allowed) throw new HttpError(429, translate(locale, "forum.write.rate"));
+  const images = imageIds(input.images, kind === "comment", locale);
+  const body = mixedBody(input.body, images, kind, locale);
+  const attachments = contentGuard(images, actor, body, kind, locale);
   await validateBodyEmojis(ctx.db, body);
   await validateMentions(ctx.db, actor.id, body);
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
   const token = crypto.randomUUID(),
     db = ctx.db;
   if (kind === "topic") {
-    const title = forumText(input.title, FORUM_TITLE_LENGTH, "标题"),
-      tags = await prepareTags(ctx, input.tags ?? []),
+    const title = forumText(input.title, FORUM_TITLE_LENGTH, "标题", translate(locale, "forum.write.titleLength", { max: FORUM_TITLE_LENGTH })),
+      tags = await prepareTags(ctx, input.tags ?? [], undefined, locale),
       tagGuard = tagsPredicate(tags);
     const gate =
       "EXISTS(SELECT 1 FROM forum_topics WHERE user_id=? AND request_key=? AND write_token=?)";
@@ -398,7 +403,7 @@ export async function publishForum(
         .first<{ id: number; request_hash: string }>();
       if (retry?.request_hash === identity.hash)
         return { target: { kind, id: retry.id } as ForumTarget };
-      conflict();
+      conflict(locale);
     }
     return { target: { kind, id: found.id } as ForumTarget };
   }
@@ -410,9 +415,9 @@ export async function publishForum(
   );
   currentPublic(parent);
   if (kind === "comment" && parent.post_number === 1)
-    throw new HttpError(400, "主楼不支持楼中楼回复，请回复主题。");
+    throw new HttpError(400, translate(locale, "forum.write.rootReply"));
   const topic = await rawTopic(ctx, parent.topic_id);
-  if (topic.locked) throw new HttpError(409, "主题已锁定，不能继续回复。");
+  if (topic.locked) throw new HttpError(409, translate(locale, "forum.lockedReply"));
   const targetId = input.replyToId == null ? null : id(input.replyToId);
   let recipientId = kind === "post" ? topic.user_id : parent.user_id;
   if (kind === "comment" && targetId) {
@@ -421,7 +426,7 @@ export async function publishForum(
       id: targetId,
     });
     if (!target.public || target.post_id !== parent.id)
-      throw new HttpError(409, "回复目标已不可用。", "forum_reply_target");
+      throw new HttpError(409, translate(locale, "forum.write.replyTarget"), "forum_reply_target");
     recipientId = target.user_id;
   }
   await assertInteractionAllowed(db, recipientId, actor.id, "reply");
@@ -512,7 +517,7 @@ export async function publishForum(
     )
     .bind(actor.id, identity.key)
     .first<{ id: number; request_hash: string }>();
-  if (!result || result.request_hash !== identity.hash) conflict();
+  if (!result || result.request_hash !== identity.hash) conflict(locale);
   return { target: { kind, id: result.id } as ForumTarget };
 }
 
@@ -520,29 +525,30 @@ export async function editForum(
   ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ) {
-  checkPermission(actor, "forum.use");
-  let target = forumTarget(input.target);
+  checkPermission(actor, "forum.use", locale);
+  let target = forumTarget(input.target, locale);
   const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);
   currentPublic(row);
   const topic = await rawTopic(ctx, row.topic_id);
   if (actor.id !== row.user_id)
-    throw new HttpError(403, "只能编辑自己的内容。");
-  if (topic.locked) throw new HttpError(409, "主题已锁定，不能编辑。");
-  const images = imageIds(input.images, target.kind === "comment");
-  const body = mixedBody(input.body, images, target.kind);
-  const attachments = contentGuard(images, actor, body, target.kind, row.id);
+    throw new HttpError(403, translate(locale, "forum.write.editOwn"));
+  if (topic.locked) throw new HttpError(409, translate(locale, "forum.write.editLocked"));
+  const images = imageIds(input.images, target.kind === "comment", locale);
+  const body = mixedBody(input.body, images, target.kind, locale);
+  const attachments = contentGuard(images, actor, body, target.kind, locale, row.id);
   await validateBodyEmojis(ctx.db, body, row.body ?? "");
   await validateMentions(ctx.db, actor.id, body, row.body ?? "");
   const offsets = imageOffsets(input.imageOffsets ?? [], images, body);
   const title =
     target.kind === "topic"
-      ? forumText(input.title, FORUM_TITLE_LENGTH, "标题")
+      ? forumText(input.title, FORUM_TITLE_LENGTH, "标题", translate(locale, "forum.write.titleLength", { max: FORUM_TITLE_LENGTH }))
       : null;
   const tags =
     target.kind === "topic" && input.tagsChanged === true
-      ? await prepareTags(ctx, input.tags, topic.id)
+      ? await prepareTags(ctx, input.tags, topic.id, locale)
       : null;
   const tagGuard = tags ? tagsPredicate(tags) : { sql: "1", args: [] };
   const token = crypto.randomUUID(),
@@ -591,23 +597,24 @@ export async function editForum(
     source: "owned", operation: "edit", context: { topicId: topic.id, target },
   });
   if (!result[0].meta.changes)
-    throw new HttpError(409, "当前内容、权限或附件状态已变化，无法保存。请保留输入后重试。");
+    throw new HttpError(409, translate(locale, "forum.write.editConflict"));
   return { target };
 }
 export async function deleteForum(
   ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ) {
-  checkPermission(actor, "forum.use");
-  let target = forumTarget(input.target);
+  checkPermission(actor, "forum.use", locale);
+  let target = forumTarget(input.target, locale);
   const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);
   currentPublic(row);
   if (row.user_id !== actor.id)
-    throw new HttpError(403, "只能删除自己的内容。");
+    throw new HttpError(403, translate(locale, "forum.write.deleteOwn"));
   const topic = await rawTopic(ctx, row.topic_id);
-  if (input.topicRevision !== topic.revision) conflict();
+  if (input.topicRevision !== topic.revision) conflict(locale);
   if (
     target.kind === "topic" &&
     (await ctx.db
@@ -617,7 +624,7 @@ export async function deleteForum(
       .bind(topic.id, topic.id)
       .first())
   )
-    throw new HttpError(409, "主题已有回复，请请求管理人员处理。");
+    throw new HttpError(409, translate(locale, "forum.write.deleteReplies"));
   const token = crypto.randomUUID(),
     gate = topicGate(topic.id, token),
     table = target.kind === "comment" ? "forum_post_comments" : "forum_posts";
@@ -658,24 +665,25 @@ export async function deleteForum(
     snapshot: forumEditAuditSnapshot(target), permission: "forum.use", authorizationBasis: "content_author",
     source: "owned", operation: "delete", context: { topicId: topic.id, target },
   });
-  if (!result[0].meta.changes) conflict();
+  if (!result[0].meta.changes) conflict(locale);
 }
 export async function likeForum(
   ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ) {
-  checkPermission(actor, "forum.use");
+  checkPermission(actor, "forum.use", locale);
   // Preserve the published postId input; new callers can identify a nested reply.
   const target = input.target === undefined
     ? { kind: "post" as const, id: id(input.postId) }
-    : forumTarget(input.target);
-  if (target.kind === "topic") throw new HttpError(400, "点赞目标无效。");
+    : forumTarget(input.target, locale);
+  if (target.kind === "topic") throw new HttpError(400, translate(locale, "forum.write.likeTarget"));
   const table = target.kind === "comment" ? "forum_comment_likes" : "forum_post_likes";
   const column = target.kind === "comment" ? "comment_id" : "post_id";
   const visible = target.kind === "comment" ? "forum_public_comments" : "forum_public_posts";
   if (typeof input.liked !== "boolean")
-    throw new HttpError(400, "点赞状态无效。");
+    throw new HttpError(400, translate(locale, "forum.write.likeState"));
   const row = await ctx.db.prepare(`SELECT
     (? AND ${interactionRestrictedSql("p.user_id", "?", "like")} AND NOT EXISTS(
       SELECT 1 FROM ${table} WHERE ${column}=p.id AND user_id=?)) AS restricted
@@ -715,9 +723,10 @@ export async function reportForum(
   ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ) {
-  checkPermission(actor, "forum.use");
-  let target = forumTarget(input.target);
+  checkPermission(actor, "forum.use", locale);
+  let target = forumTarget(input.target, locale);
   const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);
   currentPublic(row);
@@ -733,11 +742,11 @@ export async function reportForum(
       input.reason as (typeof FORUM_REPORT_REASONS)[number],
     )
   )
-    throw new HttpError(400, "请选择举报原因。");
+    throw new HttpError(400, translate(locale, "forum.write.reportReason"));
   const explanation =
     typeof input.explanation === "string" ? input.explanation.trim() : "";
   if (explanation.length > 2000 || (input.reason === "其他" && !explanation))
-    throw new HttpError(400, "请填写 1–2000 个字符的说明。");
+    throw new HttpError(400, translate(locale, "forum.write.reportLength"));
   const view =
     target.kind === "comment" ? "forum_public_comments" : "forum_public_posts";
   await ctx.db
@@ -768,7 +777,7 @@ export async function reportForum(
     .bind(actor.id, target.kind, target.id)
     .first<{ id: number }>();
   if (!found)
-    throw new HttpError(429, "提交未完成，请确认目标仍可用后稍后重试。");
+    throw new HttpError(429, translate(locale, "forum.write.reportRetry"));
   return found;
 }
 
@@ -776,8 +785,9 @@ export async function moderateForum(
   ctx: ForumRuntime,
   actor: ArchiveUser,
   input: Record<string, unknown>,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ) {
-  let target = forumTarget(input.target);
+  let target = forumTarget(input.target, locale);
   const row = await contentIdentity(ctx, target);
   target = normalizeTarget(target, row);
   const action = input.action as ForumAction | "none";
@@ -797,7 +807,7 @@ export async function moderateForum(
       "none",
     ].includes(action)
   )
-    throw new HttpError(400, "管理动作无效。");
+    throw new HttpError(400, translate(locale, "admin.discussions.invalidAction"));
   const sageAction = action === "sage" || action === "unsage";
   const curation = action === "feature" || action === "unfeature" || action === "tags";
   const permission: PermissionKey = sageAction
@@ -806,22 +816,22 @@ export async function moderateForum(
       ? "forum.topic.feature_any"
       : "forum.content.moderate_any";
   const publicOnly = sageAction || curation || action === "pin" || action === "unpin";
-  checkPermission(actor, permission);
+  checkPermission(actor, permission, locale);
   const topic = await rawTopic(ctx, row.topic_id);
-  if (input.topicRevision !== topic.revision) conflict();
-  const reason = forumText(input.reason, 1000, "原因");
+  if (input.topicRevision !== topic.revision) conflict(locale);
+  const reason = forumText(input.reason, 1000, "原因", translate(locale, "admin.discussions.reasonLength"));
   if (action !== "none" && row.status === "deleted")
-    throw new HttpError(409, "已删除内容不能修改或恢复。");
+    throw new HttpError(409, translate(locale, "admin.discussions.deletedContent"));
   if (
     (publicOnly || action === "lock" || action === "unlock") &&
     target.kind !== "topic"
   )
-    throw new HttpError(400, "此动作只适用于主题。");
+    throw new HttpError(400, translate(locale, "admin.discussions.topicOnly"));
   if (publicOnly && !topic.public) unavailable();
   if (action === "restore" && row.status !== "hidden")
-    throw new HttpError(409, "目标未被隐藏。");
+    throw new HttpError(409, translate(locale, "admin.discussions.notHidden"));
   const tags =
-      action === "tags" ? await prepareTags(ctx, input.tags, topic.id) : null,
+      action === "tags" ? await prepareTags(ctx, input.tags, topic.id, locale) : null,
     tagGuard = tags ? tagsPredicate(tags) : { sql: "1", args: [] };
   const token = crypto.randomUUID(),
     gate = topicGate(topic.id, token),
@@ -833,7 +843,7 @@ export async function moderateForum(
     target_id: number;
   } | null = null;
   if (input.reportId != null) {
-    checkPermission(actor, "forum.content.moderate_any");
+    checkPermission(actor, "forum.content.moderate_any", locale);
     report = await db
       .prepare(
         "SELECT id,status,target_kind,target_id FROM forum_content_reports WHERE id=?",
@@ -846,10 +856,10 @@ export async function moderateForum(
       report.target_kind !== target.kind ||
       report.target_id !== target.id
     )
-      conflict();
+      conflict(locale);
     if (input.resolution !== "resolved" && input.resolution !== "dismissed")
-      throw new HttpError(400, "请选择处理结果。");
-  } else if (action === "none") throw new HttpError(400, "缺少管理动作。");
+      throw new HttpError(400, translate(locale, "admin.discussions.chooseResolution"));
+  } else if (action === "none") throw new HttpError(400, translate(locale, "admin.discussions.missingAction"));
   const restoreImages =
     action === "restore" && target.kind !== "comment"
       ? {
@@ -865,7 +875,7 @@ export async function moderateForum(
       .bind(...restoreImages.args)
       .first())
   )
-    throw new HttpError(409, "关联图片已进入清理，无法完整恢复内容。");
+    throw new HttpError(409, translate(locale, "admin.discussions.imageRestoreConflict"));
   const predicate: Predicate = {
     sql: `${publicOnly ? publicTopicSql : "1"} AND ${tagGuard.sql} AND ${restoreImages.sql}
     ${report ? `AND ${forumActorSql("forum.content.moderate_any")} AND EXISTS(SELECT 1 FROM forum_content_reports WHERE id=? AND status='pending')` : ""}`,

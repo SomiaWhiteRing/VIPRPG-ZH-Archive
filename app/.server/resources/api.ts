@@ -1,3 +1,4 @@
+import { translate } from "@/lib/i18n/core";
 import { readJsonObject } from "@/app/.server/http/request";
 import { json as jsonResponse, HttpError, jsonError } from "@/lib/http";
 import { Hono } from "hono";
@@ -15,11 +16,11 @@ export const resourceApi = new Hono<{
   Variables: { runtime: AppRuntime };
 }>();
 
-async function body(request: Request) {
-  return readJsonObject(request, "请求格式不正确", {
+async function body(request: Request, locale: AppRuntime["uiLocale"]) {
+  return readJsonObject(request, translate(locale, "admin.resources.error.body"), {
     maximumBytes: 256 * 1024,
     requireJsonContentType: true,
-    invalidJsonMessage: "JSON 格式不正确",
+    invalidJsonMessage: translate(locale, "admin.resources.error.json"),
   });
 }
 type Endpoint = (
@@ -35,8 +36,8 @@ function route(path: string, methods: string[], admin: boolean, run: Endpoint) {
       return new Response(null, { status: 204, headers: { Allow: allow } });
     if (!methods.includes(c.req.method))
       return new Response(null, { status: 405, headers: { Allow: allow } });
+    const runtime = c.get("runtime");
     try {
-      const runtime = c.get("runtime");
       let actor: Actor | null = null;
       if (admin) {
         const auth = await requireBootstrapAdmin(runtime, c.req.raw);
@@ -45,12 +46,12 @@ function route(path: string, methods: string[], admin: boolean, run: Endpoint) {
       }
       return await run(runtime, c.req.raw, c.req.param(), actor);
     } catch (error) {
-      return jsonError("链接操作失败", error);
+      return jsonError(translate(runtime.uiLocale, "admin.resources.error.failed"), error);
     }
   });
 }
-function root(actor: Actor | null): Actor {
-  if (!actor) throw new HttpError(403, "需要超级管理员权限");
+function root(actor: Actor | null, locale: AppRuntime["uiLocale"]): Actor {
+  if (!actor) throw new HttpError(403, translate(locale, "admin.resources.error.root"), undefined, "admin.resources.error.root");
   return actor;
 }
 route(
@@ -60,7 +61,7 @@ route(
   async (rt, req, _p, actor) => {
     if (req.method === "GET")
       return jsonResponse({ resources: await listResources(rt, true) });
-    const id = await createResource(rt, root(actor), await body(req));
+    const id = await createResource(rt, root(actor, rt.uiLocale), await body(req, rt.uiLocale));
     return jsonResponse(await getEditor(rt, id), { status: 201 });
   },
 );
@@ -76,7 +77,7 @@ route(
   true,
   async (rt, req, p, actor) => {
     if (req.method === "POST")
-      await editResource(rt, root(actor), p.id, await body(req));
+      await editResource(rt, root(actor, rt.uiLocale), p.id, await body(req, rt.uiLocale));
     return jsonResponse(await getEditor(rt, p.id));
   },
 );
@@ -88,17 +89,17 @@ route(
     if (req.method === "PUT") {
       await uploadIcon(
         rt,
-        root(actor),
+        root(actor, rt.uiLocale),
         p.id,
-        integer(Number(req.headers.get("x-resource-revision")), 1),
+        integer(rt.uiLocale, Number(req.headers.get("x-resource-revision")), 1),
         req,
       );
       return jsonResponse(await getEditor(rt, p.id));
     }
     const row = await getResource(rt, p.id);
-    if (!row.icon_blob_sha256) throw new HttpError(404, "图标不存在");
+    if (!row.icon_blob_sha256) throw new HttpError(404, translate(rt.uiLocale, "admin.resources.error.missingIcon"), undefined, "admin.resources.error.missingIcon");
     const object = await rt.bucket.get(blobKey(row.icon_blob_sha256));
-    if (!object) throw new HttpError(404, "图标不存在");
+    if (!object) throw new HttpError(404, translate(rt.uiLocale, "admin.resources.error.missingIcon"), undefined, "admin.resources.error.missingIcon");
     return new Response(req.method === "HEAD" ? null : object.body, {
       headers: {
         "Content-Type": object.httpMetadata?.contentType ?? "application/octet-stream",
@@ -115,9 +116,9 @@ route(
   async (rt, req, p, actor) => {
     const artifactId = await registerArtifact(
       rt,
-      root(actor),
+      root(actor, rt.uiLocale),
       p.id,
-      await body(req),
+      await body(req, rt.uiLocale),
     );
     return jsonResponse({ artifactId, ...(await getEditor(rt, p.id)) }, { status: 201 });
   },
@@ -131,19 +132,19 @@ route(
     if (req.method === "PUT")
       await uploadArtifact(
         rt,
-        root(actor),
+        root(actor, rt.uiLocale),
         p.id,
-        integer(Number(req.headers.get("x-resource-revision")), 1),
+        integer(rt.uiLocale, Number(req.headers.get("x-resource-revision")), 1),
         req,
       );
     else if (req.method === "POST") {
-      const data = await body(req),
-        revision = integer(data.revision, 1);
+      const data = await body(req, rt.uiLocale),
+        revision = integer(rt.uiLocale, data.revision, 1);
       if (data.action === "confirm")
-        await confirmArtifact(rt, root(actor), p.id, revision);
+        await confirmArtifact(rt, root(actor, rt.uiLocale), p.id, revision);
       else if (data.action === "cleanup")
-        await cleanupArtifact(rt, root(actor), p.id, revision);
-      else throw new HttpError(400, "未知操作");
+        await cleanupArtifact(rt, root(actor, rt.uiLocale), p.id, revision);
+      else throw new HttpError(400, "未知操作", undefined, "admin.resources.error.unknown");
     } else if (row.storage_status === "ready")
       await verifyArtifactObject(rt, row);
     return jsonResponse(await getEditor(rt, row.resource_id));

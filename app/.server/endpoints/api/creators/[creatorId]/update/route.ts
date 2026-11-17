@@ -20,11 +20,11 @@ export async function POST(
     const form = await request.formData();
     function field(name: string) {
       const value = form.get(name);
-      if (typeof value !== "string") throw new HttpError(400, "资料不完整，请重新打开编辑器");
+      if (typeof value !== "string") throw new HttpError(400, "资料不完整，请重新打开编辑器", undefined, "creator.edit.error.incomplete");
       return value;
     }
     const aliases = form.getAll("alias");
-    if (aliases.some((value) => typeof value !== "string")) throw new HttpError(400, "别名格式不正确");
+    if (aliases.some((value) => typeof value !== "string")) throw new HttpError(400, "别名格式不正确", undefined, "creator.edit.error.aliasFormat");
     const avatarBlobSha256 = await storeAvatarFromForm(runtime, form);
     let avatar;
     if (avatarBlobSha256 !== undefined) {

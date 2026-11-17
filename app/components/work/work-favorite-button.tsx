@@ -1,4 +1,7 @@
-import { requestJson } from "@/lib/ui/api-response";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { formatFeedbackError } from "@/lib/i18n/feedback";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { ApiResponseError, requestJson } from "@/lib/ui/api-response";
 
 import { Button } from "@/app/components/ui/button";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
@@ -13,7 +16,7 @@ import { MAX_FAVORITE_NOTE_LENGTH, MAX_USER_TAGS, parseFavoriteNote, parseUserTa
 import { EllipsisVertical, Heart } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useRef, useState } from "react";
-import { Link, useLocation } from "react-router";
+import { useLocation } from "react-router";
 
 
 type Props = {
@@ -44,6 +47,8 @@ function WorkFavoriteButtonContent({
   summary,
   onSaved,
 }: Props) {
+  const t = useMessages();
+  const locale = useUiLocale();
   const [favoriteState, setFavoriteState] = useState({ source: initialFavorited, favorited: initialFavorited });
   if (favoriteState.source !== initialFavorited)
     setFavoriteState({ source: initialFavorited, favorited: initialFavorited });
@@ -79,7 +84,8 @@ function WorkFavoriteButtonContent({
       setNote(result.note);
       setTagQuery("");
     } catch (error) {
-      setError(error instanceof Error ? error.message : "收藏信息加载失败，请重试。");
+      setError(error instanceof ApiResponseError ? error.messageFor(locale)
+        : error instanceof Error ? error.message : t("favorite.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -99,10 +105,10 @@ function WorkFavoriteButtonContent({
       credentials: "same-origin",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ favorited: next, tags: savedTags, note: next ? parseFavoriteNote(note) : "" }),
-    }, "收藏状态保存失败");
+    }, t("favorite.saveFailed"));
     setFavorited(result.favorited ?? next);
     setOpen(false);
-    toast.success(next ? "收藏已保存。" : "已取消收藏。");
+    toast.success(next ? t("favorite.saved") : t("favorite.removed"));
     await onSaved({ ...result, favorited: result.favorited ?? next });
   }
 
@@ -113,7 +119,7 @@ function WorkFavoriteButtonContent({
     try {
       await persistFavorite(next);
     } catch (error) {
-      setError(error instanceof Error ? error.message : "收藏状态保存失败，请稍后重试。");
+      setError(formatFeedbackError(error, locale, t("favorite.saveRetry")));
     } finally {
       setBusy(false);
     }
@@ -121,9 +127,9 @@ function WorkFavoriteButtonContent({
 
   async function removeFavorite() {
     if (!currentUserId || busy) return;
-    await confirm("这会同时移除本次收藏的标签和吐槽。", {
-      title: workTitle ? `移除“${workTitle}”？` : "移除收藏？",
-      confirmLabel: "确认移除",
+    await confirm(t("favorite.removeHint"), {
+      title: workTitle ? t("favorite.removeNamed", { title: workTitle }) : t("favorite.removeTitle"),
+      confirmLabel: t("favorite.confirmRemove"),
       destructive: true,
       action: async () => {
         setBusy(true);
@@ -135,26 +141,26 @@ function WorkFavoriteButtonContent({
   if (!currentUserId) {
     if (appearance === "compact") return (
       <Button asChild className={compactButtonClass} size="sm" variant="ghost">
-        <Link to={`/login?${new URLSearchParams({ next: `${location.pathname}${location.search}` })}`}>加入收藏</Link>
+        <Link to={`/login?${new URLSearchParams({ next: `${location.pathname}${location.search}` })}`}>{t("favorite.add")}</Link>
       </Button>
     );
-    return <p className="m-0 text-xs text-muted">登录后可以收藏作品。</p>;
+    return <p className="m-0 text-xs text-muted">{t("favorite.login")}</p>;
   }
 
   if (appearance === "remove") return (
     <Button type="button" variant="outline" size="sm" disabled={busy || !favorited} onClick={() => void removeFavorite()}>
-      {favorited ? "取消收藏" : "已取消收藏"}
+      {favorited ? t("favorite.unfavorite") : t("favorite.notSaved")}
     </Button>
   );
 
   const workSuggestions = (favorite?.workTags ?? []).filter((value) => !validateUserTag(value)).map((value) => ({ value, meta: "" }));
-  const frequentSuggestions = (favorite?.frequentTags ?? []).filter((tag) => !validateUserTag(tag.name)).map((tag) => ({ value: tag.name, meta: `${tag.workCount} 部作品` }));
+  const frequentSuggestions = (favorite?.frequentTags ?? []).filter((tag) => !validateUserTag(tag.name)).map((tag) => ({ value: tag.name, meta: t("favorite.workCount", { count: tag.workCount }) }));
   const suggestions = [...new Map([...workSuggestions, ...frequentSuggestions].map((item) => [tagNameKey(item.value), item])).values()];
   return (
     <Dialog.Root open={open} onOpenChange={changeOpen}>
       {appearance === "manage" ? (
         <FavoriteManagementActions
-          title={workTitle ?? "作品"}
+          title={workTitle ?? t("search.scopes.works")}
           dialogId={dialogId}
           disabled={busy || loading}
           editing={open}
@@ -171,7 +177,7 @@ function WorkFavoriteButtonContent({
           variant={appearance === "compact" ? "ghost" : favorited ? "default" : "outline"}
         >
           {appearance === "button" ? <Heart aria-hidden /> : null}
-          {favorited ? "已收藏" : appearance === "compact" ? "加入收藏" : "收藏"}
+          {favorited ? t("favorite.active") : appearance === "compact" ? t("favorite.add") : t("favorite.label")}
         </Button>
       </Dialog.Trigger>}
       <Dialog.Portal>
@@ -186,34 +192,37 @@ function WorkFavoriteButtonContent({
             if (returnFocus.current?.isConnected) { event.preventDefault(); returnFocus.current.focus(); }
           }}
         >
-          <Dialog.Title>{favorited ? "编辑收藏" : "收藏作品"}</Dialog.Title>
-          {loading ? <p role="status" className="text-sm text-muted">正在加载收藏…</p> : null}
+          <Dialog.Title>{favorited ? t("favorite.edit") : t("favorite.dialog")}</Dialog.Title>
+          {loading ? <p role="status" className="text-sm text-muted">{t("favorite.loading")}</p> : null}
           {error ? <Notice tone="error">{error}</Notice> : null}
           {favorite ? (
             <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void saveFavorite(true); }}>
-              <FormField label="标签" controlId={`favorite-tags-${workId}`}>
+              <FormField label={t("library.tags")} controlId={`favorite-tags-${workId}`}>
                 <TokenPicker
                   disabled={busy}
                   id={`favorite-tags-${workId}`}
-                  label="标签"
-                  placeholder="作品在收藏中的标签"
+                  label={t("library.tags")}
+                  placeholder={t("favorite.tagPlaceholder")}
                   suggestions={suggestions}
                   recommendationGroups={[
-                    { label: "常用标签", items: workSuggestions },
-                    { label: "我的标签", items: frequentSuggestions },
+                    { label: t("favorite.commonTags"), items: workSuggestions },
+                    { label: t("favorite.myTags"), items: frequentSuggestions },
                   ]}
                   includeSelectedRecommendations
                   values={tags}
                   onChange={setTags}
                   onQueryChange={setTagQuery}
                   normalizeValue={normalizeEntityName}
-                  validateValue={validateUserTag}
+                  validateValue={(value) => {
+                    const error = validateUserTag(value);
+                    return error ? t(error) : null;
+                  }}
                   maxValues={MAX_USER_TAGS}
                   commitOnBlur
                   showHelp={false}
                 />
               </FormField>
-              <FormField label="吐槽" controlId={`favorite-note-${workId}`}>
+              <FormField label={t("favorite.note")} controlId={`favorite-note-${workId}`}>
                 <Textarea
                   id={`favorite-note-${workId}`}
                   aria-describedby={showRemaining ? `favorite-note-${workId}-remaining` : undefined}
@@ -226,25 +235,25 @@ function WorkFavoriteButtonContent({
                 />
               </FormField>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                {favorited ? <Button className="mr-auto text-destructive hover:text-destructive" disabled={busy} type="button" variant="ghost" onClick={() => void removeFavorite()}>移除收藏</Button> : null}
-                <Dialog.Close asChild><Button disabled={busy} type="button" variant="outline">取消</Button></Dialog.Close>
+                {favorited ? <Button className="mr-auto text-destructive hover:text-destructive" disabled={busy} type="button" variant="ghost" onClick={() => void removeFavorite()}>{t("favorite.remove")}</Button> : null}
+                <Dialog.Close asChild><Button disabled={busy} type="button" variant="outline">{t("relation.edit.cancel")}</Button></Dialog.Close>
                 {showRemaining ? (
                   <span
                     id={`favorite-note-${workId}-remaining`}
                     className={`font-mono text-sm tabular-nums ${remaining < 0 ? "text-destructive" : "text-muted"}`}
                     role="status"
                   >
-                    <span className="sr-only">{remaining < 0 ? `超出上限 ${-remaining} 字` : `还可输入 ${remaining} 字`}</span>
+                    <span className="sr-only">{remaining < 0 ? t("favorite.exceeded", { count: -remaining }) : t("favorite.remaining", { count: remaining })}</span>
                     <span aria-hidden="true">{remaining}</span>
                   </span>
                 ) : null}
-                <Button disabled={busy || remaining < 0} type="submit">{busy ? "保存中…" : "保存"}</Button>
+                <Button disabled={busy || remaining < 0} type="submit">{busy ? t("favorite.saving") : t("core.action.save")}</Button>
               </div>
             </form>
           ) : (
             <div className="flex justify-end gap-2">
-              <Dialog.Close asChild><Button type="button" variant="outline">关闭</Button></Dialog.Close>
-              {!loading ? <Button type="button" onClick={() => void loadFavorite()}>重试</Button> : null}
+              <Dialog.Close asChild><Button type="button" variant="outline">{t("core.action.close")}</Button></Dialog.Close>
+              {!loading ? <Button type="button" onClick={() => void loadFavorite()}>{t("core.action.retry")}</Button> : null}
             </div>
           )}
         </Dialog.Content>
@@ -263,6 +272,7 @@ function FavoriteManagementActions({ title, dialogId, disabled, editing, onEdit,
   onEdit: (returnFocus: HTMLElement) => void;
   onRemove: () => void;
 }) {
+  const t = useMessages();
   const menuTrigger = useRef<HTMLButtonElement>(null);
   const openingDialog = useRef(false);
   const menuItemClass = "flex min-h-9 w-full cursor-pointer items-center rounded-sm px-2.5 py-2 text-sm outline-none focus:bg-muted/15 data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
@@ -273,24 +283,24 @@ function FavoriteManagementActions({ title, dialogId, disabled, editing, onEdit,
           aria-controls={dialogId}
           aria-expanded={editing}
           aria-haspopup="dialog"
-          aria-label={`编辑收藏：${title}`}
+          aria-label={t("favorite.editNamed", { title })}
           className="h-7 min-h-7 rounded-none px-2.5 text-xs shadow-none focus-visible:ring-inset focus-visible:ring-offset-0"
           disabled={disabled}
           onClick={(event) => onEdit(event.currentTarget)}
           size="sm" type="button" variant="ghost"
-        >编辑</Button>
+        >{t("core.action.edit")}</Button>
         <Button
           aria-haspopup="dialog"
-          aria-label={`从收藏移除：${title}`}
+          aria-label={t("favorite.removeFromNamed", { title })}
           className="h-7 min-h-7 rounded-none px-2.5 text-xs text-destructive shadow-none hover:text-destructive focus-visible:ring-inset focus-visible:ring-offset-0"
           disabled={disabled}
           onClick={onRemove}
           size="sm" type="button" variant="ghost"
-        >移除</Button>
+        >{t("core.action.remove")}</Button>
       </div>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <Button ref={menuTrigger} aria-label={`管理收藏：${title}`} className="size-8 rounded-full bg-card sm:hidden" disabled={disabled} size="icon" type="button" variant="ghost">
+          <Button ref={menuTrigger} aria-label={t("favorite.manageNamed", { title })} className="size-8 rounded-full bg-card sm:hidden" disabled={disabled} size="icon" type="button" variant="ghost">
             <EllipsisVertical aria-hidden />
           </Button>
         </DropdownMenu.Trigger>
@@ -301,12 +311,12 @@ function FavoriteManagementActions({ title, dialogId, disabled, editing, onEdit,
           >
             <DropdownMenu.Item aria-controls={dialogId} aria-haspopup="dialog" className={menuItemClass} disabled={disabled} onSelect={() => {
               if (menuTrigger.current) { openingDialog.current = true; onEdit(menuTrigger.current); }
-            }}>编辑收藏</DropdownMenu.Item>
+            }}>{t("favorite.edit")}</DropdownMenu.Item>
             <DropdownMenu.Item aria-haspopup="dialog" className={`${menuItemClass} text-destructive focus:text-destructive`} disabled={disabled} onSelect={() => {
               openingDialog.current = true;
               menuTrigger.current?.focus();
               onRemove();
-            }}>移除</DropdownMenu.Item>
+            }}>{t("core.action.remove")}</DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>

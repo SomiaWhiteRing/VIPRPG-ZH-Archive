@@ -7,6 +7,7 @@ import { formatBytes } from "@/lib/format";
 import { Download, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/app/components/ui/toast";
+import { useMessages } from "@/lib/i18n/react";
 
 async function coverPreview(hash: string | null): Promise<string | undefined> {
   if (!hash) return;
@@ -27,6 +28,7 @@ async function coverPreview(hash: string | null): Promise<string | undefined> {
 }
 
 export function LocalInstallButton({ id, bytes, title, workId, coverBlobSha256 }: { id: number; bytes: number; title: string; workId: number; coverBlobSha256: string | null }) {
+  const t = useMessages();
   const toast = useToast();
   const [native, setNative] = useState(false);
   const [status, setStatus] = useState("");
@@ -53,9 +55,9 @@ export function LocalInstallButton({ id, bytes, title, workId, coverBlobSha256 }
     onClick={native ? () => {
       setBusy(true);
       void (status === "ready" || queued ? localRequest("open", status === "ready" ? { archiveVersionId: id } : {}) : coverPreview(coverBlobSha256).then(coverDataUrl => localRequest<{ status: string }>("install", { archiveVersionId: id, title, workId, coverBlobSha256, coverDataUrl })).then(task => setStatus(task.status)))
-        .catch(error => toast.error(error instanceof Error ? error.message : "无法创建安装任务。"))
+        .catch(error => toast.error(error instanceof Error ? error : t("work.localInstall.failed")))
         .finally(() => setBusy(false));
     } : undefined}>
-    {!native ? "在线游玩" : status === "ready" ? "启动游戏" : queued ? "查看下载进度" : <>安装到本地 <span className="text-xs text-white">{formatBytes(bytes)}</span></>}
+    {!native ? t("work.play") : status === "ready" ? t("play.install.startGame") : queued ? t("work.localInstall.progress") : <>{t("work.localInstall.install")} <span className="text-xs text-white">{formatBytes(bytes)}</span></>}
   </Rm2kButton>;
 }

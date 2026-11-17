@@ -15,15 +15,18 @@ import { TableWrap } from "@/app/components/ui/table-wrap";
 import { useToast } from "@/app/components/ui/toast";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
 import { useRouteRefresh } from "@/app/components/use-route-refresh";
-import { hasPermission, isPermissionKey, PERMISSION_LIST, PERMISSIONS } from "@/lib/authz/permissions";
+import { hasPermission, isPermissionKey, PERMISSION_LIST } from "@/lib/authz/permissions";
 import type { AdminUserAccessUpdate } from "@/lib/dto/db/users";
 import { formatDate } from "@/lib/format";
 import { requestJson } from "@/lib/ui/api-response";
-import { pageMetaDescriptors } from "@/lib/ui/page-metadata";
+import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { BadgeCheck, ChevronDown, ChevronUp, ShieldCheck, ShieldMinus } from "lucide-react";
 import { Fragment, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData, useRevalidator } from "react-router";
+import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+import { translate } from "@/lib/i18n/core";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { useLoaderData, useRevalidator } from "react-router";
 import { PermissionBlockControl } from "./permission-block-control";
 import { RoleAssignmentControl, roleSourceLabel } from "./role-assignment-control";
 import "./users.css";
@@ -59,13 +62,18 @@ export async function loader(args: LoaderFunctionArgs) {
     canBlockPermissions: adminUser.isBootstrapAdmin,
     query, status, sort, blocks, permission, roleId, page, result, roles,
     memberships, permissionBlocks, assignableRoles,
+    locale: runtime.uiLocale,
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, error }) =>
-  pageMetaDescriptors({ title: ["用户与角色", "控制台"], page: loaderData?.page }, error);
+export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
+  const locale = loaderData?.locale ?? pageMetadataLocale(location.search, matches);
+  return pageMetaDescriptors({ title: [translate(locale, "admin.users.title"), translate(locale, "admin.characterIndex.console")], page: loaderData?.page }, error, locale);
+};
 
 export default function AdminUsersPage() {
+  const t = useMessages();
+  const locale = useUiLocale();
   const { data, refresh } = useRouteRefresh(useLoaderData<typeof loader>());
   const revalidator = useRevalidator();
   const toast = useToast();
@@ -115,9 +123,9 @@ export default function AdminUsersPage() {
         method: "POST", headers: { Accept: "application/json" }, body,
       });
       await refresh();
-      toast.success(nextStatus === "active" ? "账户已启用。" : "账户已禁用。");
+      toast.success(nextStatus === "active" ? t("admin.users.enabled") : t("admin.users.disabledDone"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "账户状态更新失败");
+      toast.error(error instanceof Error ? error : t("admin.users.updateFailed"));
     } finally {
       setUserSaving(userId, false);
     }
@@ -127,62 +135,62 @@ export default function AdminUsersPage() {
     <main className="admin-users-page">
       <PageHeader
         compact
-        eyebrow="用户权限 / 用户"
-        title="用户与角色"
-        subtitle="管理账户状态以及当前管理员有权分配的角色。"
-        actions={<span className="inline-flex items-center gap-1.5 text-xs text-muted"><ShieldCheck className="size-4" aria-hidden />当前可管理范围</span>}
+        eyebrow={`${t("admin.nav.userPermissions")} / ${t("admin.nav.users")}`}
+        title={t("admin.users.title")}
+        subtitle={t("admin.users.subtitle")}
+        actions={<span className="inline-flex items-center gap-1.5 text-xs text-muted"><ShieldCheck className="size-4" aria-hidden />{t("admin.users.scope")}</span>}
       />
       <AdminListControls
         key={JSON.stringify([query, status, sort, roleId, permission, blocks])}
         action="/admin/users"
         query={query}
-        searchLabel="搜索用户"
-        searchPlaceholder="名称、邮箱、外部认证 ID 或用户 ID"
+        searchLabel={t("admin.users.search")}
+        searchPlaceholder={t("admin.users.hint")}
         status={status}
-        statusLabel="账户状态"
+        statusLabel={t("admin.users.status")}
         statusOptions={[
-          { value: "all", label: "全部状态" }, { value: "active", label: "正常" },
-          { value: "disabled", label: "已禁用" }, { value: "deleted", label: "已注销" },
+          { value: "all", label: t("admin.works.all") }, { value: "active", label: t("admin.users.normal") },
+          { value: "disabled", label: t("admin.users.disabled") }, { value: "deleted", label: t("admin.users.deleted") },
         ]}
         sort={sort}
         sortOptions={[
-          { value: "default", label: "最近注册" }, { value: "oldest", label: "最早注册" },
-          { value: "name", label: "显示名称" },
+          { value: "default", label: t("admin.users.recent") }, { value: "oldest", label: t("admin.users.oldest") },
+          { value: "name", label: t("admin.users.displayName") },
         ]}
         filtered={filtered}
         total={result.total}
-        noun="用户"
+        noun={t("admin.nav.users")}
         pageSize={PAGE_SIZE}
       >
         <div className="admin-filter-row">
           <div className="admin-field">
-            <Label htmlFor="admin-users-role">角色</Label>
+            <Label htmlFor="admin-users-role">{t("admin.users.role")}</Label>
             <SelectField id="admin-users-role" name="role" defaultValue={String(roleId ?? "all")} options={[
-              { value: "all", label: "全部角色" },
+              { value: "all", label: t("admin.users.allRoles") },
               ...roles.filter((role) => role.kind !== "bootstrap_admin").map((role) => ({
-                value: String(role.id), label: role.name + (role.status === "disabled" ? "（已停用）" : ""),
+                value: String(role.id), label: role.name + (role.status === "disabled" ? t("admin.users.inactiveRole") : ""),
               })),
             ]} />
           </div>
           <div className="admin-field">
-            <Label htmlFor="admin-users-permission">生效权限</Label>
+            <Label htmlFor="admin-users-permission">{t("admin.users.effective")}</Label>
             <SelectField id="admin-users-permission" name="permission" defaultValue={permission ?? "all"} options={[
-              { value: "all", label: "全部权限" },
-              ...PERMISSION_LIST.map((item) => ({ value: item.key, label: item.label })),
+              { value: "all", label: t("admin.users.allPermissions") },
+              ...PERMISSION_LIST.map((item) => ({ value: item.key, label: t(`permission.${item.key}`) })),
             ]} />
           </div>
           <div className="admin-field">
-            <Label htmlFor="admin-users-blocks">单独禁用权限</Label>
+            <Label htmlFor="admin-users-blocks">{t("admin.users.blocks")}</Label>
             <SelectField id="admin-users-blocks" name="blocks" defaultValue={blocks} options={[
-              { value: "all", label: "全部用户" }, { value: "blocked", label: "有单独禁用项" },
-              { value: "unblocked", label: "无单独禁用项" },
+              { value: "all", label: t("admin.users.allUsers") }, { value: "blocked", label: t("admin.users.blocked") },
+              { value: "unblocked", label: t("admin.users.unblocked") },
             ]} />
           </div>
         </div>
       </AdminListControls>
       {result.items.length > 0 ? (
-          <TableWrap compact minWidth={760} className="admin-users-table" label="用户列表">
-            <thead><tr><th>用户</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
+          <TableWrap compact minWidth={760} className="admin-users-table" label={t("admin.users.table")}>
+            <thead><tr><th>{t("admin.nav.users")}</th><th>{t("admin.users.role")}</th><th>{t("admin.list.status")}</th><th>{t("admin.users.registered")}</th><th>{t("admin.characterList.actions")}</th></tr></thead>
             <tbody>
               {result.items.map((user) => {
                 const roleIds = memberships.get(user.id) ?? [];
@@ -207,16 +215,16 @@ export default function AdminUsersPage() {
                       <td>
                         <div className="flex flex-wrap gap-1.5">
                           {currentRoles.map((role) => (
-                            <span className={"admin-users-role-pill " + (role.key !== "user" && role.status === "active" ? "admin-users-role-special" : "")} key={role.id} title={roleSourceLabel(role, roleIds.includes(role.id), user.status === "active")}>
-                              {role.name}{role.status === "disabled" ? "（已停用）" : ""}
-                              {user.status === "active" && role.status === "active" && role.availableToAll ? <span className="text-muted">{roleIds.includes(role.id) ? "单独＋全员" : "全员"}</span> : null}
+                            <span className={"admin-users-role-pill " + (role.key !== "user" && role.status === "active" ? "admin-users-role-special" : "")} key={role.id} title={roleSourceLabel(role, roleIds.includes(role.id), user.status === "active", locale)}>
+                              {role.name}{role.status === "disabled" ? t("admin.users.inactiveRole") : ""}
+                              {user.status === "active" && role.status === "active" && role.availableToAll ? <span className="text-muted">{roleIds.includes(role.id) ? t("admin.users.individualAndGlobal") : t("admin.users.global")}</span> : null}
                             </span>
                           ))}
                         </div>
-                        {blockedKeys.length ? <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-destructive"><ShieldMinus className="size-3" aria-hidden />单独禁用 {blockedKeys.length} 项</span> : null}
+                        {blockedKeys.length ? <span className="mt-1.5 inline-flex items-center gap-1 text-xs text-destructive"><ShieldMinus className="size-3" aria-hidden />{t("admin.users.blockedCount", { count: blockedKeys.length })}</span> : null}
                       </td>
                       <td><StatusBadge kind="account" value={user.status} /></td>
-                      <td className="whitespace-nowrap text-xs text-muted tabular-nums">{formatDate(user.createdAt)}</td>
+                      <td className="whitespace-nowrap text-xs text-muted tabular-nums">{formatDate(user.createdAt, { locale })}</td>
                       <td>
                         <Button
                           variant={expanded ? "default" : "ghost"}
@@ -225,10 +233,10 @@ export default function AdminUsersPage() {
                           disabled={busy}
                           aria-expanded={expanded}
                           aria-controls={expanded ? panelId : undefined}
-                          aria-label={(expanded ? "收起" : "查看") + user.displayName + "的管理设置"}
+                          aria-label={t("admin.users.toggleSettings", { name: user.displayName, expanded: expanded ? "yes" : "no" })}
                           onClick={() => setExpandedUserId(expanded ? null : user.id)}
                         >
-                          {expanded ? "收起" : user.status === "deleted" ? "查看" : "管理"}
+                          {expanded ? t("admin.users.collapse") : user.status === "deleted" ? t("admin.users.view") : t("admin.users.manage")}
                           {expanded ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
                         </Button>
                       </td>
@@ -236,45 +244,45 @@ export default function AdminUsersPage() {
                     {expanded ? (
                       <tr className="admin-users-detail-row">
                         <td colSpan={5}>
-                          <section id={panelId} aria-label={user.displayName + "的管理设置"} className="admin-users-detail">
+                          <section id={panelId} aria-label={t("admin.users.settings", { name: user.displayName })} className="admin-users-detail">
                             {canUpdateStatus && user.status !== "deleted" ? <div className="flex justify-end">
                               <Button variant="outline" size="sm" type="button" disabled={busy} className={user.status === "active" ? "border-destructive/20 bg-destructive/5 text-destructive hover:bg-destructive/10" : undefined}
                                 onClick={() => void updateStatus(user.id, user.status === "active" ? "disabled" : "active")}>
-                                {user.status === "active" ? "禁用账户" : "启用账户"}
+                                {user.status === "active" ? t("admin.users.disable") : t("admin.users.enable")}
                               </Button>
                             </div> : null}
                             <div className="admin-users-detail-columns">
                               <section aria-labelledby={panelId + "-roles"}>
-                                <h2 id={panelId + "-roles"} className="admin-users-section-title"><BadgeCheck className="size-4 text-primary" aria-hidden />角色授权</h2>
+                                <h2 id={panelId + "-roles"} className="admin-users-section-title"><BadgeCheck className="size-4 text-primary" aria-hidden />{t("admin.users.grants")}</h2>
                                 {canAssignRoles && user.status === "active" ? (
                                   <RoleAssignmentControl disabled={busy} onBusyChange={(saving) => setUserSaving(user.id, saving)} onSaved={onAccessSaved}
                                     initialRoleIds={roleIds} currentRoles={currentRoles} roles={assignableRoles} userId={user.id} />
                                 ) : (
                                   <ul className="grid gap-2 text-sm">{currentRoles.map((role) => <li key={role.id}>
-                                    {role.name}{role.status === "disabled" ? "（已停用）" : ""}
-                                    <span className="block text-xs text-muted">{roleSourceLabel(role, roleIds.includes(role.id), user.status === "active")}</span>
+                                    {role.name}{role.status === "disabled" ? t("admin.users.inactiveRole") : ""}
+                                    <span className="block text-xs text-muted">{roleSourceLabel(role, roleIds.includes(role.id), user.status === "active", locale)}</span>
                                   </li>)}</ul>
                                 )}
-                                <p className="mt-3 text-xs text-muted">{user.status === "active" ? "全员开放角色移除单独授权后仍然生效。" : "账户不可用，所有权限均不生效。"}</p>
+                                <p className="mt-3 text-xs text-muted">{user.status === "active" ? t("admin.users.globalRemains") : t("admin.users.accountUnavailable")}</p>
                               </section>
                               <section aria-labelledby={panelId + "-blocks"}>
-                                <h2 id={panelId + "-blocks"} className="admin-users-section-title"><ShieldMinus className="size-4 text-primary" aria-hidden />单独禁用权限</h2>
+                                <h2 id={panelId + "-blocks"} className="admin-users-section-title"><ShieldMinus className="size-4 text-primary" aria-hidden />{t("admin.users.blocks")}</h2>
                                 {canBlockPermissions && user.status !== "deleted" ? (
                                   <PermissionBlockControl disabled={busy} onBusyChange={(saving) => setUserSaving(user.id, saving)} onSaved={onAccessSaved}
                                     userId={user.id} blockedKeys={blockedKeys} grantedKeys={user.permissionKeys} />
                                 ) : (
-                                  <div className="text-sm text-muted">{blockedKeys.length ? blockedKeys.map((key) => PERMISSIONS[key].label).join("、") : "没有单独禁用的权限。"}</div>
+                                  <div className="text-sm text-muted">{blockedKeys.length ? new Intl.ListFormat(locale).format(blockedKeys.map((key) => t(`permission.${key}`))) : t("admin.users.emptyBlocks")}</div>
                                 )}
                               </section>
                             </div>
                             <details className="admin-users-effective">
-                              <summary className="cursor-pointer text-sm text-primary">生效权限与来源 · {user.permissionKeys.length} 项</summary>
-                              {user.status !== "active" ? <p className="mt-3 text-sm text-muted">账户不可用，所有权限均不生效。</p> : (
+                              <summary className="cursor-pointer text-sm text-primary">{t("admin.users.effectiveCount", { count: user.permissionKeys.length })}</summary>
+                              {user.status !== "active" ? <p className="mt-3 text-sm text-muted">{t("admin.users.accountUnavailable")}</p> : (
                                 <ul className="mt-4 grid gap-x-6 gap-y-3 md:grid-cols-2">
                                   {PERMISSION_LIST.filter((item) => user.permissionKeys.includes(item.key)).map((item) => <li key={item.key} className="border-b border-border pb-2 text-sm">
-                                    {item.label}
+                                    {t(`permission.${item.key}`)}
                                     <span className="mt-0.5 block text-xs text-muted">{currentRoles.filter((role) => role.status === "active" && role.permissionKeys.includes(item.key))
-                                      .map((role) => role.name + "（" + roleSourceLabel(role, roleIds.includes(role.id), true) + "）").join("、")}</span>
+                                      .map((role) => role.name + "（" + roleSourceLabel(role, roleIds.includes(role.id), true, locale) + "）").join("、")}</span>
                                   </li>)}
                                 </ul>
                               )}
@@ -288,9 +296,9 @@ export default function AdminUsersPage() {
               })}
             </tbody>
           </TableWrap>
-      ) : <EmptyState title="没有找到匹配的用户。" />}
+      ) : <EmptyState title={t("admin.users.empty")} />}
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
-        <span>仅显示权限层级低于自己的账户</span>
+        <span>{t("admin.users.lowerPriority")}</span>
         <PaginationLinks className="my-0" basePath="/admin/users" page={page} pageSize={PAGE_SIZE} total={result.total} params={{
           q: query || undefined, status: status === "all" ? undefined : status, sort: sort === "default" ? undefined : sort,
           role: roleId ? String(roleId) : undefined, permission, blocks: blocks === "all" ? undefined : blocks,

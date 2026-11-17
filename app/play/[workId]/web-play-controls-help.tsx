@@ -1,11 +1,13 @@
 import { Button } from "@/app/components/ui/button";
 import * as Dialog from "@/app/components/ui/dialog";
+import { useMessages } from "@/lib/i18n/react";
 import { Keyboard, X } from "lucide-react";
 
 import { WebPlayKeyboard } from "./web-play-keyboard";
 import { keyboardGroups } from "./web-play-keyboard-keys";
 
 export function WebPlayControlsHelp() {
+  const t = useMessages();
   return (
     <Dialog.Root>
       <Dialog.Trigger asChild>
@@ -16,7 +18,7 @@ export function WebPlayControlsHelp() {
           variant="ghost"
         >
           <Keyboard aria-hidden />
-          操作说明
+          {t("play.help")}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -26,14 +28,14 @@ export function WebPlayControlsHelp() {
             <div>
               <Dialog.Title className="flex items-center gap-2">
                 <Keyboard aria-hidden className="size-4 text-primary" />
-                操作说明
+                {t("play.help")}
               </Dialog.Title>
               <Dialog.Description className="mb-0 mt-1 text-xs text-muted">
-                PC 常用默认键位
+                {t("play.defaultKeys")}
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
-              <Button aria-label="关闭操作说明" className="size-8" size="icon" type="button" variant="outline">
+              <Button aria-label={t("play.closeHelp")} className="size-8" size="icon" type="button" variant="outline">
                 <X aria-hidden />
               </Button>
             </Dialog.Close>
@@ -42,7 +44,7 @@ export function WebPlayControlsHelp() {
           <div
             className="web-play-help-board"
             role="img"
-            aria-label="常用键位位置图：方向键或 WASD 移动；Z、Enter、Space 确认；X、Esc 取消；F1 系统设置、F2 帧率、F7 截图、F9 Debug 菜单、E 交互高亮、反引号键会话历史；F、G 加速，Shift 为游戏功能。"
+            aria-label={t("play.keyboardMap", { engineKeys: t("play.engineKeys") })}
           >
             <WebPlayKeyboard />
           </div>
@@ -54,12 +56,12 @@ export function WebPlayControlsHelp() {
                 data-key-group={group.id}
                 key={group.id}
               >
-                <span className="web-play-help-legend-name"><span className="web-play-help-dot" aria-hidden />{group.label}</span>
-                <span className="web-play-help-legend-keys">{group.keysLabel}</span>
+                <span className="web-play-help-legend-name"><span className="web-play-help-dot" aria-hidden />{t(`play.keys.${group.id}`)}</span>
+                <span className="web-play-help-legend-keys">{group.id === "move" ? t("play.moveKeys") : group.id === "engine" ? t("play.engineKeys") : group.keysLabel}</span>
               </div>
             ))}
           </div>
-          <p className="mb-0 mt-2.5 text-xs text-muted">F9 和 E 需在「追加功能」中分别开启「强制TestPlay」和「场景交互高亮」。</p>
+          <p className="mb-0 mt-2.5 text-xs text-muted">{t("play.extraFeatures")}</p>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
