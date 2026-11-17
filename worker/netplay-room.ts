@@ -365,6 +365,11 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
           this.publishDirectory();
           return;
         }
+        if (diagnostics && /^room:leaving:(local_leave|room_replaced|transport_ended):\d{1,15}$/.test(data)) {
+          console.log({ event: "netplay_client_close", ...room.details, negotiationStartedAt: rtc?.startedAt,
+            seat: peers.get(socket)!.seatNumber, reason: data.split(":")[2], reportedRound: Number(data.split(":")[3]), serverAtMs: Date.now() });
+          return;
+        }
         if (diagnostics && data.startsWith("room:diagnostic:")) {
           const diagnostic = parseNetplayDiagnostic(data);
           if (diagnostic) console.log({
@@ -395,12 +400,13 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
           if (snapshot.phase === "fallback" && rtc.route !== "websocket") return;
           const progress = rtc.progress.get(socket)!;
           const phases = progress.iceStatsPhases ??= new Set();
-          if (phases.has(snapshot.phase)) return;
-          phases.add(snapshot.phase);
+          const key = snapshot.phase + (snapshot.phase === "state" ? ":" + snapshot.stateIndex : "");
+          if (phases.has(key)) return;
+          phases.add(key);
           console.log({
             event: "netplay_ice_stats", ...room.details,
             seat: socket === peers.keys().next().value ? 1 : 2,
-            route: rtc.route, ...snapshot,
+            route: rtc.route, ...snapshot, serverAtMs: Date.now(),
           });
           return;
         }

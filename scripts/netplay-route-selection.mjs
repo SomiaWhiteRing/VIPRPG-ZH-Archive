@@ -26,7 +26,7 @@ function readMeasurement(message) {
 }
 
 export function startRouteSelection({ round, seats, paths, send, commit, fail, inputMirror = false, inputProtocol = 0, report }) {
-  const candidates = new Map(paths.map(path => [path, { ready: new Set(), reports: new Map() }]));
+  const candidates = new Map(paths.map(path => [path, { ready: new Set(), reports: new Map(), signals: new Map() }]));
   const probeTimeoutMs = inputMirror ? 9_000 : selectionTimeoutMs - confirmationTimeoutMs;
   const timeoutMs = probeTimeoutMs + (inputMirror ? mirrorConfirmationTimeoutMs : confirmationTimeoutMs);
   const deadline = Date.now() + timeoutMs;
@@ -43,6 +43,7 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail, i
     path,
     failed: Boolean(candidate.failed),
     ready: seats.map(seat => candidate.ready.has(seat)),
+    signalsForwarded: seats.map(seat => candidate.signals.get(seat) ?? 0),
     measurements: seats.map(seat => candidate.reports.get(seat)),
   }));
   const choose = () => {
@@ -84,6 +85,7 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail, i
     acknowledged.clear();
     sendToBoth({ type: "select", path: selected });
     timer = setTimeout(() => {
+      report?.({ phase: "confirmation_timeout", path: selected, accepted: seats.map(seat => acknowledged.has(seat)) });
       candidates.get(selected).failed = true;
       choose();
     }, inputMirror && selected === "websocket" ? deadline - Date.now() : Math.min(confirmationTimeoutMs, deadline - Date.now()));
@@ -93,7 +95,10 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail, i
       candidate.failed || candidate.reports.size === seats.length)) choose();
   };
 
-  timer = setTimeout(choose, probeTimeoutMs);
+  timer = setTimeout(() => {
+    report?.({ phase: "probe_timeout", measurements: measurements() });
+    choose();
+  }, probeTimeoutMs);
   return {
     round,
     stop,
@@ -108,6 +113,7 @@ export function startRouteSelection({ round, seats, paths, send, commit, fail, i
       if (!candidate || candidate.failed) return;
       if (type === "signal" && path !== "websocket" && !selected &&
           message.value && typeof message.value === "object") {
+        candidate.signals.set(seat, (candidate.signals.get(seat) ?? 0) + 1);
         send(seats.find(peer => peer !== seat), message);
       } else if (type === "ready" && !candidate.probing && !selected) {
         candidate.ready.add(seat);

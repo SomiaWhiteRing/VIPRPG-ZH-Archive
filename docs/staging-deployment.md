@@ -40,9 +40,19 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 双方使用 `inputProtocol=1` 时，自动选线优先考虑双方各自 8 个探测回复中最多缺失 2 个的直连或 TURN 路线，再按原有延迟指标比较这些路线。没有这样的 UDP 候选时沿用原评分和 WebSocket 兜底。选择 TURN 且支持双路时继续保留 WebSocket＋TURN；旧输入协议不使用丢包容忍优先级。`netplay_route_probe` 按空间、房间和 `round` 记录探测开始、各席位 8 个 RTT 样本及缺失数、最终评分与选择依据；最终双路结果以 `netplay_route.backup` 为准。
 
-Player 通过 `routeIceDiagnostics=1` 声明支持自动选线 ICE 诊断，服务在 `start` 消息中通过 `diagnostics` 启用。`netplay_route.iceDiagnostics` 按席位记录支持情况，统计时据此区分旧客户端与缺失的诊断。新版 Player 在每条 RTC 候选启动后 2 秒、6 秒、被选中、失败或被淘汰时采集摘要，以 `route:` 前缀的 JSON 消息（`type` 为 `ice-stats`）上报。日志事件为 `netplay_ice_stats`，按空间、房间、`round`、`seat`、`path` 关联到同轮 `netplay_route`，每个阶段只记一次。摘要包含 ICE/DTLS/两个 DataChannel 状态、带相对时间的里程碑、候选 IP/端口和关联地址、IPv6 范围、候选交换/应用计数、STUN 节点及错误、候选对检查收发计数；不收集完整 SDP、TURN 凭据或令牌。`netplay_ice_failure` 在候选报错时单独记录原因，便于识别终止后最终摘要未送达的情况。淘汰候选的最终采集最多持续 250 ms，选线和游戏不等待采集完成；中途断开控制连接时摘要可能缺失。
+Player 通过 `routeIceDiagnostics=1` 声明支持自动选线 ICE 诊断，服务在 `start` 消息中通过 `diagnostics` 启用。`netplay_route.iceDiagnostics` 按席位记录支持情况，统计时据此区分旧客户端与缺失的诊断。新版 Player 在每条 RTC 候选启动后 2 秒、6 秒、被选中、失败或被淘汰时采集摘要，以 `route:` 前缀的 JSON 消息（`type` 为 `ice-stats`）上报。日志事件为 `netplay_ice_stats`，按空间、房间、`round`、`seat`、`path` 关联到同轮 `netplay_route`，原有阶段每个阶段只记一次，状态变化快照按 `stateIndex` 去重。摘要包含 ICE/DTLS/两个 DataChannel 状态、带相对时间的里程碑、候选 IP/端口和关联地址、IPv6 范围、候选交换/应用计数、STUN 节点及错误、候选对检查收发计数；不收集完整 SDP、TURN 凭据或令牌。`netplay_ice_failure` 在候选报错时单独记录原因，便于识别终止后最终摘要未送达的情况。淘汰候选的最终采集最多持续 250 ms，选线和游戏不等待采集完成；中途断开控制连接时摘要可能缺失。
 
 诊断时先分开计算“双方直连就绪”“双方完成测速”和“最终选中直连”，按 `round` 去重。用双方 `localSignals`/`remoteSignals` 检查公网候选是否生成并交换，用 `ipv6Scope=global` 区分公网 IPv6 与链路本地/ULA；远端地址被浏览器隐藏时优先看候选信令摘要。STUN 701 只代表某次地址发现请求不可达，不能独自证明所有 STUN 都失败。候选对已经发出检查但没有响应，说明该路径不通，仍不足以区分 NAT、终端防火墙或运营商丢弃；不同 STUN 映射须比较相同关联地址和端口，不能把不同本地 socket 的端口差异当作对称 NAT。`discarded` 表示选线结束后关闭候选，不等于 ICE 明确失败。只记录了早期阶段、没有最终摘要的轮次保留为未确定，不按推测填充失败原因。
+
+新版诊断为每个 PeerConnection 生成 `connectionId`，每份快照包含 `sequence`，候选对的 `number` 在同一连接内稳定。沿用空间、房间、`round`、`seat`、`path` 关联双端；候选对编号不跨设备通用，双端候选需按实际地址、端口及信令对应，浏览器隐藏的地址仍保留未知。`serverAtMs` 是房间服务接收时间，`elapsedMs` 是客户端连接内的相对时间，不能假设双方设备时钟一致。候选对的 `sampleAtMs` 和 `delta.intervalMs` 来自同一客户端的统计时间；计数增量只比较时间递增且计数未回退的快照。
+
+`serverHost`、`serverPort`、`serverScheme`、`serverTransport` 记录浏览器实际提供的 STUN/TURN URL 摘要，支持香港 IPv4/IPv6 的 3478/443；STUN 错误带 `firstAtMs` / `lastAtMs`。`configuredServers` 仅说明下发配置，不证明请求成功，也不将缺少来源信息的候选强行归给某个服务器。日志不保留 TURN 凭据、完整 SDP 或错误自由文本。
+
+除原有采样外，ICE、连接、收集及通道状态变化会触发 `phase=state` 快照，100 ms 内合并，每个连接最多 12 份，`stateIndex` 用于接收端去重。失败及最终快照不受此上限影响。`stage` 描述可观察阶段：`peer_setup`、`signaling`、`address_discovery`、`ice_checks`、`dtls`、`data_channel`、`ready`，证据不足为 `unknown`；`wasReady` 表示通道曾就绪。它们不自动判断 NAT 类型或认定运营商丢包。`netplay_route_probe` 另记录 `signalsForwarded`、`probe_timeout` 和 `confirmation_timeout`，区分探测未完成与双方选线确认未完成。
+
+客户端关闭房间前通过原控制连接发送 `room:leaving` 诊断，服务记录 `netplay_client_close` 及客户端报告的 `reportedRound`。原因区分 `local_leave`、`room_replaced`、`transport_ended`；候选最终快照还区分 `route_not_selected`、`connection_replaced`、`peer_left`、`route_ended`。该消息不要求确认，不参与退房逻辑；控制连接已经断开时可能缺失，不能仅凭没有退出标记就认定网络故障。旧协商与自动选线共用同一快照解析器，旧客户端仍可上报原有字段。新字段需发布对应 Player 运行包和房间服务后生效。
+
+读取 systemd JSON 日志时使用 `journalctl --all -u viprpg-netplay-production -o json`，否则较长的 `MESSAGE` 可能输出为 `null`，导致 ICE 快照漏计。本批正式发布按批准范围在共用 Coturn 中开启 `verbose` 和 `log-binding`，通过既有 `log-file=stdout` 记录 Binding 与 UDP 端点信息；启停需备份配置并重启 Coturn，会中断正式和预生产的 TURN 会话。后续停止采集时仅移除这两项日志设置，保留 STUN/TURN 与凭据配置。服务端记录只能证明服务器收到／处理了相应请求，不能观察双方直接传输的 ICE 检查，亦不能按浏览器 `round` 直接匹配 STUN 事务。
 
 房间建立时生成四位密码，默认关闭。大厅只接收 `locked` 标记，支持 `roomAccess=1` 的成员通过私有 `room:settings` 消息取得开关与密码。新版 Player 在 WebSocket 接通后发送 `room:join`，服务校验当前房间和密码后才占座、协商线路。房主通过 `room:password` 修改设置。香港服务与 Cloudflare 房间服务使用同一口令格式，无密码旧客户端仍可进入未加锁房间。数字输入及第三行“密码”的显示由游戏事件负责。
 

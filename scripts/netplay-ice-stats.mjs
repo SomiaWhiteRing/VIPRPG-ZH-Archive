@@ -1,14 +1,26 @@
 import { isIP } from "node:net";
 
 export const iceCandidateTypes = ["host", "srflx", "prflx", "relay"];
-const phases = ["2s", "6s", "connected", "fallback", "failure", "discarded"];
+const phases = ["2s", "6s", "state", "connected", "fallback", "failure", "discarded"];
 const statuses = ["ok", "timeout", "peer_unavailable", "unsupported", "error"];
 const iceStates = ["new", "checking", "connected", "completed", "failed", "disconnected", "closed"];
 const protocols = ["udp", "tcp"];
 const relayProtocols = [...protocols, "tls"];
 const addressKinds = ["ipv4", "ipv6", "mdns", "unknown"];
 const stunSchemes = ["stun", "stuns", "turn", "turns"];
-const iceServers = ["cloudflare-stun", "nextcloud-stun", "hitv-stun", "cloudflare-turn", "hong-kong-turn"];
+const iceServers = ["cloudflare-stun", "nextcloud-stun", "hitv-stun", "cloudflare-turn", "hong-kong-turn", "hong-kong-stun"];
+
+/** @param {Fields} row */
+function endpoint(row) {
+  const host = typeof row.serverHost === "string" ? row.serverHost : "";
+  return {
+    iceServer: choice(row.iceServer, iceServers),
+    serverHost: isIP(host) || ["stun.cloudflare.com", "stun.nextcloud.com", "stun.hitv.com", "turn.cloudflare.com",
+      "netplay-hk.viprpg.org", "netplay-hk-staging.viprpg.org"].includes(host) ? host : undefined,
+    serverScheme: choice(row.serverScheme, stunSchemes), serverPort: integer(row.serverPort, 65535),
+    serverTransport: choice(row.serverTransport, protocols),
+  };
+}
 
 /** @typedef {Record<string, unknown>} Fields */
 
@@ -70,7 +82,7 @@ function candidate(row) {
     relatedAddressKind: choice(row.relatedAddressKind, addressKinds), relatedPort: integer(row.relatedPort, 65535),
     tcpType: choice(row.tcpType, ["active", "passive", "so"]),
     relayProtocol: choice(row.relayProtocol, relayProtocols),
-    iceServer: choice(row.iceServer, iceServers),
+    ...endpoint(row),
     priority: integer(row.priority, 0xffffffff),
   };
 }
@@ -124,8 +136,14 @@ export function parseIceStats(payload) {
   const negotiationStartedAt = integer(value.negotiationStartedAt);
   const elapsedMs = integer(value.elapsedMs);
   if (!phase || !status || negotiationStartedAt === undefined || elapsedMs === undefined) return;
-  return {
+  const stateIndex = integer(value.stateIndex, 12);
+  if (phase === "state" && !stateIndex) return;
+  const snapshot = {
     phase, status, negotiationStartedAt, elapsedMs,
+    stateIndex: phase === "state" ? stateIndex : undefined,
+    connectionId: typeof value.connectionId === "string" && /^[0-9a-f]{32}$/.test(value.connectionId) ? value.connectionId : undefined,
+    sequence: integer(value.sequence),
+    configuredServers: rows(value.configuredServers, 16).map(endpoint),
     reason: typeof value.reason === "string" && /^[a-z_]{1,40}$/.test(value.reason) ? value.reason : undefined,
     milestones: rows(value.milestones, 32).filter(row =>
       typeof row.name === "string" && /^[a-z_]{1,40}$/.test(row.name)).map(row => ({
@@ -146,9 +164,10 @@ export function parseIceStats(payload) {
     ...counts(value, ["localCandidatesGathered", "remoteCandidatesReceived", "remoteCandidatesApplied", "candidateCount", "pairCount"]),
     stunErrors: rows(value.stunErrors, 32).map(row => ({
       code: integer(row.code, 999), count: integer(row.count), scheme: choice(row.scheme, stunSchemes),
+      firstAtMs: integer(row.firstAtMs), lastAtMs: integer(row.lastAtMs),
       addressKind: choice(row.addressKind, addressKinds), port: integer(row.port, 65535),
       address: address(row.address),
-      iceServer: choice(row.iceServer, iceServers),
+      ...endpoint(row),
     })),
     localSignals: signals(value.localSignals),
     remoteSignals: signals(value.remoteSignals),
@@ -157,6 +176,9 @@ export function parseIceStats(payload) {
       number: integer(row.number), side: choice(row.side, ["local", "remote"]),
     })),
     pairs: rows(value.pairs, 32).map(row => ({
+      number: integer(row.number), sampleAtMs: integer(row.sampleAtMs),
+      delta: isRecord(row.delta) ? counts(row.delta, ["intervalMs", "requestsSent", "requestsReceived",
+        "responsesSent", "responsesReceived", "bytesSent", "bytesReceived"]) : undefined,
       state: choice(row.state, ["frozen", "waiting", "in-progress", "failed", "succeeded"]),
       nominated: flag(row.nominated), selected: flag(row.selected),
       ...counts(row, [
@@ -165,4 +187,17 @@ export function parseIceStats(payload) {
       ]),
     })),
   };
+  const names = new Set(snapshot.milestones.map(item => item.name));
+  // Describe the observed stage, never infer NAT type or who dropped a packet.
+  const stage = names.has("peer_create_failed") ? "peer_setup"
+    : !names.size && !snapshot.localSdp && !snapshot.remoteSdp ? "unknown"
+    : !snapshot.remoteSdp ? "signaling"
+    : !snapshot.localCandidatesGathered ? "address_discovery"
+    : !["connected", "completed"].includes(snapshot.iceState ?? "") ? "ice_checks"
+    : snapshot.channelState === "open" && (!snapshot.inputChannelState || snapshot.inputChannelState === "open") ? "ready"
+    : !snapshot.dtlsState ? "unknown"
+    : snapshot.dtlsState !== "connected" ? "dtls"
+    : snapshot.channelState !== "open" || snapshot.inputChannelState && snapshot.inputChannelState !== "open" ? "data_channel" : "ready";
+  return { ...snapshot, stage, wasReady: names.has("channel_open") &&
+    (snapshot.inputChannelState === undefined || names.has("input_channel_open")) };
 }

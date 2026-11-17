@@ -304,6 +304,12 @@ function receiveText(room, seat, data) {
     publishDirectory(room.pool);
     return;
   }
+  if (seat.diagnostics && /^room:leaving:(local_leave|room_replaced|transport_ended):\d{1,15}$/.test(data)) {
+    console.log(JSON.stringify({ event: "netplay_client_close", archiveVersionId: room.pool.id, roomId: room.id,
+      seat: seat.seatNumber, round: room.selection?.round ?? room.negotiation?.startedAt,
+      path: room.activeSelection?.path, reason: data.split(":")[2], reportedRound: Number(data.split(":")[3]), serverAtMs: Date.now() }));
+    return;
+  }
   if (seat.diagnostics && data.startsWith("room:diagnostic:")) {
     const diagnostic = parseNetplayDiagnostic(data);
     const turnPort = room.turnPort ?? room.pool.turnPort;
@@ -353,12 +359,12 @@ function receiveText(room, seat, data) {
       const snapshot = parseIceStats(message.snapshot);
       if (!snapshot || snapshot.negotiationStartedAt !== message.round) return;
       const phases = seat.routeIceStats ??= new Set();
-      const key = message.path + ":" + snapshot.phase;
+      const key = message.path + ":" + snapshot.phase + (snapshot.phase === "state" ? ":" + snapshot.stateIndex : "");
       if (phases.has(key)) return;
       phases.add(key);
       console.log(JSON.stringify({ ...snapshot, event: "netplay_ice_stats", archiveVersionId: room.pool.id,
         roomId: room.id, seat: seat.seatNumber, platform: seat.platform,
-        round: message.round, path: message.path, route: room.route }));
+        round: message.round, path: message.path, route: room.route, serverAtMs: Date.now() }));
       return;
     }
     const active = room.activeSelection;
@@ -367,7 +373,9 @@ function receiveText(room, seat, data) {
         typeof message.reason === "string" && /^[a-z_]{1,40}$/.test(message.reason)) {
       console.log(JSON.stringify({ event: "netplay_ice_failure", archiveVersionId: room.pool.id,
         roomId: room.id, seat: seat.seatNumber, platform: seat.platform,
-        round: message.round, path: message.path, reason: message.reason }));
+        round: message.round, path: message.path, reason: message.reason,
+        connectionId: typeof message.connectionId === "string" && /^[0-9a-f]{32}$/.test(message.connectionId) ? message.connectionId : undefined,
+        serverAtMs: Date.now() }));
     }
     if (room.route === "pending" && Buffer.byteLength(data) <= 24_576) room.selection.receive(seat, message);
     else if (active && message?.round === active.round &&
@@ -395,40 +403,21 @@ function receiveText(room, seat, data) {
   const rtc = room.negotiation;
   if (!rtc) return;
   if (data.startsWith("rtc:ice-stats:")) {
-    let snapshot;
-    try {
-      snapshot = JSON.parse(data.slice("rtc:ice-stats:".length));
-    } catch {
-      return;
-    }
-    const phase = snapshot?.phase;
-    const expectedRoute = phase === "connected" ? "webrtc" : phase === "fallback" ? "hong_kong_websocket" : undefined;
-    if (!expectedRoute || room.route !== expectedRoute || snapshot?.negotiationStartedAt !== rtc.startedAt || seat.iceStatsPhase === phase) return;
-    seat.iceStatsPhase = phase;
-    const counts = ["localCandidatesGathered", "remoteCandidatesReceived", "remoteCandidatesApplied", "candidateCount", "pairCount"];
-    const checks = ["local", "remote", "requestsSent", "requestsReceived", "responsesSent", "responsesReceived", "roundTripMs"];
-    const pairs = Array.isArray(snapshot.pairs) ? snapshot.pairs.slice(0, 32).filter(Boolean).map(pair => ({
-      selected: pair.selected === true,
-      ...Object.fromEntries(checks.filter(key => Number.isSafeInteger(pair[key])).map(key => [key, pair[key]])),
-    })) : [];
-    const selected = pairs.find(pair => pair.selected);
-    const candidates = Array.isArray(snapshot.candidates) ? snapshot.candidates : [];
-    const local = selected && candidates.find(candidate => candidate?.number === selected.local && candidate.side === "local");
-    const remote = selected && candidates.find(candidate => candidate?.number === selected.remote && candidate.side === "remote");
-    const types = ["host", "srflx", "prflx", "relay"];
-    const protocols = ["udp", "tcp", "tls"];
-    const stunErrors = Array.isArray(snapshot.stunErrors) ? snapshot.stunErrors.slice(0, 8)
-      .filter(error => Number.isSafeInteger(error?.code)).map(error => ({
-        code: error.code,
-        addressKind: ["ipv4", "ipv6", "unknown"].includes(error.addressKind) ? error.addressKind : undefined,
-      })) : [];
-    console.log(JSON.stringify({ event: "netplay_ice_stats", archiveVersionId: room.pool.id, roomId: room.id,
-      seat: [...room.seats].indexOf(seat) + 1, platform: seat.platform, turnPort: room.pool.turnPort, phase, pairs, stunErrors,
-      localCandidateType: types.includes(local?.type) ? local.type : undefined,
-      remoteCandidateType: types.includes(remote?.type) ? remote.type : undefined,
-      relayProtocol: protocols.includes(local?.relayProtocol) ? local.relayProtocol : undefined,
-      ...Object.fromEntries(counts.filter(key => Number.isSafeInteger(snapshot[key])).map(key => [key, snapshot[key]])),
-    }));
+    const snapshot = parseIceStats(data.slice("rtc:ice-stats:".length));
+    if (!snapshot || snapshot.negotiationStartedAt !== rtc.startedAt) return;
+    if (snapshot.phase === "connected" && room.route !== "webrtc") return;
+    if (snapshot.phase === "fallback" && room.route !== "hong_kong_websocket") return;
+    const phases = seat.routeIceStats ??= new Set();
+    const key = snapshot.phase + (snapshot.phase === "state" ? ":" + snapshot.stateIndex : "");
+    if (phases.has(key)) return;
+    phases.add(key);
+    const selected = snapshot.pairs.find(pair => pair.selected);
+    const local = selected && snapshot.candidates.find(candidate => candidate.number === selected.local && candidate.side === "local");
+    const remote = selected && snapshot.candidates.find(candidate => candidate.number === selected.remote && candidate.side === "remote");
+    console.log(JSON.stringify({ ...snapshot, event: "netplay_ice_stats", archiveVersionId: room.pool.id, roomId: room.id,
+      seat: seat.seatNumber, platform: seat.platform, turnPort: room.pool.turnPort,
+      localCandidateType: local?.type, remoteCandidateType: remote?.type, relayProtocol: local?.relayProtocol,
+      round: rtc.startedAt, route: room.route, serverAtMs: Date.now() }));
     return;
   }
   const prefix = "rtc:round:" + rtc.startedAt + ":";
@@ -529,7 +518,6 @@ function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, in
       player.rttMs = player.peakRttMs = null;
       player.input = undefined;
       player.backupClosed = false;
-      player.iceStatsPhase = undefined;
       player.routeIceStats = undefined;
       player.signals = 0;
       player.milestones = [];
