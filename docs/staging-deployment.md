@@ -32,6 +32,8 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 使用 `?netplayTurn=443` 可单独测试 UDP 443。该房间池使用 coturn 的 IPv4 和 IPv6 辅助监听地址，沿用同一组中继端口和凭据。野草云产品防火墙需放行入站 UDP 443，coturn 的 systemd 服务通过 `CAP_NET_BIND_SERVICE` 绑定该端口。
 
+香港服务与 Cloudflare 房间服务的直连候选均包含本站香港 STUN：`85.189.41.214` 和 `[2001:df1:7880:6::953]`，各使用 UDP 3478、443，同时保留原有公共 STUN。共用 Coturn 同时提供 STUN Binding 和 TURN，配置已移除 `no-stun`；TURN 的短期凭据及中继限制保持不变。调整该配置需备份并重启 Coturn，会中断正式及预生产的现有 TURN 会话；发布前应从服务器外分别验证四个 STUN 地址。
+
 预生产网页版默认进入自动选线房间池。配套安卓安装版也通过网站取得同一个房间入口。Player 通过 `routeSelection=1` 声明支持，双方支持时并行测试 WebSocket、直连和可用的 UDP TURN，房间服务收到双方确认后宣布房间就绪。双方同时声明 `routeInputMirror=1` 和 `inputProtocol=1` 时测试 UDP 3478，其余客户端组合沿用原有选线和 UDP 443。网页版使用 `?netplayDirect=1` 对照直连及其 WebSocket 兜底，使用 `?netplayRelay=1` 对照纯 WebSocket 转发。两台设备使用同一入口。部署香港房间服务时，`netplay-hk-relay.mjs`、`netplay-route-selection.mjs`、`netplay-diagnostics.mjs`、`netplay-ice-stats.mjs`、`netplay-room-password.mjs`、`netplay-recording.mjs` 与 `netplay-finish.mjs` 放在同一目录。
 
 自动选线保留直连。当双方支持双路、选线结果需要中转、WebSocket 和 UDP TURN 均可用时，房间服务在选线确认中保留两条线路。房间消息和开局确认走 WebSocket，局内输入和确认同时走两条线路，由 Player 按帧去重并交给原对战逻辑。WebSocket 与 UDP TURN 都即时发送输入和确认，不再对备用 UDP 施加 250 ms 节流；浏览器通道积压时仍合并最新输入历史与确认。UDP 通道关闭后，WebSocket 继续传送同一格式的输入。WebSocket 异常断开时，对战可经仍在线的 UDP 通道继续，Player 同时尝试在 15 秒内恢复房间连接。双路协商给探测预留最多 9 秒，再给双方确认预留 3 秒。通过 `netplay_route.backup`、`backupTurnPort` 和 `netplay_ice_pair` 核对实际启用的路径，用 `netplay_backup_closed` 和 `netplay_control_resumed` 识别局内回退及恢复。

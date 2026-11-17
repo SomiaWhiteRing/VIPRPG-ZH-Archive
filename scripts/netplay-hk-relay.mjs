@@ -33,7 +33,11 @@ const rtcWss = new WebSocketServer({ noServer: true, maxPayload: 50_000, perMess
 const heartbeatIntervalMs = 5_000;
 const heartbeatHideMs = 10_000;
 const heartbeatTimeoutMs = 15_000;
-const iceServers = [{ urls: ["stun:stun.hitv.com:3478", "stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"] }];
+const iceServers = [{ urls: [
+  "stun:85.189.41.214:3478", "stun:85.189.41.214:443",
+  "stun:[2001:df1:7880:6::953]:3478", "stun:[2001:df1:7880:6::953]:443",
+  "stun:stun.hitv.com:3478", "stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443",
+] }];
 
 function route(request) {
   if (!URL.canParse(request.url, origin)) return;

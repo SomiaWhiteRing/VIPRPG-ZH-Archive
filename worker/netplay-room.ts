@@ -18,7 +18,11 @@ import { prepareNetplayReplay } from "../app/.server/db/netplay-replays";
 import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "../scripts/netplay-room-password.mjs";
 import type { RoomPassword } from "../scripts/netplay-room-password.mjs";
 
-const standardStunUrls = ["stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443"];
+const standardStunUrls = [
+  "stun:85.189.41.214:3478", "stun:85.189.41.214:443",
+  "stun:[2001:df1:7880:6::953]:3478", "stun:[2001:df1:7880:6::953]:443",
+  "stun:stun.cloudflare.com:3478", "stun:stun.nextcloud.com:443",
+];
 const directIceServers = [{ urls: standardStunUrls }];
 const stagingIceServers = [{ urls: ["stun:stun.hitv.com:3478", ...standardStunUrls] }];
 // Staging Chrome nominated the slower UDP relay when both were offered.
