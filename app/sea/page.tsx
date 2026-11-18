@@ -94,6 +94,7 @@ export default function EternalSeaPage() {
   const [roomReady, setRoomReady] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
   const followingRef = useRef(true);
   const scrollInitializedRef = useRef(false);
   const composingRef = useRef<string | null>(null);
@@ -261,6 +262,12 @@ export default function EternalSeaPage() {
               <div className="sea-input-area">
                 <Label htmlFor="sea-input" className="sr-only">{t("sea.body")}</Label>
                 <Textarea id="sea-input" ref={inputRef} value={draft} rows={3} className="sea-input" placeholder={t("sea.placeholder")}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" || !event.ctrlKey || event.altKey || event.metaKey || event.shiftKey
+                      || event.nativeEvent.isComposing || event.keyCode === 229 || composingRef.current !== null) return;
+                    event.preventDefault();
+                    if (!event.repeat) submitRef.current?.click();
+                  }}
                   onChange={(event) => {
                     if (composingRef.current !== null) setDraft(event.currentTarget.value);
                     else commitDraft(event.currentTarget, draft);
@@ -330,7 +337,8 @@ export default function EternalSeaPage() {
                       </Dialog.Content>
                     </Dialog.Portal>
                   </Dialog.Root>}
-                  <Button type="submit" variant="rm2k" size="sm" className="sea-submit" disabled={!canSend || sending}>{t("sea.send")}</Button>
+                  <Button ref={submitRef} type="submit" variant="rm2k" size="sm" className="sea-submit"
+                    aria-keyshortcuts="Control+Enter" disabled={!canSend || sending}>{t("sea.send")}</Button>
                 </div>
               </div>
             </div>

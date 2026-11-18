@@ -35,10 +35,36 @@ export function seaDisplayName(name: string) {
   return `${result}…`;
 }
 
-const literalCharacters = /[\s\S]/gu;
-const rm2000Characters = /\\(?:[Cc]\[([0-9]+)\]|\\)|[\s\S]/gu;
-const pendingColorCode = /(?:^|[^\\])(?:\\\\)*(\\(?:[Cc](?:\[[0-9]*)?)?)$/;
+const colorCommand = /^\\[Cc]\[([0-9]+)\]$/;
+const pendingParameter = /^\\[A-Za-z]\[(?:[0-9[\]]|\\[Vv])*\\?$/;
 const utf8 = new TextEncoder();
+
+function* seaBodyTokens(text: string) {
+  // Index complete parameters on each line, including forms like \N[\V[1]].
+  const bracketEnds = new Map<number, number>();
+  const opens: number[] = [];
+  for (const { 0: bracket, index } of text.matchAll(/[[\]\n]/g)) {
+    if (bracket === "[") {
+      opens.push(index);
+    } else if (bracket === "\n") {
+      opens.length = 0;
+    } else {
+      const start = opens.pop();
+      if (start !== undefined) bracketEnds.set(start, index + 1);
+    }
+  }
+
+  const tokens = /\\(?:([A-Za-z])|[^\n])?|[\s\S]/gu;
+  for (let match = tokens.exec(text); match; match = tokens.exec(text)) {
+    const end = match[1] ? bracketEnds.get(tokens.lastIndex) : undefined;
+    if (end === undefined) {
+      yield match[0];
+    } else {
+      tokens.lastIndex = end;
+      yield text.slice(match.index, end);
+    }
+  }
+}
 
 function layoutSeaText(text: string, body: boolean, byteBudget = Infinity) {
   const opening = seaGlyph("「");
@@ -53,14 +79,17 @@ function layoutSeaText(text: string, body: boolean, byteBudget = Infinity) {
   let color: number | undefined;
   let hasContent = false;
   let previous: SeaGlyph | undefined = placements[0];
-  for (const [source, colorCode] of text.matchAll(body ? rm2000Characters : literalCharacters)) {
+  for (const source of body && text.includes("\\") ? seaBodyTokens(text) : text) {
     if (countBytes) {
       byteBudget -= utf8.encode(JSON.stringify(source)).length - 2;
       if (byteBudget < 0) break;
     }
-    if (colorCode !== undefined) {
-      const index = Number(colorCode);
-      color = index > 0 && index <= 19 ? index : undefined;
+    if (body && source.startsWith("\\") && source !== "\\\\") {
+      const colorCode = colorCommand.exec(source);
+      if (colorCode) {
+        const index = Number(colorCode[1]);
+        color = index > 0 && index <= 19 ? index : undefined;
+      }
       end += source.length;
       continue;
     }
@@ -127,12 +156,18 @@ export function limitSeaBodyInput(body: string, caret: number, previous: string,
   const layout = layoutSeaBody(body, byteBudget);
   if (layout.fits) return body;
   if (body.length <= byteBudget && utf8.encode(JSON.stringify(body)).length - 2 <= byteBudget) {
-    const pending = pendingColorCode.exec(body.slice(0, caret))?.[1];
-    if (pending) {
-      // Allow typing a color code at capacity. Sending still measures the
-      // actual text, including any incomplete code as literal characters.
-      const completed = body.slice(0, caret - pending.length) + "\\C[0]" + body.slice(caret);
-      if (layoutSeaBody(completed, byteBudget).fits) return body;
+    const prefix = body.slice(0, caret);
+    const lineStart = prefix.lastIndexOf("\n") + 1;
+    let start = lineStart;
+    for (const token of seaBodyTokens(prefix.slice(lineStart))) {
+      if (token.length === 2 && pendingParameter.test(prefix.slice(start))) {
+        // A two-character prefix here has no closing bracket at the caret.
+        // Allow finishing it even when its literal parameters would overflow.
+        const completed = body.slice(0, start) + "\\C[0]" + body.slice(caret);
+        if (layoutSeaBody(completed, byteBudget).fits) return body;
+        break;
+      }
+      start += token.length;
     }
   }
   return caret === body.length ? body.slice(0, layout.end) : previous;
