@@ -4,9 +4,10 @@ export const SEA_ROOM_LIMIT = 100;
 export const SEA_ANONYMOUS_NAME = "无名的VIPPER";
 export const SEA_ANONYMOUS_NAME_LIMIT = 16;
 export const SEA_FACE_COUNT = 16;
+export const SEA_MESSAGE_REQUEST_BYTES = 4096;
 export type SeaAvatarMode = "own" | "alex";
 export type SeaFont = { id: string; url: string; expiresAt: number };
-export type SeaGlyph = { character: string; x: number; row: number; width: number };
+export type SeaGlyph = { character: string; x: number; row: number; width: number; color?: number };
 export type SeaMessage = {
   id: number;
   name: string;

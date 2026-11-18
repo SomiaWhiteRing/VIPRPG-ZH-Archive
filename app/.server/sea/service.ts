@@ -2,8 +2,8 @@ import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
 import { translate } from "@/lib/i18n/core";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { HttpError } from "@/lib/http";
-import { SEA_ANONYMOUS_NAME, SEA_ANONYMOUS_NAME_LIMIT, SEA_FACE_COUNT, type SeaSubmission } from "@/lib/dto/sea";
-import { layoutSeaDialogue } from "@/lib/ui/eternal-sea";
+import { SEA_ANONYMOUS_NAME_LIMIT, SEA_FACE_COUNT, type SeaSubmission } from "@/lib/dto/sea";
+import { layoutSeaBody } from "@/lib/ui/eternal-sea";
 import type { SeaActor } from "./identity";
 import type { CharacterPortrait } from "@/lib/character-names";
 import { PUBLIC_CHARACTER_PORTRAIT_CONDITION } from "@/app/.server/db/character-portrait-library";
@@ -37,8 +37,9 @@ export async function seaSubmission(value: Record<string, unknown>, actor: SeaAc
       faceIndex = value.faceIndex || undefined;
     }
   }
-  const name = avatarMode === "own" ? actor.name : anonymousName ?? SEA_ANONYMOUS_NAME;
-  if (!body.trim() || !layoutSeaDialogue(name, body).fits) throw new HttpError(400, translate(locale, "sea.capacity"));
+  const layout = layoutSeaBody(body);
+  if (!layout.fits) throw new HttpError(400, translate(locale, "sea.capacity"));
+  if (!layout.hasContent) throw new HttpError(400, translate(locale, "sea.invalidBody"));
   if (avatarMode === "alex" && value.portrait !== undefined) {
     const choice = value.portrait as Partial<CharacterPortrait> | null;
     const id = choice?.faceSheetId;

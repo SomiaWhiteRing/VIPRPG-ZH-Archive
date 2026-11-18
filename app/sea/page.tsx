@@ -12,7 +12,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
 import { RpgDialogue, RpgFace } from "@/app/components/ui/rpg-dialogue";
-import { layoutSeaDialogue, limitSeaBodyInput, SEA_ASSETS, seaBitmap } from "@/lib/ui/eternal-sea";
+import { layoutSeaBody, limitSeaBodyInput, SEA_ASSETS, seaBitmap, seaBodyByteBudget } from "@/lib/ui/eternal-sea";
 import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { getUserAvatarSrc } from "@/lib/user-profile";
 import { runtimeContext } from "@/app/.server/router-context";
@@ -76,7 +76,14 @@ export default function EternalSeaPage() {
   const [anonymousPortrait, setAnonymousPortrait] = useState<CharacterAvatarSelection>();
   const [settings, setSettings] = useState<{ open: boolean; name: string; face: number; portrait?: CharacterAvatarSelection }>({ open: false, name: "", face: 0 });
   const avatarMode = session && useOwnAvatar ? "own" : "alex";
-  const name = avatarMode === "own" && session ? session.displayName : anonymousName || SEA_ANONYMOUS_NAME;
+  const submissionFields = {
+    avatarMode,
+    anonymousName: avatarMode === "alex" ? anonymousName || undefined : undefined,
+    faceIndex: avatarMode === "alex" ? anonymousFace || undefined : undefined,
+    portrait: avatarMode === "alex" && anonymousPortrait
+      ? { faceSheetId: anonymousPortrait.faceSheetId, row: anonymousPortrait.row, column: anonymousPortrait.column }
+      : undefined,
+  } satisfies Omit<SeaSubmission, "clientMessageId" | "body">;
   const { messages, font, refresh } = useSeaRoom(useLoaderData<typeof loader>(), locale);
   const toast = useToast();
   const [sending, setSending] = useState(false);
@@ -89,11 +96,12 @@ export default function EternalSeaPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const followingRef = useRef(true);
   const scrollInitializedRef = useRef(false);
-  const composingRef = useRef(false);
+  const composingRef = useRef<string | null>(null);
   const sendingRef = useRef(false);
   const submissionRef = useRef<SeaSubmission | null>(null);
-  const layout = layoutSeaDialogue(name, draft);
-  const canSend = draft.trim().length > 0 && layout.fits;
+  const byteBudget = seaBodyByteBudget(submissionFields);
+  const layout = layoutSeaBody(draft, byteBudget);
+  const canSend = layout.hasContent && layout.fits;
 
   useEffect(() => {
     try {
@@ -192,19 +200,26 @@ export default function EternalSeaPage() {
     return () => window.removeEventListener("scroll", trackDocumentScroll);
   }, [native]);
 
+  function commitDraft(input: HTMLTextAreaElement, previous: string) {
+    const { value, selectionEnd } = input;
+    const next = limitSeaBodyInput(value, selectionEnd, previous, byteBudget);
+    if (next !== value) {
+      const caret = Math.max(0, selectionEnd + next.length - value.length);
+      input.value = next;
+      input.setSelectionRange(caret, caret);
+    }
+    setDraft(next);
+  }
+
   async function send(event: FormEvent) {
     event.preventDefault();
-    if (!canSend || composingRef.current || sendingRef.current) return;
-    const savedName = avatarMode === "alex" ? anonymousName || undefined : undefined;
-    const faceIndex = avatarMode === "alex" ? anonymousFace || undefined : undefined;
-    const portrait = avatarMode === "alex" && anonymousPortrait
-      ? { faceSheetId: anonymousPortrait.faceSheetId, row: anonymousPortrait.row, column: anonymousPortrait.column }
-      : undefined;
+    if (!canSend || composingRef.current !== null || sendingRef.current) return;
+    const { anonymousName: savedName, faceIndex, portrait } = submissionFields;
     const old = submissionRef.current;
     const submission: SeaSubmission = old?.body === draft && old.avatarMode === avatarMode
       && old.anonymousName === savedName && old.faceIndex === faceIndex
       && old.portrait?.faceSheetId === portrait?.faceSheetId && old.portrait?.row === portrait?.row && old.portrait?.column === portrait?.column
-      ? old : { clientMessageId: crypto.randomUUID(), body: draft, avatarMode, anonymousName: savedName, faceIndex, portrait };
+      ? old : { ...submissionFields, clientMessageId: crypto.randomUUID(), body: draft };
     submissionRef.current = submission;
     sendingRef.current = true;
     setSending(true);
@@ -246,11 +261,15 @@ export default function EternalSeaPage() {
               <div className="sea-input-area">
                 <Label htmlFor="sea-input" className="sr-only">{t("sea.body")}</Label>
                 <Textarea id="sea-input" ref={inputRef} value={draft} rows={3} className="sea-input" placeholder={t("sea.placeholder")}
-                  onChange={(event) => setDraft(composingRef.current ? event.target.value : limitSeaBodyInput(event.target.value))}
-                  onCompositionStart={() => { composingRef.current = true; }}
+                  onChange={(event) => {
+                    if (composingRef.current !== null) setDraft(event.currentTarget.value);
+                    else commitDraft(event.currentTarget, draft);
+                  }}
+                  onCompositionStart={() => { composingRef.current = draft; }}
                   onCompositionEnd={(event) => {
-                    composingRef.current = false;
-                    setDraft(limitSeaBodyInput(event.currentTarget.value));
+                    const previous = composingRef.current ?? draft;
+                    composingRef.current = null;
+                    commitDraft(event.currentTarget, previous);
                   }} />
                 <div className="sea-submit-row">
                   {avatarMode === "alex" && <Dialog.Root open={settings.open} onOpenChange={(open) => setSettings({ open, name: anonymousName, face: anonymousFace, portrait: anonymousPortrait })}>

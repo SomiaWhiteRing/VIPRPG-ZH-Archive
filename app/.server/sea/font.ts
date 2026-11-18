@@ -104,7 +104,7 @@ export function seaFontCodec(state: SeaFontState) {
     bytes: () => bytes ??= buildFont(state.order),
     message(message: SeaOriginalMessage): SeaMessage {
       return { ...message, name: encode(message.name), body: encode(message.body),
-        glyphs: layoutSeaDialogue(message.name, message.body).placements.map(glyph => ({ ...glyph, character: encode(glyph.character) })) };
+        glyphs: layoutSeaDialogue(message.name, message.body).map(glyph => ({ ...glyph, character: encode(glyph.character) })) };
     },
   };
 }

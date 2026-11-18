@@ -4,6 +4,7 @@ import { requireAnyPermission, requirePermission } from "@/app/.server/auth/auth
 import { assertSameOrigin, SameOriginError } from "@/app/.server/auth/origin";
 import { parsePositiveId, readJsonObject } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
+import { SEA_MESSAGE_REQUEST_BYTES } from "@/lib/dto/sea";
 import { HttpError, json } from "@/lib/http";
 import { prepareSeaActor, seaIpKey } from "./identity";
 import { seaRoom, seaSubmission } from "./service";
@@ -63,7 +64,7 @@ seaApi.post("/api/sea/messages", async c => {
     throw error;
   }
   const { actor, cookie } = await prepareSeaActor(runtime);
-  const input = await seaSubmission(await readJsonObject(c.req.raw, translate(runtime.uiLocale, "sea.payload"), { maximumBytes: 4096, requireJsonContentType: true, fatalUtf8: true }), actor, runtime.env.DB, runtime.uiLocale);
+  const input = await seaSubmission(await readJsonObject(c.req.raw, translate(runtime.uiLocale, "sea.payload"), { maximumBytes: SEA_MESSAGE_REQUEST_BYTES, requireJsonContentType: true, fatalUtf8: true }), actor, runtime.env.DB, runtime.uiLocale);
   const result = await seaRoom(runtime).publish(actor, input);
   if (!result.ok) throw new HttpError(result.status, result.detail, result.code);
   return json(result, { status: result.repeated ? 200 : 201, headers: cookie ? { "Set-Cookie": cookie } : undefined });

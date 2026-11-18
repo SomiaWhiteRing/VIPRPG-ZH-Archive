@@ -30,7 +30,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       CREATE TABLE IF NOT EXISTS mutes (actor_key TEXT PRIMARY KEY, message_id INTEGER NOT NULL, name TEXT NOT NULL, until INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS moderation_log (id INTEGER PRIMARY KEY AUTOINCREMENT, operator_id INTEGER NOT NULL, action TEXT NOT NULL, message_id INTEGER NOT NULL, minutes INTEGER, created_at INTEGER NOT NULL);
     `);
-    // Existing rooms retain their messages and identity mutes during this additive upgrade.
+    // Existing rooms retain their messages and identity mutes during upgrades.
     for (const [table, columns] of [
       ["messages", [["ip_key", "TEXT"], ["avatar_blob_sha256", "TEXT"], ["anonymous_name", "TEXT"], ["face_index", "INTEGER NOT NULL DEFAULT 0"], ["portrait", "TEXT"]]],
       ["moderation_log", [["scope", "TEXT NOT NULL DEFAULT 'identity'"], ["reason", "TEXT NOT NULL DEFAULT ''"]]],
@@ -38,6 +38,15 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
       const existing = new Set(ctx.storage.sql.exec<{ name: string }>(`PRAGMA table_info(${table})`).toArray().map(column => column.name));
       for (const [name, definition] of columns) {
         if (!existing.has(name)) ctx.storage.sql.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+      }
+      if (table === "messages" && existing.has("body_format")) {
+        ctx.storage.transactionSync(() => {
+          ctx.storage.sql.exec("ALTER TABLE messages DROP COLUMN body_format");
+          // The same stored messages now render differently in open clients.
+          this.advance();
+        });
+        const sockets = ctx.getWebSockets();
+        if (sockets.length) ctx.waitUntil(this.syncSockets(sockets));
       }
     }
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
