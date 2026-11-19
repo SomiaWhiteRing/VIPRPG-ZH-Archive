@@ -65,6 +65,7 @@ export function ResourceManager({
   return (
     <main>
       <PageHeader compact title={t("admin.resources.title")} />
+      <Link className="text-primary" to="/admin/windy-errors">{t("windy.title")}</Link>
       <AdminListMeta total={resources.length} noun={t("core.nav.resources")} />
       {resources.length ? <TableWrap compact label={t("admin.resources.list")} minWidth={760}>
         <thead><tr><th>{t("creator.name")}</th><th>{t("admin.genres.genres")}</th><th>{t("admin.list.status")}</th><th>{t("admin.resources.order")}</th><th className="admin-action-column">{t("admin.characterList.actions")}</th></tr></thead>

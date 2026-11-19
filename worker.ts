@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { HttpError } from "./lib/http";
+import { ingestWindyReport } from "./app/.server/windy-reports";
 import { DurableObject } from "cloudflare:workers";
 import { createRequestHandler, RouterContextProvider } from "react-router";
 import { api } from "./app/.server/api";
@@ -81,6 +83,16 @@ const app = new Hono<{
   Variables: { runtime: AppRuntime };
 }>();
 
+app.post("/api/tools/windy-translator/error-reports", async c => {
+  const rt = createRuntime(c.req.raw, c.env, c.executionCtx, import.meta.env.DEV);
+  try {
+    return await ingestWindyReport(rt);
+  } catch (error) {
+    if (error instanceof HttpError) return new Response(null, { status: error.status });
+    console.error("Windy error report storage failed");
+    return new Response(null, { status: 503, headers: {"Retry-After":"60"} });
+  }
+});
 app.use("*", async (c, next) => {
   const crawlResponse = crawlerResponse(c.req.raw);
   if (crawlResponse) {

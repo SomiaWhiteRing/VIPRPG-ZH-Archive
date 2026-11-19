@@ -18,6 +18,7 @@ export type InboxItemStatus =
   | "archived";
 
 export type InboxItem = {
+  windyErrorKind?: string;
   id: number;
   type: InboxItemType;
   roleRequestClosed?: true;

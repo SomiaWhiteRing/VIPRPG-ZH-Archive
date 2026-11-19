@@ -78,6 +78,7 @@ export default [
     index("admin/page.tsx"),
     route("permissions", "admin/permissions/page.tsx"),
     route("resources", "admin/resources/page.tsx"),
+    route("windy-errors", "admin/windy-errors/page.tsx"),
     route("resources/:id", "admin/resources/detail.tsx"),
     route("tags", "admin/tags/page.tsx"),
     route("genres", "admin/genres/page.tsx"),
