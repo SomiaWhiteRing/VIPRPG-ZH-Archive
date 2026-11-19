@@ -20,8 +20,8 @@ CREATE TRIGGER windy_report_received AFTER INSERT ON windy_error_reports
 BEGIN
   UPDATE windy_error_groups SET
     samples=samples+1, occurrences=occurrences+NEW.occurrences, last_seen=CURRENT_TIMESTAMP,
-    generation=generation+CASE WHEN NEW.build_number>=fixed_build THEN 1 ELSE 0 END,
-    fixed_build=CASE WHEN NEW.build_number>=fixed_build THEN NULL ELSE fixed_build END
+    generation=generation+iif(NEW.build_number>=fixed_build,1,0),
+    fixed_build=iif(NEW.build_number>=fixed_build,NULL,fixed_build)
   WHERE kind=NEW.kind;
   INSERT INTO inbox_items(type,recipient_user_id,title,body,event_key,metadata_json)
     SELECT 'system_notice',ur.user_id,'温蒂翻译器出现新的报错类型','',
