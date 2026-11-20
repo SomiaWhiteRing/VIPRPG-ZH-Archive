@@ -142,9 +142,9 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
         className="admin-panel grid gap-4"
       >
         <h2 className="admin-section-title">{t("admin.resources.details")}</h2>
-        <p className="text-sm text-muted">
-          {t("admin.resources.slugValue", { slug: resource.slug })} ·{" "}
-          {resource.kind === "tool" ? t("admin.resources.tool") : t("admin.resources.external")}
+        <p className="flex flex-wrap gap-x-2 text-sm text-muted">
+          <span>{t("admin.resources.slugValue", { slug: resource.slug })}</span>
+          <span>{resource.kind === "tool" ? t("admin.resources.tool") : t("admin.resources.external")}</span>
         </p>
         <Field label={t("creator.name")}>
           <Input
@@ -284,13 +284,10 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
               className="admin-panel admin-details"
             >
               <summary>
-                {release.version_label} ·{" "}
-                {
-                  t(release.status === "draft" ? "admin.resources.draft" : release.status === "published" ? "upload.own.status.published" : "inbox.withdrawn")
-                }
+                {release.version_label} ({t(release.status === "draft" ? "admin.resources.draft" : release.status === "published" ? "upload.own.status.published" : "inbox.withdrawn")})
                 {!automaticPackage && release.release_sequence
-                  ? ` · ${t("admin.resourceRelease.sequence", { count: release.release_sequence })}`
-                  : ""}
+                  ? <span className="ms-2">{t("admin.resourceRelease.sequence", { count: release.release_sequence })}</span>
+                  : null}
               </summary>
               <div className="mt-4 grid gap-4">
                 <form
@@ -350,15 +347,15 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
                       key={a.id}
                       className="grid gap-3 border-t border-border pt-3"
                     >
-                      <p className="break-all text-sm">
-                        {targetLabel(a.target)} · {a.filename} ·{" "}
-                        {fileSize(a.size_bytes)} ·{" "}
-                        {t(`admin.resourceRelease.${a.storage_status}`)}
+                      <p className="flex flex-wrap gap-x-2 break-all text-sm">
+                        <span>{targetLabel(a.target)}</span>
+                        <span>{a.filename} ({fileSize(a.size_bytes)})</span>
+                        <span>{t(`admin.resourceRelease.${a.storage_status}`)}</span>
                       </p>
                       {release.published_at !== null && ["cleanup", "cleaned"].includes(a.storage_status) ? (
-                        <p className="break-all text-sm text-muted">
-                          {t("admin.resourceRelease.oldPackage", { hash: a.sha256 })}
-                          {a.application_build_id ? ` · ${t("admin.resourceRelease.build", { id: a.application_build_id })}` : ""}
+                        <p className="flex flex-wrap gap-x-2 break-all text-sm text-muted">
+                          <span>{t("admin.resourceRelease.oldPackage", { hash: a.sha256 })}</span>
+                          {a.application_build_id ? <span>{t("admin.resourceRelease.build", { id: a.application_build_id })}</span> : null}
                         </p>
                       ) : null}
                       <div className="flex flex-wrap gap-2">

@@ -122,12 +122,12 @@ export default function WindyErrors() {
     const key = `windy.kind.${kind}`;
     return isMessageKey(key) ? t(key) : kind;
   };
-  const sampleName = (sample: Sample) => formatDate(sample.received_at, { locale }) + " · " + sample.version + " · " + sample.id.slice(0, 8);
+  const sampleName = (sample: Sample) => `${formatDate(sample.received_at, { locale })}, ${sample.version} (${sample.id.slice(0, 8)})`;
   const detail = typeof evidence?.message === "string" ? evidence.message : typeof evidence?.reason === "string" ? evidence.reason : null;
   const file = typeof evidence?.file === "string" ? evidence.file : null;
   return <main>
     <PageHeader compact title={t("windy.title")} actions={<Link className="text-primary" to={"/admin/windy-errors?"+backQuery}>{t("windy.day.back")}</Link>} />
-    {day && group && <h2 className="text-lg font-bold">{day} · {nameOf(group.kind)}</h2>}
+    {day && group && <h2 className="text-lg font-bold">{day} {nameOf(group.kind)}</h2>}
     {!group ? <EmptyState title={t("windy.empty")} /> :
       <div className={day ? "min-w-0" : "grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(13rem,16rem)_minmax(0,1fr)]"}>
         {!day && <aside className="admin-panel lg:sticky lg:top-4">

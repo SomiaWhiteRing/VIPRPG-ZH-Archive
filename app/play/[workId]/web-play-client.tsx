@@ -995,7 +995,7 @@ export function WebPlayClient({
                     onClick={startInstall}
                     type="button"
                   >
-                    {t("play.install.start", { action: installAction })} · {formatBytes(metadata.installTotalSizeBytes)}
+                    {t("play.install.start", { action: installAction })} ({formatBytes(metadata.installTotalSizeBytes)})
                   </Rm2kButton>
                 )}
 

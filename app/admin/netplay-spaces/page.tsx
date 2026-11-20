@@ -59,7 +59,7 @@ export default function NetplaySpacesPage() {
     <RedirectFeedback />
     <Pane heading={t("admin.netplay.createSpace")}><SpaceForm /></Pane>
     {spaces.map((space) => <details key={space.id} className="admin-panel admin-details">
-      <summary>{space.name} · {space.external_endpoint ? t("admin.netplay.external") : "Cloudflare"}</summary>
+      <summary>{space.name} ({space.external_endpoint ? t("admin.netplay.external") : "Cloudflare"})</summary>
       <div className="mt-4"><SpaceForm space={space} /></div>
     </details>)}
   </main>;

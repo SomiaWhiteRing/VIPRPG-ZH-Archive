@@ -30,8 +30,8 @@ export function DiscussionList({
           <p className="mt-1 line-clamp-2 wrap-anywhere text-[15px] text-muted">
             {item.snippet}
           </p>
-          <p className="mb-0 mt-2 text-xs text-muted">
-            {t(`publicProfile.activity.${item.kind}`)} ·{" "}
+          <p className="mb-0 mt-2 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+            <span>{t(`publicProfile.activity.${item.kind}`)}</span>
             <Timestamp value={item.createdAt} />
           </p>
         </li>

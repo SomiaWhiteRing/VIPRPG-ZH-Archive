@@ -20,6 +20,7 @@ import {
 import {
   CHARACTER_ROLE_LABELS,
   characterNameKey,
+  formatCharacterNamePair,
   type CharacterCreditSelection,
   type CharacterRoleKey,
   type CharacterSuggestion,
@@ -382,7 +383,7 @@ export function CharacterCreditManager({
   const nameEditor = useMemo(() => {
     if (editingIndex === null || !values[editingIndex]) return null;
     const index = editingIndex, credit = values[index], name = credit.selection.displayName;
-    return <Input aria-label={t("character.manager.workName", { name })} className="h-[26px] min-w-0 flex-1 rounded-sm px-[3px] py-0 text-xs" disabled={disabled} maxLength={100} title={`${name} · ${credit.selection.originalName}`} ref={nameInput} value={nameValue}
+    return <Input aria-label={t("character.manager.workName", { name })} className="h-[26px] min-w-0 flex-1 rounded-sm px-[3px] py-0 text-xs" disabled={disabled} maxLength={100} title={formatCharacterNamePair(name, credit.selection.originalName)} ref={nameInput} value={nameValue}
       onChange={(event) => { setNameValue(event.target.value); if (nameDraft.current) nameDraft.current.value = event.target.value; }}
       onCompositionStart={() => { composing.current = true; }} onCompositionEnd={(event) => { composing.current = false; if (nameDraft.current) nameDraft.current.value = event.currentTarget.value; if (document.activeElement !== event.currentTarget) finishName(); }}
       onBlur={(event) => { if (!composing.current && event.relatedTarget !== nameButtons.current.get(index)) finishName(); }}
@@ -506,7 +507,7 @@ export function CharacterCreditManager({
                       <div className={cn("grid grid-cols-3 auto-rows-[38px] content-start gap-[5px]", settlingIds.size > 0 && "pointer-events-none")}>
                         {rows.map(({ credit, index }) => {
                           const selected = pickedWork.has(index), name = credit.selection.displayName;
-                          return <CharacterDragItem key={creditDragId(credit)} id={creditDragId(credit)} source={{ from: "work", index }} target={{ kind: "credit", role, index }} disabled={disabled} packed={dragSets.packed.has(index)} lifted={dragSets.work.has(index)} settling={settlingIds.has(creditDragId(credit))} activateFromContainer data-credit-index={index} role="group" aria-label={`${name} · ${t(`work.role.${role}`)}`}
+                          return <CharacterDragItem key={creditDragId(credit)} id={creditDragId(credit)} source={{ from: "work", index }} target={{ kind: "credit", role, index }} disabled={disabled} packed={dragSets.packed.has(index)} lifted={dragSets.work.has(index)} settling={settlingIds.has(creditDragId(credit))} activateFromContainer data-credit-index={index} role="group" aria-label={`${name} (${t(`work.role.${role}`)})`}
                             className={cn("relative flex h-[38px] w-full min-w-0 cursor-grab items-center gap-1.5 rounded border border-border px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-primary active:cursor-grabbing [content-visibility:auto] [contain-intrinsic-size:38px]", selected && "border-primary bg-primary/5 ring-1 ring-primary")}
                             onClickCapture={(event) => {
                               if (disabled || !event.ctrlKey || (event.target as Element).closest("input, textarea, [data-drag-no-activate]")) return;
@@ -573,12 +574,12 @@ const WorkCharacterContent = memo(function WorkCharacterContent({ index, credit,
   const name = credit.selection.displayName;
   const portrait = useMemo(() => renderPortrait(index), [renderPortrait, index]);
   return <>
-    <Button aria-label={t("upload.character.choosePortrait", { name })} aria-haspopup="dialog" aria-controls={portraitDialogId} className={cn("group/portrait relative size-7 min-h-0 shrink-0 overflow-hidden rounded-sm p-0 hover:bg-transparent", missing && "bg-destructive/10")} disabled={disabled} size="icon" title={missing ? `${name} · ${t("upload.character.portraitPending")}` : t("upload.character.choosePortrait", { name })} type="button" variant="ghost" onClick={(event) => onEditPortrait(index, event.currentTarget)}>
+    <Button aria-label={t("upload.character.choosePortrait", { name })} aria-haspopup="dialog" aria-controls={portraitDialogId} className={cn("group/portrait relative size-7 min-h-0 shrink-0 overflow-hidden rounded-sm p-0 hover:bg-transparent", missing && "bg-destructive/10")} disabled={disabled} size="icon" title={missing ? `${name} (${t("upload.character.portraitPending")})` : t("upload.character.choosePortrait", { name })} type="button" variant="ghost" onClick={(event) => onEditPortrait(index, event.currentTarget)}>
       {portrait}<span aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center bg-black/55 text-white opacity-0 transition-opacity group-hover/portrait:opacity-100 group-focus-visible/portrait:opacity-100 motion-reduce:transition-none"><Pencil className="size-3.5" /></span>
     </Button>
     <div className="flex min-w-0 flex-1 items-center gap-[3px]">
-      {editor ?? (multiple ? <Button aria-label={t("character.manager.selectNamed", { name })} aria-pressed={selected} className="h-[26px] min-h-0 min-w-0 flex-1 cursor-grab justify-start overflow-hidden rounded-none p-0 text-xs font-normal hover:bg-transparent active:cursor-grabbing" disabled={disabled} title={`${name} · ${credit.selection.originalName}`} type="button" variant="ghost" onClick={() => onSelect(index)}><span className="truncate">{name}</span></Button>
-        : <span className="min-w-0 flex-1 truncate text-xs" title={`${name} · ${credit.selection.originalName}`}>{name}</span>)}
+      {editor ?? (multiple ? <Button aria-label={t("character.manager.selectNamed", { name })} aria-pressed={selected} className="h-[26px] min-h-0 min-w-0 flex-1 cursor-grab justify-start overflow-hidden rounded-none p-0 text-xs font-normal hover:bg-transparent active:cursor-grabbing" disabled={disabled} title={formatCharacterNamePair(name, credit.selection.originalName)} type="button" variant="ghost" onClick={() => onSelect(index)}><span className="truncate">{name}</span></Button>
+        : <span className="min-w-0 flex-1 truncate text-xs" title={formatCharacterNamePair(name, credit.selection.originalName)}>{name}</span>)}
       <Button aria-label={editor ? t("character.manager.saveName") : t("character.manager.editNamed", { name })} data-drag-no-activate className="h-4 min-h-0 w-3.5 shrink-0 rounded-none p-0 text-muted [&_svg]:size-3" disabled={disabled} size="icon" title={editor ? t("character.manager.saveName") : t("character.manager.editName")} type="button" variant="ghost" ref={(node) => { if (node) nameButtons.current.set(index, node); else nameButtons.current.delete(index); }} onClick={() => editor ? onFinishName(true, true) : onEditName(index)}>{editor ? <Check aria-hidden /> : <Pencil aria-hidden />}</Button>
       <Button aria-label={t("character.manager.removeNamed", { name })} data-drag-no-activate className="h-4 min-h-0 w-3.5 shrink-0 rounded-none p-0 text-muted hover:text-destructive [&_svg]:size-3" disabled={disabled} size="icon" title={t("character.manager.removeCredit")} type="button" variant="ghost" onClick={() => onRemove([index])}><Trash2 aria-hidden /></Button>
     </div>
@@ -589,9 +590,9 @@ const LibraryCharacterTile = memo(function LibraryCharacterTile({ item, disabled
   item: CatalogItem; disabled: boolean; multiple: boolean; selected: boolean; lifted: boolean; settling: boolean; onSelect: (characterId: number, multiple: boolean) => void;
 }) {
   return <CharacterLibraryDragItem id={`library:${item.character.id}`} source={{ from: "library", characterId: item.character.id }} disabled={disabled} lifted={lifted} settling={settling} className="h-[38px] min-w-0 [content-visibility:auto] [contain-intrinsic-size:38px]" data-library-character={item.character.id}>
-    {({ attributes, listeners, setActivatorNodeRef }) => <Button {...attributes} {...listeners} ref={setActivatorNodeRef} aria-label={`${item.name} · ${item.originalName}`} aria-pressed={selected}
+    {({ attributes, listeners, setActivatorNodeRef }) => <Button {...attributes} {...listeners} ref={setActivatorNodeRef} aria-label={formatCharacterNamePair(item.name, item.originalName)} aria-pressed={selected}
       className={cn("relative h-[38px] min-h-0 w-full min-w-0 cursor-grab justify-start gap-1.5 rounded border border-border px-1.5 py-0 text-xs font-normal hover:border-primary active:cursor-grabbing", selected && "border-primary bg-primary/5 ring-1 ring-primary")}
-      disabled={disabled} type="button" variant="ghost" title={`${item.name} · ${item.originalName}`} onClick={(event) => onSelect(item.character.id, multiple || event.ctrlKey)}>
+      disabled={disabled} type="button" variant="ghost" title={formatCharacterNamePair(item.name, item.originalName)} onClick={(event) => onSelect(item.character.id, multiple || event.ctrlKey)}>
       <CharacterPortrait className="size-7 rounded-sm text-[11px]" displayName={item.name} portrait={item.character.defaultPortrait} size={28} toneKey={item.character.id} />
       <span className="min-w-0 flex-1 truncate text-left">{item.name}</span>
       {selected ? <Check aria-hidden className="pointer-events-none absolute left-6 top-[23px] size-2.5 rounded-full bg-primary text-primary-foreground" /> : null}

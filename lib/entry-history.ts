@@ -136,7 +136,11 @@ function displaySnapshot(snapshot: Snapshot, kind: EntryHistoryKind, id: number,
     texts("简介", snapshot.description);
     texts("别名", ...array(snapshot.aliases).map(value => {
       const alias = auditRecord(value);
-      return alias ? [text(alias.name), language(alias.language, locale)].filter(Boolean).join(" · ") : text(value);
+      if (!alias) return text(value);
+      const name = text(alias.name);
+      const label = language(alias.language, locale);
+      if (!name || !label) return name || label;
+      return locale === "en" ? `${name} (${label})` : `${name}（${label}）`;
     }));
     texts("来源资料", ...array(snapshot.sources));
     texts("分类归属", ...records(snapshot.memberships).map(row => lines(
@@ -254,7 +258,7 @@ export function entryHistorySummary(changes: ReturnType<typeof entryHistoryChang
   const separator = locale === "en" ? ", " : "、";
   return (["added", "removed", "edited"] as const).flatMap(action => groups[action].length
     ? [translate(locale, `entryHistory.${action}`, { fields: groups[action].join(separator) })]
-    : []).join(locale === "en" ? " · " : "，");
+    : []).join(locale === "en" ? ". " : "，");
 }
 
 /** Reconstruct the endpoints from chronological, operation-scoped snapshots before diffing. */

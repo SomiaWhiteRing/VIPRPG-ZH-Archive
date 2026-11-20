@@ -8,7 +8,7 @@ import { cn } from "@/lib/ui/cn";
 
 export function TimelineWorkPreview({ work, compact }: { work: TimelineWork; compact: boolean }) {
   const locale = useUiLocale();
-  const metadata = [work.genre, work.engineFamily !== "other" ? engineShortLabel(work.engineFamily, locale) : null].filter(Boolean).join(" · ");
+  const metadata = [work.genre, work.engineFamily !== "other" ? engineShortLabel(work.engineFamily, locale) : null].filter(Boolean).join(locale === "en" ? ", " : "、");
   return <Link to={`/games/${work.id}`} prefetch="none" className="group mt-2 flex min-w-0 max-w-xl items-center gap-3 rounded-lg border border-border/60 bg-muted/5 p-2 transition-colors hover:border-primary/40 hover:bg-muted/10">
     <span className={cn("relative grid aspect-4/3 shrink-0 place-items-center overflow-hidden rounded bg-muted/10 text-muted", compact ? "w-14" : "w-20 sm:w-24")}>
       <WorkThumbnail blobSha256={work.coverBlobSha256} width={compact ? 56 : 96} height={compact ? 42 : 72} fallback={<Gamepad2 aria-hidden className="size-5" />} />

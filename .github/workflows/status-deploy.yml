@@ -26,6 +26,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run check:middle-dot
       - run: npx tsc --noEmit --project status/tsconfig.json
       - name: Candidate summary
         run: |

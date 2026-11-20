@@ -99,8 +99,7 @@ export default function AdminImportJobsPage() {
                 </td>
                 <td>{job.uploaderName || t("play.diagnostic.unknown")}</td>
                 <td>
-                  {job.fileCount.toLocaleString(locale)} ·{" "}
-                  {formatBytes(job.sourceSizeBytes || 0)}
+                  {job.fileCount.toLocaleString(locale)} ({formatBytes(job.sourceSizeBytes || 0)})
                 </td>
                 <td className="whitespace-nowrap text-xs text-muted tabular-nums">{formatDate(job.updatedAt, { locale })}</td>
               </tr>

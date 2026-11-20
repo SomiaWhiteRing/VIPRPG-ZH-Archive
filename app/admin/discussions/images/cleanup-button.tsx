@@ -45,8 +45,10 @@ export function ImageCleanupButton({
           {t("admin.discussions.imageDeleteTitle")}
         </AlertDialogTitle>
         <AlertDialogDescription className="break-words text-sm text-muted">
-          {author} ·{" "}
-          {topicId ? t("admin.discussions.imagePost", { id: topicId, post: postNumber ?? "" }) : t("admin.discussions.imageUnlinked")}
+          <span className="flex flex-wrap gap-x-2">
+            <span>{author}</span>
+            <span>{topicId ? t("admin.discussions.imagePost", { id: topicId, post: postNumber ?? "" }) : t("admin.discussions.imageUnlinked")}</span>
+          </span>
           <span className="mt-1 block break-all font-mono text-xs">{id}</span>
           <span className="mt-3 block">
             {t("admin.discussions.imageDeleteNote")}

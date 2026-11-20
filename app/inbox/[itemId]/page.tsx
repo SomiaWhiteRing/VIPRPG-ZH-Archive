@@ -80,8 +80,9 @@ export default function InboxTargetPage() {
           </p>
         </div> : <p>{item.type.startsWith("forum_") ? t("inbox.contentUnavailable") : title}</p>}
         {item.maintainerRequest ? <MaintainerRequestDetails request={item.maintainerRequest} /> : null}
-        {item.type === "role_change_request" ? <p className="mt-2 text-sm text-muted">
-          {item.targetUserId ? <Link className="text-primary hover:underline" to={`/users/${item.targetUserId}`}>{item.targetDisplayName}</Link> : item.targetDisplayName} · {item.requestedRole?.name}
+        {item.type === "role_change_request" ? <p className="mt-2 flex flex-wrap gap-x-2 text-sm text-muted">
+          <span>{item.targetUserId ? <Link className="text-primary hover:underline" to={`/users/${item.targetUserId}`}>{item.targetDisplayName}</Link> : item.targetDisplayName}</span>
+          {item.requestedRole?.name ? <span>{item.requestedRole.name}</span> : null}
         </p> : null}
         {contentNotification ? <>
           <Link to={contentNotification.href} className="mt-2 block text-primary hover:underline">{item.timelineNotification ? t("inbox.event.timelineTarget") : contentNotification.targetTitle}</Link>

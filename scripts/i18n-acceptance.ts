@@ -91,7 +91,7 @@ if (options.suite === "all") for (const viewport of Object.keys(viewports)) {
   }
 }
 if (options.suite === "header") for (const viewport of Object.keys(viewports)) for (const locale of locales) for (const persona of ["guest", "member", "admin"] as const) {
-  add("header", `共用页头 · ${persona}`, locale, viewport, persona, persona === "admin" ? "/admin" : "/about");
+  add("header", `共用页头（${persona}）`, locale, viewport, persona, persona === "admin" ? "/admin" : "/about");
 }
 if (options["retry-report"]) {
   const previous = JSON.parse(readFileSync(options["retry-report"], "utf8")) as { cases: AcceptanceCase[] };

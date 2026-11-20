@@ -85,11 +85,9 @@ export function AdminDiscussionTags({
                 <td className="wrap-anywhere">
                   <strong className="admin-cell-title">{tag.name}</strong>
                   <span className="admin-cell-meta font-mono">#{tag.id}</span>
-                  <p className="mt-1 text-xs text-muted md:hidden">
-                    {
-                      t(tagStateKeys[tag.state])
-                    }{" "}
-                    · {t("admin.discussionTags.count", { count: tag.count })}
+                  <p className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted md:hidden">
+                    <span>{t(tagStateKeys[tag.state])}</span>
+                    <span>{t("admin.discussionTags.count", { count: tag.count })}</span>
                   </p>
                 </td>
                 <td className="hidden font-mono md:table-cell">
@@ -220,7 +218,7 @@ function ManageTag({
         }}
       >
         <p className="text-sm">
-          ID {tag.id} · {t("admin.discussionTags.count", { count: tag.count })}
+          ID {tag.id} ({t("admin.discussionTags.count", { count: tag.count })})
         </p>
         <p className="wrap-anywhere text-sm">{t("admin.discussionTags.creatorName", { name: tag.creator })}</p>
         <p className="text-xs text-muted">
@@ -274,7 +272,7 @@ function ManageTag({
                 onValueChange={setTargetId}
                 options={targets.map((target) => ({
                   value: String(target.id),
-                  label: `${target.name} · ${t("admin.discussionTags.count", { count: target.count })}`,
+                  label: `${target.name} (${t("admin.discussionTags.count", { count: target.count })})`,
                 }))}
                 required
                 disabled={busy}

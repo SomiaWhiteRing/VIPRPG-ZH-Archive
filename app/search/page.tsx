@@ -302,7 +302,7 @@ async function listDirectory(
       href: `/catalogs/${item.id}`,
       title: item.title,
       subtitle: null,
-      meta: `${translate(runtime.uiLocale, "favorite.workCount", { count: item.itemCount })} · ${item.ownerName}`,
+      meta: `${item.ownerName} (${translate(runtime.uiLocale, "favorite.workCount", { count: item.itemCount })})`,
       catalog: item,
     }));
   else items = [];

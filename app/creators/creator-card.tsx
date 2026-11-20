@@ -1,5 +1,5 @@
 import { RichMessage } from "@/app/components/ui/rich-message";
-import { useMessages } from "@/lib/i18n/react";
+import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { CreatorPortrait } from "@/app/components/ui/creator-portrait";
 import type { PublicCreatorListItem } from "@/lib/dto/db/creator-library";
 import { LocaleLink as Link } from "@/app/components/ui/locale-link";
@@ -8,6 +8,7 @@ export function CreatorCard({ creator }: {
   creator: Omit<PublicCreatorListItem, "aliases"> & { aliases?: string[] };
 }) {
   const t = useMessages();
+  const locale = useUiLocale();
   return (
     <article className="h-full min-w-0">
       <Link
@@ -27,7 +28,7 @@ export function CreatorCard({ creator }: {
           {creator.aliases?.length ? (
             <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted wrap-anywhere sm:text-[13px]">
               <span className="sr-only">{t("creator.aliases")}</span>
-              {creator.aliases.join(" · ")}
+              {locale === "en" ? new Intl.ListFormat(locale).format(creator.aliases) : creator.aliases.join("、")}
             </p>
           ) : null}
           {creator.bio ? (

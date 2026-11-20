@@ -111,19 +111,19 @@ export default function UploadsPage() {
                     {work.originalTitle}
                   </p>
                 ) : null}
-                <p className="mt-1 text-sm text-muted">
-                  {engineLabel(work.engineFamily, locale)} ·{" "}
-                  {languageLabel(work.language, locale)}
+                <p className="mt-1 flex flex-wrap gap-x-2 text-sm text-muted">
+                  <span>{engineLabel(work.engineFamily, locale)}</span>
+                  <span>{languageLabel(work.language, locale)}</span>
                 </p>
-                <p className="mt-1 text-sm text-muted">
+                <p className="mt-1 flex flex-wrap gap-x-2 text-sm text-muted">
                   {work.publishedAt
-                    ? t("upload.own.publishedAt", { date: formatDate(work.publishedAt, { locale }) })
-                    : ""}
+                    ? <span>{t("upload.own.publishedAt", { date: formatDate(work.publishedAt, { locale }) })}</span>
+                    : null}
                   {!work.publishedAt ||
                   parseTimestamp(work.updatedAt).getTime() !==
                     parseTimestamp(work.publishedAt).getTime()
-                    ? `${work.publishedAt ? " · " : ""}${t("upload.own.updatedAt", { date: formatDate(work.updatedAt, { locale }) })}`
-                    : ""}
+                    ? <span>{t("upload.own.updatedAt", { date: formatDate(work.updatedAt, { locale }) })}</span>
+                    : null}
                 </p>
               </div>
               <div className="col-start-2 flex flex-wrap gap-2 sm:col-start-3">

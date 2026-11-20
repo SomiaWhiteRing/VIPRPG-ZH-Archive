@@ -21,7 +21,7 @@ export function NestedReply({
         {children}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-1">
-        <span className="mr-auto text-xs text-muted">{metadata}</span>
+        <span className="mr-auto flex flex-wrap items-center gap-x-2 text-xs text-muted">{metadata}</span>
         {actions}
       </div>
     </article>

@@ -525,7 +525,7 @@ export function DiscussionWorkspace({
         : { kind: content.kind, id: content.id };
     const base = {
       target,
-      summary: `${detail.topic.title} · #${content.postNumber}${content.kind === "comment" ? ` ${t("forum.nestedSuffix")}` : ""}`,
+      summary: `${detail.topic.title} (#${content.postNumber}${content.kind === "comment" ? ` ${t("forum.nestedSuffix")}` : ""})`,
       topicRevision: detail.topic.revision,
     };
     const items: ForumMenuItem[] = [];
@@ -839,8 +839,8 @@ export function DiscussionWorkspace({
               {detail.topic.title}
             </h1>
             <div className="mt-1.5 flex items-center justify-between gap-4">
-              <div className="min-w-0 text-sm text-muted">
-                {t("forum.by")}<ForumAuthorName author={detail.topic.author} /> ·{" "}
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-sm text-muted">
+                <span>{t("forum.by")}<ForumAuthorName author={detail.topic.author} /></span>
                 <Timestamp value={detail.topic.createdAt} />
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -1035,15 +1035,13 @@ export function DiscussionWorkspace({
                       </Link>
                       <div className="mt-2 flex flex-wrap items-center gap-x-1.5 text-xs leading-[18px] text-muted">
                         <ForumAuthorName author={item.author} />
-                        <span className="md:hidden">
-                          {" "}
-                          · {t("forum.replyCount", { count: item.replies })} ·{" "}
+                        <span className="inline-flex flex-wrap items-center gap-x-1.5 md:hidden">
+                          <span>{t("forum.replyCount", { count: item.replies })}</span>
                           <Timestamp value={item.activeAt} format="duration" />
                         </span>
                         {item.lastAuthor && !isPostAuthorHidden(item.lastAuthor.id) ? (
                           <span className="hidden md:inline">
-                            {" "}
-                            · {t("forum.lastReply")}
+                            {t("forum.lastReply")}
                             <ForumAuthorName author={item.lastAuthor} />
                           </span>
                         ) : null}
@@ -1151,6 +1149,7 @@ function ForumFloorView({
   onLocationChange: (href: string, replace?: boolean, targetId?: string) => void;
 }) {
   const t = useMessages();
+  const locale = useUiLocale();
   const location = useLocation();
   const toast = useToast();
   const isPostAuthorHidden = useIsPostAuthorHidden();
@@ -1339,9 +1338,8 @@ function ForumFloorView({
             >
               #{post.postNumber}
             </Link>
-            <span>·</span>
             <Timestamp value={post.createdAt} />
-            {post.editedAt ? ` · ${t("comment.edited")}` : ""}
+            {post.editedAt ? <span>{t("comment.edited")}</span> : null}
           </span>
           <div className="ml-auto flex items-center gap-0">
             {post.capabilities.like || post.body !== null ? (
@@ -1416,7 +1414,7 @@ function ForumFloorView({
                 id={`comment-${comment.id}`}
                 metadata={<>
                     <Timestamp value={comment.createdAt} />
-                    {comment.editedAt ? ` · ${t("comment.edited")}` : ""}
+                    {comment.editedAt ? <span>{t("comment.edited")}</span> : null}
                 </>}
                 actions={<>
                   {comment.body !== null ? (
@@ -1466,7 +1464,7 @@ function ForumFloorView({
                           )}
                         </>
                       ) : null}
-                      {" · "}
+                      {locale === "en" ? ": " : "："}
                       <ForumBody
                         body={comment.body!}
                         emojis={commentEmojis}

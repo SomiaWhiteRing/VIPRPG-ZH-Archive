@@ -1,5 +1,6 @@
 import { SearchComboBox } from "@/app/components/ui/search-combobox";
 import { Button } from "@/app/components/ui/button";
+import { formatCharacterNamePair } from "@/lib/character-names";
 import { useMessages } from "@/lib/i18n/react";
 import { useId, useMemo, useState } from "react";
 
@@ -55,7 +56,7 @@ export function CharacterMergeTargetField({
         descriptionId={descriptionId}
         items={matches.items}
         getKey={(item) => item.id}
-        getText={(item) => `${item.originalName} · ${item.primaryName}`}
+        getText={(item) => formatCharacterNamePair(item.originalName, item.primaryName)}
         onChoose={choose}
         enterSelectsFirst
         emptyState={
@@ -78,10 +79,10 @@ export function CharacterMergeTargetField({
         renderItem={(candidate) => (
           <>
             <span className="min-w-0 truncate">
-              {candidate.originalName} · {candidate.primaryName}
+              {formatCharacterNamePair(candidate.originalName, candidate.primaryName)}
             </span>
             <span className="shrink-0 text-xs text-muted">
-              #{candidate.id} · {t("upload.staff.works", { count: candidate.workCount })}
+              #{candidate.id} ({t("upload.staff.works", { count: candidate.workCount })})
             </span>
           </>
         )}
@@ -89,13 +90,13 @@ export function CharacterMergeTargetField({
       {selected ? (
         <div className="flex min-h-10 items-center justify-between gap-3 border-y border-border py-2">
           <span className="min-w-0 truncate text-sm font-normal">
-            {t("admin.characterDetail.selected", { name: `${selected.originalName} · ${selected.primaryName}` })}
+            {t("admin.characterDetail.selected", { name: formatCharacterNamePair(selected.originalName, selected.primaryName) })}
             <span className="ml-2 text-xs text-muted">
-              #{selected.id} · {t("upload.staff.works", { count: selected.workCount })}
+              #{selected.id} ({t("upload.staff.works", { count: selected.workCount })})
             </span>
           </span>
           <Button
-            aria-label={t("admin.characterDetail.clearSelected", { name: `${selected.originalName} · ${selected.primaryName}` })}
+            aria-label={t("admin.characterDetail.clearSelected", { name: formatCharacterNamePair(selected.originalName, selected.primaryName) })}
             onClick={() => setSelected(null)}
             size="sm"
             type="button"

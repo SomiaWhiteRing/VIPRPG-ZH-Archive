@@ -113,7 +113,7 @@ export class MissingResourceScan {
     // Maniac skips diagnostics, but known static RTP references still restore.
     if (this.skipMissingForManiac || this.missing.has(key)) return;
     if (this.missing.size >= 200) { this.limited = true; return; }
-    this.missing.set(key, { path, source: `${source} · ${kind}/${id}` });
+    this.missing.set(key, { path, source: `${source} (${kind}/${id})` });
   };
 
   finish(linkedRtp: ReadonlySet<string> = new Set()): MissingResourceReport {

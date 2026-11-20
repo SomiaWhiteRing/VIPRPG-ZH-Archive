@@ -9,7 +9,7 @@ import {
   type CharacterIndexEntry,
   type CharacterNameSelection,
 } from "@/lib/character-index";
-import { characterNameKey } from "@/lib/character-names";
+import { characterNameKey, formatCharacterNamePair } from "@/lib/character-names";
 import { useMessages } from "@/lib/i18n/react";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
@@ -109,7 +109,7 @@ export function CharacterMembershipPicker({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-medium">
-                {selection.displayName} · {selection.originalName}
+                {formatCharacterNamePair(selection.displayName, selection.originalName)}
               </span>
               <Button
                 aria-label={t("admin.characterMembers.deselect", { name: selection.displayName })}

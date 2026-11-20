@@ -16,7 +16,7 @@ BEGIN
     last_seen=CURRENT_TIMESTAMP, generation=generation+iif(NEW.build_number>=fixed_build,1,0),
     fixed_build=iif(NEW.build_number>=fixed_build,NULL,fixed_build) WHERE kind=NEW.kind;
   INSERT INTO inbox_items(type,recipient_user_id,title,body,event_key,metadata_json)
-    SELECT 'system_notice',ur.user_id,coalesce(NEW.report_day,date(NEW.received_at,'+8 hours')) || ' · 温蒂错误报告','',
+    SELECT 'system_notice',ur.user_id,coalesce(NEW.report_day,date(NEW.received_at,'+8 hours')) || ' 温蒂错误报告','',
       'windy-day:' || coalesce(NEW.report_day,date(NEW.received_at,'+8 hours')),
       json_object('windyDay',coalesce(NEW.report_day,date(NEW.received_at,'+8 hours')))
     FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE r.kind='bootstrap_admin'

@@ -313,7 +313,7 @@ final class NativeLibrary extends LinearLayout {
         sorting.setTooltipText("排序：" + SORT_NAMES[sortOrder]);
         sorting.setContentDescription("排序：" + SORT_NAMES[sortOrder]);
         int ready = 0; for (Entry item : entries) if (item.installed) ready++;
-        summary.setText(ready + " 款已安装" + (usage < 0 ? "" : "  ·  游戏文件 " + bytes(usage))
+        summary.setText(ready + " 款已安装" + (usage < 0 ? "" : "（游戏文件 " + bytes(usage) + "）")
             + (searchQuery.isEmpty() ? "" : "\n搜索：" + searchQuery));
         searchButton.setIconTint(ColorStateList.valueOf(searchQuery.isEmpty() ? ink() : teal()));
         manageButton.setIconTint(ColorStateList.valueOf(managing ? teal() : ink()));
@@ -387,7 +387,7 @@ final class NativeLibrary extends LinearLayout {
         if (entry.ready) {
             details.addView(title);
             String detailsText = bytes(entry.bytes);
-            if (!entry.lastPlayed.isEmpty()) detailsText += "  ·  " + date(entry.lastPlayed);
+            if (!entry.lastPlayed.isEmpty()) detailsText += "，" + date(entry.lastPlayed);
             TextView subtitle = label(detailsText, 12, muted(), false);
             subtitle.setPadding(0, dp(5), 0, 0); details.addView(subtitle);
             line.addView(details, new LayoutParams(0, -2, 1));

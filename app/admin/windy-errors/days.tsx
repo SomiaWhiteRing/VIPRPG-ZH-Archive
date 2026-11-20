@@ -70,7 +70,7 @@ export default function WindyDays() {
       <aside className="admin-panel"><h2 className="admin-section-title">{t("windy.day.recent")}</h2>
         <nav aria-label={t("windy.day.recent")} className="admin-tabs grid">
           {week.map(r=><Link key={r.day} to={forDay(r.day)} aria-current={day===r.day?"page":undefined}>
-            {r.day}{r.day===today ? " · "+t("windy.day.today") : ""} <span className="float-end tabular-nums">{r.n}</span>
+            {r.day}{r.day===today ? ` (${t("windy.day.today")})` : ""} <span className="float-end tabular-nums">{r.n}</span>
             {r.releases.map(release=><span className="admin-cell-meta" key={release.id}>{t("windy.day.release",{version:release.version})}</span>)}</Link>)}
         </nav>
         <div className="mt-3 flex flex-wrap gap-3 border-t border-border pt-3 text-sm text-primary">
@@ -85,7 +85,7 @@ export default function WindyDays() {
           <div className="grid gap-1"><Label htmlFor="windy-day">{t("windy.day.date")}</Label>
             <Input type="date" name="day" id="windy-day" defaultValue={day} required/></div>
           <div className="grid min-w-0 max-w-full gap-1"><Label htmlFor="windy-build">{t("windy.day.build")}</Label>
-            <SelectField id="windy-build" name="build" defaultValue={build} options={[{value:"",label:t("windy.day.all")},...builds.map(b=>({value:b.id,label:b.id===b.version?b.version:b.version+" · "+b.id}))]}/></div>
+            <SelectField id="windy-build" name="build" defaultValue={build} options={[{value:"",label:t("windy.day.all")},...builds.map(b=>({value:b.id,label:b.id===b.version?b.version:`${b.version} (${b.id})`}))]}/></div>
           <Button type="submit">{t("admin.list.apply")}</Button>
         </form>
         <header className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">

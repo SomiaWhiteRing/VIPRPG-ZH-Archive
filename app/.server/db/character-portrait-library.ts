@@ -17,7 +17,7 @@ import type {
 import { HttpError } from "@/lib/http";
 
 const MATERIAL_PAGE_SIZE = 48;
-const MATERIAL_RELATED_NAMES = `COALESCE((SELECT group_concat(ch.original_name || ' ' || ch.primary_name, ' · ')
+const MATERIAL_RELATED_NAMES = `COALESCE((SELECT group_concat(ch.original_name || ' ' || ch.primary_name, ', ')
   FROM character_material_bindings binding JOIN characters ch ON ch.id=binding.character_id
   WHERE binding.material_id=m.id), '')`;
 

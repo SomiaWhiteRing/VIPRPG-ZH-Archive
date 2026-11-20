@@ -248,9 +248,10 @@ export default function MePage() {
           ) : (
             <AccountEmpty>
               {canPublishWork(user) ? (
-                <>
-                  {t("account.overview.noUploads")} · <Link to="/upload">{t("account.overview.publish")}</Link>
-                </>
+                <span className="inline-flex flex-wrap justify-center gap-x-2">
+                  <span>{t("account.overview.noUploads")}</span>
+                  <Link to="/upload">{t("account.overview.publish")}</Link>
+                </span>
               ) : (
                 t("account.overview.noMaintained")
               )}

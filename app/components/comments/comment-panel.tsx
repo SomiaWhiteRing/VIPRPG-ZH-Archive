@@ -600,7 +600,7 @@ function CommentNestedReply({
       id={`comment-${comment.id}`}
       metadata={<>
         <Timestamp value={comment.createdAt} />
-        {comment.editedAt ? ` · ${t("comment.edited")}` : ""}
+        {comment.editedAt ? <span>{t("comment.edited")}</span> : null}
       </>}
       actions={<>
         {editControl}

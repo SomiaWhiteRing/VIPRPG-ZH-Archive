@@ -143,14 +143,14 @@ export function AdminDiscussions({
                     {row.kind === "message" ? t("admin.discussions.message") : row.kind === "topic"
                       ? t("admin.discussions.topic")
                       : `#${row.postNumber} ${t(row.kind === "comment" ? "admin.discussions.comment" : "admin.discussions.post")}`}{" "}
-                    · {row.id}
+                    (#{row.id})
                   </p>
                   {row.tags ? <p className="text-xs">{row.tags}</p> : null}
                   {row.replies !== undefined ? (
-                    <p className="text-xs">
-                      {t("admin.discussions.replies", { count: row.replies })}
-                      {row.locked ? ` · ${t("admin.discussions.locked")}` : ""}
-                      {row.featured ? ` · ${t("admin.discussions.featured")}` : ""}
+                    <p className="flex flex-wrap gap-x-2 text-xs">
+                      <span>{t("admin.discussions.replies", { count: row.replies })}</span>
+                      {row.locked ? <span>{t("admin.discussions.locked")}</span> : null}
+                      {row.featured ? <span>{t("admin.discussions.featured")}</span> : null}
                     </p>
                   ) : null}
                   <p className="line-clamp-2 whitespace-pre-wrap wrap-anywhere text-xs text-muted">
@@ -324,9 +324,9 @@ function AdminDiscussionPanel({
         </section>
       ) : null}
       <h3 className="mb-2 text-sm font-bold">{t("admin.discussions.current")}</h3>
-      <p className="text-xs text-muted">
-        {t(`admin.discussions.${detail.target.kind}`)}{" "}
-        · {detail.target.id} · {t(Object.hasOwn(contentStateKeys, detail.state) ? contentStateKeys[detail.state] : "admin.discussions.unavailable")}
+      <p className="flex flex-wrap gap-x-2 text-xs text-muted">
+        <span>{t(`admin.discussions.${detail.target.kind}`)} #{detail.target.id}</span>
+        <span>{t(Object.hasOwn(contentStateKeys, detail.state) ? contentStateKeys[detail.state] : "admin.discussions.unavailable")}</span>
       </p>
       <p className="mt-1 wrap-anywhere text-sm">{t("admin.discussions.author", { name: row.author ?? "" })}</p>
       {!row.reportId ? (
@@ -433,7 +433,7 @@ function AdminDiscussionPanel({
           {detail.audit.map((entry) => (
             <li key={entry.id}>
               <strong>
-                {entry.actor} · {entry.event}
+                {entry.actor} ({entry.event})
               </strong>
               <p>
                 <Timestamp value={entry.createdAt} />

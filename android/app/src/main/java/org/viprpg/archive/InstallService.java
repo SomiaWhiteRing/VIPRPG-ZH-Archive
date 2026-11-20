@@ -24,7 +24,7 @@ public final class InstallService extends Service {
         getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("installs", "游戏安装", NotificationManager.IMPORTANCE_LOW));
         store.progress = task -> {
             long total = task.optLong("downloadBytesTotal");
-            String percent = total > 0 ? " · " + Math.min(100, task.optLong("downloadedBytes") * 100 / total) + "%" : "";
+            String percent = total > 0 ? "（" + Math.min(100, task.optLong("downloadedBytes") * 100 / total) + "%）" : "";
             getSystemService(NotificationManager.class).notify(31, notification(task.optString("title") + percent));
         };
     }

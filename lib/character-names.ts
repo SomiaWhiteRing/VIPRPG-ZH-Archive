@@ -86,6 +86,7 @@ export function characterSelectionKey(value: CharacterSelection): string {
     : `new:${characterNameKey(value.originalName)}`;
 }
 
-export function characterSelectionLabel(value: CharacterSelection): string {
-  return `${value.originalName} · ${value.displayName}`;
+export function formatCharacterNamePair(name: string, otherName: string): string {
+  if (!name || !otherName || name === otherName) return name || otherName;
+  return `${name} (${otherName})`;
 }

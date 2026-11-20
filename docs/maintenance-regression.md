@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | `npm run check` | 类型、lint、静态架构、安全和 UI 静态规则 | 不证明浏览器交互；按改动需要单独运行 |
 | `npx tsx scripts/ui-self-check.ts` | `app` 下 TSX 控件和样式改动的最小 UI 静态检查 | 仅扫描源码，不启动浏览器；规则独立于 TypeScript 和 ESLint，已包含在 `npm run check` 中 |
+| `npm run check:middle-dot` | Git 跟踪的文本中禁用中点分隔符（U+00B7） | 保留指定的原名、文件名和颜文字数据，网站、Android 和状态站发布共用此检查 |
 | `npm run check:i18n` | 三语键集合、空值、ICU 语法、参数及富文本标签兼容性 | 仅读取网站 UI 词库，已包含在 `npm run check` 中；不扫描作品介绍和用户内容 |
 | `npm run test:i18n:contract` | 语言优先级、auto、账号跨会话保存及重定向参数／锚点 | 纯函数与独立内存 SQLite，执行真实迁移及偏好接口；不构建、不启动浏览器或访问远端。Deploy、`npm test`、`verify:preprod` 均执行 |
 | `npm run test:i18n -- --hold` | i18n 浏览器专项验收及 TUI | 默认构建并创建隔离 D1/R2；按当前任务授权和影响范围运行，不自动作为每次发布的全量门槛 |

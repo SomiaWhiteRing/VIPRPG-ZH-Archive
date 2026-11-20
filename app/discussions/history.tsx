@@ -30,9 +30,15 @@ export function ForumHistoryDialog({ target, onClose }: { target: ForumTarget; o
     {error ? <p role="alert" className="text-sm text-danger">{error}</p> : !history ? <p role="status" className="text-sm text-muted">{t("forum.history.loading")}</p> : <div className="grid gap-4">
       {history.state === "deleted" ? <p className="text-sm text-muted">{t("forum.history.deleted")}</p> : null}
       {!history.total ? <p className="text-sm text-muted">{t("forum.history.empty")}</p> : history.items.map((entry) => <article key={entry.id} className="grid min-w-0 gap-3 border-b border-border pb-4">
-        <p className="text-sm"><strong>{entry.operation === "delete" ? t("timeline.action.delete") : t("core.action.edit")}</strong> · {entry.actor.name} · <Timestamp value={entry.createdAt} /></p>
-        {typeof entry.before?.authorName === "string" ? <p className="text-xs text-muted">{t("forum.history.author", { name: entry.before.authorName })}
-          {typeof entry.before.createdAt === "string" ? <> · {t("forum.history.published")}<Timestamp value={entry.before.createdAt} /></> : null}</p> : null}
+        <p className="flex flex-wrap items-center gap-x-2 text-sm">
+          <strong>{entry.operation === "delete" ? t("timeline.action.delete") : t("core.action.edit")}</strong>
+          <span>{entry.actor.name}</span>
+          <Timestamp value={entry.createdAt} />
+        </p>
+        {typeof entry.before?.authorName === "string" ? <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
+          <span>{t("forum.history.author", { name: entry.before.authorName })}</span>
+          {typeof entry.before.createdAt === "string" ? <span>{t("forum.history.published")}<Timestamp value={entry.before.createdAt} /></span> : null}
+        </p> : null}
         {entityAuditChanges(entry.before, entry.operation === "delete" ? null : entry.after).map((change, index) => <div key={index} className="grid min-w-0 gap-2 text-sm">
           <strong className="wrap-anywhere">{change.field}</strong>
           <div><span className="text-xs text-muted">{entry.operation === "delete" ? t("forum.history.beforeDelete") : t("forum.history.beforeEdit")}</span>

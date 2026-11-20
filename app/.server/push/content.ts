@@ -36,7 +36,7 @@ export async function webPushContent(runtime: AppRuntime, user: ArchiveUser, kin
     if (item.contentUnavailable) return null;
     content.title = actor ? actor.actorName + actor.action : item.title;
     content.body = source ? `${"topicTitle" in source ? source.topicTitle : source.targetTitle}\n${source.excerpt}`
-      : item.maintainerRequest ? `${item.maintainerRequest.applicant.displayName} · ${item.maintainerRequest.workTitle}\n${item.body}` : item.body;
+      : item.maintainerRequest ? `${item.maintainerRequest.applicant.displayName} 申请维护《${item.maintainerRequest.workTitle}》\n${item.body}` : item.body;
     const avatar = actor?.actorAvatar ?? item.maintainerRequest?.applicant.avatarBlobSha256 ?? item.senderAvatar;
     content.icon = avatar || actor || item.maintainerRequest || item.senderDisplayName ? getUserAvatarSrc(avatar) : "/icon/windI.png";
     content.timestamp = parseTimestamp(item.createdAt).getTime();

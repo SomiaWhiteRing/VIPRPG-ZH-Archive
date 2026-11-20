@@ -105,7 +105,7 @@ export function WebPlayScreenshotGallery({
       <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0">
         {pageScreenshots.map((screenshot) => {
           const capturedAt = parseTimestamp(screenshot.createdAt).toLocaleString(locale, { timeZone: DISPLAY_TIME_ZONE, hour12: false });
-          const label = `${title} · ${capturedAt}`;
+          const label = `${title} (${capturedAt})`;
           return (
             <li className="min-w-0" key={screenshot.id}>
               <ScreenshotThumbnail screenshot={screenshot} label={label} onClick={() => setActiveId(screenshot.id)} />

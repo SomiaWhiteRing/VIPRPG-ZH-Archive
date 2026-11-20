@@ -166,10 +166,10 @@ export default function AdminMaintenancePage() {
                     <Link to={`/admin/archive-versions/${download.archiveVersionId}`}>
                       #{download.archiveVersionId} {download.workTitle}
                     </Link>
-                    <div className="text-sm text-muted">
-                      {download.archiveStatus === "deleted" ? t("admin.maintenance.deletedVersion") : download.isCurrent ? t("admin.archives.current") : t("admin.maintenance.oldVersion")}
-                      {" · "}{download.downloadProfile === "web-play" ? t("work.play") : t("admin.maintenance.zip")}
-                      {" · "}{t("admin.maintenance.record", { id: download.id })}
+                    <div className="flex flex-wrap gap-x-2 text-sm text-muted">
+                      <span>{download.archiveStatus === "deleted" ? t("admin.maintenance.deletedVersion") : download.isCurrent ? t("admin.archives.current") : t("admin.maintenance.oldVersion")}</span>
+                      <span>{download.downloadProfile === "web-play" ? t("work.play") : t("admin.maintenance.zip")}</span>
+                      <span>{t("admin.maintenance.record", { id: download.id })}</span>
                     </div>
                   </td>
                   <td>
@@ -182,7 +182,7 @@ export default function AdminMaintenancePage() {
                     {download.lastFailureKind === "server" ? t("admin.maintenance.serverError") : download.lastFailureKind === "interrupted" ? t("admin.maintenance.interrupted") : t("admin.maintenance.unknownFailure")}
                     <div className="text-sm text-muted">
                       {download.lastFailureAt ? formatDate(download.lastFailureAt, { locale }) : t("admin.maintenance.noFailureAt")}
-                      {download.lastFailureDurationMs !== null ? ` · ${formatNullableDuration(download.lastFailureDurationMs)}` : ""}
+                      {download.lastFailureDurationMs !== null ? ` (${formatNullableDuration(download.lastFailureDurationMs)})` : ""}
                     </div>
                     <div className="max-w-sm break-words text-sm text-muted">
                       {download.lastErrorMessage ?? t("admin.maintenance.noReason")}

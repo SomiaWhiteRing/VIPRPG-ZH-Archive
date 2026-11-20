@@ -23,7 +23,7 @@ import type { SourceFaceSheetWarning } from "@/app/upload/upload-types";
 import type { UiLocale } from "@/lib/i18n/locale";
 import { translate } from "@/lib/i18n/core";
 import { useMessages, useUiLocale } from "@/lib/i18n/react";
-import { type CharacterCreditSelection, type CharacterFaceSheet, type CharacterNameLanguage, type CharacterPortrait as CharacterPortraitValue, type CharacterRoleKey, type CharacterSelection, type CharacterSuggestion, CHARACTER_ROLE_LABELS, characterNameKey, characterSelectionKey, characterSelectionLabel, isCharacterRoleKey } from "@/lib/character-names";
+import { type CharacterCreditSelection, type CharacterFaceSheet, type CharacterNameLanguage, type CharacterPortrait as CharacterPortraitValue, type CharacterRoleKey, type CharacterSelection, type CharacterSuggestion, CHARACTER_ROLE_LABELS, characterNameKey, characterSelectionKey, isCharacterRoleKey } from "@/lib/character-names";
 
 import { normalizeEntityName } from "@/lib/entity-name";
 import type { CharacterIndexData } from "@/lib/character-index";
@@ -158,8 +158,8 @@ export function CharacterPicker({
         (left, right) =>
           left.rank - right.rank ||
           right.workCount - left.workCount ||
-          characterSelectionLabel(left.selection).localeCompare(
-            characterSelectionLabel(right.selection),
+          `${left.selection.originalName} ${left.selection.displayName}`.localeCompare(
+            `${right.selection.originalName} ${right.selection.displayName}`,
             "zh-CN",
           ),
       )
@@ -447,7 +447,7 @@ export function CharacterPicker({
                       setPortraitIndex(index);
                     }}
                     size="icon"
-                    title={`${label} · ${portraitStatus(credit, suggestion, files, t)}`}
+                    title={`${label} (${portraitStatus(credit, suggestion, files, t)})`}
                     type="button"
                     variant="ghost"
                   >

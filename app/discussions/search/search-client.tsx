@@ -48,11 +48,11 @@ export function DiscussionSearch({
               <p className="my-2 line-clamp-2 break-words text-[15px] [overflow-wrap:anywhere]">
                 <Highlight text={hit.snippet} query={query} />
               </p>
-              <div className="text-xs text-muted">
+              <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
                 {hit.author ? (
                   <ForumAuthorName author={hit.author} query={query} />
-                ) : null}{" "}
-                · {hit.kind === "comment" ? t("forum.nestedResult") : t("forum.rootResult")} ·{" "}
+                ) : null}
+                <span>{hit.kind === "comment" ? t("forum.nestedResult") : t("forum.rootResult")}</span>
                 <Timestamp value={hit.createdAt} />
               </div>
             </article>

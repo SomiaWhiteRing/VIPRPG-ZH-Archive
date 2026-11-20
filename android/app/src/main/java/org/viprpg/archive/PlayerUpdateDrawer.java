@@ -97,7 +97,7 @@ final class PlayerUpdateDrawer extends LinearLayout {
             speed.setTextColor(getContext().getColor(failed ? R.color.native_destructive : R.color.native_ink));
             speed.setText(switch (phase) {
                 case DOWNLOADING -> bytes(state.speed()) + "/s";
-                case MOBILE -> "移动网络 · 已暂停";
+                case MOBILE -> "已暂停（移动网络）";
                 case PAUSED -> "已暂停";
                 case OFFLINE -> "网络已断开";
                 case FAILED -> "下载失败";

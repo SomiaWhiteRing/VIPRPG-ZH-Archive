@@ -143,7 +143,7 @@ final class ScreenshotViewer extends Dialog {
     private void updateTitle(int position) {
         ScreenshotStore.Entry item = items.get(position);
         title.setText(item.createdAt.format(DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.CHINA)));
-        subtitle.setText(item.createdAt.format(DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA)) + "  ·  " + item.title);
+        subtitle.setText(item.createdAt.format(DateTimeFormatter.ofPattern("HH:mm", Locale.CHINA)) + "  " + item.title);
     }
 
     private void showDetails() {
@@ -163,7 +163,7 @@ final class ScreenshotViewer extends Dialog {
         handleRow.addView(handle, new LinearLayout.LayoutParams(dp(28), dp(4)));
         detailContent.addView(handleRow, new LinearLayout.LayoutParams(-1, dp(24)));
         TextView date = text(context, 18); date.setTypeface(null, Typeface.BOLD);
-        date.setText(item.createdAt.format(DateTimeFormatter.ofPattern("yyyy年M月d日 EEEE · HH:mm:ss", Locale.CHINA)));
+        date.setText(item.createdAt.format(DateTimeFormatter.ofPattern("yyyy年M月d日 EEEE HH:mm:ss", Locale.CHINA)));
         date.setPadding(0, dp(16), 0, dp(20)); detailContent.addView(date);
         TextView game = text(context, 16); game.setText(item.title); game.setPadding(0, 0, 0, dp(28)); detailContent.addView(game);
         TextView heading = text(context, 17); heading.setText("详细信息"); heading.setTypeface(null, Typeface.BOLD);
@@ -195,7 +195,7 @@ final class ScreenshotViewer extends Dialog {
         FrameLayout reveal = new FrameLayout(context); reveal.setClipChildren(true);
         LinearLayout.LayoutParams revealParams = new LinearLayout.LayoutParams(-1, 0); card.addView(reveal, revealParams);
         TextView path = text(context, 14); NativeControls.textColor(path, R.color.native_muted); path.setTextIsSelectable(true);
-        path.setText("设备端 · " + formatBytes(item.bytes) + "\n" + (item.folderPath.isEmpty() ? "系统未提供文件路径" : item.folderPath));
+        path.setText("设备端（" + formatBytes(item.bytes) + "）\n" + (item.folderPath.isEmpty() ? "系统未提供文件路径" : item.folderPath));
         path.setPadding(dp(20), dp(18), dp(20), dp(20));
         GradientDrawable lower = new GradientDrawable(); lower.setCornerRadius(dp(24)); path.setBackground(lower);
         NativeControls.bindTheme(path, () -> {

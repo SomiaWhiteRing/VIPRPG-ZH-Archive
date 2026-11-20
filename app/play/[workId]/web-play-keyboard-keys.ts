@@ -49,8 +49,8 @@ export const keyboardKeys: Readonly<Record<string, KeyboardKey>> = Object.fromEn
 
 export const keyboardGroups = [
   { id: "move", keys: ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"] },
-  { id: "confirm", keysLabel: "Z · Enter · Space", keys: ["KeyZ", "Enter", "Space"] },
-  { id: "cancel", keysLabel: "X · Esc", keys: ["KeyX", "Escape"] },
+  { id: "confirm", keysLabel: "Z / Enter / Space", keys: ["KeyZ", "Enter", "Space"] },
+  { id: "cancel", keysLabel: "X / Esc", keys: ["KeyX", "Escape"] },
   { id: "engine", keys: ["F1", "F2", "F7", "F9", "KeyE", "Backquote", "KeyF", "KeyG", "ShiftLeft", "ShiftRight"] },
 ] satisfies { id: "move" | "confirm" | "cancel" | "engine"; keysLabel?: string; keys: string[] }[];
 

@@ -98,7 +98,8 @@ export default function SeaModerationPage() {
     {canMute && <section className="mt-4 rounded-lg border border-border bg-card px-3 py-2">
       <h2 className="mb-2 text-sm font-semibold">{t("admin.sea.active")}</h2>
       <ul className="grid gap-3">{view.mutes.map(mute => <li key={`${mute.scope}:${mute.messageId}`} className="flex flex-wrap items-center gap-2 text-sm">
-        <span>{mute.name} · {mute.scope === "ip" ? t("admin.sea.ip") : t("admin.sea.identity")} · {mute.until === 0 ? t("admin.sea.permanent") : new Date(mute.until).toLocaleString(locale)}</span>
+        <span>{mute.name} ({mute.scope === "ip" ? t("admin.sea.ip") : t("admin.sea.identity")})</span>
+        <span>{mute.until === 0 ? t("admin.sea.permanent") : new Date(mute.until).toLocaleString(locale)}</span>
         <Button size="sm" variant="outline" className="min-h-8 px-2 text-xs" disabled={busy} onClick={() => editMute(mute.messageId, mute.name, mute.scope, mute.until, mute.reason)}>{t("admin.sea.edit")}</Button>
         <Button size="sm" variant="outline" className="min-h-8 px-2 text-xs" disabled={busy} onClick={() => void update(view.page, "/api/sea/mutes", "PUT", { messageId: mute.messageId, scope: mute.scope, minutes: 0 })}>{t("admin.sea.lift")}</Button>
         {mute.reason ? <p className="w-full whitespace-pre-wrap wrap-anywhere text-muted">{mute.reason}</p> : null}
@@ -109,7 +110,7 @@ export default function SeaModerationPage() {
       <Dialog.Portal>
         <Dialog.Overlay />
         <Dialog.Content aria-describedby={undefined} className="left-1/2 top-1/2 max-h-[90dvh] w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-md p-5">
-          <Dialog.Title>{editing?.scope === "ip" ? t("admin.sea.ip") : t("admin.sea.identity")} · {editing?.name}</Dialog.Title>
+          <Dialog.Title>{editing?.scope === "ip" ? t("admin.sea.ip") : t("admin.sea.identity")}{editing ? ` (${editing.name})` : ""}</Dialog.Title>
           {editing ? <form className="mt-4 grid gap-4" onSubmit={async event => {
             event.preventDefault();
             const minutes = editing.permanent ? null : Math.ceil((new Date(editing.date).getTime() - Date.now()) / 60000);

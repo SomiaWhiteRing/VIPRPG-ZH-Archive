@@ -38,7 +38,7 @@ export function DownloadFilenameTemplate({ data, disabled }: { data: ResourceEdi
       </p>
       <div id={`${id}-preview`} className="grid gap-1 break-all text-sm text-muted" aria-live="polite">
         {error ? <p role="alert">{error}</p> : samples.length ? samples.map(({ artifact, version }) => (
-          <p key={artifact.id}>{targetLabel(artifact.target)} · {version}：{resourceDownloadFilename(value, artifact, version)}</p>
+          <p key={artifact.id}>{targetLabel(artifact.target)} ({version})：{resourceDownloadFilename(value, artifact, version)}</p>
         )) : value.trim() ? (
           <p>{t("admin.resources.filenameExample", { name: resourceDownloadFilename(value, { filename: "", format: data.resource.slug === "viprpg-android" ? "apk" : "zip" }, "1.2.3") })}</p>
         ) : <p>{t("admin.resources.filenameEmpty")}</p>}

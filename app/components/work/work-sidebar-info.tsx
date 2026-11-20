@@ -98,7 +98,7 @@ export function WorkSidebarInfo({
     <div>
       <dl className="m-0">
         {work.aliases.length ? (
-          <InfoRow label={t("work.sidebar.aliases")}>{work.aliases.join(" · ")}</InfoRow>
+          <InfoRow label={t("work.sidebar.aliases")}>{locale === "en" ? new Intl.ListFormat(locale).format(work.aliases) : work.aliases.join("、")}</InfoRow>
         ) : null}
         {work.genre ? <InfoRow label={t("work.sidebar.genre")}><Link className="font-medium text-secondary hover:underline" to={`/games?${new URLSearchParams({ genre: work.genre })}`}>{work.genre}</Link></InfoRow> : null}
         {work.referenceDuration ? <InfoRow label={t("library.duration")}>{referenceDurationLabel(work.referenceDuration, locale)}</InfoRow> : null}

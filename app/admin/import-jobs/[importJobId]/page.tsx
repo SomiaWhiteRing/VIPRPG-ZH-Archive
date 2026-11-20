@@ -112,7 +112,7 @@ export default function AdminImportJobPage() {
             { label: t("admin.imports.sourceSize"), value: formatBytes(job.sourceSizeBytes || 0) },
             {
               label: t("admin.imports.excluded"),
-              value: `${job.excludedFileCount.toLocaleString(locale)} · ${formatBytes(job.excludedSizeBytes)}`,
+              value: `${job.excludedFileCount.toLocaleString(locale)} (${formatBytes(job.excludedSizeBytes)})`,
             },
             {
               label: t("admin.imports.missingBlob"),
@@ -128,11 +128,11 @@ export default function AdminImportJobPage() {
             },
             {
               label: t("admin.imports.uploadedBlobs"),
-              value: `${job.uploadedBlobCount.toLocaleString(locale)} · ${formatBytes(job.uploadedBlobSizeBytes)}`,
+              value: `${job.uploadedBlobCount.toLocaleString(locale)} (${formatBytes(job.uploadedBlobSizeBytes)})`,
             },
             {
               label: t("admin.imports.uploadedPacks"),
-              value: `${job.uploadedCorePackCount.toLocaleString(locale)} · ${formatBytes(job.uploadedCorePackSizeBytes)}`,
+              value: `${job.uploadedCorePackCount.toLocaleString(locale)} (${formatBytes(job.uploadedCorePackSizeBytes)})`,
             },
           ]}
           variant="tiles"

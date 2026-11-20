@@ -16,7 +16,7 @@ import type {
   CharacterAliasSuggestion,
   CharacterSuggestion,
 } from "@/lib/character-names";
-import { characterNameKey } from "@/lib/character-names";
+import { characterNameKey, formatCharacterNamePair } from "@/lib/character-names";
 import type {
   AdminCharacterEdit,
   AdminTagEdit,
@@ -36,7 +36,7 @@ export class CharacterAliasMergeConflictError extends HttpError {
   ) {
     super(
       409,
-      `日文别名${formatQuotedNames(aliases)}已归属于角色 #${candidate.id}“${candidate.originalName} · ${candidate.primaryName}”。可以修改别名，或确认将该角色合并到当前角色。`,
+      `日文别名${formatQuotedNames(aliases)}已归属于角色 #${candidate.id}“${formatCharacterNamePair(candidate.originalName, candidate.primaryName)}”。可以修改别名，或确认将该角色合并到当前角色。`,
       "character_alias_merge_available",
     );
     this.name = "CharacterAliasMergeConflictError";
@@ -1044,13 +1044,13 @@ function assertCharacterIdentityAvailable(
         : `日文别名“${originalConflict.occupiedName}”`;
     throw new HttpError(
       409,
-      `角色原名“${originalConflict.inputName}”已被角色 #${originalConflict.characterId}“${originalConflict.originalName} · ${originalConflict.primaryName}”用作${occupiedAs}。请修改角色原名；如果两条记录是同一角色，请使用页面下方的“合并重复角色”。`,
+      `角色原名“${originalConflict.inputName}”已被角色 #${originalConflict.characterId}“${formatCharacterNamePair(originalConflict.originalName, originalConflict.primaryName)}”用作${occupiedAs}。请修改角色原名；如果两条记录是同一角色，请使用页面下方的“合并重复角色”。`,
       "character_name_conflict",
       "admin.characterDetail.error.originalConflict",
       {
         name: originalConflict.inputName,
         id: originalConflict.characterId,
-        character: `${originalConflict.originalName} · ${originalConflict.primaryName}`,
+        character: formatCharacterNamePair(originalConflict.originalName, originalConflict.primaryName),
         role: originalConflict.occupiedAs,
         alias: originalConflict.occupiedName,
       },

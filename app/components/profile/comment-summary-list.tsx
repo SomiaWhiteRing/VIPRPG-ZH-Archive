@@ -38,7 +38,6 @@ export function CommentSummaryList({
             </p>
             <div className="flex items-center gap-2 text-xs text-muted">
               <Timestamp value={comment.updatedAt} />
-              <span aria-hidden>·</span>
               <span className="inline-flex items-center gap-1">
                 <ThumbsUp aria-hidden className="size-3.5" />
                 <span className="sr-only">{t("publicProfile.likes")}</span>

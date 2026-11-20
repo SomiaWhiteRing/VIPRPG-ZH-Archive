@@ -18,6 +18,7 @@ import {
 } from "@/app/.server/http/form";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { hasPermission } from "@/lib/authz/permissions";
+import { formatCharacterNamePair } from "@/lib/character-names";
 import { HttpError, json } from "@/lib/http";
 import { translate } from "@/lib/i18n/core";
 import { UiHttpError } from "@/lib/i18n/feedback";
@@ -191,7 +192,7 @@ export async function POST(
       const conflict = {
         aliases: error.aliases.map((alias) => `“${alias}”`).join(locale === "en" ? ", " : "、"),
         candidateId: error.candidate.id,
-        candidateName: `${error.candidate.originalName} · ${error.candidate.primaryName}`,
+        candidateName: formatCharacterNamePair(error.candidate.originalName, error.candidate.primaryName),
         currentId: error.currentCharacterId,
       };
       return json(
