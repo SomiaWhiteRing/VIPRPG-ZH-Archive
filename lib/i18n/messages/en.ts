@@ -1413,7 +1413,7 @@ export const en = {
   "admin.portraits.boundCount": "Bound {count, number}",
   "admin.portraits.library": "Asset library",
   "admin.portraits.faceFormat": "PNG (up to 256 KiB, 48-pixel grid)",
-  "admin.portraits.imageFormat": "PNG / JPEG / GIF / WebP. Up to 2 MiB each",
+  "admin.portraits.imageFormat": "PNG / JPEG / GIF / WebP (up to 2 MiB each)",
   "admin.portraits.upload": "Upload {label}",
   "admin.portraits.search": "Search {label}",
   "admin.portraits.faceSearch": "Press Enter to search by source, file name, or #ID",

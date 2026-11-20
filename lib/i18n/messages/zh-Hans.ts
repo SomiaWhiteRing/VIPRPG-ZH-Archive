@@ -1413,7 +1413,7 @@ export const zh = {
   "admin.portraits.boundCount": "已绑定 {count, number}",
   "admin.portraits.library": "素材库",
   "admin.portraits.faceFormat": "PNG（不超过 256 KiB，48 像素网格）",
-  "admin.portraits.imageFormat": "PNG / JPEG / GIF / WebP。每张不超过 2 MiB",
+  "admin.portraits.imageFormat": "PNG / JPEG / GIF / WebP（每张不超过 2 MiB）",
   "admin.portraits.upload": "上传{label}",
   "admin.portraits.search": "搜索{label}",
   "admin.portraits.faceSearch": "回车搜索来源、文件名或 #ID",

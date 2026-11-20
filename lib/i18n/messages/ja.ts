@@ -1413,7 +1413,7 @@ export const ja = {
   "admin.portraits.boundCount": "関連付け済み {count, number}",
   "admin.portraits.library": "素材ライブラリ",
   "admin.portraits.faceFormat": "PNG（256 KiB 以下、48 ピクセルグリッド）",
-  "admin.portraits.imageFormat": "PNG / JPEG / GIF / WebP。1 枚あたり 2 MiB 以下",
+  "admin.portraits.imageFormat": "PNG / JPEG / GIF / WebP（1 枚あたり 2 MiB 以下）",
   "admin.portraits.upload": "{label}をアップロード",
   "admin.portraits.search": "{label}を検索",
   "admin.portraits.faceSearch": "出典・ファイル名・#ID を入力して Enter",
