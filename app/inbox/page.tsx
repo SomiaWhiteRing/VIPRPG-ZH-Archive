@@ -221,7 +221,7 @@ function InboxRow({
               )}
               <span>{actor.actionKey ? t(actor.actionKey) : actor.action}</span>
             </>
-          ) : item.windyErrorKind ? <Link className="text-primary" to={`/inbox/${item.id}`}>{t("windy.notice")}</Link> : item.contentUnavailable ? t("inbox.contentUnavailable") : title}
+          ) : item.windyDay || item.windyErrorKind ? <Link className="text-primary" to={`/inbox/${item.id}`}>{item.windyDay ? t("windy.day.notice",{day:item.windyDay}) : t("windy.notice")}</Link> : item.contentUnavailable ? t("inbox.contentUnavailable") : title}
         </p>
         {interaction ? (
           <>

@@ -18,7 +18,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { useMessages, useUiLocale } from "@/lib/i18n/react";
 
-const base = "/admin/windy-errors";
+const base = "/admin/windy-errors/detail";
 const noStore = {"Cache-Control": "private, no-store"};
 export const headers = () => noStore;
 type Group = {kind: string; occurrences: number; samples: number; first_seen: string; last_seen: string; fixed_build: number | null};
@@ -32,7 +32,10 @@ export async function loader({request,context}: LoaderFunctionArgs) {
   const page=Math.max(0,Math.min(Math.ceil((group?.samples ?? 0)/30)-1,Number(query.get("page")) || 0));
   const samples=group ? (await rt.db.prepare("SELECT * FROM windy_error_reports WHERE kind=? ORDER BY received_at DESC,id DESC LIMIT 30 OFFSET ?")
     .bind(group.kind,Math.floor(page)*30).all<Sample>()).results : [];
-  const selected=samples.find(s=>s.id===query.get("sample")) ?? samples[0];
+  const sampleId=query.get("sample");
+  const selected=sampleId && group ? await rt.db.prepare("SELECT * FROM windy_error_reports WHERE id=? AND kind=?")
+    .bind(sampleId,group.kind).first<Sample>() : samples[0];
+  if (sampleId && !selected) throw new Response(null,{status:404});
   const raw=selected ? await getWindyEvidence(rt,selected.id) : null;
   if (selected && !raw) throw new Response(null,{status:503});
   return data({groups,group,samples,selected,raw,page,locale:rt.uiLocale}, {headers:noStore});
@@ -109,6 +112,10 @@ export default function WindyErrors() {
   const t = useMessages();
   const locale = useUiLocale();
   const [params, setParams] = useSearchParams();
+  const day=params.get("day");
+  const backQuery=new URLSearchParams();
+  if (day) backQuery.set("day", day);
+  if (params.get("build")) backQuery.set("build",params.get("build")!);
   const evidence = useMemo(() => raw ? auditRecord(JSON.parse(raw).evidence) : null, [raw]);
   const attempts = Array.isArray(evidence?.attempts) ? evidence.attempts : [];
   const nameOf = (kind: string) => {
@@ -119,10 +126,11 @@ export default function WindyErrors() {
   const detail = typeof evidence?.message === "string" ? evidence.message : typeof evidence?.reason === "string" ? evidence.reason : null;
   const file = typeof evidence?.file === "string" ? evidence.file : null;
   return <main>
-    <PageHeader compact title={t("windy.title")} />
+    <PageHeader compact title={t("windy.title")} actions={<Link className="text-primary" to={"/admin/windy-errors?"+backQuery}>{t("windy.day.back")}</Link>} />
+    {day && group && <h2 className="text-lg font-bold">{day} · {nameOf(group.kind)}</h2>}
     {!group ? <EmptyState title={t("windy.empty")} /> :
-      <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(13rem,16rem)_minmax(0,1fr)]">
-        <aside className="admin-panel lg:sticky lg:top-4">
+      <div className={day ? "min-w-0" : "grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(13rem,16rem)_minmax(0,1fr)]"}>
+        {!day && <aside className="admin-panel lg:sticky lg:top-4">
           <h2 className="admin-section-title">{t("windy.types")}</h2>
           <nav aria-label={t("windy.types")} className="grid gap-1 sm:grid-cols-2 lg:grid-cols-1">
             {groups.map(g => <Link key={g.kind} to={base + "?kind=" + g.kind} aria-current={group.kind === g.kind ? "page" : undefined}
@@ -130,9 +138,9 @@ export default function WindyErrors() {
               <span>{nameOf(g.kind)}</span><span className="shrink-0 tabular-nums text-xs">{t("windy.countShort", {count:g.occurrences})}</span>
             </Link>)}
           </nav>
-        </aside>
+        </aside>}
         <div className="grid min-w-0 gap-4">
-          <section key={group.kind} className="admin-panel">
+          {!day && <section key={group.kind} className="admin-panel">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <h2 className="text-xl font-bold">{nameOf(group.kind)}</h2>
               <Badge variant={group.fixed_build ? "positive" : "pending"}>{t(group.fixed_build ? "windy.resolved" : "windy.unresolved")}</Badge>
@@ -149,20 +157,20 @@ export default function WindyErrors() {
                 <Button type="submit">{t("windy.resolve")}</Button>
               </Form>
             </details>
-          </section>
+          </section>}
           {selected && raw && <section className="admin-panel grid gap-4" key={selected.id}>
             <header className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-bold">{t("windy.report")}</h2>
               <Button asChild variant="outline" size="sm"><a href={"data:application/json;charset=utf-8," + encodeURIComponent(raw)} download={selected.id + ".json"}><Download aria-hidden />{t("windy.download")}</a></Button>
             </header>
             <div className="grid min-w-0 gap-1.5">
-              {samples.length > 1 ? <><Label htmlFor="windy-sample">{t("windy.sample")}</Label><SelectField id="windy-sample" value={selected.id}
+              {!day && samples.length > 1 && samples.some(s=>s.id===selected.id) ? <><Label htmlFor="windy-sample">{t("windy.sample")}</Label><SelectField id="windy-sample" value={selected.id}
                 options={samples.map(s=>({value:s.id,label:sampleName(s)}))}
                 onValueChange={id=>{const next=new URLSearchParams(params); next.set("kind",group.kind); next.set("sample",id); setParams(next);}} /></>
                 : <p className="text-sm">{sampleName(selected)}</p>}
               {file && <code className="text-xs text-muted">{file}</code>}
             </div>
-            {(page > 0 || (page+1)*30 < group.samples) && <nav className="admin-tabs">
+            {!day && (page > 0 || (page+1)*30 < group.samples) && <nav className="admin-tabs">
               {page>0 && <Link to={base+"?kind="+group.kind+"&page="+(page-1)}>{t("windy.prev")}</Link>}
               {(page+1)*30<group.samples && <Link to={base+"?kind="+group.kind+"&page="+(page+1)}>{t("windy.next")}</Link>}
             </nav>}

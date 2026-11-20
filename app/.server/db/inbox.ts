@@ -43,6 +43,7 @@ const inboxMentionSql = `(COALESCE(json_extract(i.metadata_json,'$.mention'),0)=
 
 type InboxItemRow = {
   windy_error_kind: string | null;
+  windy_day: string | null;
   id: number;
   type: InboxItemType;
   status: InboxItemStatus;
@@ -100,6 +101,7 @@ function inboxSelect(details: boolean) {
   return `SELECT
   i.id,
   json_extract(i.metadata_json,'$.windyErrorKind') AS windy_error_kind,
+  json_extract(i.metadata_json,'$.windyDay') AS windy_day,
   CASE WHEN ${inboxMentionSql} THEN 'mention' ELSE i.interaction_kind END AS interaction_kind,
   json_extract(i.metadata_json,'$.alsoMention') AS also_mention,
   json_extract(i.metadata_json,'$.reportKind') AS report_kind,
@@ -449,6 +451,7 @@ function mapInboxItemRow(row: InboxItemRow, viewer: ArchiveUser, locale: UiLocal
     interaction: null,
     friendNotification,
     ...(row.windy_error_kind ? {windyErrorKind: row.windy_error_kind} : {}),
+    ...(row.windy_day ? {windyDay:row.windy_day} : {}),
     ...(row.type === "system_notice" && (row.maintainer_outcome === "approve" || row.maintainer_outcome === "reject")
       && typeof row.maintainer_work_title === "string"
       ? { maintainerOutcome: { decision: row.maintainer_outcome, workTitle: row.maintainer_work_title } }
@@ -680,6 +683,7 @@ export async function inboxTargetLocation(
 ) {
   if (item.timelineNotification) return { href: item.timelineNotification.href };
   if (item.windyErrorKind) return {href: "/admin/windy-errors?kind="+encodeURIComponent(item.windyErrorKind)};
+  if (item.windyDay) return {href: "/admin/windy-errors?day="+encodeURIComponent(item.windyDay)};
   if (item.commentNotification) return { href: item.commentNotification.href };
   if (!item.interaction) return null;
   const target = item.interaction;

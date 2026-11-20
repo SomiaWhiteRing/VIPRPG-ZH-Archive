@@ -19,6 +19,7 @@ export type InboxItemStatus =
 
 export type InboxItem = {
   windyErrorKind?: string;
+  windyDay?: string;
   id: number;
   type: InboxItemType;
   roleRequestClosed?: true;
