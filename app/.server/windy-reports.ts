@@ -25,8 +25,21 @@ export async function ingestWindyReport(rt: AppRuntime) {
     || !Number.isSafeInteger(occurrences) || occurrences < 1 || occurrences > 1000000
     || !evidence || typeof evidence !== "object" || Array.isArray(evidence))
     return new Response(null, {status: 400});
-  const exists = rt.db.prepare("SELECT id FROM windy_error_reports WHERE id=?").bind(id);
-  if (await exists.first()) return new Response(null, {status: 204});
+  const exists = rt.db.prepare("SELECT kind,occurrences FROM windy_error_reports WHERE id=?").bind(id);
+  const previous = await exists.first<{kind:string;occurrences:number}>();
+  if (previous) {
+    if (kind !== previous.kind) return new Response(null,{status:400});
+    if (occurrences > previous.occurrences) {
+      // Both updates see the same current count; retried or out-of-order summaries add no duplicates.
+      await rt.db.batch([
+        rt.db.prepare("UPDATE windy_error_groups SET occurrences=occurrences+max(0,?-(SELECT occurrences FROM windy_error_reports WHERE id=?)),last_seen=CURRENT_TIMESTAMP WHERE kind=?")
+          .bind(occurrences,id,kind),
+        rt.db.prepare("UPDATE windy_error_reports SET occurrences=max(occurrences,?) WHERE id=?").bind(occurrences,id),
+      ]);
+    }
+    return new Response(null, {status: 204});
+  }
+  if (Object.keys(evidence).length === 0) return new Response(null, {status: 400});
   const payload = {schema: 1,id,kind,version,build,occurrences,evidence};
   const key = objectKey(id);
   const stored = await rt.bucket.put(key, JSON.stringify(payload), {onlyIf: {etagDoesNotMatch: "*"},
