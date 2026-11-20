@@ -90,7 +90,7 @@ export default function AdminNetplayMatchDetail() {
                   upload,
                   expected ? t("admin.netplay.chunks", { received: seat.chunks, expected }) : null,
                   missing ? t("admin.netplay.missingChunks", { count: missing }) : null,
-                ].filter(Boolean).join(", ") },
+                ].filter(Boolean).join(" / ") },
                 { label: t("admin.netplay.lastUpload"), value: seat.last_received_at ? formatExactTimestamp(new Date(seat.last_received_at).toISOString()) : "—" },
               ]} />
             </Pane>

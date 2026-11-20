@@ -27,7 +27,7 @@ import { formatFeedbackError } from "@/lib/i18n/feedback";
 import { UI_LOCALE_PARAM } from "@/lib/i18n/locale";
 import { useMessages, useNavigationLocale, useUiLocale } from "@/lib/i18n/react";
 import { CHARACTER_MATERIAL_CATEGORIES } from "@/lib/character-materials";
-import { formatCharacterNamePair, type CharacterPortrait as Portrait } from "@/lib/character-names";
+import type { CharacterPortrait as Portrait } from "@/lib/character-names";
 import type {
   AdminCharacterMaterial,
   AdminCharacterMaterialPage,
@@ -574,9 +574,12 @@ export function PortraitLibraryEditor({
       <nav aria-label={t("admin.portraits.characterNav")} className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 flex-1">
           <strong className="block truncate text-sm">
-            {formatCharacterNamePair(characterOriginalName, characterName)}
+            {characterOriginalName}
           </strong>
-          <span className="text-xs text-muted">#{characterId}</span>
+          <div className="flex flex-wrap gap-x-2 text-xs text-muted">
+            {characterName && characterName !== characterOriginalName ? <span>{characterName}</span> : null}
+            <span>#{characterId}</span>
+          </div>
         </div>
         <CharacterTreeSearch
           data={characterIndex}

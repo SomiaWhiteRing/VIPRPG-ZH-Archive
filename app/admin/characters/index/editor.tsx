@@ -484,7 +484,8 @@ export function CharacterIndexEditor({
             onChange={(event) => setQuery(event.target.value)}
           />
           <p className="text-xs text-muted">
-            {t("admin.characterIndex.counts", { categories: data.categories.length, characters: data.characters.length, unplaced: unplaced.length })}
+            {t("admin.characterIndex.counts", { categories: data.categories.length, characters: data.characters.length })}
+            <span className="block">{t("admin.characterIndex.unplacedCount", { unplaced: unplaced.length })}</span>
           </p>
         </div>
         <nav

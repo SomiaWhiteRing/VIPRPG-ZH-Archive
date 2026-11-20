@@ -22,7 +22,7 @@ import type { FaceEmoji } from "@/lib/dto/db/work-community";
 import { type ForumAuthor, type ForumEditContent, type ForumTag, type ForumTarget, type ForumTopic, forumHref, forumTagError, normalizeForumTag } from "@/lib/forum";
 
 import { forumSearchMatches } from "@/lib/forum-search";
-import { type KeyboardEventHandler, type ReactNode, Fragment, useEffect, useRef, useState } from "react";
+import { type KeyboardEventHandler, type ReactNode, Fragment, useEffect, useId, useRef, useState } from "react";
 
 import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
@@ -255,6 +255,7 @@ export function ForumModal({
   open,
   onOpenChange,
   title,
+  description,
   children,
   confirm = false,
   editor = false,
@@ -264,6 +265,7 @@ export function ForumModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  description?: string;
   children: ReactNode;
   confirm?: boolean;
   editor?: boolean;
@@ -271,6 +273,7 @@ export function ForumModal({
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
 }) {
   const t = useMessages();
+  const descriptionId = useId();
   const returnFocus = useRef<HTMLElement | null>(null);
   return (
     <Dialog.Root
@@ -283,7 +286,7 @@ export function ForumModal({
         <Dialog.Overlay className="bg-black/40" />
         <Dialog.Content
           onKeyDown={onKeyDown}
-          aria-describedby={undefined}
+          aria-describedby={description ? descriptionId : undefined}
           onOpenAutoFocus={(event) => {
             returnFocus.current = document.activeElement as HTMLElement;
             if (confirm) {
@@ -304,7 +307,10 @@ export function ForumModal({
           }
         >
           <div className="mb-4 flex shrink-0 items-center justify-between gap-4">
-            <Dialog.Title className="text-lg font-bold">{title}</Dialog.Title>
+            <div className="min-w-0">
+              <Dialog.Title className="text-lg font-bold">{title}</Dialog.Title>
+              {description ? <Dialog.Description id={descriptionId} className="mt-1 text-sm text-muted">{description}</Dialog.Description> : null}
+            </div>
             <Dialog.Close asChild>
               <Button
                 type="button"

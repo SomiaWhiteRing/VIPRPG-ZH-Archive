@@ -8,6 +8,9 @@ import { keyboardGroups } from "./web-play-keyboard-keys";
 
 export function WebPlayControlsHelp() {
   const t = useMessages();
+  const system = t("play.engineKeys.system");
+  const interaction = t("play.engineKeys.interaction");
+  const shift = t("play.engineKeys.shift");
   return (
     <Dialog.Root>
       <Dialog.Trigger asChild>
@@ -44,7 +47,7 @@ export function WebPlayControlsHelp() {
           <div
             className="web-play-help-board"
             role="img"
-            aria-label={t("play.keyboardMap", { engineKeys: t("play.engineKeys") })}
+            aria-label={t("play.keyboardMap", { engineKeys: t("play.engineKeys", { system, interaction, shift }) })}
           >
             <WebPlayKeyboard />
           </div>
@@ -57,7 +60,16 @@ export function WebPlayControlsHelp() {
                 key={group.id}
               >
                 <span className="web-play-help-legend-name"><span className="web-play-help-dot" aria-hidden />{t(`play.keys.${group.id}`)}</span>
-                <span className="web-play-help-legend-keys">{group.id === "move" ? t("play.moveKeys") : group.id === "engine" ? t("play.engineKeys") : group.keysLabel}</span>
+                <span className="web-play-help-legend-keys">
+                  {group.id === "move" ? t("play.moveKeys") : group.id === "engine" ? (
+                    <>
+                      <span className="block">{system}</span>
+                      <span className="block">{interaction}</span>
+                      <span className="block">{t("play.engineKeys.speed")}</span>
+                      <span className="block">{shift}</span>
+                    </>
+                  ) : group.keysLabel}
+                </span>
               </div>
             ))}
           </div>

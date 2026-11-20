@@ -26,7 +26,7 @@ export function ForumHistoryDialog({ target, onClose }: { target: ForumTarget; o
   const history = state?.page === page ? state.history : undefined;
   const error = state?.page === page ? state.error : undefined;
   const name = t(`admin.discussions.${target.kind}`);
-  return <ForumModal open onOpenChange={(open) => { if (!open) onClose(); }} title={t("entryHistory.title", { name: `${name} #${target.id}` })}>
+  return <ForumModal open onOpenChange={(open) => { if (!open) onClose(); }} title={t("work.sidebar.history")} description={`${name} #${target.id}`}>
     {error ? <p role="alert" className="text-sm text-danger">{error}</p> : !history ? <p role="status" className="text-sm text-muted">{t("forum.history.loading")}</p> : <div className="grid gap-4">
       {history.state === "deleted" ? <p className="text-sm text-muted">{t("forum.history.deleted")}</p> : null}
       {!history.total ? <p className="text-sm text-muted">{t("forum.history.empty")}</p> : history.items.map((entry) => <article key={entry.id} className="grid min-w-0 gap-3 border-b border-border pb-4">

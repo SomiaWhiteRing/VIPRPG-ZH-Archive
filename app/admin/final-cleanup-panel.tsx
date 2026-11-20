@@ -258,7 +258,10 @@ export function FinalCleanupPanel() {
       ) : null}
       {job ? (
         <div className="space-y-3 rounded-md border border-border p-3 text-sm">
-          <p className="break-all text-muted">{t("admin.cleanup.job", { id: job.id, days: job.graceDays, date: formatExactTimestamp(job.createdAt) })}</p>
+          <div>
+            <p className="wrap-anywhere font-semibold">{t("admin.cleanup.job", { id: job.id })}</p>
+            <p className="mt-0.5 text-xs text-muted">{t("admin.cleanup.jobDetails", { days: job.graceDays, date: formatExactTimestamp(job.createdAt) })}</p>
+          </div>
           {scanning ? (
             <p>{t("admin.cleanup.scanProgress", { phase: t(`admin.cleanup.phase.${job.phase}`), count: job.totalItems })}</p>
           ) : job.status === "cancelled" ? (

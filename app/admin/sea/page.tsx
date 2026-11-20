@@ -109,8 +109,12 @@ export default function SeaModerationPage() {
     <Dialog.Root open={editing !== null} onOpenChange={open => { if (!open && !busy) setEditing(null); }}>
       <Dialog.Portal>
         <Dialog.Overlay />
-        <Dialog.Content aria-describedby={undefined} className="left-1/2 top-1/2 max-h-[90dvh] w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-md p-5">
-          <Dialog.Title>{editing?.scope === "ip" ? t("admin.sea.ip") : t("admin.sea.identity")}{editing ? ` (${editing.name})` : ""}</Dialog.Title>
+        <Dialog.Content className="left-1/2 top-1/2 max-h-[90dvh] w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-md p-5">
+          <Dialog.Title>{t("admin.sea.edit")}</Dialog.Title>
+          <Dialog.Description className="mt-1 flex flex-wrap gap-x-2 text-sm text-muted">
+            <span>{editing?.name}</span>
+            <span>{editing?.scope === "ip" ? t("admin.sea.ip") : t("admin.sea.identity")}</span>
+          </Dialog.Description>
           {editing ? <form className="mt-4 grid gap-4" onSubmit={async event => {
             event.preventDefault();
             const minutes = editing.permanent ? null : Math.ceil((new Date(editing.date).getTime() - Date.now()) / 60000);

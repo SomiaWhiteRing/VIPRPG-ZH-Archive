@@ -192,7 +192,7 @@ export default function EntryHistoryPage() {
   }
   return <PageContainer>
     {history.entryHref ? <BackLink className="mb-4" href={history.entryHref} label={t("entryHistory.back")} variant="text" /> : null}
-    <PageHeader compact title={t("entryHistory.title", { name: history.title })} />
+    <PageHeader compact title={t("work.sidebar.history")} subtitle={history.title} />
     {selection ? <section className="mt-5 min-w-0" aria-label={selection.snapshot ? t("entryHistory.snapshot") : t("entryHistory.diff")}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">{selection.snapshot ? t("entryHistory.snapshot") : t("entryHistory.diff")}</h2>

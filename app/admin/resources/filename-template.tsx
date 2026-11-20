@@ -36,9 +36,12 @@ export function DownloadFilenameTemplate({ data, disabled }: { data: ResourceEdi
       <p id={`${id}-help`} className="text-sm text-muted">
         <RichMessage id="admin.resources.filenameHelp" values={{ variable: "${version}" }} components={{ code: children => <code key="variable">{children}</code> }} />
       </p>
-      <div id={`${id}-preview`} className="grid gap-1 break-all text-sm text-muted" aria-live="polite">
+      <div id={`${id}-preview`} className="grid gap-2 break-all text-sm text-muted" aria-live="polite">
         {error ? <p role="alert">{error}</p> : samples.length ? samples.map(({ artifact, version }) => (
-          <p key={artifact.id}>{targetLabel(artifact.target)} ({version})：{resourceDownloadFilename(value, artifact, version)}</p>
+          <p key={artifact.id}>
+            <span className="block font-medium text-foreground">{resourceDownloadFilename(value, artifact, version)}</span>
+            <span className="block text-xs">{targetLabel(artifact.target)} / {version}</span>
+          </p>
         )) : value.trim() ? (
           <p>{t("admin.resources.filenameExample", { name: resourceDownloadFilename(value, { filename: "", format: data.resource.slug === "viprpg-android" ? "apk" : "zip" }, "1.2.3") })}</p>
         ) : <p>{t("admin.resources.filenameEmpty")}</p>}

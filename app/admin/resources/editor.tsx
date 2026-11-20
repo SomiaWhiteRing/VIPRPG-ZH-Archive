@@ -284,10 +284,13 @@ export function ResourceEditor({ initial }: { initial: ResourceEditorData }) {
               className="admin-panel admin-details"
             >
               <summary>
-                {release.version_label} ({t(release.status === "draft" ? "admin.resources.draft" : release.status === "published" ? "upload.own.status.published" : "inbox.withdrawn")})
-                {!automaticPackage && release.release_sequence
-                  ? <span className="ms-2">{t("admin.resourceRelease.sequence", { count: release.release_sequence })}</span>
-                  : null}
+                <span className="font-semibold">{release.version_label}</span>
+                <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted">
+                  <span>{t(release.status === "draft" ? "admin.resources.draft" : release.status === "published" ? "upload.own.status.published" : "inbox.withdrawn")}</span>
+                  {!automaticPackage && release.release_sequence
+                    ? <span>{t("admin.resourceRelease.sequence", { count: release.release_sequence })}</span>
+                    : null}
+                </span>
               </summary>
               <div className="mt-4 grid gap-4">
                 <form
