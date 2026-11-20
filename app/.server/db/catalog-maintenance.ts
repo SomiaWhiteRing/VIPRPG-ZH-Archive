@@ -207,7 +207,7 @@ export async function mergeWorks(
         .bind(target, source),
     );
   }
-  for (const table of ["import_jobs", "download_builds", "timeline_events"]) {
+  for (const table of ["import_jobs", "download_builds"]) {
     statements.push(
       db
         .prepare(
@@ -273,6 +273,7 @@ export async function mergeWorks(
         ELSE MIN(first_observed_at,excluded.first_observed_at) END`).bind(target, source),
     db.prepare("DELETE FROM user_work_first_plays WHERE work_id=?").bind(source),
     db.prepare("UPDATE timeline_events SET work_id=? WHERE work_id=?").bind(target, source),
+    db.prepare("UPDATE netplay_match_seats SET work_id=? WHERE work_id=?").bind(target, source),
     db
       .prepare(
         `INSERT INTO user_work_entries(work_id,user_id,last_played_at,favorited_at,favorite_note,updated_at)

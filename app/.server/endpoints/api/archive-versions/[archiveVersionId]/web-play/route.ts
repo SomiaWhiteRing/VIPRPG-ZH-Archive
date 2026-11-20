@@ -23,11 +23,7 @@ export async function GET(
     const archiveVersionId = parseArchiveVersionId(rawArchiveVersionId);
     const options = new URL(request.url).searchParams;
     const endpointOnly = options.get("fields") === "netplayEndpoint";
-    const record = await getPublishedArchiveDownloadRecord(
-      runtime,
-      archiveVersionId,
-      endpointOnly,
-    );
+    const record = await getPublishedArchiveDownloadRecord(runtime, archiveVersionId);
 
     if (!record) {
       return json(

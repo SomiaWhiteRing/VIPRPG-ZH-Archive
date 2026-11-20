@@ -1,6 +1,6 @@
 export type RecordingParticipant = {
   identity: { name: string };
-  account?: { userId: number | null; workId?: number | null; archiveVersionId?: number | null };
+  account?: { userId: number | null; workId?: number | null };
 };
 
 export type RecordingBatch = {

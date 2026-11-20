@@ -20,13 +20,13 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 在控制台「联机空间」创建或编辑空间，再在作品维护页绑定。使用 Cloudflare 托管时，空间拥有固定的 `/api/netplay/v1/spaces/<空间 ID>/` 入口。同一空间的作品共享大厅。外部托管填写支持 Player 房间协议的完整 HTTPS 基础地址，包含服务器分配给这个空间的路径。联机作品的新归档需要保留 `EasyRPG.ini` 的联机声明。
 
-同一联机空间只绑定使用相同对战规则、输入含义和同步事件的版本。翻译、素材和界面调整可沿用原空间；影响对战同步的更新使用新空间，避免已打开的旧版与新版进入同一场对局。
+联机空间绑定作品，同一空间内各客户端需使用相同的对战规则、输入含义和同步事件。翻译、素材和界面调整可沿用原空间；影响对战同步的更新使用新空间，避免已打开的旧版与新版进入同一场对局。
 
 香港中继可用 `NETPLAY_NEXT_SPACE_PATH` 同时提供第二个数字路径。两个路径各自维护房间和大厅，`/healthz` 的 `spacePathIds` 列出已启用的路径。在两种语言的新归档准备好后，将两件作品一起换绑到新空间，并分别核对旧路径的房间与新路径的中日版大厅。安装中继脚本时的服务重启会结束当时仍在该进程中的房间。
 
 联机优选入口 `netplay-staging.viprpg.org` 使用社区 CNAME 和精确的 `/api/netplay/v1/*` Route，由预生产配置生成脚本加入同一个 Worker。使用 Cloudflare 托管的作品可以在预生产网页版游玩地址加 `?netplayEdge=1`，通过该入口以访客身份进入同一房间池。对照测试使用 WebSocket 的实际双端往返时间。
 
-预生产玉露弹（作品 18）的联机空间使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 以 Debian 的 Node.js 和 `node-ws` 运行。沿用的 `NETPLAY_ARCHIVE_VERSION` 表示该中继地址的固定数字路径，随空间配置管理。Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
+预生产玉露弹（作品 18）的联机空间使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 以 Debian 的 Node.js 和 `node-ws` 运行。`NETPLAY_SPACE_PATH` 对应中继地址的固定数字路径，兼容既有配置中的 `NETPLAY_ARCHIVE_VERSION`。Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
 
 在网页版游玩地址加 `?netplayTurn=1` 进入独立的香港 UDP TURN 房间池。该入口要求双方经 coturn 中继，连接失败时房主留在原房间等待，来客可从大厅重新加入。coturn 在香港服务器的公网 IPv4 和 IPv6 上监听 UDP 3478，两类连接都使用同一服务器的 IPv4 分配 UDP 49160–49259 中继端口，中继对端限定为同一服务器上的分配。野草云 P 型 VPS 还需在客户中心的产品防火墙规则中允许 `net0` 入站 UDP 3478。香港联机服务使用与 coturn 配置一致的 `NETPLAY_HK_TURN_SECRET` 签发短期凭据，实际使用的中继协议见香港服的 `netplay_ice_stats` 日志。
 
@@ -60,7 +60,7 @@ Player 通过 `routeIceDiagnostics=1` 声明支持自动选线 ICE 诊断，服�
 
 诊断协议 `v: 1` 中的字段可独立增加。接收端保留认识且校验通过的字段，忽略未知字段。事件类型和必要字段继续按协议校验。
 
-新版 Player 使用 `recording=2` 协商。开打时房间服务分配同一对局 ID，使用现有联机身份密钥签发绑定账号、归档和席位的上传凭据。Player 在 IndexedDB 中分批保存输入、接收时刻、开局随机数状态、确认帧检查点和结算事件。第 0 帧为双方的中立输入，记录从第 1 帧开始。终局补发和比分确认沿房间协议实时发送。
+新版 Player 使用 `recording=2` 协商。开打时房间服务分配同一对局 ID，使用现有联机身份密钥签发记录账号、作品和席位的上传凭据。Player 在 IndexedDB 中分批保存输入、接收时刻、开局随机数状态、确认帧检查点和结算事件。第 0 帧为双方的中立输入，记录从第 1 帧开始。终局补发和比分确认沿房间协议实时发送。
 
 结算或退房后，Player 通过 `POST /api/netplay-recordings/upload` 合并上传本地分段，断网时保留队列。进程被强制关闭时，重新打开游戏会尝试上传已落盘的分段，结束原因为 `interrupted`。网站根据凭据写入 D1 对局索引和 R2 的 `netplay-recordings/v1/<对局>/<席位>/<序号>.json`。旧版 `recording=1` 沿用局内上传协议。
 

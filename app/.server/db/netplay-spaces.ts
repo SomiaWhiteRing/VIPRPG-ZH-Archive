@@ -21,10 +21,7 @@ export async function isCloudflareSpaceReadable(runtime: AppRuntime, spaceId: nu
   const access = workReadCondition(await getCurrentUser(runtime));
   return !!await runtime.db.prepare(
     `SELECT 1 FROM netplay_spaces s JOIN works w ON w.netplay_space_id=s.id
-     JOIN archive_versions av ON av.work_id=w.id
-     WHERE s.id=? AND s.external_endpoint IS NULL
-       AND av.is_current=1 AND av.status='published' AND av.purged_at IS NULL
-       AND av.netplay_service IS NOT NULL AND ${access.sql} LIMIT 1`,
+     WHERE s.id=? AND s.external_endpoint IS NULL AND ${access.sql} LIMIT 1`,
   ).bind(spaceId, ...access.binds).first();
 }
 

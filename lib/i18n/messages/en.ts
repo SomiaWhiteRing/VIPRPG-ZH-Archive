@@ -356,7 +356,6 @@ export const en = {
   "admin.netplay.seat": "Seat {seat}",
   "admin.netplay.recording": "Download frame log",
   "admin.netplay.account": "Player account",
-  "admin.netplay.archive": "Archive version",
   "admin.netplay.score": "Score",
   "admin.netplay.finishFrame": "Match end frame",
   "admin.netplay.inputRoutes": "Input routes",

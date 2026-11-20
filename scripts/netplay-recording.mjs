@@ -32,7 +32,8 @@ export function createMatchRecording() {
           name: player.identity.name,
           userId: player.account?.userId ?? null,
           workId: player.account?.workId ?? null,
-          archiveVersionId: player.account?.archiveVersionId ?? null,
+          // Keep the nullable field for older Workers reading grants during rollout.
+          archiveVersionId: null,
         })) };
     }
     return { ...active, seat: players.indexOf(participant) + 1 };

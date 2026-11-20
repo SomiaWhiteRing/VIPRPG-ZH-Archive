@@ -508,7 +508,7 @@ await check("discussion topics only; replies and edits stay outside timeline", a
   assert.equal((await f.page()).items.length, 0);
 });
 
-await check("successful external upload and archive visibility/atomic publication", async (f) => {
+await check("successful uploads follow work visibility after atomic publication", async (f) => {
   await f.enable();
   const input = { user: f.actor(1), originalTitle: "External upload", chineseTitle: null, description: null,
     originalReleaseDate: "2026-01-01", engineFamily: "other", isOriginal: true, isTranslation: false, language: "zh-CN",
@@ -523,7 +523,7 @@ await check("successful external upload and archive visibility/atomic publicatio
   assert.equal(f.count("upload"), 1);
   f.sqlite.exec(`INSERT INTO archive_versions(id,work_id,manifest_sha256,file_policy_version,packer_version,source_type,status)
     VALUES(1,2,'${"b".repeat(64)}','fixture','fixture','browser_zip','processing');`);
-  const event = () => timelineStatement(f.db, { userId: 1, kind: "upload", action: "上传了新版本", eventKey: "archive-upload:1", workId: 2, archiveVersionId: 1,
+  const event = () => timelineStatement(f.db, { userId: 1, kind: "upload", action: "上传了新版本", eventKey: "archive-upload:1", workId: 2,
     predicate: "EXISTS(SELECT 1 FROM archive_versions WHERE id=1 AND status='published')" });
   await event().run();
   assert.equal(f.count("upload"), 1, "processing rows cannot announce a published archive");
@@ -532,8 +532,8 @@ await check("successful external upload and archive visibility/atomic publicatio
   await f.db.batch([f.db.prepare("UPDATE archive_versions SET status='published' WHERE id=1"), event()]);
   await event().run();
   assert.equal(f.count("upload"), 2);
-  f.sqlite.exec("UPDATE archive_versions SET status='hidden' WHERE id=1");
-  assert.equal((await f.page()).items.length, 1);
+  f.sqlite.exec("DELETE FROM archive_versions WHERE id=1");
+  assert.equal((await f.page()).items.length, 2);
 });
 
 await check("first-play off-period consumption, retry races and rollback", async (f) => {

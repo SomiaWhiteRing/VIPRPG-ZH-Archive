@@ -2,9 +2,10 @@ import { DurableObject } from "cloudflare:workers";
 import { getCurrentUser } from "../app/.server/auth/current-user";
 import { getPublishedArchiveDownloadRecord } from "../app/.server/db/archive-downloads";
 import { isCloudflareSpaceReadable } from "../app/.server/db/netplay-spaces";
+import { workReadCondition } from "../app/.server/db/work-visibility";
 import { createRuntime } from "../app/.server/runtime";
 import { getUserAvatarSrc } from "../lib/user-profile";
-import { productionNetplayHongKongOrigin, productionNetplayHongKongWork, productionNetplayLegacyArchive,
+import { productionNetplayHongKongOrigin, productionNetplayHongKongWork,
   productionNetplaySiteOrigin, stagingNetplayEdgeOrigin, stagingNetplaySiteOrigin } from "../lib/archive/netplay-ingress";
 import { json } from "../lib/http";
 import { requestJsonValue } from "../lib/ui/api-response";
@@ -69,7 +70,7 @@ type Negotiation = {
   timeout: ReturnType<typeof setTimeout>;
 };
 type Room = {
-  details: { archiveVersionId?: number; netplaySpaceId?: number; roomId: number; pool: "space" | "rtc" | "legacy" };
+  details: { netplaySpaceId: number; roomId: number; pool: "space" | "rtc" | "legacy" };
   peers: Map<WebSocket, {
     identity: Identity;
     rtc: boolean;
@@ -232,12 +233,11 @@ export class NetplayRoom extends DurableObject<NetplayEnvironment> {
       return;
     }
     const existing = this.rooms.get(id);
-    const [, , , , scope, key] = path.split("/");
-    const space = scope === "spaces";
+    const [, , , , , key, mode] = path.split("/");
     const room: Room = existing ?? {
       details: {
-        ...(space ? { netplaySpaceId: Number(key) } : { archiveVersionId: Number(scope) }),
-        roomId: id, pool: space ? "space" : key === "rtc" ? "rtc" : "legacy",
+        netplaySpaceId: Number(key),
+        roomId: id, pool: mode === "rtc" || mode === "legacy" ? mode : "space",
       },
       peers: new Map(),
       hidden: false,
@@ -598,24 +598,28 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
       ((websocket || origin !== null) && origin !== runtime.origin)) {
     return new Response(null, { status: 403 });
   }
-  let pool = `v1/spaces/${id}`;
+  let spaceId = id;
+  let legacyWorkId: number | null = null;
+  let poolSuffix = "";
   if (space) {
     if (!await isCloudflareSpaceReadable(runtime, id)) return new Response(null, { status: 404 });
   } else {
-    const record = await getPublishedArchiveDownloadRecord(runtime, id, true);
+    const record = await getPublishedArchiveDownloadRecord(runtime, id);
     if (!record?.netplayCapable || record.netplaySpaceId === null) return new Response(null, { status: 404 });
-    // Previously published archive URLs remain usable for installed clients.
-    const legacy = runtime.origin === productionNetplaySiteOrigin && record.workId === productionNetplayHongKongWork &&
-      (id === productionNetplayLegacyArchive ||
-        (record.netplayExternalEndpoint && new URL(record.netplayExternalEndpoint).origin === productionNetplayHongKongOrigin));
-    if (legacy) {
-      pool = rtc ? `v1/${id}/rtc` : `v1/${id}`;
-    } else {
-      if (record.netplayExternalEndpoint) return new Response(null, { status: 404 });
-      pool = `v1/spaces/${record.netplaySpaceId}`;
+    // Older clients can still enter the work's space via the same-origin archive URL.
+    if (record.netplayExternalEndpoint) {
+      const legacy = runtime.origin === productionNetplaySiteOrigin &&
+        record.workId === productionNetplayHongKongWork &&
+        new URL(record.netplayExternalEndpoint).origin === productionNetplayHongKongOrigin;
+      if (!legacy) return new Response(null, { status: 404 });
+      poolSuffix = rtc ? "/rtc" : "/legacy";
     }
+    spaceId = record.netplaySpaceId;
+    legacyWorkId = record.workId;
+    url.pathname = `/api/netplay/v1/spaces/${spaceId}${poolSuffix}/${target}`;
+    request = new Request(url, request);
   }
-  const rooms = env.NETPLAY_ROOM.getByName(pool);
+  const rooms = env.NETPLAY_ROOM.getByName(`v1/spaces/${spaceId}${poolSuffix}`);
   if (directory && !websocket) {
     const response = await rooms.fetch(request);
     if (!stagingEdge) return response;
@@ -636,13 +640,17 @@ export async function maybeHandleNetplayRoom(request: Request, env: CloudflareEn
   headers.set("X-Netplay-Identity", encodeURIComponent(JSON.stringify(identity)));
   headers.delete("X-Netplay-Account");
   if (["1", "2"].includes(url.searchParams.get("recording") ?? "")) {
-    const requested = Number(url.searchParams.get("archive"));
-    const archive = Number.isSafeInteger(requested) && requested > 0
-      ? await getPublishedArchiveDownloadRecord(runtime, requested) : null;
-    const associated = archive && pool === `v1/spaces/${archive.netplaySpaceId}` ? archive : null;
-    headers.set("X-Netplay-Account", JSON.stringify({
-      userId: user?.id ?? null, workId: associated?.workId ?? null, archiveVersionId: associated?.id ?? null,
-    }));
+    let workId = legacyWorkId;
+    const work = url.searchParams.get("work");
+    const requested = Number(work ?? url.searchParams.get("archive"));
+    if (workId === null && Number.isSafeInteger(requested) && requested > 0) {
+      const access = workReadCondition(user);
+      const workSource = work === null ? "(SELECT work_id FROM archive_versions WHERE id=?)" : "?";
+      workId = await runtime.db.prepare(`SELECT w.id FROM works w
+        WHERE w.id=${workSource} AND w.netplay_space_id=? AND ${access.sql}`)
+        .bind(requested, spaceId, ...access.binds).first<number>("id");
+    }
+    headers.set("X-Netplay-Account", JSON.stringify({ userId: user?.id ?? null, workId }));
   }
   return rooms.fetch(new Request(request, { headers }));
 }

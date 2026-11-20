@@ -1543,7 +1543,7 @@ async function finalizeArchiveCommit(
 
   statements.push(timelineStatement(database, { userId: input.user.id, kind: "upload",
     action: input.metadata.target.mode === "create" ? "上传了作品" : "上传了新版本",
-    eventKey: `archive-upload:${input.archiveVersionId}`, workId: input.workId, archiveVersionId: input.archiveVersionId,
+    eventKey: `archive-upload:${input.archiveVersionId}`, workId: input.workId,
     predicate: "EXISTS(SELECT 1 FROM archive_versions WHERE id=? AND work_id=? AND status='published' AND purged_at IS NULL) AND EXISTS(SELECT 1 FROM import_jobs WHERE id=? AND status='completed')",
     args: [input.archiveVersionId, input.workId, input.importJobId] }));
   await auditedEntityBatch(database, statements, {

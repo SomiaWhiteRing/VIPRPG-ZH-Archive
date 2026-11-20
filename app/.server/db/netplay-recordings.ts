@@ -41,9 +41,10 @@ export async function saveNetplayRecording(env: CloudflareEnv, batch: RecordingB
   const results = await env.DB.batch<{ replay_pending: number }>([
     env.DB.prepare("INSERT OR IGNORE INTO netplay_matches VALUES (?, ?, ?, ?)")
       .bind(id, match, startedAt, JSON.stringify(room)),
-    ...participants.map(({ userId, name, workId, archiveVersionId }, index) => env.DB.prepare(
-      `INSERT OR IGNORE INTO netplay_match_seats VALUES (?, ?, (SELECT id FROM users WHERE id = ?), ?, ?, ?)`,
-    ).bind(id, index + 1, userId, name, workId, archiveVersionId)),
+    ...participants.map(({ userId, name, workId }, index) => env.DB.prepare(
+      `INSERT OR IGNORE INTO netplay_match_seats(match_id,seat,user_id,display_name,work_id)
+       VALUES (?, ?, (SELECT id FROM users WHERE id = ?), ?, ?)`,
+    ).bind(id, index + 1, userId, name, workId)),
     chunk,
     ...(seq === 0 ? [env.DB.prepare("INSERT OR IGNORE INTO netplay_replay_recording_start VALUES (?, ?, ?)")
       .bind(id, seat, JSON.stringify(getRecordedReplayStart(indexedEvents) ?? null))] : []),

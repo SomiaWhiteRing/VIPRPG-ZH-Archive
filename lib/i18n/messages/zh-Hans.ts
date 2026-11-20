@@ -356,7 +356,6 @@ export const zh = {
   "admin.netplay.seat": "席位 {seat}",
   "admin.netplay.recording": "下载逐帧记录",
   "admin.netplay.account": "参战账号",
-  "admin.netplay.archive": "归档版本",
   "admin.netplay.score": "比分",
   "admin.netplay.finishFrame": "结算帧",
   "admin.netplay.inputRoutes": "收到输入的线路",

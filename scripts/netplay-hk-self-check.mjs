@@ -46,7 +46,7 @@ await check("service", () => {
     .map(item => [item.slice(0, item.indexOf("=")), item.slice(item.indexOf("=") + 1)]));
   return { ...status, port: environment.NETPLAY_PORT ?? "8787", siteOrigin: environment.NETPLAY_SITE_ORIGIN ?? "https://staging.viprpg.org",
     turnHost: environment.NETPLAY_TURN_HOST ?? "netplay-hk-staging.viprpg.org",
-    spacePaths: [environment.NETPLAY_ARCHIVE_VERSION, environment.NETPLAY_NEXT_SPACE_PATH].filter(Boolean),
+    spacePaths: [environment.NETPLAY_SPACE_PATH ?? environment.NETPLAY_ARCHIVE_VERSION, environment.NETPLAY_NEXT_SPACE_PATH].filter(Boolean),
     identityKeyConfigured: Boolean(environment.NETPLAY_HK_IDENTITY_KEY), turnKeyConfigured: Boolean(environment.NETPLAY_HK_TURN_SECRET) };
 });
 await check("websocket_library", () => {

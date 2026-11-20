@@ -356,7 +356,6 @@ export const ja = {
   "admin.netplay.seat": "席 {seat}",
   "admin.netplay.recording": "フレーム記録をダウンロード",
   "admin.netplay.account": "参加アカウント",
-  "admin.netplay.archive": "アーカイブ版",
   "admin.netplay.score": "スコア",
   "admin.netplay.finishFrame": "結果確定フレーム",
   "admin.netplay.inputRoutes": "入力を受信した経路",

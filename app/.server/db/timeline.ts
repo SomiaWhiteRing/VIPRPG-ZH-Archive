@@ -16,16 +16,16 @@ import { TIMELINE_RECORD_KINDS, isTimelineDefaultView, isTimelineKind, isTimelin
 type Bind = string | number | null;
 export function timelineStatement(db: D1Database, input: {
   userId: number; kind: TimelineKind; action: "收藏了作品" | "上传了作品" | "上传了新版本" | "初次游玩"; eventKey?: string;
-  workId?: number; catalogId?: number; archiveVersionId?: number;
+  workId?: number; catalogId?: number;
   predicate?: string; args?: Bind[];
 }) {
-  return db.prepare(`INSERT INTO timeline_events(user_id,kind,action,event_key,work_id,catalog_id,archive_version_id)
-    SELECT id,?,?,?,?,?,? FROM users WHERE id=? AND status='active' AND timeline_enabled=1
+  return db.prepare(`INSERT INTO timeline_events(user_id,kind,action,event_key,work_id,catalog_id)
+    SELECT id,?,?,?,?,? FROM users WHERE id=? AND status='active' AND timeline_enabled=1
     AND ${userPermissionSql("users.id", "timeline.use")}
     AND EXISTS(SELECT 1 FROM json_each(timeline_record_kinds) WHERE value=?)
     AND (${input.predicate ?? "1"}) ON CONFLICT(event_key) DO NOTHING`)
     .bind(input.kind, input.action, input.eventKey ?? crypto.randomUUID(), input.workId ?? null,
-      input.catalogId ?? null, input.archiveVersionId ?? null, input.userId, input.kind, ...(input.args ?? []));
+      input.catalogId ?? null, input.userId, input.kind, ...(input.args ?? []));
 }
 
 export async function readTimelineSettings(runtime: AppRuntime, userId: number): Promise<TimelineSettings> {
@@ -66,11 +66,10 @@ const FROM = `FROM timeline_events e JOIN users u ON u.id=e.user_id
   LEFT JOIN catalogs comment_catalog ON comment_catalog.id=c.catalog_id
   LEFT JOIN forum_posts fp ON fp.id=(SELECT pp.id FROM forum_public_posts pp WHERE pp.id=e.forum_post_id)
   LEFT JOIN forum_topics ft ON ft.id=fp.topic_id
-  LEFT JOIN archive_versions av ON av.id=e.archive_version_id
   WHERE (u.status='active' OR (u.status='deleted' AND e.kind IN ('join','rename'))) AND e.hidden_at IS NULL AND CASE e.kind
     WHEN 'favorite' THEN e.action='收藏了作品' AND u.profile_show_favorites=1 AND w.id IS NOT NULL
     WHEN 'play' THEN u.profile_show_history=1 AND w.id IS NOT NULL
-    WHEN 'upload' THEN w.id IS NOT NULL AND (e.archive_version_id IS NULL OR (av.status='published' AND av.purged_at IS NULL AND av.work_id=w.id))
+    WHEN 'upload' THEN w.id IS NOT NULL
     WHEN 'catalog' THEN e.action='创建了目录' AND u.profile_show_catalogs=1 AND cat.id IS NOT NULL AND cat_owner.status='active' AND cat_owner.profile_show_catalogs=1
     WHEN 'comment' THEN u.profile_show_comments=1 AND c.id IS NOT NULL AND c.root_comment_id IS NULL
     WHEN 'discussion' THEN u.profile_show_discussions=1 AND ft.id IS NOT NULL AND fp.post_number=1

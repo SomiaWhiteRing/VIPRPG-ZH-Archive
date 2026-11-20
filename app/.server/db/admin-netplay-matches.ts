@@ -5,13 +5,13 @@ import type { RecordingBatch } from "../../../scripts/netplay-recording.mjs";
 type MatchRow = { id: string; started_at: number; room_json: string };
 type SeatRow = {
   match_id: string; seat: number; user_id: number | null; display_name: string;
-  current_name: string | null; archive_version_id: number | null;
+  current_name: string | null; work_id: number | null;
   end_reason: string | null; terminal: string | null; chunks: number;
   last_sequence: number | null; last_received_at: number | null;
 };
 
 const SEATS = `
-  SELECT s.match_id, s.seat, s.user_id, s.display_name, u.display_name AS current_name, s.archive_version_id,
+  SELECT s.match_id, s.seat, s.user_id, s.display_name, u.display_name AS current_name, s.work_id,
     MAX(c.end_reason) AS end_reason, MAX(c.terminal_json) AS terminal,
     COUNT(c.seq) AS chunks, MAX(c.seq) AS last_sequence, MAX(c.received_at) AS last_received_at
   FROM netplay_match_seats s

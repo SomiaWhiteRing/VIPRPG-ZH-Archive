@@ -14,8 +14,8 @@ const { WebSocket, WebSocketServer } = createRequire(import.meta.url)("ws");
 const origin = process.env.NETPLAY_SITE_ORIGIN ?? "https://staging.viprpg.org";
 const turnHost = process.env.NETPLAY_TURN_HOST ?? "netplay-hk-staging.viprpg.org";
 const defaultAvatar = "/icon/alex.png";
-const archiveVersionId = Number(process.env.NETPLAY_ARCHIVE_VERSION);
-const spacePathIds = [archiveVersionId];
+const spacePathId = Number(process.env.NETPLAY_SPACE_PATH ?? process.env.NETPLAY_ARCHIVE_VERSION);
+const spacePathIds = [spacePathId];
 if (process.env.NETPLAY_NEXT_SPACE_PATH) spacePathIds.push(Number(process.env.NETPLAY_NEXT_SPACE_PATH));
 const identityKey = process.env.NETPLAY_HK_IDENTITY_KEY;
 const turnKey = process.env.NETPLAY_HK_TURN_SECRET;
@@ -60,11 +60,11 @@ function route(request) {
     const actual = Buffer.from(signature, "base64url");
     const expected = createHmac("sha256", identityKey).update(payload).digest();
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return;
-    const [expires, archive, name, avatar, userId, workId, versionId, spaceId] =
+    const [expires, signedSpacePath, name, avatar, userId, workId, , spaceId] =
       JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    if (archive !== pool.id || expires <= Date.now()) return;
+    if (signedSpacePath !== pool.id || expires <= Date.now()) return;
     if (name) identity = { name, avatar };
-    account = { userId, workId, archiveVersionId: versionId, spaceId };
+    account = { userId, workId, spaceId };
   }
   const agent = request.headers["user-agent"] ?? "";
   const recording = url.searchParams.get("recording");
@@ -594,7 +594,7 @@ function json(response, body) {
 const server = createServer(async (request, response) => {
   if (request.method === "GET" && request.url === "/healthz") {
     json(response, { ok: true, route: "hong_kong_websocket", direct: true, turnUdp: Boolean(turnKey), roomPassword: true,
-      archiveVersionId, spacePathIds, profileIdentity: Boolean(identityKey) });
+      archiveVersionId: spacePathId, spacePathIds, profileIdentity: Boolean(identityKey) });
   } else if (request.headers.origin && request.headers.origin !== origin) {
     response.writeHead(403).end();
   } else if (request.method === "GET" && (request.url === defaultAvatar ||

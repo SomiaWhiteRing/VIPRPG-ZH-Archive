@@ -74,7 +74,7 @@ export default function AdminNetplayMatchDetail() {
                     {seat.current_name ?? seat.display_name} #{seat.user_id}
                   </Link>
                 ) : seat.display_name },
-                { label: t("admin.netplay.archive"), value: seat.archive_version_id ? `#${seat.archive_version_id}` : "—" },
+                { label: t("admin.audit.target.work"), value: seat.work_id ? `#${seat.work_id}` : "—" },
                 { label: t("admin.netplay.reason"), value: endReasonLabel(seat.end_reason, t) },
                 { label: t("admin.netplay.score"), value: seat.score ? `${seat.score[1]} : ${seat.score[2]}` : "—" },
                 { label: t("admin.netplay.finishFrame"), value: seat.score?.[0] ?? "—" },

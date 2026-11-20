@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { workReadCondition } from "@/app/.server/db/work-visibility";
 import type { AppRuntime } from "@/app/.server/runtime";
 import {
-  productionNetplayHongKongOrigin, productionNetplayHongKongWork, productionNetplayLegacyArchive, productionNetplaySiteOrigin,
+  productionNetplayHongKongOrigin, productionNetplayHongKongWork, productionNetplaySiteOrigin,
   stagingNetplayEdgeOrigin, stagingNetplayHongKongOrigin, stagingNetplaySiteOrigin,
 } from "@/lib/archive/netplay-ingress";
 import { getUserAvatarSrc } from "@/lib/user-profile";
@@ -57,8 +57,7 @@ export async function getArchiveNetplayEndpoint(
   const options = new URL(runtime.request.url).searchParams;
   const production = runtime.origin === productionNetplaySiteOrigin && record.workId === productionNetplayHongKongWork;
   const external = record.netplayExternalEndpoint ? new URL(record.netplayExternalEndpoint) : null;
-  const legacy = production && (record.id === productionNetplayLegacyArchive ||
-    (!supportsExternal && external?.origin === productionNetplayHongKongOrigin));
+  const legacy = production && !supportsExternal && external?.origin === productionNetplayHongKongOrigin;
   if (legacy) {
     return runtime.env.NETPLAY_ROOM ? new URL(`/api/netplay/v1/${record.id}/`, runtime.origin).href : undefined;
   }
@@ -79,8 +78,9 @@ export async function getArchiveNetplayEndpoint(
     const key = runtime.env.NETPLAY_HK_IDENTITY_KEY;
     if (!key) return external.href;
     const expires = Date.now() + 24 * 60 * 60 * 1000;
+    // Retain the empty archive slot in the signed profile for older relays.
     const profile = [expires, Number(relay[1]), user?.displayName ?? "", getUserAvatarSrc(user?.avatarBlobSha256),
-      user?.id ?? null, record.workId, record.id, record.netplaySpaceId];
+      user?.id ?? null, record.workId, null, record.netplaySpaceId];
     const payload = Buffer.from(JSON.stringify(profile)).toString("base64url");
     const signature = createHmac("sha256", key).update(payload).digest("base64url");
     return new URL(`identity/${payload}.${signature}/`, external).href;
@@ -89,7 +89,7 @@ export async function getArchiveNetplayEndpoint(
   const useStagingEdge = runtime.origin === stagingNetplaySiteOrigin &&
     options.get("netplayEdge") === "1";
   const endpoint = new URL(`/api/netplay/v1/spaces/${record.netplaySpaceId}/`, useStagingEdge ? stagingNetplayEdgeOrigin : runtime.origin);
-  endpoint.searchParams.set("archive", String(record.id));
+  endpoint.searchParams.set("work", String(record.workId));
   return endpoint.href;
 }
 
@@ -99,11 +99,8 @@ export function parseArchiveVersionId(value: string): number {
 export async function getPublishedArchiveDownloadRecord(
   runtime: AppRuntime,
   id: number,
-  includeLegacyNetplay = false,
 ): Promise<ArchiveDownloadRecord | null> {
   const access = workReadCondition(await getCurrentUser(runtime));
-  const legacyWork = includeLegacyNetplay && runtime.origin === productionNetplaySiteOrigin &&
-    id === productionNetplayLegacyArchive ? productionNetplayHongKongWork : null;
   const row = await getD1(runtime)
     .prepare(
       `SELECT av.id,
@@ -128,11 +125,12 @@ export async function getPublishedArchiveDownloadRecord(
        LEFT JOIN netplay_spaces s ON s.id = w.netplay_space_id
        WHERE av.id = ?
          AND av.status = 'published'
-         AND (av.is_current = 1 OR (av.work_id = ? AND av.netplay_service = 1 AND av.purged_at IS NULL))
+         AND av.is_current = 1
+         AND av.purged_at IS NULL
          AND ${access.sql}
        LIMIT 1`,
     )
-    .bind(id, legacyWork, ...access.binds)
+    .bind(id, ...access.binds)
     .first<DownloadRow>();
   if (!row || !row.work_original_title) return null;
   return {
