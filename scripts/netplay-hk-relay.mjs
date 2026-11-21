@@ -169,11 +169,8 @@ function selectRoute(room, route, reason, choice) {
     return;
   }
   for (const [index, seat] of seats.entries()) {
-    if (connected) {
-      clearTimeout(seat.hide);
-      clearTimeout(seat.expire);
-    }
     if (connected || choice?.backup) {
+      renewHeartbeat(room, seat);
       seat.resumeToken = randomBytes(24).toString("base64url");
       send(seat.socket, "room:resume:" + seat.resumeToken);
     }
@@ -257,8 +254,7 @@ function renewHeartbeat(room, seat) {
   clearTimeout(seat.hide);
   clearTimeout(seat.expire);
   seat.lastPong = Date.now();
-  if (room.route === "webrtc") return;
-  seat.hide = setTimeout(() => publishDirectory(room.pool), heartbeatHideMs);
+  if (room.route !== "webrtc") seat.hide = setTimeout(() => publishDirectory(room.pool), heartbeatHideMs);
   seat.expire = setTimeout(() => {
     const socket = seat.socket;
     if (!canResumeControl(room)) leave(room, seat, "heartbeat_timeout");
@@ -451,10 +447,13 @@ function receiveText(room, seat, data) {
 
 function attachRoomSocket(socket, room, seat) {
   seat.socket = socket;
+  seat.pingAt = 0;
   if (seat.diagnostics) send(socket, "room:diagnostics:1");
   if (seat.recording) send(socket, `room:record:${seat.recording}`);
   renewHeartbeat(room, seat);
   seat.ping = setInterval(() => {
+    // A new ping on a resumable route also tells the client its previous pong arrived.
+    if (canResumeControl(room) && seat.pingAt) return;
     seat.pingAt = performance.now();
     send(socket, seat.inputStats ? "room:ping:stats" : "room:ping");
   }, heartbeatIntervalMs);
@@ -639,7 +638,8 @@ server.on("upgrade", (request, socket, head) => {
   const target = route(request);
   const room = target?.pool.rooms.get(target.roomId);
   const resume = target?.resume && canResumeControl(room) &&
-    [...room.seats].find(seat => !seat.socket && seat.resumeToken === target.resume);
+    [...room.seats].find(seat => seat.resumeToken === target.resume &&
+      (!seat.socket || Date.now() - seat.lastPong >= heartbeatHideMs));
   const error = target && !target.directory && !target.roomAccess && !target.resume ? joinError(target, null) : undefined;
   const status = request.headers.origin !== origin ? 403
     : !target ? 404
@@ -662,7 +662,10 @@ server.on("upgrade", (request, socket, head) => {
     client.on("error", () => client.terminate());
     if (target.directory) watchDirectory(client, target);
     else if (resume) {
+      const previous = resume.socket;
+      clearInterval(resume.ping);
       attachRoomSocket(client, room, resume);
+      previous?.terminate();
       sendRoomSettings(room);
       send(client, String(3 + [...room.seats].indexOf(resume)));
       room.finish.restore(resume);

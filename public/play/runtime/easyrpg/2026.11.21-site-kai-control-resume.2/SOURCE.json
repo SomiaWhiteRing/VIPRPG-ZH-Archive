@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
   "revision": "88667cdd0f351f90236fcf9c4acca18e05e7ee8f",
-  "version": "2026.11.17-site-kai-netplay-diagnostics.1",
+  "version": "2026.11.21-site-kai-control-resume.2",
   "build": "kai-web-netplay-diagnostics",
   "artifact": "EasyRPG-Player-Kai-netplay-diagnostics.zip",
   "archiveSha256": "91972626c1c784cadd68c3647027c04dd8594d4142eac0b8a91d701679dc93d4",
@@ -35,7 +35,15 @@
       "easyrpg-player-asyncify.wasm"
     ]
   },
-  "patches": [],
+  "patches": [
+    {
+      "file": "player-worker.js",
+      "path": "scripts/runtime-patches/kai-netplay-control-heartbeat.patch",
+      "sha256": "c4579592ffa8976161cc35193fc6e71881b3c64f8b007de09d0bdcdaaa2ca778",
+      "beforeSha256": "d44642d05446adb6930a05e5e055d0875e4fec35256aaaaebf621c2e44324a81",
+      "afterSha256": "3c5c3aeb326e351294ac8c05a1b25cc7cbb0b89b7fe57e3f4c9a65babea70dd4"
+    }
+  ],
   "files": {
     "index.js": {
       "size": 71299,
@@ -62,8 +70,8 @@
       "sha256": "f90fd34ad26ec7eafa7763bba44593d32e60036a9a1c54deb7f60e6aca74ea19"
     },
     "player-worker.js": {
-      "size": 79468,
-      "sha256": "d44642d05446adb6930a05e5e055d0875e4fec35256aaaaebf621c2e44324a81"
+      "size": 80311,
+      "sha256": "3c5c3aeb326e351294ac8c05a1b25cc7cbb0b89b7fe57e3f4c9a65babea70dd4"
     },
     "player-audio.js": {
       "size": 1910,
