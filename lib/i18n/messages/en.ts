@@ -4358,6 +4358,7 @@ export const en = {
   "library.sort": "Sort",
   "library.default": "Default",
   "library.title": "Title",
+  "library.uploadDate": "Upload date",
   "library.release": "Release date",
   "library.views": "Views",
   "library.players": "Plays",

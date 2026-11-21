@@ -1,5 +1,7 @@
 import { translate } from "@/lib/i18n/core";
 import { useMessages } from "@/lib/i18n/react";
+import { parseWorkCreditSort } from "@/lib/params";
+import { WorkCreditSortTabs } from "@/app/components/work/work-credit-sort-tabs";
 import { browsePublicCreatorWorks } from "@/app/.server/db/creator-library";
 import { throwNotFound } from "@/app/.server/http/page-response";
 import { parsePositiveId } from "@/app/.server/http/request";
@@ -16,12 +18,15 @@ import { useLoaderData } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const id = parsePositiveId(args.params.id ?? "", "creator id");
+  const { searchParams } = new URL(args.request.url);
+  const sort = parseWorkCreditSort(searchParams.get("sort"));
   const result = await browsePublicCreatorWorks(runtime, id, {
-    page: Number(new URL(args.request.url).searchParams.get("page") || "1"),
+    page: Number(searchParams.get("page") || "1"),
     pageSize: 20,
+    sort,
   });
   if (!result) throwNotFound();
-  return { ...result, locale: runtime.uiLocale };
+  return { ...result, sort, locale: runtime.uiLocale };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
@@ -31,7 +36,8 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location,
 
 export default function CreatorWorksPage() {
   const t = useMessages();
-  const { creator, items, page, pageSize, total } = useLoaderData<typeof loader>();
+  const { creator, items, page, pageSize, sort, total } = useLoaderData<typeof loader>();
+  const basePath = `/creators/${creator.id}/works`;
   return (
     <main className="mx-auto w-[min(1180px,calc(100vw-2rem))] py-5 sm:py-8">
       <PageHeader
@@ -39,11 +45,13 @@ export default function CreatorWorksPage() {
         subtitle={creator.name}
         title={t("creator.credits")}
       />
+      <WorkCreditSortTabs basePath={basePath} sort={sort} />
       {items.length ? (
         <CreatorWorkList works={items} creatorName={creator.name} standalone />
       ) : <EmptyState title={t("creator.emptyCredits")} />}
       <PaginationLinks
-        basePath={`/creators/${creator.id}/works`}
+        basePath={basePath}
+        params={{ sort: sort === "release" ? sort : undefined }}
         page={page}
         pageSize={pageSize}
         total={total}

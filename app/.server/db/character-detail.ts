@@ -6,6 +6,8 @@ import {
   mapCharacterPortrait,
 } from "@/app/.server/db/character-portrait-library";
 import { getD1 } from "@/app/.server/db/d1";
+import { workCreditOrder } from "@/app/.server/db/work-credit-order";
+import type { WorkCreditSort } from "@/lib/params";
 import type { AppRuntime } from "@/app/.server/runtime";
 import type { CharacterCategory } from "@/lib/character-index";
 import { characterNodePath } from "@/lib/character-index";
@@ -124,7 +126,7 @@ export async function getPublicCharacterDetail(
 export async function browsePublicCharacterWorks(
   runtime: AppRuntime,
   id: number,
-  input: { page: number; pageSize: number },
+  input: { page: number; pageSize: number; sort: WorkCreditSort },
 ) {
   const character = await readPublicCharacter(runtime, id);
   if (!character) return null;
@@ -136,7 +138,7 @@ export async function browsePublicCharacterWorks(
     ? Math.max(1, Math.min(Math.max(1, Math.ceil(total / pageSize)), Math.floor(input.page)))
     : 1;
   const credits = await characterWorksStatement(
-    getD1(runtime), id, pageSize, (page - 1) * pageSize,
+    getD1(runtime), id, pageSize, (page - 1) * pageSize, input.sort,
   ).all<CharacterWorkCredit>();
   return { character, items: groupCharacterWorks(credits.results), total, page, pageSize };
 }
@@ -146,7 +148,9 @@ function characterWorksStatement(
   id: number,
   pageSize: number,
   offset: number,
+  sort: WorkCreditSort = "upload",
 ) {
+  const order = workCreditOrder[sort];
   return db.prepare(
     `SELECT w.id,w.audience,wc.id AS creditId,COALESCE(w.chinese_title,w.original_title) AS title,w.original_title AS originalTitle,
       wc.display_name AS displayName,wc.role_key AS roleKey,wc.spoiler_level AS spoilerLevel,wc.notes,
@@ -165,10 +169,10 @@ function characterWorksStatement(
         WHERE w.id IN (SELECT id FROM member_works) AND EXISTS (
           SELECT 1 FROM work_characters credit WHERE credit.work_id=w.id AND credit.character_id=?
         )
-        ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,w.original_title ASC,w.id DESC
+        ORDER BY ${order}
         LIMIT ? OFFSET ?
       )
-      ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,w.original_title ASC,w.id DESC,wc.sort_order,wc.id`,
+      ORDER BY ${order},wc.sort_order,wc.id`,
   ).bind(id, id, pageSize, offset);
 }
 

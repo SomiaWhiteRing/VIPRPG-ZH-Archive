@@ -1,5 +1,7 @@
 import { translate } from "@/lib/i18n/core";
 import { useMessages } from "@/lib/i18n/react";
+import { parseWorkCreditSort } from "@/lib/params";
+import { WorkCreditSortTabs } from "@/app/components/work/work-credit-sort-tabs";
 import { browsePublicCharacterWorks } from "@/app/.server/db/character-detail";
 import { throwNotFound } from "@/app/.server/http/page-response";
 import { parsePositiveId } from "@/app/.server/http/request";
@@ -17,12 +19,15 @@ import { useLoaderData } from "react-router";
 export async function loader(args: LoaderFunctionArgs) {
   const runtime = args.context.get(runtimeContext);
   const id = parsePositiveId(args.params.id ?? "", "character id");
+  const { searchParams } = new URL(args.request.url);
+  const sort = parseWorkCreditSort(searchParams.get("sort"));
   const result = await browsePublicCharacterWorks(runtime, id, {
-    page: Number(new URL(args.request.url).searchParams.get("page") || "1"),
+    page: Number(searchParams.get("page") || "1"),
     pageSize: 20,
+    sort,
   });
   if (!result) throwNotFound();
-  return { ...result, locale: runtime.uiLocale };
+  return { ...result, sort, locale: runtime.uiLocale };
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location, matches }) => {
@@ -32,7 +37,8 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location,
 
 export default function CharacterWorksPage() {
   const t = useMessages();
-  const { character, items, page, pageSize, total } = useLoaderData<typeof loader>();
+  const { character, items, page, pageSize, sort, total } = useLoaderData<typeof loader>();
+  const basePath = `/characters/${character.id}/works`;
   return (
     <PageContainer>
       <PageHeader
@@ -40,11 +46,13 @@ export default function CharacterWorksPage() {
         subtitle={character.primaryName}
         title={t("character.works")}
       />
+      <WorkCreditSortTabs basePath={basePath} sort={sort} />
       {items.length ? (
         <CharacterWorkList works={items} characterName={character.primaryName} standalone />
       ) : <EmptyState title={t("character.emptyWorks")} />}
       <PaginationLinks
-        basePath={`/characters/${character.id}/works`}
+        basePath={basePath}
+        params={{ sort: sort === "release" ? sort : undefined }}
         page={page}
         pageSize={pageSize}
         total={total}

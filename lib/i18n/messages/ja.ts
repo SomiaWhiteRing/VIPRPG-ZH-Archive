@@ -4358,6 +4358,7 @@ export const ja = {
   "library.sort": "並べ替え",
   "library.default": "既定",
   "library.title": "タイトル",
+  "library.uploadDate": "アップロード日",
   "library.release": "初公開日",
   "library.views": "閲覧数",
   "library.players": "プレイ数",

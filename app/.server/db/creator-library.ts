@@ -1,4 +1,6 @@
 import { getD1 } from "@/app/.server/db/d1";
+import { workCreditOrder } from "@/app/.server/db/work-credit-order";
+import type { WorkCreditSort } from "@/lib/params";
 import { auditedEntityBatch, creatorAuditSnapshot } from "@/app/.server/db/entity-audit";
 import type { ArchiveUser } from "@/lib/dto/db/user-access";
 import { normalizeCreatorLinks, parseCreatorLinks, type CreatorLink } from "@/lib/creator-links";
@@ -168,14 +170,14 @@ export async function getPublicCreatorDetail(
 export async function browsePublicCreatorWorks(
   runtime: AppRuntime,
   id: number,
-  input: { page: number; pageSize: number },
+  input: { page: number; pageSize: number; sort?: WorkCreditSort },
 ) {
   const creator = await getPublicCreatorDetail(runtime, id, false);
   if (!creator) return null;
   const total = creator.workCreditCount;
   const pageSize = limitValue(input.pageSize, 50);
   const page = limitValue(input.page, Math.max(1, Math.ceil(total / pageSize)));
-  const credits = await listCredits(runtime, id, false, { page, pageSize });
+  const credits = await listCredits(runtime, id, false, { page, pageSize, sort: input.sort ?? "upload" });
   const grouped = new Map<number, CreatorWorkCredit & { credits: CreatorWorkCredit[] }>();
   for (const credit of credits) {
     const current = grouped.get(credit.workId);
@@ -426,8 +428,9 @@ async function listCredits(
   runtime: AppRuntime,
   id: number,
   includeNonPublic: boolean,
-  pagination?: { page: number; pageSize: number },
+  pagination?: { page: number; pageSize: number; sort: WorkCreditSort },
 ): Promise<CreatorWorkCredit[]> {
+  const order = workCreditOrder[pagination?.sort ?? "release"];
   const status = includeNonPublic ? "1=1" : "w.id IN (SELECT id FROM member_works)";
   const rows = await getD1(runtime)
     .prepare(
@@ -465,12 +468,10 @@ async function listCredits(
            WHERE ${status} AND EXISTS (
              SELECT 1 FROM work_staff staff WHERE staff.work_id=w.id AND staff.creator_id=?
            )
-           ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,
-             w.original_title ASC, w.id DESC
+           ORDER BY ${order}
            LIMIT ? OFFSET ?
          )` : ""}
-       ORDER BY w.original_release_date IS NULL ASC,w.original_release_date DESC,
-         w.original_title ASC, w.id DESC, ws.sort_order ASC, ws.role_key ASC`,
+       ORDER BY ${order},ws.sort_order ASC,ws.role_key ASC`,
     )
     .bind(id, ...(pagination ? [id, pagination.pageSize, (pagination.page - 1) * pagination.pageSize] : []))
     .all<CreditRow>();

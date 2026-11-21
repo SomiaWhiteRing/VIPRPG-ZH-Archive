@@ -4358,6 +4358,7 @@ export const zh = {
   "library.sort": "排序",
   "library.default": "默认",
   "library.title": "标题",
+  "library.uploadDate": "上传时间",
   "library.release": "发布日期",
   "library.views": "浏览数",
   "library.players": "游玩数",
