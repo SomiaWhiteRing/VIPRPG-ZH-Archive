@@ -13,21 +13,27 @@ export type SaveFile = {
 const maxFiles = 100;
 const maxSaveBytes = 16 * 1024 * 1024;
 const maxTotalBytes = 40 * 1024 * 1024;
-const signature = new TextEncoder().encode("LcfSaveData");
+const encoder = new TextEncoder();
+const lsdSignature = encoder.encode("\u000bLcfSaveData");
+const lgsSignature = encoder.encode("\u000dLcfGlobalSave");
+const dynSignature = encoder.encode("DYNSAVE1");
 
 function saveName(name: string, allowDownloadSuffix = false): string | null {
-  const match = (allowDownloadSuffix
-    ? /^Save([0-9]{2,6})(?: \([0-9]+\))?\.lsd$/i
-    : /^Save([0-9]{2,6})\.lsd$/i).exec(name);
-  return match ? `Save${match[1]}.lsd` : null;
+  if (allowDownloadSuffix) name = name.replace(/ \([0-9]+\)(?=\.[^.]+$)/, "");
+  const slot = /^Save([0-9]{2,6})\.(lsd|dyn)$/i.exec(name);
+  if (slot) return `Save${slot[1]}.${slot[2].toLowerCase()}`;
+  if (/^Save\.lgs$/i.test(name)) return "Save.lgs";
+  if (!allowDownloadSuffix && /^SaveData\/Save\.lgs$/i.test(name)) return "SaveData/Save.lgs";
+  return null;
 }
 
 function validateSave(file: SaveFile): void {
-  if (!saveName(file.name)) throw new UiFeedbackError("play.save.invalidName");
+  const name = saveName(file.name);
+  if (!name) throw new UiFeedbackError("play.save.invalidName");
   if (file.bytes.byteLength > maxSaveBytes) throw new UiFeedbackError("play.save.tooLargeNamed", { name: file.name });
-  if (file.bytes.length < signature.length + 1 || file.bytes[0] !== signature.length
-    || signature.some((byte, index) => file.bytes[index + 1] !== byte)) {
-    throw new UiFeedbackError("play.save.invalidLsd", { name: file.name });
+  const signature = name.endsWith(".lgs") ? lgsSignature : name.endsWith(".dyn") ? dynSignature : lsdSignature;
+  if (signature.some((byte, index) => file.bytes[index] !== byte)) {
+    throw new UiFeedbackError("play.save.invalidHeader", { name: file.name });
   }
 }
 
@@ -123,7 +129,7 @@ function readZipDirectory(bytes: Uint8Array): ZipEntry[] {
   if (u16(end + 4) !== 0 || u16(end + 6) !== 0 || u16(end + 8) !== count) {
     throw new UiFeedbackError("play.save.multiZip");
   }
-  if (!count) throw new UiFeedbackError("play.save.noLsd");
+  if (!count) throw new UiFeedbackError("play.save.noEntries");
   if (count > maxFiles) throw new UiFeedbackError("play.save.max");
   if (directoryOffset + directorySize !== end) throw new UiFeedbackError("play.save.zip64");
   bounds(directoryOffset, directorySize, end);
@@ -400,7 +406,7 @@ export async function readSaveFiles(workId: number): Promise<SaveFile[]> {
   } finally { db.close(); }
 }
 
-/** Delete only selected save slots; configuration and other IDBFS files remain. Caller holds the transfer lock. */
+/** Delete selected save files. Caller holds the transfer lock. */
 export async function deleteSaveFiles(workId: number, files: SaveFile[], signal: AbortSignal): Promise<void> {
   signal.throwIfAborted();
   const directory = saveDirectory(workId);
@@ -487,6 +493,14 @@ export async function importSaveFiles(
             const existing = current.get(name);
             if (existing && !overwrite.has(name)) continue;
             const path = existing?.sourcePath ?? `${directory}/${name}`;
+            if (!existing && name === "SaveData/Save.lgs") {
+              // IDBFS restores the directory entry before its file.
+              const parent = `${directory}/SaveData`;
+              const parentKey = store.getKey(parent);
+              parentKey.onsuccess = () => {
+                if (parentKey.result === undefined) store.add({ timestamp: new Date(), mode: 0o40777 }, parent);
+              };
+            }
             store.put({ timestamp: new Date(), mode: 0o100666, contents: file.bytes }, path);
             imported++;
           }
@@ -535,7 +549,6 @@ export function saveArchiveFilename(title: string, workId: number): string {
   let name = (title ?? "").normalize("NFC").replace(/[<>:"/\\|?*\p{Cc}]/gu, "_").trim().replace(/[.\s]+$/g, "");
   if (!name) name = `game-${workId}`;
   if (/^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]|CONIN\$|CONOUT\$)(\.|$)/i.test(name)) name = `_${name}`;
-  const encoder = new TextEncoder();
   let limited = "";
   let length = suffix.length;
   let bytes = encoder.encode(suffix).length;

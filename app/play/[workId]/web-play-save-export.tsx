@@ -170,7 +170,7 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy, 
         type="button" variant="outline">
         {operation === "read" ? t("play.save.reading") : operation === "import" ? t("play.save.importing") : t("play.save.import")}
       </Button>
-      <input accept=".lsd,.zip" aria-label={t("play.save.choose")} className="hidden" multiple ref={inputRef} type="file"
+      <input accept=".lsd,.lgs,.dyn,.zip" aria-label={t("play.save.choose")} className="hidden" multiple ref={inputRef} type="file"
         onChange={event => {
           const files = Array.from(event.currentTarget.files ?? []);
           event.currentTarget.value = "";

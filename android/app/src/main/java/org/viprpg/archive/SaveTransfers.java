@@ -9,17 +9,25 @@ import android.util.Base64;
 import android.widget.Toast;
 import org.json.JSONObject;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
 import java.text.Normalizer;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.*;
 
-/** User-selected LSD/ZIP import and ZIP export; no persistent storage grants. */
+/** User-selected save import and ZIP export; no persistent storage grants. */
 final class SaveTransfers {
     private static final int IMPORT = 2101, EXPORT = 2102;
     private static final int MAX_EXPORT_SAVE_BYTES = 16 * 1024 * 1024;
+    private static final Pattern SLOT_SAVE = Pattern.compile("(?i)Save([0-9]{2,6})\\.(lsd|dyn)");
+    private static final Pattern GLOBAL_SAVE = Pattern.compile("(?i)(SaveData/)?Save\\.lgs");
+    private static final byte[] LSD_SIGNATURE = "\u000bLcfSaveData".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] LGS_SIGNATURE = "\rLcfGlobalSave".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] DYN_SIGNATURE = "DYNSAVE1".getBytes(StandardCharsets.US_ASCII);
     private final Activity activity;
     private final GameStore store;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -44,9 +52,24 @@ final class SaveTransfers {
         } catch (Exception e) { fail(e); }
     }
     private String prefix() { return "/work-saves/" + workId + "/"; }
-    private static boolean lsd(String name) { return name.matches("(?i)Save[0-9]{2,6}\\.lsd"); }
+    private static String saveName(String name, boolean allowDownloadSuffix) {
+        if (allowDownloadSuffix) name = name.replaceFirst(" \\([0-9]+\\)(?=\\.[^.]+$)", "");
+        Matcher slot = SLOT_SAVE.matcher(name);
+        if (slot.matches()) return "Save" + slot.group(1) + "." + slot.group(2).toLowerCase(Locale.ROOT);
+        Matcher global = GLOBAL_SAVE.matcher(name);
+        if (!global.matches()) return null;
+        return global.group(1) == null ? "Save.lgs" : allowDownloadSuffix ? null : "SaveData/Save.lgs";
+    }
+    private static void validateHeader(String name, byte[] bytes) throws IOException {
+        byte[] signature = name.endsWith(".lgs") ? LGS_SIGNATURE : name.endsWith(".dyn") ? DYN_SIGNATURE : LSD_SIGNATURE;
+        if (bytes.length < signature.length) throw new IOException("存档文件头无效：" + name);
+        for (int i = 0; i < signature.length; i++) {
+            if (bytes[i] != signature[i]) throw new IOException("存档文件头无效：" + name);
+        }
+    }
     static byte[] decodeExportSave(String name, String encoded) throws IOException {
-        if (name == null || !lsd(name)) throw new IOException("存档文件名无效。");
+        String canonicalName = name == null ? null : saveName(name, false);
+        if (canonicalName == null) throw new IOException("存档文件名无效。");
         if (encoded == null || encoded.length() > ((MAX_EXPORT_SAVE_BYTES + 2) / 3) * 4) throw new IOException("存档文件过大。");
         if (encoded.length() % 4 != 0) throw new IOException("存档编码无效。");
         int padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
@@ -58,9 +81,7 @@ final class SaveTransfers {
         try { bytes = Base64.decode(encoded, Base64.NO_WRAP); }
         catch (IllegalArgumentException error) { throw new IOException("存档编码无效。", error); }
         if (bytes.length > MAX_EXPORT_SAVE_BYTES) throw new IOException("存档文件过大。");
-        byte[] signature = "LcfSaveData".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
-        if (bytes.length < signature.length + 1 || bytes[0] != signature.length) throw new IOException("不是有效的 LSD 存档。");
-        for (int i = 0; i < signature.length; i++) if (bytes[i + 1] != signature[i]) throw new IOException("不是有效的 LSD 存档。");
+        validateHeader(canonicalName, bytes);
         return bytes;
     }
     void exportSave(long workId, String title, String name, byte[] bytes, Consumer<String> opened) {
@@ -101,7 +122,7 @@ final class SaveTransfers {
             try {
                 JSONObject files = store.storage.loadSaves(workId), times = store.storage.saveTimes(workId);
                 List<String> paths = new ArrayList<>(); Iterator<String> keys = files.keys();
-                while (keys.hasNext()) { String path = keys.next(); if (path.startsWith(prefix()) && lsd(path.substring(prefix().length()))) paths.add(path); }
+                while (keys.hasNext()) { String path = keys.next(); if (path.startsWith(prefix()) && saveName(path.substring(prefix().length()), false) != null) paths.add(path); }
                 Collections.sort(paths, String.CASE_INSENSITIVE_ORDER);
                 activity.runOnUiThread(() -> {
                     if (paths.isEmpty()) { busy = false; toast("暂无可导出的存档。"); return; }
@@ -150,7 +171,7 @@ final class SaveTransfers {
     }
     private void readImports(List<Uri> uris) {
         try {
-            if (uris.isEmpty() || uris.size() > 100) throw new IOException("每次请选择 1 至 100 个 LSD 或 ZIP 文件。");
+            if (uris.isEmpty() || uris.size() > 100) throw new IOException("每次请选择 1 至 100 个存档或 ZIP 文件。");
             JSONObject incoming = new JSONObject(); int[] total = {0};
             for (Uri uri : uris) {
                 String name;
@@ -167,25 +188,41 @@ final class SaveTransfers {
                             ZipEntry entry;
                             while ((entry = zip.getNextEntry()) != null) {
                                 if (++entries > 100) throw new IOException("每次最多导入 100 个存档。");
-                                String nameInZip = entry.getName();
-                                if (entry.isDirectory() || !lsd(nameInZip))
-                                    throw new IOException("ZIP 结构不受支持，请使用本应用导出的 ZIP（根目录仅包含 SaveNN.lsd）。");
+                                String nameInZip = saveName(entry.getName(), false);
+                                if (entry.isDirectory() || nameInZip == null)
+                                    throw new IOException("ZIP 结构不受支持，请使用本应用导出的存档 ZIP。");
                                 byte[] bytes = GameStore.readStream(zip, 16 * 1024 * 1024);
                                 countImportBytes(total, bytes.length);
                                 addImport(incoming, nameInZip, bytes);
                                 zip.closeEntry();
                             }
                         }
-                        if (incoming.length() == before) throw new IOException("ZIP 中没有可导入的 LSD 存档。");
+                        if (incoming.length() == before) throw new IOException("ZIP 中没有可导入的存档。");
                     } else {
+                        String importedName = saveName(name, true);
+                        if (importedName == null) throw new IOException("请选择 Save01.lsd、Save.lgs 或 Save01.dyn 这类存档文件。");
                         byte[] bytes = GameStore.readStream(in, 16 * 1024 * 1024);
-                        countImportBytes(total, bytes.length); addImport(incoming, name, bytes);
+                        countImportBytes(total, bytes.length); addImport(incoming, importedName, bytes);
                     }
                 }
             }
             JSONObject existing = store.storage.loadSaves(workId), times = store.storage.saveTimes(workId);
             List<String> conflicts = new ArrayList<>();
-            Iterator<String> keys = incoming.keys(); while (keys.hasNext()) { String key = keys.next(); if (existing.has(key)) conflicts.add(key); }
+            Iterator<String> keys = existing.keys();
+            String prefix = prefix();
+            while (keys.hasNext()) {
+                String path = keys.next();
+                if (!path.startsWith(prefix)) continue;
+                String name = saveName(path.substring(prefix.length()), false);
+                if (name == null) continue;
+                String canonicalPath = prefix + name;
+                if (!incoming.has(canonicalPath)) continue;
+                if (!path.equals(canonicalPath)) {
+                    if (existing.has(canonicalPath)) continue;
+                    incoming.put(path, incoming.remove(canonicalPath));
+                }
+                conflicts.add(path);
+            }
             Collections.sort(conflicts, String.CASE_INSENSITIVE_ORDER);
             activity.runOnUiThread(() -> confirmImports(incoming, existing, times, conflicts));
         } catch (Exception e) { activity.runOnUiThread(() -> fail(e)); }
@@ -195,14 +232,9 @@ final class SaveTransfers {
         if (total[0] > 40 * 1024 * 1024) throw new IOException("本次解压后的存档总量超过 40 MiB。");
     }
     private void addImport(JSONObject incoming, String name, byte[] bytes) throws Exception {
-        java.util.regex.Matcher slot = java.util.regex.Pattern.compile("(?i)^Save([0-9]{2,6})(?: \\([0-9]+\\))?\\.lsd$").matcher(name);
-        if (!slot.matches()) throw new IOException("请选择 Save01.lsd 这类存档文件，保留原始槽位编号。");
-        name = "Save" + slot.group(1) + ".lsd";
-        if (incoming.has(prefix() + name)) throw new IOException("导入来源包含重复槽位：" + name + "，请分批导入。");
+        if (incoming.has(prefix() + name)) throw new IOException("导入来源包含重复存档：" + name + "，请分批导入。");
         if (incoming.length() >= 100) throw new IOException("每次最多导入 100 个存档。");
-        byte[] signature = "LcfSaveData".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
-        if (bytes.length < signature.length + 1 || bytes[0] != signature.length) throw new IOException("不是有效的 LSD 存档：" + name);
-        for (int i = 0; i < signature.length; i++) if (bytes[i + 1] != signature[i]) throw new IOException("不是有效的 LSD 存档：" + name);
+        validateHeader(name, bytes);
         incoming.put(prefix() + name, Base64.encodeToString(bytes, Base64.NO_WRAP));
     }
     private void confirmImports(JSONObject incoming, JSONObject existing, JSONObject times, List<String> conflicts) {
