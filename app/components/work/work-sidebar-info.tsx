@@ -8,7 +8,7 @@ import type {
 } from "@/lib/dto/db/game-library";
 import { formatBytes } from "@/lib/format";
 import { creatorRoleLabel, engineLabel, languageLabel } from "@/lib/labels";
-import { referenceDurationLabel } from "@/lib/work-reference-duration";
+import { referenceDurationLabel, WORK_REFERENCE_DURATIONS } from "@/lib/work-reference-duration";
 import { ChevronRight } from "lucide-react";
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { LocaleLink as Link } from "@/app/components/ui/locale-link";
@@ -101,9 +101,37 @@ export function WorkSidebarInfo({
           <InfoRow label={t("work.sidebar.aliases")}>{locale === "en" ? new Intl.ListFormat(locale).format(work.aliases) : work.aliases.join("、")}</InfoRow>
         ) : null}
         {work.genre ? <InfoRow label={t("work.sidebar.genre")}><Link className="font-medium text-secondary hover:underline" to={`/games?${new URLSearchParams({ genre: work.genre })}`}>{work.genre}</Link></InfoRow> : null}
-        {work.referenceDuration ? <InfoRow label={t("library.duration")}>{referenceDurationLabel(work.referenceDuration, locale)}</InfoRow> : null}
-        <InfoRow label={t("work.sidebar.engine")}>{engineLabel(work.engineFamily, locale)}</InfoRow>
-        <InfoRow label={t("library.language")}>{languageLabel(work.language, locale)}</InfoRow>
+        {work.referenceDuration ? (
+          <InfoRow label={t("library.duration")}>
+            {WORK_REFERENCE_DURATIONS.some(value => value === work.referenceDuration) ? (
+              <Link
+                className="font-medium text-secondary hover:underline"
+                rel="nofollow"
+                to={`/games?${new URLSearchParams({ duration: work.referenceDuration })}`}
+              >
+                {referenceDurationLabel(work.referenceDuration, locale)}
+              </Link>
+            ) : work.referenceDuration}
+          </InfoRow>
+        ) : null}
+        <InfoRow label={t("work.sidebar.engine")}>
+          <Link
+            className="font-medium text-secondary hover:underline"
+            rel="nofollow"
+            to={`/games?${new URLSearchParams({ engine: work.engineFamily })}`}
+          >
+            {engineLabel(work.engineFamily, locale)}
+          </Link>
+        </InfoRow>
+        <InfoRow label={t("library.language")}>
+          <Link
+            className="font-medium text-secondary hover:underline"
+            rel="nofollow"
+            to={`/games?${new URLSearchParams({ language: work.language })}`}
+          >
+            {languageLabel(work.language, locale)}
+          </Link>
+        </InfoRow>
         {work.originalReleaseDate && work.originalReleasePrecision !== "unknown" ? (
           <InfoRow label={t("library.release")} mono>
             {work.originalReleaseDate}
