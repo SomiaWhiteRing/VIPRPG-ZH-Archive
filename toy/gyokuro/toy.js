@@ -60,7 +60,7 @@ start.addEventListener("click", async () => {
     frame.hidden = true;
     start.hidden = false;
     // The canvas may already belong to the engine Worker.
-    frame.src = "./player.html";
+    frame.src = new URL("./player.html", import.meta.url).href;
   } finally {
     start.disabled = false;
   }

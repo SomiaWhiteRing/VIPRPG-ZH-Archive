@@ -1,5 +1,5 @@
-import { cp, mkdir, readdir, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { cp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unzipSync } from "fflate";
 import { easyRpgConfigArguments } from "../lib/archive/easyrpg-config.ts";
@@ -55,17 +55,23 @@ if (!paths.some(path => /^rpg_rt\.ldb$/i.test(path)) || !paths.some(path => /^rp
 
 await mkdir(dirname(output), { recursive: true });
 await mkdir(output);
-await cp(join(root, "toy", "gyokuro"), output, { recursive: true });
+// Toy serves resource URLs with immutable caching, including after an update.
+const release = `game-${metadata.archiveVersionId}-${Date.now().toString(36)}`;
+const assets = join(output, release);
+const template = join(root, "toy", "gyokuro");
+const entry = await readFile(join(template, "index.html"), "utf8");
+await writeFile(join(output, "index.html"), entry.replaceAll('="./', `="./${release}/`));
+await cp(template, assets, { recursive: true, filter: path => basename(path) !== "index.html" });
 const runtimePath = join(root, "public", "play", "runtime", "easyrpg", runtime.version);
-const targetRuntime = join(output, "runtime");
+const targetRuntime = join(assets, "runtime");
 for (const name of await readdir(runtimePath)) {
   if (name.endsWith(".br") || name === "game-services.js") continue;
   await cp(join(runtimePath, name), join(targetRuntime, name === "COPYING" ? "COPYING.md" : name.replace(/\.txt$/, ".md")));
 }
 await cp(join(root, "scripts", "easyrpg-game-services.js"), join(targetRuntime, "game-services.js"));
 await cp(join(root, "public", "icon", "alex.png"), join(targetRuntime, "alex.png"));
-await writeFile(join(output, "game.data"), Buffer.concat(parts, offset));
-await writeFile(join(output, "config.js"), `export default ${JSON.stringify({
+await writeFile(join(assets, "game.data"), Buffer.concat(parts, offset));
+await writeFile(join(assets, "config.js"), `export default ${JSON.stringify({
   siteOrigin: origin,
   archiveVersionId: metadata.archiveVersionId,
   arguments: [...easyRpgConfigArguments(metadata.easyRpg), "--skip-logo"],
