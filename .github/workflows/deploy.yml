@@ -95,6 +95,7 @@ jobs:
         run: node scripts/prepare-wrangler-config.mjs --env staging
         env:
           WRANGLER_CONFIG_JSONC: ${{ secrets.WRANGLER_CONFIG_JSONC }}
+          TOY_NETPLAY_WORK_ID: ${{ vars.TOY_NETPLAY_WORK_ID }}
       - run: npm run deploy:staging -- --apply-migrations
       - run: npm run smoke:staging
         env:

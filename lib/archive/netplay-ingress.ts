@@ -4,3 +4,4 @@ export const stagingNetplayHongKongOrigin = "https://netplay-hk-staging.viprpg.o
 export const productionNetplaySiteOrigin = "https://viprpg.org";
 export const productionNetplayHongKongOrigin = "https://netplay-hk.viprpg.org";
 export const productionNetplayHongKongWork = 282;
+export const toyNetplayOrigin = "https://www.bilibilitoy.com";

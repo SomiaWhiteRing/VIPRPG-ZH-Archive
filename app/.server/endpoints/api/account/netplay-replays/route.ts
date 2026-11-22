@@ -6,6 +6,7 @@ import { readJsonObject } from "@/app/.server/http/request";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { isAdministrator } from "@/lib/authz/roles";
 import { json } from "@/lib/http";
+import type { ArchiveUser } from "@/lib/dto/db/user-access";
 
 export async function POST(runtime: AppRuntime, request: Request) {
   try { assertSameOrigin(runtime, request); }
@@ -14,11 +15,20 @@ export async function POST(runtime: AppRuntime, request: Request) {
     return new Response(null, { status: 403 });
   }
   const user = await getCurrentUser(runtime);
-  const accountId = user?.id ?? null;
-  const administrator = user !== null && isAdministrator(user);
-  const { workId, operation, page, pageCount, snapshot, favorites, scope, id, favorite } = await readJsonObject(
+  const input = await readJsonObject(
     request, "Invalid replay request", { maximumBytes: 2048 },
   );
+  return readNetplayReplayResponse(runtime, input, user?.id ?? null, user);
+}
+
+export async function readNetplayReplayResponse(
+  runtime: AppRuntime,
+  input: Record<string, unknown>,
+  accountId: number | null,
+  user: ArchiveUser | null = null,
+) {
+  const administrator = user !== null && isAdministrator(user);
+  const { workId, operation, page, pageCount, snapshot, favorites, scope, id, favorite } = input;
   if (typeof workId !== "number" || !Number.isSafeInteger(workId) || workId < 1) return new Response(null, { status: 400 });
   const access = workReadCondition(user);
   const row = await runtime.db.prepare(`SELECT w.netplay_space_id,w.language FROM works w
@@ -34,19 +44,19 @@ export async function POST(runtime: AppRuntime, request: Request) {
     if (snapshot !== undefined && (typeof snapshot !== "number" || !Number.isSafeInteger(snapshot) || snapshot < 0)) {
       return new Response(null, { status: 400 });
     }
-    if (!user && (favorites === true || scope === "mine")) return new Response(null, { status: 401 });
+    if (accountId === null && (favorites === true || scope === "mine")) return new Response(null, { status: 401 });
     // Older games retain their administrator/member defaults; guests browse the shared space.
-    const listScope = scope ?? (administrator || !user ? "all" : "mine");
+    const listScope = scope ?? (administrator || accountId === null ? "all" : "mine");
     return json({ ...await listNetplayReplays(runtime, accountId, space, page, favorites === true, listScope,
       row.language, pageCount ?? 1, snapshot ?? null),
       accountId });
   }
-  if (operation === "favorite" && !user) return new Response(null, { status: 401 });
+  if (operation === "favorite" && accountId === null) return new Response(null, { status: 401 });
   if (typeof id !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) return new Response(null, { status: 400 });
   const replay = await getNetplayReplay(runtime, accountId, space, id, row.language);
   if (!replay) return new Response(null, { status: 404 });
-  if (operation === "favorite" && typeof favorite === "boolean" && user) {
-    await setNetplayReplayFavorite(runtime, user.id, id, favorite);
+  if (operation === "favorite" && typeof favorite === "boolean" && accountId !== null) {
+    await setNetplayReplayFavorite(runtime, accountId, id, favorite);
     return json({ favorite, accountId });
   }
   if (operation !== "detail" && operation !== "frames") return new Response(null, { status: 400 });

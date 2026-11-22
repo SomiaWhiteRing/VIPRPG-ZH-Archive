@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <title>玉露弹 Online</title>
+    <link rel="stylesheet" href="./toy.css">
+    <script defer src="https://s1.hdslb.com/bfs/seed/toy/app/sdk/toy-sdk.js"></script>
+    <script type="module" src="./toy.js"></script>
+  </head>
+  <body>
+    <main>
+      <button id="start" type="button">开始游戏</button>
+      <iframe title="游戏画面" src="./player.html" allow="autoplay; fullscreen" hidden></iframe>
+      <div id="controls" hidden>
+        <div>
+          <button type="button" data-key="ArrowLeft" aria-label="向左">←</button>
+          <button type="button" data-key="ArrowUp" aria-label="向上">↑</button>
+          <button type="button" data-key="ArrowDown" aria-label="向下">↓</button>
+          <button type="button" data-key="ArrowRight" aria-label="向右">→</button>
+        </div>
+        <div>
+          <button type="button" data-key="ShiftLeft">Shift</button>
+          <button type="button" data-key="KeyX">X</button>
+          <button type="button" data-key="KeyZ">Z</button>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

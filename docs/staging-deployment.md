@@ -28,6 +28,22 @@ staging 使用 custom domain，关闭 `workers_dev` 与 `preview_urls`。旧 Wor
 
 预生产玉露弹（作品 18）的联机空间使用 `netplay-hk-staging.viprpg.org`，Cloudflare 仅解析香港服务器的公网 IP。[香港联机服务](../scripts/netplay-hk-relay.mjs) 以 Debian 的 Node.js 和 `node-ws` 运行。`NETPLAY_SPACE_PATH` 对应中继地址的固定数字路径，兼容既有配置中的 `NETPLAY_ARCHIVE_VERSION`。Caddy 将 HTTPS 和 WebSocket 转发到本机 8787 端口。预生产 Worker 和香港服务使用同一份 `NETPLAY_HK_IDENTITY_KEY` 签发及验证昵称和头像，访客使用默认头像。
 
+### 玉露弹 Bilibili Toy
+
+Toy 与网页版共用玉露弹联机空间、香港中继及回放索引。预生产 Worker 的 `vars` 设置 `TOY_NETPLAY_WORK_ID=18`，香港服务设置 `NETPLAY_TOY_SPACE_PATH` 为作品现有外部中继地址里的路径编号。两端需要部署包含 Toy 接口与中继来源配置的同一版本。来源目前为 `https://www.bilibilitoy.com`，以实际 Toy 内容帧为准。Worker 通过独立 API 处理 Toy 会话、个人回放和带录制授权的上传。
+
+Toy 使用 B 站按账号隔离的云存档恢复联机凭证，官网以凭证映射参赛账户并签发有限的入房权限。Toy 玩家在两端显示系统分配的昵称及默认头像。重新登录同一 B 站账号、进入同一个 Toy 可恢复该身份及个人回放。玩家在 B 站的昵称、头像及 `toyOpenId` 不发送给官网。独立的预生产和正式 Toy 使用各自的云存档空间。
+
+对齐本地和目标网站的 Kai 运行包版本后生成候选。命令从目标网站读取玉露弹当前公开归档，生成带资源索引的 Toy 目录。归档升级后重新生成 Toy 包。
+
+```powershell
+node scripts/build-gyokuro-toy.mjs staging output/gyokuro-toy-staging
+```
+
+在 Toy 创作者账号开通后端权限后，用有 Toy ID 的限制访问版本验收。新建草稿的 CLI 预览实测缺少 Toy ID。用一个 B 站玩家和一个已登录的预生产官网玩家进入同一个房间，完成选人、对局、结算及回房，核对双方「我的对局」出现同一场录像并可以播放。再从新的浏览器会话使用同一 B 站账号检查回放归属。对外发布前核对 App 的横屏、触屏、音频及 WebAssembly 装载。
+
+正式启用时按[正式部署手册](./production-deployment.md)确认目标和范围，有授权时使用作品 282 和对应版本的正式中继路径构建及配置。
+
 在网页版游玩地址加 `?netplayTurn=1` 进入独立的香港 UDP TURN 房间池。该入口要求双方经 coturn 中继，连接失败时房主留在原房间等待，来客可从大厅重新加入。coturn 在香港服务器的公网 IPv4 和 IPv6 上监听 UDP 3478，两类连接都使用同一服务器的 IPv4 分配 UDP 49160–49259 中继端口，中继对端限定为同一服务器上的分配。野草云 P 型 VPS 还需在客户中心的产品防火墙规则中允许 `net0` 入站 UDP 3478。香港联机服务使用与 coturn 配置一致的 `NETPLAY_HK_TURN_SECRET` 签发短期凭据，实际使用的中继协议见香港服的 `netplay_ice_stats` 日志。
 
 使用 `?netplayTurn=443` 可单独测试 UDP 443。该房间池使用 coturn 的 IPv4 和 IPv6 辅助监听地址，沿用同一组中继端口和凭据。野草云产品防火墙需放行入站 UDP 443，coturn 的 systemd 服务通过 `CAP_NET_BIND_SERVICE` 绑定该端口。

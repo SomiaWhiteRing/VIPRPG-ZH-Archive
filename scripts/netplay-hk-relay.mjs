@@ -12,6 +12,8 @@ import { createRoomPassword, parseJoinPassword, parseRoomPassword } from "./netp
 
 const { WebSocket, WebSocketServer } = createRequire(import.meta.url)("ws");
 const origin = process.env.NETPLAY_SITE_ORIGIN ?? "https://staging.viprpg.org";
+const toyOrigin = "https://www.bilibilitoy.com";
+const toySpacePath = Number(process.env.NETPLAY_TOY_SPACE_PATH);
 const turnHost = process.env.NETPLAY_TURN_HOST ?? "netplay-hk-staging.viprpg.org";
 const defaultAvatar = "/icon/alex.png";
 const spacePathId = Number(process.env.NETPLAY_SPACE_PATH ?? process.env.NETPLAY_ARCHIVE_VERSION);
@@ -581,24 +583,26 @@ function joinRoom(socket, { roomId, pool, identity, account, rtc, inputStats, in
   publishDirectory(pool);
 }
 
-function json(response, body) {
+function json(response, body, corsOrigin = origin) {
   response.writeHead(200, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
-    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Origin": corsOrigin,
+    Vary: "Origin",
   });
   response.end(JSON.stringify(body));
 }
 
 const server = createServer(async (request, response) => {
+  const fromToy = request.headers.origin === toyOrigin && spaces.has(toySpacePath);
   if (request.method === "GET" && request.url === "/healthz") {
     json(response, { ok: true, route: "hong_kong_websocket", direct: true, turnUdp: Boolean(turnKey), roomPassword: true,
       archiveVersionId: spacePathId, spacePathIds, profileIdentity: Boolean(identityKey) });
-  } else if (request.headers.origin && request.headers.origin !== origin) {
+  } else if (request.headers.origin && request.headers.origin !== origin && !fromToy) {
     response.writeHead(403).end();
   } else if (request.method === "GET" && (request.url === defaultAvatar ||
       /^\/api\/media\/blobs\/[a-f0-9]{64}$/.test(request.url) &&
-      [...spaces.values()].some(pools => Object.values(pools).some(({ directory, rooms }) =>
+      (fromToy ? [spaces.get(toySpacePath)] : [...spaces.values()]).some(pools => Object.values(pools).some(({ directory, rooms }) =>
         [...directory.values()].some(identity => identity.avatar === request.url) ||
         [...rooms.values()].some(({ seats }) => [...seats].some(({ identity }) => identity.avatar === request.url)))))) {
     const upstream = await fetch(origin + request.url, { signal: AbortSignal.timeout(8_000) }).catch(() => null);
@@ -611,14 +615,19 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, {
       "Content-Type": contentType,
       "Cache-Control": "public, max-age=300",
-      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Origin": fromToy ? toyOrigin : origin,
+      Vary: "Origin",
       "X-Content-Type-Options": "nosniff",
     });
     await pipeline(Readable.fromWeb(upstream.body), response).catch(() => {});
   } else if (request.method === "GET") {
     const target = route(request);
+    if (fromToy && (target?.pool.id !== toySpacePath || !target.account?.userId)) {
+      response.writeHead(403).end();
+      return;
+    }
     if (target?.directory) {
-      json(response, listRooms(target.pool));
+      json(response, listRooms(target.pool), fromToy ? toyOrigin : origin);
       return;
     }
     response.writeHead(404).end();
@@ -636,12 +645,14 @@ function joinError(target, code) {
 
 server.on("upgrade", (request, socket, head) => {
   const target = route(request);
+  const originAllowed = request.headers.origin === origin ||
+    (request.headers.origin === toyOrigin && target?.pool.id === toySpacePath && target.account?.userId);
   const room = target?.pool.rooms.get(target.roomId);
   const resume = target?.resume && canResumeControl(room) &&
     [...room.seats].find(seat => seat.resumeToken === target.resume &&
       (!seat.socket || Date.now() - seat.lastPong >= heartbeatHideMs));
   const error = target && !target.directory && !target.roomAccess && !target.resume ? joinError(target, null) : undefined;
-  const status = request.headers.origin !== origin ? 403
+  const status = !originAllowed ? 403
     : !target ? 404
     : target.resume ? (resume ? 0 : 404)
     : error === "closed" ? 404 : error === "full" ? 409 : error ? 403 : 0;

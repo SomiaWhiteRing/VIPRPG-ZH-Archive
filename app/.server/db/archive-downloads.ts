@@ -52,6 +52,7 @@ export async function getArchiveNetplayEndpoint(
   runtime: AppRuntime,
   record: ArchiveDownloadRecord,
   supportsExternal = true,
+  identity?: { id: number; displayName: string; avatarBlobSha256?: string | null },
 ): Promise<string | undefined> {
   if (!record.netplayCapable || record.netplaySpaceId === null) return;
   const options = new URL(runtime.request.url).searchParams;
@@ -74,7 +75,7 @@ export async function getArchiveNetplayEndpoint(
       else if (options.get("netplayDirect") === "1") external.pathname = base + "direct/";
       else if (options.get("netplayRelay") === "1") external.pathname = base;
     }
-    const user = await getCurrentUser(runtime);
+    const user = identity ?? await getCurrentUser(runtime);
     const key = runtime.env.NETPLAY_HK_IDENTITY_KEY;
     if (!key) return external.href;
     const expires = Date.now() + 24 * 60 * 60 * 1000;
@@ -99,8 +100,9 @@ export function parseArchiveVersionId(value: string): number {
 export async function getPublishedArchiveDownloadRecord(
   runtime: AppRuntime,
   id: number,
+  publicOnly = false,
 ): Promise<ArchiveDownloadRecord | null> {
-  const access = workReadCondition(await getCurrentUser(runtime));
+  const access = workReadCondition(publicOnly ? null : await getCurrentUser(runtime));
   const row = await getD1(runtime)
     .prepare(
       `SELECT av.id,

@@ -24,6 +24,9 @@ for (const key of infrastructure) if (Object.hasOwn(selected, key)) target[key] 
 if (values.env === "staging" && !target.routes?.some(route => route.pattern === stagingNetplayRoute.pattern)) {
   target.routes = [...(target.routes ?? []), stagingNetplayRoute];
 }
+if (values.env === "staging" && process.env.TOY_NETPLAY_WORK_ID) {
+  target.vars = { ...target.vars, TOY_NETPLAY_WORK_ID: process.env.TOY_NETPLAY_WORK_ID };
+}
 if (values.env === "production") {
   // Public analytics switches come from the production Environment, separately
   // from the resource secret so enabling analytics cannot replace ingress data.
