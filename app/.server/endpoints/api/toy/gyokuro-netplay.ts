@@ -53,19 +53,21 @@ export async function handleToyGyokuroNetplay(runtime: AppRuntime, request: Requ
 }
 
 async function handleToyRequest(runtime: AppRuntime, request: Request, workId: number) {
-  const token = request.headers.get("Authorization")?.match(/^Bearer (\S+)$/)?.[1] ?? null;
-  if (!isSessionToken(token)) return new Response(null, { status: 401 });
-  // The credential belongs to this game. It is stored in Bilibili's per-player cloud storage.
-  const externalId = `toy-gyokuro:${await hashSessionToken(token)}`;
+  const authorization = request.headers.get("Authorization");
+  const token = authorization?.match(/^Bearer (\S+)$/)?.[1] ?? null;
+  if (authorization && !isSessionToken(token)) return new Response(null, { status: 401 });
   // A 192×192 PNG and its base64 transport fit within this bound.
   const input = await readJsonObject(request, "Invalid Toy netplay request", { maximumBytes: 256 * 1024 });
-  const playerQuery = runtime.db.prepare("SELECT id, avatar_blob_sha256 AS avatarBlobSha256, status FROM users WHERE external_auth_id = ?")
-    .bind(externalId);
+  // This credential comes from Bilibili's per-player cloud storage. Guests can omit it.
+  const externalId = token ? `toy-gyokuro:${await hashSessionToken(token)}` : null;
+  const playerQuery = externalId ? runtime.db.prepare(
+    "SELECT id, avatar_blob_sha256 AS avatarBlobSha256, status FROM users WHERE external_auth_id = ?",
+  ).bind(externalId) : null;
   type Player = { id: number; avatarBlobSha256: string | null; status: string };
-  let player = await playerQuery.first<Player>();
+  let player = await playerQuery?.first<Player>();
   if (input.operation !== "session") {
-    if (player?.status !== "active") return new Response(null, { status: 401 });
-    return readNetplayReplayResponse(runtime, { ...input, workId }, player.id);
+    if (token && player?.status !== "active") return new Response(null, { status: 401 });
+    return readNetplayReplayResponse(runtime, { ...input, workId }, player?.id ?? null);
   }
 
   const current = await runtime.db.prepare(
@@ -74,28 +76,34 @@ async function handleToyRequest(runtime: AppRuntime, request: Request, workId: n
   const record = current ? await getPublishedArchiveDownloadRecord(runtime, current.id, true) : null;
   if (!record?.netplayCapable || !record.netplayExternalEndpoint) return new Response(null, { status: 404 });
   if (input.archiveVersionId !== record.id) return new Response(null, { status: 409 });
-  const { nickname, avatarPng } = input;
-  if (typeof nickname !== "string" || !nickname.trim() || [...nickname].length > 32 || /\p{Cc}/u.test(nickname) ||
-      typeof avatarPng !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(avatarPng)) {
-    throw new HttpError(400, "Invalid Toy player profile");
+  let identity: { id: number; displayName: string; avatarBlobSha256: string | null } | null = null;
+  if (playerQuery) {
+    if (player && player.status !== "active") return new Response(null, { status: 401 });
+    if (!player) await assertAuthSourceRateLimit(runtime, "gyokuro-toy-register");
+    let displayName = "", avatarBlobSha256: string | null = null;
+    const { nickname, avatarPng } = input;
+    if (nickname !== undefined || avatarPng !== undefined) {
+      if (typeof nickname !== "string" || !nickname.trim() || [...nickname].length > 32 || /\p{Cc}/u.test(nickname) ||
+          typeof avatarPng !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(avatarPng)) {
+        throw new HttpError(400, "Invalid Toy player profile");
+      }
+      displayName = nickname.trim();
+      avatarBlobSha256 = await storeAvatarPng(runtime, toArrayBuffer(Buffer.from(avatarPng, "base64")), player?.avatarBlobSha256);
+    }
+    if (!player) {
+      const accountName = `B站玩家 ${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+      await runtime.db.prepare("INSERT INTO users (external_auth_id, display_name, status, avatar_blob_sha256) VALUES (?, ?, 'active', ?) ON CONFLICT(external_auth_id) DO NOTHING")
+        .bind(externalId, accountName, avatarBlobSha256).run();
+      player = await playerQuery.first<Player>();
+    }
+    if (player?.status !== "active") return new Response(null, { status: 401 });
+    if (avatarBlobSha256 !== player.avatarBlobSha256) {
+      await runtime.db.prepare("UPDATE users SET avatar_blob_sha256 = ? WHERE id = ?")
+        .bind(avatarBlobSha256, player.id).run();
+    }
+    identity = { id: player.id, displayName, avatarBlobSha256 };
   }
-  if (player && player.status !== "active") return new Response(null, { status: 401 });
-  if (!player) await assertAuthSourceRateLimit(runtime, "gyokuro-toy-register");
-  const avatarBlobSha256 = await storeAvatarPng(runtime, toArrayBuffer(Buffer.from(avatarPng, "base64")), player?.avatarBlobSha256);
-  if (!player) {
-    const displayName = `B站玩家 ${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
-    await runtime.db.prepare("INSERT INTO users (external_auth_id, display_name, status, avatar_blob_sha256) VALUES (?, ?, 'active', ?) ON CONFLICT(external_auth_id) DO NOTHING")
-      .bind(externalId, displayName, avatarBlobSha256).run();
-    player = await playerQuery.first<Player>();
-  }
-  if (player?.status !== "active") return new Response(null, { status: 401 });
-  if (avatarBlobSha256 !== player.avatarBlobSha256) {
-    await runtime.db.prepare("UPDATE users SET avatar_blob_sha256 = ? WHERE id = ?")
-      .bind(avatarBlobSha256, player.id).run();
-  }
-  const netplayEndpoint = await getArchiveNetplayEndpoint(runtime, record, true, {
-    id: player.id, displayName: nickname.trim(), avatarBlobSha256,
-  });
+  const netplayEndpoint = await getArchiveNetplayEndpoint(runtime, record, true, identity);
   if (!netplayEndpoint?.includes("/identity/")) return new Response(null, { status: 503 });
   return json({ workId, netplayEndpoint });
 }

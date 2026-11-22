@@ -622,7 +622,7 @@ const server = createServer(async (request, response) => {
     await pipeline(Readable.fromWeb(upstream.body), response).catch(() => {});
   } else if (request.method === "GET") {
     const target = route(request);
-    if (fromToy && (target?.pool.id !== toySpacePath || !target.account?.userId)) {
+    if (fromToy && (target?.pool.id !== toySpacePath || !target.account)) {
       response.writeHead(403).end();
       return;
     }
@@ -646,7 +646,7 @@ function joinError(target, code) {
 server.on("upgrade", (request, socket, head) => {
   const target = route(request);
   const originAllowed = request.headers.origin === origin ||
-    (request.headers.origin === toyOrigin && target?.pool.id === toySpacePath && target.account?.userId);
+    (request.headers.origin === toyOrigin && target?.pool.id === toySpacePath && target.account);
   const room = target?.pool.rooms.get(target.roomId);
   const resume = target?.resume && canResumeControl(room) &&
     [...room.seats].find(seat => seat.resumeToken === target.resume &&
