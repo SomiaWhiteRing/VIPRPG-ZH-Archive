@@ -22,7 +22,7 @@ import * as netplayMatchesEndpoint from "@/app/.server/endpoints/api/account/net
 import * as netplayReplaysEndpoint from "@/app/.server/endpoints/api/account/netplay-replays/route";
 import * as netplayRecordingIngestEndpoint from "@/app/.server/endpoints/api/netplay-recordings/ingest/route";
 import * as netplayRecordingUploadEndpoint from "@/app/.server/endpoints/api/netplay-recordings/upload/route";
-import { handleToyGyokuroNetplay } from "@/app/.server/endpoints/api/toy/gyokuro-netplay";
+import { handleToyGyokuroNetplay, readToyGyokuroAvatar } from "@/app/.server/endpoints/api/toy/gyokuro-netplay";
 import * as creatorAvatarEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/avatar/route";
 import * as creatorUpdateEndpoint from "@/app/.server/endpoints/api/creators/[creatorId]/update/route";
 import * as workMediaEndpoint from "@/app/.server/endpoints/api/works/[workId]/media/[sha256]/route";
@@ -189,6 +189,7 @@ api.route("/", emojiApi);
 api.get("/api/account/netplay-matches", (c) => netplayMatchesEndpoint.GET(c.get("runtime")));
 api.on(["POST", "OPTIONS"], "/api/toy/gyokuro-netplay", (c) => handleToyGyokuroNetplay(c.get("runtime"), c.req.raw));
 api.on(["POST", "OPTIONS"], "/api/toy/gyokuro-netplay/recording", (c) => handleToyGyokuroNetplay(c.get("runtime"), c.req.raw, true));
+api.get("/api/toy/gyokuro-netplay/avatar/:sha256", (c) => readToyGyokuroAvatar(c.get("runtime"), c.req.raw, c.req.param("sha256")));
 api.post("/api/account/netplay-replays", (c) => netplayReplaysEndpoint.POST(c.get("runtime"), c.req.raw));
 api.post("/api/netplay-recordings/ingest", (c) => netplayRecordingIngestEndpoint.POST(c.get("runtime"), c.req.raw));
 api.post("/api/netplay-recordings/upload", (c) => netplayRecordingUploadEndpoint.POST(c.get("runtime"), c.req.raw));

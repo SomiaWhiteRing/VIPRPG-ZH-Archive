@@ -14,6 +14,7 @@ start.addEventListener("click", async () => {
     // Request App container changes from the same gesture that starts the game.
     const orientation = sdk.setContainerMode?.({ orientation: "landscape", immersive: true });
     orientation?.catch(() => {});
+    const { nickname, avatar } = await sdk.getUserProfile();
     const saved = await sdk.getCloudStorage([credentialKey]);
     let token = saved[credentialKey];
     if (token === undefined) {
@@ -26,7 +27,7 @@ start.addEventListener("click", async () => {
       fetch(api, {
         method: "POST", credentials: "omit",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ operation: "session", archiveVersionId: config.archiveVersionId }),
+        body: JSON.stringify({ operation: "session", archiveVersionId: config.archiveVersionId, nickname, avatar }),
       }),
       fetch(new URL("./game.data", import.meta.url)),
     ]);

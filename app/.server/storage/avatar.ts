@@ -27,9 +27,11 @@ export async function storeAvatarFromForm(
 export async function storeAvatarPng(
   runtime: AppRuntime,
   buffer: ArrayBuffer,
+  currentSha256?: string | null,
 ): Promise<string> {
   assertAvatarPng(buffer);
   const sha256 = await sha256Hex(buffer);
+  if (sha256 === currentSha256) return sha256;
   await assertObjectUploadAllowed(runtime, { kind: "blob", sha256 });
   await putBlob(runtime, sha256, buffer, buffer.byteLength, "image/png");
   await insertBlobRecord(runtime, {

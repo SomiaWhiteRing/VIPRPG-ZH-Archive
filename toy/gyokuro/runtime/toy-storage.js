@@ -8,9 +8,10 @@ self.easyRpgStorage = {
       if (resource === "/api/netplay-recordings/upload") {
         return fetchAsset(`${data.endpoint}/recording`, { ...options, credentials: "omit" });
       }
-      if (resource instanceof URL && resource.origin === self.location.origin &&
-          (resource.pathname === "/icon/alex.png" || /^\/api\/media\/blobs\/[0-9a-f]{64}$/.test(resource.pathname))) {
-        return fetchAsset(new URL("alex.png", self.location.href), options);
+      if (resource instanceof URL && resource.origin === self.location.origin) {
+        if (resource.pathname === "/icon/alex.png") return fetchAsset(new URL("alex.png", self.location.href), options);
+        const avatar = /^\/api\/media\/blobs\/([0-9a-f]{64})$/.exec(resource.pathname);
+        if (avatar) return fetchAsset(`${data.endpoint}/avatar/${avatar[1]}`, { ...options, credentials: "omit" });
       }
       return fetchAsset(resource, options);
     };
