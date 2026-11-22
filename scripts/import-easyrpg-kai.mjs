@@ -11,8 +11,6 @@ import {
 } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { tmpdir } from "node:os";
-import { execFileSync } from "node:child_process";
 import { unzipSync } from "fflate";
 import { brotliCompressSync, brotliDecompressSync, constants } from "node:zlib";
 import runtime from "../lib/archive/easyrpg-runtime.json" with { type: "json" };
@@ -58,27 +56,6 @@ if (sha256(files["movie-decoder.LICENSE.txt"]) !== runtime.movieDecoder.licenseS
 if (sha256(files["LICENSE-rime-pinyin-simp.txt"]) !== runtime.pinyinDictionary.licenseSha256)
   throw new Error("Pinyin dictionary license does not match the pinned digest");
 
-// Preserve upstream bytes except for explicitly pinned, reproducible JavaScript patches.
-const patches = runtime.patches ?? [];
-for (const patch of patches) {
-  if (!["player-host.js", "player-worker.js"].includes(patch.file) || !/^scripts\/runtime-patches\/[a-z0-9.-]+\.patch$/.test(patch.path))
-    throw new Error("Unsupported runtime patch target or path");
-  const patchPath = resolve(root, patch.path);
-  if (sha256(readFileSync(patchPath)) !== patch.sha256 || sha256(files[patch.file]) !== patch.beforeSha256)
-    throw new Error("Runtime patch or its upstream input does not match the pinned digest");
-  const scratch = mkdtempSync(resolve(tmpdir(), "viprpg-runtime-patch-"));
-  try {
-    writeFileSync(resolve(scratch, patch.file), files[patch.file]);
-    execFileSync("git", ["-c", "core.autocrlf=false", "apply", "--check", patchPath], { cwd: scratch, stdio: "pipe" });
-    execFileSync("git", ["-c", "core.autocrlf=false", "apply", patchPath], { cwd: scratch, stdio: "pipe" });
-    const patched = readFileSync(resolve(scratch, patch.file));
-    if (sha256(patched) !== patch.afterSha256)
-      throw new Error("Patched runtime does not match the pinned digest");
-    files[patch.file] = patched;
-  } finally {
-    rmSync(scratch, { recursive: true, force: true });
-  }
-}
 const output = {
   "index.js": files["player-host.js"],
   ...Object.fromEntries(runtimeFiles.map(name => [name, files[name]])),
@@ -95,16 +72,6 @@ for (const name of brotliAssets) {
     throw new Error(`Brotli representation differs from the original: ${name}`);
   output[`${name}.br`] = compressed;
 }
-// Ship the verified source changes alongside locally rebuilt engine binaries.
-const sourcePatches = runtime.sourcePatches ?? [];
-for (const patch of sourcePatches) {
-  if (!/^scripts\/runtime-patches\/[a-z0-9.-]+\.patch$/.test(patch.path))
-    throw new Error("Unsupported runtime source patch path");
-  const bytes = readFileSync(resolve(root, patch.path));
-  if (sha256(bytes) !== patch.sha256)
-    throw new Error("Runtime source patch does not match the pinned digest");
-  output[basename(patch.path)] = bytes;
-}
 const source =
   JSON.stringify(
     {
@@ -116,17 +83,12 @@ const source =
       archiveSha256,
       source: `https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/${revision}`,
       license: `https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/${revision}/COPYING`,
-      sourceState: runtime.sourceState ?? "commit",
-      sourcePatches,
-      sourceSnapshot: runtime.sourceSnapshot ?? null,
-      sourceSnapshotSha256: runtime.sourceSnapshotSha256 ?? null,
       liblcfRevision: runtime.liblcfRevision ?? null,
       emscriptenVersion: runtime.emscriptenVersion ?? null,
       buildscriptsRevision: runtime.buildscriptsRevision ?? null,
       movieDecoder: runtime.movieDecoder,
       pinyinDictionary: runtime.pinyinDictionary,
       delivery: { encoding: "br", quality: 11, assets: brotliAssets },
-      patches,
       files: Object.fromEntries(
         Object.entries(output).map(([name, bytes]) => [name, { size: bytes.length, sha256: sha256(bytes) }]),
       ),

@@ -1,3 +1,4 @@
+import { prepareAudioProfile } from "./audio-preflight";
 import { localRequest } from "@/lib/browser/android-local";
 import { Button } from "@/app/components/ui/button";
 import { useWebPlayControlsPreferences } from "@/app/play/[workId]/web-play-controls-preferences";
@@ -44,7 +45,10 @@ export function OfflineApp() {
       if (!key) return;
       const { items: rows } = await localRequest<{ items: WebPlayInstallation[] }>("list");
       const item = rows.find(row => row.playKey === key);
-      if (item?.status === "ready" && item.workId) setSelected(item);
+      if (item?.status === "ready" && item.workId) {
+        await prepareAudioProfile();
+        setSelected(item);
+      }
     } catch (reason) {
       window.VIPRPGAndroid?.setLibraryError?.(message(reason));
     }
@@ -52,6 +56,7 @@ export function OfflineApp() {
   const closeGame = useCallback(() => { setSelected(null); void refresh(); }, [refresh]);
 
   useEffect(() => {
+    void prepareAudioProfile();
     void refresh();
     const onVisible = () => { if (!document.hidden) void refresh(); };
     document.addEventListener("visibilitychange", onVisible);

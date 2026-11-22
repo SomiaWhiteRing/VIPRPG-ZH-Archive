@@ -273,15 +273,15 @@ React 页面通过 [createPlayerSession](../app/play/%5BworkId%5D/web-play-playe
 
 音频 Worker 运行同一个 WASM 模块的独立实例，复用 C++ 解码器、混音器和音效缓存，不启动游戏、不挂载存档。音频指令与 MIDI 播放状态走 Worker 间 MessagePort；PCM 由音频 Worker 直接发给 AudioWorklet，不经过游戏或网页转发。音色库在启动阶段初始化。停止时两个 Worker 一同释放；运行组件升级不改变安装键、pack 或存档格式。
 
-两个实例各有 32 MiB 的原文件字节 LRU 缓存：不超过 16 MiB 的文件整文件读取，大文件按 512 KiB 分块；解码器的小读取直接命中内存，缓存淘汰不改变已打开文件的位置。音频队列最多 3 个已排队或在途的 1024 帧块，48 kHz 下约 64 ms；欠载恢复等待两个块并以 64 个样本渐入/渐出。独立供音能够隔离游戏和网页停顿，但音频线程自身的昂贵解码仍需实机测量，不能承诺任意设备零停顿。
+两个实例各有 32 MiB 的原文件字节 LRU 缓存：不超过 16 MiB 的文件整文件读取，大文件按 512 KiB 分块；解码器的小读取直接命中内存，缓存淘汰不改变已打开文件的位置。网页播放器使用设备默认采样率，队列最多 3 个已排队或在途的 1024 帧块，48 kHz 下约 64 ms，启动和欠载恢复等待 2 块。Android 离线页在首次游玩前静默测量供音，优先使用默认采样率和短队列；加深队列时最多 10 块、等待 5 块，仍欠载时尝试 22,050 Hz。两种配置均以 64 个样本渐入/渐出，解码和实际输出仍需在目标设备测量。
 
 停止与站内离页须等待 `player.stop()`：先退出引擎，再等待串行 `IDBFS.syncfs(false)`，最后关闭音频、终止 Worker、移除 iframe、释放资源共享锁和 Work 级存档独占锁。写入失败保留 Worker 与锁并允许重试。浏览器强制关页或进程被杀时，异步写入完成没有保证，因此游戏正常保存时也会同步 IDBFS。安装 Worker 在离页时终止；普通页面数据刷新不重建播放器。
 
 当前构建、源码提交、产物摘要均以 [easyrpg-runtime.json](../lib/archive/easyrpg-runtime.json) 为准。普通作品和联机作品共用该版本。支持联机且已开启服务的归档会向宿主传入 `netplayEndpoint`。
 
-当前包使用既有 Docker Web 构建入口在本地生成。源码以 [Player 提交 339894341](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/commit/3398943413d0b99076498a3997911b74e54898a2) 为基线，应用 [本地 Kai 差异](../scripts/runtime-patches/kai-40afbf126.patch) 达到 `40afbf126`，再应用网站的启动补丁。构建工具链和内置 liblcf 基础版本继续锁定。libpng、FreeType 从同版 SDK 来源重建为 native longjmp ABI，字体来源声明随 `NOTICE-Zfull.txt`、`LICENSE-smallfonts.txt` 和拼音词库许可分发。
+构建工具链和内置 liblcf 基础版本继续锁定。libpng、FreeType 从同版 SDK 来源重建为 native longjmp ABI，字体来源声明随 `NOTICE-Zfull.txt`、`LICENSE-smallfonts.txt` 和拼音词库许可分发。
 
-`patches` 由导入脚本应用于未压缩的宿主文件。`sourcePatches` 在构建前按配置顺序应用，导入脚本校验并随包保存。当前的控制台滚动、鼠标定位和备用资源下载逻辑由 Player 源码提供。网站向 Player 传入资源地址，并通过独立存储适配器生成 Android 下载包。构建工具链与依赖由固定 Player 提交的构建脚本锁定。Web ZIP 根目录包含拼音词库许可，来源及摘要记录在 `pinyinDictionary`。运行目录内的 `SOURCE.json` 记录源码、构建来源、补丁和文件摘要。
+当前的控制台滚动、鼠标定位和备用资源下载逻辑由 Player 源码提供。网站向 Player 传入资源地址，并通过独立存储适配器生成 Android 下载包。构建工具链与依赖由固定 Player 提交的构建脚本锁定。Web ZIP 根目录包含拼音词库许可，来源及摘要记录在 `pinyinDictionary`。运行目录内的 `SOURCE.json` 记录源码、构建来源和文件摘要。
 
 Web 运行包包含 Debug 的 Goto Map 信息显示：左上角两行显示当前地图编号、名称及玩家坐标；选择目标地图和输入传送坐标时继续显示当前位置。
 
@@ -289,17 +289,17 @@ Web 运行包包含 Debug 的 Goto Map 信息显示：左上角两行显示当�
 
 同一 Map0007 第 9 波、独立 Maniac 种子及逐逻辑帧输入的回放中，原生产包约 4.49 FPS，新 JSPI 包约 58.73 FPS，音频开启约 57.96 FPS。12 个检查点的 3,600,012 个游戏变量值全部一致；这是本机指定场景证据，不代表所有设备都无长帧。固定检查方法及限制见 Player 仓库的 [Web 高负载修复流程](https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/75e169059c1ffc9d3b0faf71b12b87d0ae0435c5/docs/web-performance.md)。
 
-宿主根据 `WebAssembly.promising` 与 `WebAssembly.Suspending` 一次选择引擎：支持时使用 `easyrpg-player`，其余情况使用 `easyrpg-player-asyncify`。并行获取选定变体的 WASM、唯一的共用音色库 `easyrpg-player.data` 和 AudioWorklet；WASM 只编译一次，再把 `WebAssembly.Module` 与预载数据传给音频和游戏 Worker，两端使用同一变体并保留独立内存。Worker 的 `locateFile` 只改写 WASM 路径，两套 JS/WASM 保留兼容性，ZIP、网站和 Android 离线资源均不再重复分发 `.data`。JSPI 的 `web_main_loop` Promise 完成后才调度下一帧，等待输入时不重入游戏。资源下载仍随会话中止，字节进展重置启动计时，不需要 SharedArrayBuffer 或跨源隔离。源码补丁见 [startup-shared-assets.patch](../scripts/runtime-patches/startup-shared-assets.patch)。
+宿主根据 `WebAssembly.promising` 与 `WebAssembly.Suspending` 一次选择引擎：支持时使用 `easyrpg-player`，其余情况使用 `easyrpg-player-asyncify`。并行获取选定变体的 WASM、唯一的共用音色库 `easyrpg-player.data` 和 AudioWorklet；WASM 只编译一次，再把 `WebAssembly.Module` 与预载数据传给音频和游戏 Worker，两端使用同一变体并保留独立内存。Worker 的 `locateFile` 只改写 WASM 路径，两套 JS/WASM 保留兼容性，ZIP、网站和 Android 离线资源均不再重复分发 `.data`。JSPI 的 `web_main_loop` Promise 完成后才调度下一帧，等待输入时不重入游戏。资源下载仍随会话中止，字节进展重置启动计时，不需要 SharedArrayBuffer 或跨源隔离。
 
 网站以预生成的 Brotli 11 表示传输引擎和音色库。导入脚本从已校验的原始字节生成 `.wasm.br`／`.data.br`，解压后逐字节核对，并在 `SOURCE.json` 中记录文件与压缩参数。两个 WASM 与共用音色库共三个 URL 经 `assets.run_worker_first` 进入同一 Worker；处理器按客户端支持选择预压缩表示，通过 `encodeBody: manual`、正确 MIME 与 `Content-Encoding: br` 避免二次压缩，保留版本化 URL、ETag、条件请求及 `Vary: Accept-Encoding`。不接受 Brotli 或带 Range 的请求读取原始文件。浏览器原生解压后，引擎收到的字节与原包完全相同。Android 资源构建不复制 `.br` 表示，继续读取包内原始文件。
 
 页面通过 `runtimeAssetBasePath` 提供保留社区 CNAME 链的运行包入口；两环境目标统一声明在 [easyrpg-delivery.json](../lib/archive/easyrpg-delivery.json)。入口绑定到各自现有 Worker，页面、游戏安装、存档及 Worker 脚本仍沿用原路径。配置声明不证明 DNS 或 Route 已生效，正式启用须完成批准与入口核验。选定变体的两个公开大资源的响应提供 CORS 与 Resource Timing 授权；其余业务接口没有跨源授权。
 
-宿主的 [startup-regional-assets.patch](../scripts/runtime-patches/startup-regional-assets.patch) 是导入时的未压缩宿主补丁，不改变引擎或音色库字节。首次先请求原入口；700 ms 内尚未读到约 512 KiB 的解压后数据时才开始另一入口的探测，先完成该前缀的请求继续传输，另一请求立即取消。比较实际传输进展，不能只按响应头先后选择线路。完整下载成功后，在当前标签页会话中记住该文件的入口；再次启动直接复用成功入口的浏览器缓存。停止、取消和两个入口均失败时释放所有请求；没有提供不同入口的本地与 Android 调用仍只请求本地原路径。入口的 DNS、路由与配置变更另按正式操作边界审批。
+首次先请求原入口；700 ms 内尚未读到约 512 KiB 的解压后数据时才开始另一入口的探测，先完成该前缀的请求继续传输，另一请求立即取消。比较实际传输进展，不能只按响应头先后选择线路。完整下载成功后，在当前标签页会话中记住该文件的入口；再次启动直接复用成功入口的浏览器缓存。停止、取消和两个入口均失败时释放所有请求；没有提供不同入口的本地与 Android 调用仍只请求本地原路径。入口的 DNS、路由与配置变更另按正式操作边界审批。
 
-启动的 45 秒超时按无进展时间计算。音频与游戏 Worker 将 Emscripten 的数据下载和初始化状态转发给宿主，持续收到下载进展时重置计时；已就绪、停止中或已关闭的会话不再重置。首次下载运行包和 SoundFont 可以超过 45 秒，停滞的启动仍会超时。相关源码修改见 [startup-download-progress.patch](../scripts/runtime-patches/startup-download-progress.patch)，升级时与跳过 Logo 补丁一同应用并随包分发。
+启动的 45 秒超时按无进展时间计算。音频与游戏 Worker 将 Emscripten 的数据下载和初始化状态转发给宿主，持续收到下载进展时重置计时；已就绪、停止中或已关闭的会话不再重置。首次下载运行包和 SoundFont 可以超过 45 秒，停滞的启动仍会超时。
 
-导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont、Player、拼音词库与解码器随包许可证的摘要，只将入口文件重命名为 `index.js`。默认保留构建字节；如运行时配置声明 `patches`，仅对未压缩的 `player-host.js` 应用仓库内固定的统一差异补丁，并校验补丁文件、输入和输出的 SHA-256。导入需要 Git；补丁及摘要同时写入 `SOURCE.json`，上游 ZIP 摘要仍指向原始构建包。不会修改压缩后的生成代码或 WASM，也不依赖联网下载许可证。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。
+导入命令为 `node scripts/import-easyrpg-kai.mjs <Web ZIP 路径>`。脚本验证 ZIP、SoundFont、Player、拼音词库与解码器随包许可证的摘要，只将入口文件重命名为 `index.js`。全部验证通过后先写入临时目录，再原子改名，最后清理旧版本目录。同版本重复导入必须逐字节相同；任何产物变化均使用新版本 URL。
 
 视频优先走浏览器原生播放；媒体格式失败时才加载独立 FFmpeg/WASM Worker，补充 DivX/Xvid、Microsoft Video 1、MPEG-1/2 等旧编码。解码器按本地 Blob 切片读取，逐帧解码，并用当前 AudioContext 调度声音；不修改游戏 pack，也不改变安装键或存档目录。源码版本、上游下载摘要和解码器许可证摘要记录在运行时配置及 `SOURCE.json` 的 `movieDecoder` 字段中。具体格式子集、内存限制见随包 `web-movies.md`。
 

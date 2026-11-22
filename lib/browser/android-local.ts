@@ -24,7 +24,10 @@ export function localRequest<T>(action: string, values: Record<string, unknown> 
     catch (error) { pending.delete(id); clearTimeout(timer); reject(error); }
   });
 }
+export type AudioProfile = "default" | "buffered" | "reduced";
+
 export type NativePlayerResources = {
+  audioProfile?: AudioProfile;
   url: string;
   runtimeBasePath?: string;
   files: { filename: string; start: number; end: number }[];

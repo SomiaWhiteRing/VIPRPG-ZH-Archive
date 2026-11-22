@@ -1,11 +1,10 @@
 {
-  "version": "2026.11.21-site-kai-control-resume.2",
-  "revision": "88667cdd0f351f90236fcf9c4acca18e05e7ee8f",
-  "build": "kai-web-netplay-diagnostics",
+  "version": "2026.11.22-kai-audio-profile.1",
+  "revision": "f3b410535249c0adfdc71ac41da7353e9e3eb399",
+  "build": "kai-web-audio-profile",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
-  "sourceState": "commit",
-  "archiveSha256": "91972626c1c784cadd68c3647027c04dd8594d4142eac0b8a91d701679dc93d4",
+  "archiveSha256": "18488a664710134819ee841e340d2b458ce093b4c2d1d3f75ec89fe9cc3a102e",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
   "movieDecoder": {
@@ -15,15 +14,6 @@
     "sourceSha256": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f",
     "licenseSha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
   },
-  "patches": [
-    {
-      "file": "player-worker.js",
-      "path": "scripts/runtime-patches/kai-netplay-control-heartbeat.patch",
-      "sha256": "c4579592ffa8976161cc35193fc6e71881b3c64f8b007de09d0bdcdaaa2ca778",
-      "beforeSha256": "d44642d05446adb6930a05e5e055d0875e4fec35256aaaaebf621c2e44324a81",
-      "afterSha256": "3c5c3aeb326e351294ac8c05a1b25cc7cbb0b89b7fe57e3f4c9a65babea70dd4"
-    }
-  ],
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",
   "pinyinDictionary": {
     "name": "rime-pinyin-simp",

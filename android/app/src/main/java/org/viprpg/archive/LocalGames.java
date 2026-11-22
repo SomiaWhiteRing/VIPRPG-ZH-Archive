@@ -16,6 +16,8 @@ final class LocalGames {
     final GameStore store;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private volatile Session session;
+    private final android.content.SharedPreferences audioPreferences;
+    private final String audioProbeVersion;
     private static final class Session {
         final String token = UUID.randomUUID().toString(); final Uri zip; final long workId; final String key, title;
         final PlayerRuntime.Installation player;
@@ -25,7 +27,16 @@ final class LocalGames {
     }
     LocalGames(MainActivity activity, WebView online, WebView offline, PlayerRuntime playerRuntime) {
         this.activity = activity; this.playerRuntime = playerRuntime; store = GameStore.get(activity);
+        audioPreferences = activity.getSharedPreferences("audio-preflight", android.content.Context.MODE_PRIVATE);
+        android.content.pm.PackageInfo provider = WebView.getCurrentWebViewPackage();
+        audioProbeVersion = "v1:" + (provider == null ? "unknown" : provider.packageName + ":" + provider.getLongVersionCode());
         attach(online, false); attach(offline, true);
+    }
+    private String audioProfileKey(PlayerRuntime.Installation player) {
+        return audioProbeVersion + ":" + player.manifest().version();
+    }
+    private String cachedAudioProfile(String key) {
+        return key.equals(audioPreferences.getString("key", null)) ? audioPreferences.getString("profile", null) : null;
     }
     private void attach(WebView web, boolean offline) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return;
@@ -61,6 +72,22 @@ final class LocalGames {
                             }
                             break;
                         }
+                        case "audioProfile": {
+                            if (!offline) throw new IOException("无效操作。");
+                            PlayerRuntime.Installation player = playerRuntime.installed();
+                            if (player == null) { value = null; break; }
+                            String key = audioProfileKey(player);
+                            value = new JSONObject().put("key", key).put("profile", cachedAudioProfile(key));
+                            break;
+                        }
+                        case "setAudioProfile": {
+                            if (!offline) throw new IOException("无效操作。");
+                            String profile = request.getString("profile");
+                            if (!Arrays.asList("default", "buffered", "reduced").contains(profile)) throw new IOException("无效操作。");
+                            audioPreferences.edit().putString("key", request.getString("key")).putString("profile", profile).apply();
+                            value = true;
+                            break;
+                        }
                         case "start": {
                             if (!offline) throw new IOException("请从本地游戏启动。");
                             PlayerRuntime.Installation player = playerRuntime.installed();
@@ -84,6 +111,7 @@ final class LocalGames {
                             JSONObject saves = store.storage.seedBundledSaves(next.workId, next.zip, files);
                             session = next;
                             value = new JSONObject().put("installation", task).put("files", index.getJSONArray("files"))
+                                .put("audioProfile", cachedAudioProfile(audioProfileKey(player)))
                                 .put("runtimeBasePath", player.basePath())
                                 .put("url", BuildConfig.SITE_ORIGIN + "/_native/read/" + next.token).put("saves", saves); break;
                         }

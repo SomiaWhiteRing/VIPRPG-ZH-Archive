@@ -6,7 +6,8 @@ import { localRequest, type NativePlayerResources } from "@/lib/browser/android-
 import type { WebPlayMetadata } from "./web-play-types";
 import { easyRpgConfigArguments } from "@/lib/archive/easyrpg-config";
 import { hasGameResources, readGamePackages } from "./web-play-opfs";
-import { interceptPlayerWorker } from "./web-play-player-worker";
+import { inspectImage, MAX_IMAGE_BYTES } from "@/lib/image-format";
+import { parseSaveImports, saveArchiveBlob, saveArchiveFilename } from "./web-play-save-transfer";
 import { seedBundledWebPlaySaves } from "./web-play-bundled-saves";
 import { upgradeWebPlaySaves } from "./web-play-save-upgrade";
 import { playerConfigDirectory, preparePlayerConfig } from "./web-play-player-config";
@@ -21,7 +22,6 @@ import playerStyles from "../player.css?inline";
 type PlayerWindow = Window & {
   console: Console;
   KeyboardEvent: typeof KeyboardEvent;
-  Worker: typeof Worker;
   createEasyRpgPlayer?: (options: Record<string, unknown>) => Promise<{
     captureScreenshot: () => Promise<PlayerScreenshot>;
     stop: () => Promise<void>;
@@ -101,7 +101,7 @@ export function createPlayerSession(
   const resourceLifetime = new AbortController();
   const heldButtons = new Map<PlayerButton, { key: string; code: string; keyCode: number; location?: number }>();
   let disconnectLogs: (() => void) | undefined;
-  let restoreWorker: (() => void) | undefined;
+  let exporting = false;
   let runtime: Awaited<ReturnType<NonNullable<PlayerWindow["createEasyRpgPlayer"]>>> | undefined;
   let runtimeCreation: Promise<NonNullable<typeof runtime>> | undefined;
   let disposing: Promise<void> | undefined;
@@ -176,8 +176,6 @@ export function createPlayerSession(
       if (played) await touchResources().catch(error => onLog("warning", formatPlayerError(error)));
       disconnectLogs?.();
       disconnectLogs = undefined;
-      restoreWorker?.();
-      restoreWorker = undefined;
       frame.remove();
       if (nativeResources) await localRequest("stop");
       resourceLifetime.abort();
@@ -250,13 +248,6 @@ export function createPlayerSession(
     if (!playerWindow.createEasyRpgPlayer)
       throw new UiFeedbackError("play.diagnostic.runtimeUnavailable");
 
-    restoreWorker = interceptPlayerWorker(playerWindow, {
-      workId: metadata.workId, title: metadata.title, runtimeBasePath,
-      nativeUrl: nativeResources?.url, signal: lifetime.signal,
-      onSize: (width, height) => canvas.style.setProperty("--player-aspect", String(width / height)),
-      onScreenshot,
-      onError: error => onLog("error", translate(locale, "play.diagnostic.playerFileFailed", { reason: formatPlayerError(error) })),
-    });
     const args = metadata.easyRpg ? easyRpgConfigArguments(metadata.easyRpg) : [];
     if (!metadata.easyRpg && metadata.engineFamily === "rpg_maker_2003_maniac") args.push("--patch-maniac");
     args.push("--skip-logo", "--config-path", playerConfigDirectory);
@@ -267,6 +258,49 @@ export function createPlayerSession(
     runtimeCreation = playerWindow.createEasyRpgPlayer({
       packages,
       nativeResources,
+      audioProfile: nativeResources?.audioProfile,
+      onSize: (width: number, height: number) => canvas.style.setProperty("--player-aspect", String(width / height)),
+      onScreenshotFile: (_filename: string, bytes: Uint8Array) => {
+        if (lifetime.signal.aborted) return;
+        try {
+          if (!ArrayBuffer.isView(bytes) || bytes.byteLength > MAX_IMAGE_BYTES) throw new UiFeedbackError("play.diagnostic.invalidScreenshot");
+          const content = new Uint8Array(bytes);
+          const image = inspectImage(content.buffer);
+          if (image.format !== "png") throw new UiFeedbackError("play.diagnostic.invalidScreenshot");
+          onScreenshot({ blob: new Blob([content], { type: "image/png" }), width: image.width, height: image.height });
+        } catch (error) { onLog("error", formatPlayerError(error)); }
+      },
+      onSaveFile: async (filename: string, bytes: Uint8Array) => {
+        if (exporting || lifetime.signal.aborted) return;
+        exporting = true;
+        try {
+          if (!ArrayBuffer.isView(bytes) || bytes.byteLength > 16 * 1024 * 1024) throw new UiFeedbackError("play.diagnostic.saveDownloadInvalid");
+          const content = new Uint8Array(bytes);
+          const saves = await parseSaveImports([new File([content], filename)], lifetime.signal);
+          lifetime.signal.throwIfAborted();
+          if (nativeResources?.url) {
+            let binary = "";
+            for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+              binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+            }
+            // This runs in the host/main frame, where the origin-scoped native bridge lives.
+            await localRequest("exportSave", { url: nativeResources.url, name: saves[0].name, bytes: btoa(binary) });
+            return;
+          }
+          const url = URL.createObjectURL(saveArchiveBlob(saves));
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = saveArchiveFilename(metadata.title, metadata.workId);
+          document.body.appendChild(link);
+          try { link.click(); }
+          finally {
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 30_000);
+          }
+        } catch (error) {
+          if (!lifetime.signal.aborted) onLog("error", formatPlayerError(error));
+        } finally { exporting = false; }
+      },
       saveNative: (files: Record<string, string>) => localRequest("save", { url: nativeResources?.url, files }),
       workId: metadata.workId,
       runtimeBase: `${runtimeBasePath}/`,

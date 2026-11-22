@@ -61,7 +61,7 @@
 
 ## 构建与检查
 
-通过现有 TypeScript（网站与 Android）、变更文件 ESLint、UI 静态检查（290 文件）、Android 网页资源构建、`assembleDebug`、`lintDebug`、`git diff --check`。运行时适配只作用于 APK 构建产物；每个替换锚点均检查，升级 EasyRPG 后如结构变化会直接构建失败。
+通过现有 TypeScript（网站与 Android）、变更文件 ESLint、UI 静态检查（290 文件）、Android 网页资源构建、`assembleDebug`、`lintDebug`、`git diff --check`。
 
 未新增自动化测试代码。未验收 Android 13+ 通知授权、Android 15 前台服务时限、厂商省电策略、实体 SD 卡或不同存储提供方；目录选择当前仅接受设备本地存储提供方。正式上线前仍需这些设备范围的验证。
 
