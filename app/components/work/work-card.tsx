@@ -13,6 +13,7 @@ export function WorkCard({
   disabled,
   label,
   title,
+  titleLanguageBadge,
   originalTitle,
   coverBlobSha256,
   coverSrc,
@@ -28,6 +29,7 @@ export function WorkCard({
 }: {
   label?: string;
   title: string;
+  titleLanguageBadge?: string;
   originalTitle?: string | null;
   coverBlobSha256?: string | null;
   coverSrc?: string;
@@ -68,6 +70,13 @@ export function WorkCard({
         <div className="grid min-w-0 grid-cols-1 gap-1 wrap-anywhere p-2 min-[641px]:px-3 min-[641px]:pt-2.5 min-[641px]:pb-3">
           <div className="h-[calc(1.45em*2)] overflow-hidden text-[12.5px] font-normal leading-[1.45] min-[641px]:text-[14.5px] min-[641px]:font-semibold">
             <Title className="relative m-0 line-clamp-2 overflow-visible">
+              {titleLanguageBadge ? (
+                <>
+                  <span aria-hidden className="inline-flex max-w-full items-center justify-center rounded bg-[#185442] px-1 py-px align-middle text-center text-[11px] leading-[1.3] font-medium text-white dark:bg-[#205c49]">
+                    {titleLanguageBadge}
+                  </span>{" "}
+                </>
+              ) : null}
               {title}
               {originalTitle && originalTitle !== title ? (
                 <span className="absolute inset-x-0 top-full hidden truncate text-xs font-normal text-muted min-[641px]:block">

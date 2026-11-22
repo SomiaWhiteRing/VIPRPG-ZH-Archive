@@ -25,6 +25,7 @@ export function GameCard({ work, action, children, imagePriority = false, titleA
       : null;
   const year = /^\d{4}/.exec(work.originalReleaseDate ?? "")?.[0] ?? null;
   const language = languageLabel(work.language, locale);
+  const currentLanguage = locale === "zh-Hans" ? "zh-CN" : locale;
   const size =
     work.distribution === "archive" && sizeBytes !== null && sizeBytes > 0
       ? formatBytes(sizeBytes)
@@ -34,6 +35,7 @@ export function GameCard({ work, action, children, imagePriority = false, titleA
     <WorkCard
       href={`/games/${work.id}`}
       title={title}
+      titleLanguageBadge={work.language === currentLanguage ? undefined : language}
       originalTitle={originalTitle}
       coverBlobSha256={work.coverBlobSha256}
       description={[engineLabel(work.engineFamily, locale), language, year, size,
