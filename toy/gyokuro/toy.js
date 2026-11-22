@@ -15,7 +15,18 @@ start.addEventListener("click", async () => {
     const orientation = sdk.setContainerMode?.({ orientation: "landscape", immersive: true });
     orientation?.catch(() => {});
     const { nickname, avatar } = await sdk.getUserProfile();
-    const saved = await sdk.getCloudStorage([credentialKey]);
+    const face = new URL(avatar);
+    const [saved, portrait] = await Promise.all([
+      sdk.getCloudStorage([credentialKey]),
+      fetch(`https://p0.hdslb.com${face.pathname}@192w_192h_1c.png`, { credentials: "omit" }),
+    ]);
+    if (!portrait.ok) throw new Error(`Bilibili avatar request failed (${portrait.status})`);
+    const picture = new Uint8Array(await portrait.arrayBuffer());
+    let binary = "";
+    for (let index = 0; index < picture.length; index += 8192) {
+      binary += String.fromCharCode(...picture.subarray(index, index + 8192));
+    }
+    const avatarPng = btoa(binary);
     let token = saved[credentialKey];
     if (token === undefined) {
       const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -27,7 +38,7 @@ start.addEventListener("click", async () => {
       fetch(api, {
         method: "POST", credentials: "omit",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ operation: "session", archiveVersionId: config.archiveVersionId, nickname, avatar }),
+        body: JSON.stringify({ operation: "session", archiveVersionId: config.archiveVersionId, nickname, avatarPng }),
       }),
       fetch(new URL("./game.data", import.meta.url)),
     ]);
