@@ -38,6 +38,7 @@ export type SeaMute = { messageId: number; name: string; until: number; scope: S
 export type SeaModerationMessage = Omit<SeaMessage, "glyphs"> & {
   authorName: string;
   authorAvatarBlobSha256: string | null;
+  guest: boolean;
   anonymous: boolean;
   hiddenAt: number | null;
   canMuteIp: boolean;

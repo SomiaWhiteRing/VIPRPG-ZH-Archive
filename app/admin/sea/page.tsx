@@ -14,6 +14,7 @@ import { PageHeader } from "@/app/components/ui/page-header";
 import { TableWrap } from "@/app/components/ui/table-wrap";
 import { EmptyState } from "@/app/components/ui/empty-state";
 import { UserAvatar } from "@/app/components/ui/user-avatar";
+import { RpgFace } from "@/app/components/ui/rpg-dialogue";
 import { PaginationLinks } from "@/app/components/library/pagination-links";
 import { AdminListMeta } from "@/app/admin/admin-list-controls";
 import { useToast } from "@/app/components/ui/toast";
@@ -75,13 +76,21 @@ export default function SeaModerationPage() {
       className="text-sm [&_th]:px-3 [&_th]:py-2 [&_td]:px-3 [&_td]:py-2">
         <thead><tr><th>{t("admin.sea.speaker")}</th><th>{t("admin.sea.content")}</th><th className="admin-action-column">{t("admin.characterList.actions")}</th></tr></thead>
         <tbody>{view.window.messages.map(message => <tr key={message.id}>
-          <td className="w-52"><div className="flex items-center gap-2">
-            <UserAvatar avatarBlobSha256={message.authorAvatarBlobSha256} displayName={message.authorName} size={28} />
-            <div className="min-w-0">
-              <span className="font-semibold">{message.authorName}{message.anonymous && <span className="whitespace-nowrap font-normal text-muted">{t("admin.sea.anonymous")}</span>}</span>
-              <time dateTime={message.createdAt} className="block whitespace-nowrap text-xs text-muted">{new Date(message.createdAt).toLocaleString(locale)}</time>
+          <td className="w-52">
+            <div className="flex items-center gap-2">
+              {message.anonymous
+                ? <span className="size-7 shrink-0"><RpgFace index={message.faceIndex} portrait={message.portrait} /></span>
+                : <UserAvatar avatarBlobSha256={message.authorAvatarBlobSha256} displayName={message.authorName} size={28} />}
+              <div className="min-w-0">
+                <span className="font-semibold">{message.anonymous ? message.name : message.authorName}{message.anonymous && <span className="whitespace-nowrap font-normal text-muted">{t("admin.sea.anonymous")}</span>}</span>
+                <time dateTime={message.createdAt} className="block whitespace-nowrap text-xs text-muted">{new Date(message.createdAt).toLocaleString(locale)}</time>
+              </div>
             </div>
-          </div></td>
+            {message.anonymous && !message.guest && <div className="mt-1 flex items-center gap-2 text-xs text-muted">
+              <UserAvatar avatarBlobSha256={message.authorAvatarBlobSha256} displayName={message.authorName} size={28} />
+              <span className="min-w-0 wrap-anywhere">{message.authorName}</span>
+            </div>}
+          </td>
           <td className="whitespace-pre-wrap break-words">
             {message.hiddenAt !== null && <span className="mr-2 text-xs text-muted">{t("admin.sea.hidden")}</span>}{message.body}
           </td>

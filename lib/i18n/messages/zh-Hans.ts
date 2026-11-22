@@ -3853,7 +3853,7 @@ export const zh = {
   "timeline.feed.older": "更早的动态",
   "timeline.feed.profile": "{name}的个人主页",
   "timeline.feed.joined": "加入了VIPRPG.org",
-  "timeline.feed.joinedSelf": "加入了VIPRPG.org",
+  "timeline.feed.joinedWithoutName": "加入了VIPRPG.org",
   "timeline.feed.rename": "由 <oldName>{before}</oldName> 改名为 <newName>{after}</newName>",
   "timeline.feed.moreRenames": "另 {count, number} 条改名",
   "timeline.feed.commentBefore": "在 ",

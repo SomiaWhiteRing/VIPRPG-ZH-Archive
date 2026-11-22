@@ -3853,7 +3853,7 @@ export const en = {
   "timeline.feed.older": "Older activity",
   "timeline.feed.profile": "Profile of {name}",
   "timeline.feed.joined": "joined VIPRPG.org",
-  "timeline.feed.joinedSelf": "Joined VIPRPG.org",
+  "timeline.feed.joinedWithoutName": "Joined VIPRPG.org",
   "timeline.feed.rename": "Changed name from <oldName>{before}</oldName> to <newName>{after}</newName>",
   "timeline.feed.moreRenames": "{count, number} more name changes",
   "timeline.feed.commentBefore": "commented on ",

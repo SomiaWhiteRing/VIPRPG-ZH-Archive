@@ -159,6 +159,7 @@ export class EternalSeaRoom extends DurableObject<CloudflareEnv> {
           avatarUrl: user && user.status !== "deleted" ? getUserAvatarSrc(user.avatar_blob_sha256) : undefined,
           authorName: user?.status === "deleted" ? "账户已注销" : user?.display_name ?? row.name,
           authorAvatarBlobSha256: user && user.status !== "deleted" ? user.avatar_blob_sha256 : null,
+          guest: row.user_id === null,
           anonymous: row.avatar_mode === "alex",
           hiddenAt: row.hidden_at,
           canMuteIp: row.ip_key !== null,

@@ -42,6 +42,7 @@ export type TimelineItem = {
   sourceReplyCount: number | null;
   canDelete: boolean;
   body: TimelineBodySegment[];
+  joinName: string | null;
   nameChange: { previousName: string; newName: string } | null;
   images: CommentImage[];
   likeCount: number;

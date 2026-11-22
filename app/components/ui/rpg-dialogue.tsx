@@ -50,8 +50,15 @@ export function RpgDialogue({ glyphs, font, faceIndex = 0, avatarUrl, side = "le
 }
 
 export function RpgFace({ index, avatarUrl, portrait }: Pick<SeaMessage, "avatarUrl" | "portrait"> & { index: number }) {
-  if (portrait) return <CharacterPortrait displayName="" portrait={portrait} fillHeight className="sea-character-face" />;
-  return avatarUrl ? <img src={avatarUrl} width={48} height={48} alt="" className="sea-avatar" /> : (
-    <span className="sea-face" aria-hidden="true" style={{ backgroundPosition: `${(index % 4) * 100 / 3}% ${Math.floor(index / 4) * 100 / 3}%` }} />
+  if (portrait) return <CharacterPortrait displayName="" portrait={portrait} fillHeight className="block h-full w-full rounded-none border-0" />;
+  return avatarUrl ? <img src={avatarUrl} width={48} height={48} alt="" className="block size-full object-cover" /> : (
+    <span
+      aria-hidden="true"
+      className="block size-full bg-[length:400%_400%] bg-no-repeat [image-rendering:pixelated]"
+      style={{
+        backgroundImage: `url(${SEA_ASSETS}/faces.png)`,
+        backgroundPosition: `${(index % 4) * 100 / 3}% ${Math.floor(index / 4) * 100 / 3}%`,
+      }}
+    />
   );
 }

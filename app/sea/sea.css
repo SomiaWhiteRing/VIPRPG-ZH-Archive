@@ -149,17 +149,6 @@ body:has(.eternal-sea-page) {
 
 button.sea-face-button:hover { background: transparent; filter: brightness(1.1); }
 
-.sea-face {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: url("/assets/eternal-sea/faces.png") no-repeat;
-  background-size: 400% 400%;
-  image-rendering: pixelated;
-}
-
-.sea-avatar { display: block; width: 100%; height: 100%; object-fit: cover; }
-
 .sea-input-area { min-width: 0; }
 
 .sea-submit-row { display: flex; justify-content: flex-end; align-items: center; gap: 4px; margin-top: 8px; }

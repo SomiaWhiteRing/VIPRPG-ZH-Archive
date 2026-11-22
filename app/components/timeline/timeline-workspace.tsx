@@ -81,7 +81,9 @@ function AccountHistoryEntry({ item, showAuthor, timeAction }: { item: TimelineI
     {showAuthor && item.kind === "rename" && <Link className="shrink-0 self-start" to={`/users/${item.actor.id}`} aria-label={t("timeline.feed.profile", { name: item.actor.displayName })}><UserAvatar avatarBlobSha256={item.actor.avatarBlobSha256} displayName={item.actor.displayName} className="size-9" size={36} /></Link>}
     <div className="grid min-w-0 flex-1 gap-2">
       <p className="m-0 text-sm leading-relaxed wrap-anywhere">
-        {item.kind === "join" ? <>{showAuthor ? <><strong>{item.actor.displayName}</strong>{" "}{t("timeline.feed.joined")}</> : t("timeline.feed.joinedSelf")}</> : <RichMessage id="timeline.feed.rename" values={{ before: item.nameChange!.previousName, after: item.nameChange!.newName }} components={{ oldName: children => <strong key="before">{children}</strong>, newName: children => <strong key="after">{children}</strong> }} />}
+        {item.kind === "join"
+          ? <>{item.joinName && <><strong>{item.joinName}</strong>{" "}</>}{t(item.joinName ? "timeline.feed.joined" : "timeline.feed.joinedWithoutName")}</>
+          : <RichMessage id="timeline.feed.rename" values={{ before: item.nameChange!.previousName, after: item.nameChange!.newName }} components={{ oldName: children => <strong key="before">{children}</strong>, newName: children => <strong key="after">{children}</strong> }} />}
       </p>
       <div className="flex flex-wrap items-center gap-x-2">
         <Timestamp value={item.createdAt} format="duration" className="text-xs text-muted" />

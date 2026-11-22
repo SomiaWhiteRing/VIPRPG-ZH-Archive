@@ -76,6 +76,7 @@ const FROM = `FROM timeline_events e JOIN users u ON u.id=e.user_id
     WHEN 'status' THEN 1 WHEN 'join' THEN 1 WHEN 'rename' THEN 1 ELSE 0 END`;
 const COLUMNS = `e.id,e.user_id,e.kind,e.action,e.created_at,e.updated_at,e.body,e.previous_name,e.new_name,e.work_id,e.catalog_id,e.comment_id,e.forum_post_id,
   u.display_name,u.avatar_blob_sha256,
+  e.join_name,
   CASE WHEN e.kind='catalog' THEN cat.title WHEN e.kind='discussion' THEN ft.title
     ELSE COALESCE(NULLIF(w.chinese_title,''),w.original_title,NULLIF(cw.chinese_title,''),cw.original_title,cr.name,ch.primary_name,comment_catalog.title) END AS target_title,
   COALESCE(w.id,cw.id) AS preview_work_id,
@@ -93,7 +94,7 @@ const COLUMNS = `e.id,e.user_id,e.kind,e.action,e.created_at,e.updated_at,e.body
   (SELECT favorite_note FROM user_work_entries f WHERE f.user_id=e.user_id AND f.work_id=e.work_id AND f.favorited_at IS NOT NULL) AS favorite_note`;
 type TimelineRow = {
   id: number; user_id: number; kind: TimelineKind; action: string; created_at: string; updated_at: string; body: string | null;
-  previous_name: string | null; new_name: string | null;
+  previous_name: string | null; new_name: string | null; join_name: string | null;
   work_id: number | null; catalog_id: number | null; comment_id: number | null; forum_post_id: number | null;
   display_name: string; avatar_blob_sha256: string | null; target_title: string | null;
   preview_work_id: number | null; preview_work_title: string | null; preview_work_original_title: string | null;
@@ -130,7 +131,7 @@ function mapItem(row: TimelineRow, viewer: Awaited<ReturnType<typeof getCurrentU
   const text = row.kind === "status" ? row.body ?? "" : body.map((segment) => segment.type === "text" ? segment.text : "[表情]").join("");
   return { id: row.id, kind: row.kind, action: row.action, createdAt: row.created_at, updatedAt: row.updated_at,
     actor: { id: row.user_id, displayName: row.display_name, avatarBlobSha256: row.avatar_blob_sha256 }, text,
-    body, images: [], nameChange: row.kind === "rename" ? { previousName: row.previous_name!, newName: row.new_name! } : null,
+    body, images: [], joinName: row.join_name, nameChange: row.kind === "rename" ? { previousName: row.previous_name!, newName: row.new_name! } : null,
     likeCount: row.like_count, replyCount: row.reply_count, likedByMe: row.liked_by_me === 1,
     canLike: row.kind === "status" && hasPermission(viewer, "timeline.status.like"),
     canReply: row.kind === "status" && hasPermission(viewer, "timeline.reply.create"),

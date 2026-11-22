@@ -3853,7 +3853,7 @@ export const ja = {
   "timeline.feed.older": "以前のアクティビティ",
   "timeline.feed.profile": "{name}のプロフィール",
   "timeline.feed.joined": "が VIPRPG.org に参加しました",
-  "timeline.feed.joinedSelf": "VIPRPG.org に参加しました",
+  "timeline.feed.joinedWithoutName": "VIPRPG.org に参加しました",
   "timeline.feed.rename": "<oldName>{before}</oldName> から <newName>{after}</newName> に改名しました",
   "timeline.feed.moreRenames": "ほか {count, number} 件の改名",
   "timeline.feed.commentBefore": " ",
