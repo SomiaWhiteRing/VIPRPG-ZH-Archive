@@ -9,6 +9,7 @@ import type { AppRuntime } from "@/app/.server/runtime";
 import { storeAvatarPng } from "@/app/.server/storage/avatar";
 import { toyNetplayOrigin } from "@/lib/archive/netplay-ingress";
 import { HttpError, json, jsonError } from "@/lib/http";
+import { requestOk } from "@/lib/ui/api-response";
 
 export async function readToyGyokuroAvatar(runtime: AppRuntime, request: Request, sha256: string) {
   if (!runtime.env.TOY_NETPLAY_WORK_ID || !runtime.env.NETPLAY_HK_IDENTITY_KEY)
@@ -81,10 +82,9 @@ async function handleToyRequest(runtime: AppRuntime, request: Request, workId: n
       face.username || face.password || !/^\/bfs\/face\/(?:member\/)?[a-zA-Z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(face.pathname)) {
     throw new HttpError(400, "Invalid Bilibili avatar");
   }
-  const picture = await fetch(`https://p0.hdslb.com${face.pathname}@192w_192h_1c.png`, {
+  const picture = await requestOk(`https://p0.hdslb.com${face.pathname}@192w_192h_1c.png`, {
     redirect: "error", signal: AbortSignal.timeout(8000),
   });
-  if (!picture.ok) throw new HttpError(502, "Bilibili avatar unavailable");
   if (!player) {
     await assertAuthSourceRateLimit(runtime, "gyokuro-toy-register");
     const displayName = `B站玩家 ${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
