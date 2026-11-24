@@ -1,3 +1,5 @@
+import type { NumberOwner } from "./maniac-number-flow";
+import { additionalFields, ManiacResourceReferences } from "./maniac-resource-references";
 import schema from "./lcf-scan-schema.json";
 
 export type ResourceFile = { path: string; size: number; sha256: string };
@@ -44,15 +46,34 @@ export class LcfReferenceScan {
   private readonly seenCore = new Set<string>();
   private readonly mapInfos = new Map<number, MapInfo>();
   private readonly commentScriptPatches = new Set<string>();
+  private readonly maniac?: ManiacResourceReferences;
+  private readonly hasEasyIni: boolean;
+  private readonly knownManiac: boolean;
+  private readonly stockModePossible: boolean;
+  private hasManiacCommands = false;
+  private readonly maniacReasons = new Set<string>();
+  private unboundedManiac = "";
+  private checkedEasyIni = false;
   private steps = 0;
   private totalBytes = 0;
   private currentPath = "";
 
   constructor(private readonly files: readonly ResourceFile[], isCandidate: (file: ResourceFile) => boolean,
-    private readonly observe?: ReferenceObserver) {
+    private readonly observe?: ReferenceObserver, detectedManiac?: boolean) {
+    const paths = new Set(files.map(file => normalize(file.path)));
+    this.hasEasyIni = paths.has("easyrpg.ini");
+    this.knownManiac = detectedManiac !== undefined && (detectedManiac || paths.has("accord.dll"));
+    this.stockModePossible = !detectedManiac;
+    if (detectedManiac !== undefined) {
+      this.maniac = new ManiacResourceReferences(bytes => this.string(bytes),
+        reason => { if (this.maniacReasons.size < 20) this.maniacReasons.add(reason); },
+        reason => { this.unboundedManiac ||= reason; }, decoders, files.some(file => /\.po$/i.test(file.path)));
+    }
     this.candidates = files.filter(isCandidate);
     for (const file of this.candidates) {
-      const name = stem(file.path);
+      const base = stem(file.path);
+      const name = this.maniac ? base.normalize("NFKC") : base;
+      this.maniac?.strings.indexCandidate(name);
       const bucket = this.names.get(name);
       if (bucket) bucket.push(file);
       else this.names.set(name, [file]);
@@ -65,8 +86,8 @@ export class LcfReferenceScan {
       if (path === "easyrpg.ini") this.commentScriptPatches.add("easyrpg");
       // Stock RPG2000/2003 runtime libraries are not arbitrary resource loaders.
       // Only accept their root paths; other plugins may load any path.
-      if ((path.endsWith(".dll") && path !== "harmony.dll" && path !== "ultimate_rt_eb.dll") ||
-          /(?:^|\/)(?:dynrpg|easyrpg)\.ini$/.test(path) ||
+      if ((path.endsWith(".dll") && path !== "harmony.dll" && path !== "ultimate_rt_eb.dll" && !(this.knownManiac && path === "accord.dll")) ||
+          (/(?:^|\/)(?:dynrpg|easyrpg)\.ini$/.test(path) && !(this.knownManiac && path === "easyrpg.ini")) ||
           /\.(?:script|lua|js)$/.test(path)) {
         this.protect("*", `存在未分析的扩展：${file.path}`);
       }
@@ -77,12 +98,29 @@ export class LcfReferenceScan {
     if (this.steps > ANALYSIS_STEP_LIMIT || this.totalBytes > 256 * 1024 * 1024) return false;
     // Protection prevents pruning; read-only observers can still collect known
     // static references for RTP restoration within the same analysis budgets.
-    return Boolean(this.observe) || (this.candidates.length > 0 && !this.protectedDirs.has("*"));
+    return Boolean(this.observe) || (this.candidates.length > 0 && (this.knownManiac || !this.protectedDirs.has("*")));
   }
 
   consume(path: string, bytes: Uint8Array): void {
     if (!this.needsScan) return;
     const key = normalize(path);
+    if (this.knownManiac && key === "easyrpg.ini") {
+      this.checkedEasyIni = true;
+
+      let section = "";
+      for (const raw of new TextDecoder("windows-1252").decode(bytes).replace(/^ï»¿/, "").split(/\r?\n/)) {
+        const line = raw.replace(/\s+;.*$/, "").trim().toLowerCase();
+        if (!line || /^[;#]/.test(line)) continue;
+        if (section === "[netplay]" && /^enabled\s*=\s*(?:1|true|yes|on)$/.test(line)) { this.maniac?.strings.invalidate(); this.maniac?.numbers.invalidate(); }
+        if (/^\[(?:patch|netplay)\]$/.test(line)) section = line;
+        else if (!(section === "[patch]" && /^maniac\s*=\s*\d+$/.test(line)) &&
+                 !(section === "[netplay]" && /^enabled\s*=\s*(?:[01]|true|false|yes|no|on|off)$/.test(line))) {
+          this.protect("*", "EasyRPG.ini 含未分析的扩展设置");
+          break;
+        }
+      }
+      return;
+    }
     if (!/\.(?:ldb|lmt|lmu)$/.test(key) && key !== "rpg_rt.ini") return;
     this.currentPath = path;
     try {
@@ -94,7 +132,8 @@ export class LcfReferenceScan {
       this.seenCore.add(key);
       if (key === "rpg_rt.ini") {
         const ini = new TextDecoder("windows-1252").decode(bytes);
-        if (/maniac|dynrpg|destiny|picpointer|easyrpg_extensions/i.test(ini)) {
+        if (this.maniac && /maniac/i.test(ini)) this.hasManiacCommands = true;
+        if (/dynrpg|destiny|picpointer|easyrpg_extensions/i.test(ini) || (!this.maniac && /maniac/i.test(ini))) {
           this.protect("*", "配置声明了扩展引擎");
         }
         const encoding = ini.match(/^\s*Encoding\s*=\s*(\S+)/im)?.[1];
@@ -126,6 +165,13 @@ export class LcfReferenceScan {
   }
 
   finish(): ResourceReferenceReport {
+    // EXE-less projects can declare the dialect only in a later map. Accumulate
+    // both interpretations and apply the Maniac effects independent of file order.
+    const maniac = this.knownManiac || this.hasManiacCommands ? this.maniac : undefined;
+    maniac?.finish();
+    if (maniac && this.unboundedManiac) this.protect("*", this.unboundedManiac);
+    if (maniac) for (const reason of this.maniacReasons) if (this.reasons.size < 20) this.reasons.add(reason);
+    if (this.knownManiac && this.hasEasyIni && !this.checkedEasyIni) this.protect("*", "EasyRPG.ini 未完整分析");
     if (this.needsScan) {
       for (const required of ["rpg_rt.ldb", "rpg_rt.lmt"]) {
         if (!this.seenCore.has(required)) this.protect("*", `缺少核心文件：${required}`);
@@ -155,7 +201,8 @@ export class LcfReferenceScan {
       status: !this.candidates.length ? "no_candidates" : this.protectedDirs.has("*") ? "preserved" : "analyzed",
       candidateCount: this.candidates.length,
       excluded: this.candidates.filter((file) => !this.protectedDirs.has("*") &&
-        !this.protectedDirs.has(normalize(file.path).split("/")[0]) && !this.referenced.has(file.path))
+        !this.protectedDirs.has(normalize(file.path).split("/")[0]) && !this.referenced.has(file.path) &&
+        !maniac?.keeps(normalize(file.path)))
         .map(({ path, size, sha256 }) => ({ path, size, sha256 })).sort((a, b) => a.path.localeCompare(b.path)),
       protectedDirectories: [...this.protectedDirs].sort(), reasons: [...this.reasons].sort(),
     };
@@ -175,7 +222,8 @@ export class LcfReferenceScan {
       try { value = decoder.decode(bytes); } catch { continue; }
       if (decoded.has(value)) continue;
       decoded.add(value);
-      const base = normalize(value).split("/").at(-1)!;
+      const leaf = normalize(value).split("/").at(-1)!;
+      const base = this.maniac ? leaf.normalize("NFKC") : leaf;
       for (const name of [base, base.replace(/\.[^.]*$/, "")]) {
         for (const file of this.names.get(name) ?? []) this.referenced.add(file.path);
         // All candidates in this bucket are now protected. Across the whole
@@ -189,8 +237,10 @@ export class LcfReferenceScan {
     if (++this.steps > ANALYSIS_STEP_LIMIT || depth > 32) throw new Error("超过分析复杂度限制");
   }
 
-  private structure(reader: Reader, type: string, depth: number, eofAllowed = false, mapInfo?: MapInfo): void {
-    const fields = structures[type];
+  private structure(reader: Reader, type: string, depth: number, eofAllowed = false, mapInfo?: MapInfo, id = 0, parent = 0): void {
+    const owner: NumberOwner = { type, id, parent, source: this.currentPath, trigger: type === "CommonEvent" ? 5 : 0 };
+    const extra = this.maniac && additionalFields[type];
+    const fields = structures[type] ?? extra;
     if (!fields) throw new Error(`未支持的结构：${type}`);
     const seen = new Set<number>();
     let animationName: Uint8Array | undefined;
@@ -205,7 +255,7 @@ export class LcfReferenceScan {
       if (seen.has(id)) throw new Error(`重复字段：${type}/${id}`);
       seen.add(id);
       const block = new Reader(reader.take(reader.integer()));
-      const kind = fields[id];
+      const kind = fields[id] ?? extra?.[id];
       if (!kind) {
         if (!this.observe) throw new Error(`未支持的字段：${type}/${id}`);
         // Field payloads are length-delimited; skip unknown extension fields.
@@ -215,12 +265,19 @@ export class LcfReferenceScan {
       if (kind === "string") {
         const bytes = block.take(block.remaining);
         this.string(bytes);
+        this.maniac?.strings.databaseField(type, id, bytes);
+        if (this.maniac && type === "Item" && (id === 1 || id === 2)) {
+          const nul = bytes.indexOf(0);
+          if (nul > 0) this.string(bytes.subarray(0, nul));
+        }
         if (type === "Animation" && id === 2) animationName = bytes;
         else this.observe?.(bytes, this.currentPath, type, id);
       }
-      else if (kind === "commands") this.commands(block);
+      else if (kind === "integer") block.integer();
+      else if ((type === "CommonEvent" && id === 11) || (type === "EventPage" && id === 33)) owner.trigger = block.integer();
+      else if (kind === "commands") this.commands(block, owner);
       else if (kind === "moves") this.moves(block);
-      else if (kind.startsWith("array:")) this.array(block, kind.slice(6), depth + 1);
+      else if (kind.startsWith("array:")) this.array(block, kind.slice(6), depth + 1, type === "Event" || type === "Troop" ? owner.id : parent);
       else if (kind.startsWith("struct:")) this.structure(block, kind.slice(7), depth + 1);
       else if (mapInfo && (id === 2 || id === 4)) {
         const value = block.integer();
@@ -244,7 +301,7 @@ export class LcfReferenceScan {
     if (!eofAllowed) throw new Error(`结构缺少结束标记：${type}`);
   }
 
-  private array(reader: Reader, type: string, depth: number): void {
+  private array(reader: Reader, type: string, depth: number, parent = 0): void {
     const count = reader.integer();
     if (count > reader.remaining) throw new Error("数组数量无效");
     const ids = new Set<number>();
@@ -253,23 +310,33 @@ export class LcfReferenceScan {
       if (ids.has(id)) throw new Error("数组 ID 重复");
       ids.add(id);
       const mapInfo = type === "MapInfo" ? { type: -1, parent: 0, hasAreaRect: false } : undefined;
-      this.structure(reader, type, depth + 1, false, mapInfo);
+      this.structure(reader, type, depth + 1, false, mapInfo, id, parent);
       if (mapInfo) this.mapInfos.set(id, mapInfo);
     }
   }
 
-  private commands(reader: Reader): void {
+  private commands(reader: Reader, owner: NumberOwner): void {
     if (!reader.remaining) return;
+    const numbers = this.knownManiac ? this.maniac?.numbers.list(owner) : undefined;
+    let offset = 0;
+    let script: { mode: number; lines: Uint8Array[] } | undefined;
     while (reader.remaining) {
       this.tick(0);
       const code = reader.integer();
+      if (script && code !== 3031) {
+        this.maniac!.javascript(script.lines, script.mode, this.currentPath);
+        script = undefined;
+      }
       if (!code) { // LCF command list sentinel includes indent/string-size/parameter-count.
         if (reader.integer() || reader.integer() || reader.integer() || reader.remaining) throw new Error("事件结束标记无效");
+        numbers?.finish();
         return;
       }
-      reader.integer(); // indentation
+      const indent = reader.integer();
       const bytes = reader.take(reader.integer());
       this.string(bytes);
+      const nul = this.maniac ? bytes.indexOf(0) : -1;
+      if (nul > 0) this.string(bytes.subarray(0, nul));
       // EasyRPG dispatches these scripts only from Comment/Comment_2, with
       // the marker at byte zero and the corresponding patch enabled. DLLs
       // identify DynRPG/Destiny; an unanalysed EasyRPG.ini already preserves
@@ -287,6 +354,16 @@ export class LcfReferenceScan {
       if (count > reader.remaining || count > 100_000) throw new Error("事件参数数量无效");
       const parameters = Array.from({ length: count }, () => reader.integer());
       this.observe?.(bytes, this.currentPath, "command", code, parameters);
+      const numericUse = numbers?.add(code, indent, parameters, offset++, bytes);
+      const extension = code >= 3000 && code < 4000;
+      if (this.maniac && extension) this.hasManiacCommands = true;
+      if (this.maniac && code === 3030) {
+        this.maniac.strings.instruction(code, parameters, this.currentPath, bytes);
+        script = { mode: parameters[0] ?? 0, lines: [bytes] };
+        continue;
+      }
+      if (script && code === 3031) { script.lines.push(bytes); continue; }
+      if (this.maniac?.command(code, bytes, parameters, this.currentPath, numericUse) && (extension || !this.stockModePossible)) continue;
       if (!commandNames[code]) {
         if (!this.observe) throw new Error(`未支持的事件指令：${code}`);
         // The command envelope has already been read. Preserve all candidates

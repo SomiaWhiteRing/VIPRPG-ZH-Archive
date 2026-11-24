@@ -1,7 +1,7 @@
 import { LcfReferenceScan, type ResourceFile, type ResourceReferenceReport } from "./lcf-reference-scan";
 import { classifyArchivePath } from "./file-policy";
 
-export const RESOURCE_CLEANUP_VERSION = "resources-static-v7";
+export const RESOURCE_CLEANUP_VERSION = "resources-static-v11";
 export type ResourceCleanupReport = ResourceReferenceReport & { version: string };
 
 export const resourceMediaDirectories = new Set("backdrop battle battle2 battlecharset battleweapon charset chipset faceset gameover monster movie music panorama picture sound system system2 title".split(" "));
@@ -20,7 +20,9 @@ export function isResourceCleanupCandidate(file: Pick<ResourceFile, "path">): bo
 }
 
 export class ResourceReferenceScan extends LcfReferenceScan {
-  constructor(files: readonly ResourceFile[]) { super(files, isResourceCleanupCandidate); }
+  constructor(files: readonly ResourceFile[], detectedManiac = files.some(file => /^accord\.dll$/i.test(file.path))) {
+    super(files, isResourceCleanupCandidate, undefined, detectedManiac);
+  }
   override finish(): ResourceCleanupReport {
     return { version: RESOURCE_CLEANUP_VERSION, ...super.finish() };
   }

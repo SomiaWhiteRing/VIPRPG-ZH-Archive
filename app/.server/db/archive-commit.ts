@@ -342,7 +342,9 @@ export async function verifyArchiveSourceManifest(
 
   validateBlobReferences(manifest, objectLedger.blobs);
   const cleanup = manifest.archiveVersion.resourceCleanup;
-  const scan = cleanup?.excluded.length ? new ResourceReferenceScan([...manifest.files, ...cleanup.excluded]) : null;
+  const scan = cleanup?.excluded.length
+    ? new ResourceReferenceScan([...manifest.files, ...cleanup.excluded], (manifest.archiveVersion.easyRpg?.patches.maniac ?? 0) > 0)
+    : null;
   const detectionBytes = new Map<string, Uint8Array>();
   await validateCorePackReferences(runtime, manifest, objectLedger.corePacks,
     scan || manifest.archiveVersion.easyRpg ? (path, bytes) => {
@@ -364,6 +366,7 @@ export async function verifyArchiveSourceManifest(
         if (!object || object.size !== file.size) throw new HttpError(400, `引擎检测文件缺失：${file.path}`, undefined, "upload.error.engineFileMissing", { path: file.path });
         const bytes = new Uint8Array(await object.arrayBuffer());
         if (await sha256Hex(bytes.buffer) !== file.sha256) throw new HttpError(400, `引擎检测文件校验失败：${file.path}`, undefined, "upload.error.engineFileInvalid", { path: file.path });
+        if (file.path.toLowerCase() === "easyrpg.ini") scan?.consume(file.path, bytes);
         return bytes;
       },
     })));

@@ -214,7 +214,7 @@ async function startSource(
         throw new UiFeedbackError("upload.worker.sharedUnavailable");
       }
     }
-    const scan = await scanAndHash(task, sourceFiles, message.useSharedPlayer, message.checkMissingResources);
+    const scan = await scanAndHash(task, sourceFiles, message.useSharedPlayer, message.checkMissingResources, easyRpg.patches.maniac > 0);
     runtime.task = task = scan.task;
     await waitForCancellation(runtime);
     try {
@@ -799,6 +799,7 @@ async function scanAndHash(
   sourceFiles: SourceFile[],
   useSharedPlayer: boolean,
   checkMissingResources: boolean,
+  detectedManiac: boolean,
 ): Promise<{
   task: BrowserUploadTaskSnapshot;
   includedFiles: IncludedFile[];
@@ -866,7 +867,7 @@ async function scanAndHash(
 
   {
     task = emitTask(setPhase(task, "analyzing_resources", 0, null), true);
-    const references = new ResourceReferenceScan(includedFiles);
+    const references = new ResourceReferenceScan(includedFiles, detectedManiac);
     const ini = includedFiles.find((file) => file.path.toLowerCase() === "rpg_rt.ini");
     const missing = new MissingResourceScan(
       includedFiles, ini && (ini.cachedBytes ?? await ini.source.bytes()), createRtpResolver(includedFiles),
@@ -874,7 +875,8 @@ async function scanAndHash(
     missingScan = missing;
     for (let index = 0; index < includedFiles.length && (references.needsScan || missing.scanner.needsScan); index++) {
       const file = includedFiles[index];
-      if (/\.(?:ldb|lmt|lmu)$/i.test(file.path) || file.path.toLowerCase() === "rpg_rt.ini") {
+      if (/\.(?:ldb|lmt|lmu)$/i.test(file.path) || /^rpg_rt\.ini$/i.test(file.path) ||
+          (/^easyrpg\.ini$/i.test(file.path) && file.size <= 1024 ** 2)) {
         assertRuntimeActive(task.localTaskId);
         const bytes = file.cachedBytes ?? await file.source.bytes();
         references.consume(file.path, bytes);
