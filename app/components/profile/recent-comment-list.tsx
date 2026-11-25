@@ -1,4 +1,5 @@
 import { CommentTargetImage } from "@/app/components/profile/comment-target-image";
+import { UserContentText } from "@/app/components/ui/user-content-text";
 import { commentTargetHref } from "@/lib/comment-target";
 import type { UserCommentSummary } from "@/lib/dto/db/work-community";
 import { LocaleLink as Link } from "@/app/components/ui/locale-link";
@@ -26,7 +27,7 @@ export function RecentCommentList({
               {comment.targetTitle}
             </Link>
             <p className="mt-1 line-clamp-2 text-[15px] text-muted">
-              {comment.body}{comment.imageCount > 0 ? ` ${t("publicProfile.imageCount", { count: comment.imageCount })}` : ""}
+              <UserContentText text={comment.body} />{comment.imageCount > 0 ? ` ${t("publicProfile.imageCount", { count: comment.imageCount })}` : ""}
             </p>
           </div>
         </li>

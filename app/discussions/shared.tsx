@@ -3,11 +3,11 @@ import { translate } from "@/lib/i18n/core";
 import { DEFAULT_UI_LOCALE, parseUiLocale, UI_LOCALE_PARAM } from "@/lib/i18n/locale";
 import { requestJson, type ApiResponsePayload } from "@/lib/ui/api-response";
 
-import { AUTO_LINK_PATTERN, autoLink } from "@/lib/auto-links";
-import { MentionText } from "@/app/components/comments/mention-text";
+import { autoLink } from "@/lib/auto-links";
+import { UserContentLink, UserContentText } from "@/app/components/ui/user-content-text";
 import { resolveEmojis } from "@/app/components/emojis/client";
 import { FaceEmojiView } from "@/app/components/emojis/face-emoji";
-import { emojiIds } from "@/lib/face-emojis";
+import { emojiIds, FACE_EMOJI_PATTERN } from "@/lib/face-emojis";
 import { FORUM_ELEMENT_PATTERN, readForumElement } from "@/lib/forum-elements";
 import { forumDice, parseForumBBCode, type ForumBBCodeNode } from "@/lib/forum-bbcode";
 import { BrowserElement } from "./browser-element";
@@ -25,6 +25,8 @@ import { forumSearchMatches } from "@/lib/forum-search";
 import { type KeyboardEventHandler, type ReactNode, Fragment, useEffect, useId, useRef, useState } from "react";
 
 import { LocaleLink as Link } from "@/app/components/ui/locale-link";
+
+const FORUM_TEXT_TOKENS = new RegExp(`${FACE_EMOJI_PATTERN.source}|${FORUM_ELEMENT_PATTERN.source}`);
 
 export async function forumRequest<T>(
   url: string,
@@ -180,33 +182,18 @@ export function ForumBody({
 }) {
   const t = useMessages();
   const emojiMap = new Map(emojis.map((emoji) => [emoji.id, emoji]));
-  function renderText(text: string) {
-    return text.split(new RegExp(`(${AUTO_LINK_PATTERN.source}|:face_[1-9]\\d{0,15}:|${FORUM_ELEMENT_PATTERN.source})`, "g")).map((part, index) => {
-        const source = !inline ? readForumElement(part) : null;
-        if (source !== null) return <BrowserElement key={index} source={source} interactive={interactiveElements} />;
-        if (/^:face_[1-9]\d{0,15}:$/.test(part))
-          return (
-            <FaceEmojiView
-              emoji={emojiMap.get(Number(part.slice(6, -1))) ?? null}
-              key={index}
-            />
-          );
-        const link = autoLink(part);
-        if (link) return (
-          <Fragment key={index}>
-            <a className="text-primary underline" href={link.href} target="_blank" rel="nofollow ugc noopener noreferrer">
-              {link.text}
-            </a>
-            {link.suffix}
-          </Fragment>
-        );
-        return <MentionText key={index} text={part} />;
-    });
-  }
+  const extraTokens = {
+    pattern: FORUM_TEXT_TOKENS,
+    render(token: string) {
+      const source = !inline ? readForumElement(token) : null;
+      if (source !== null) return <BrowserElement source={source} interactive={interactiveElements} />;
+      if (token.startsWith(":face_")) return <FaceEmojiView emoji={emojiMap.get(Number(token.slice(6, -1))) ?? null} />;
+    },
+  };
   let diceOrdinal = 0;
   function renderNodes(nodes: ForumBBCodeNode[], literal = false): ReactNode {
     return nodes.map((node, index) => {
-      if (node.type === "text") return <Fragment key={index}>{literal ? node.text : renderText(node.text)}</Fragment>;
+      if (node.type === "text") return literal ? <Fragment key={index}>{node.text}</Fragment> : <UserContentText key={index} text={node.text} extraTokens={extraTokens} />;
       if (node.type === "image") return <Fragment key={index}>{images[node.index]?.content}</Fragment>;
       if (node.type === "dice") {
         const expression = node.children.map((child) => child.type === "text" ? child.text : "").join("");
@@ -221,7 +208,7 @@ export function ForumBody({
         const target = node.parameter ?? node.children.map((child) => child.type === "text" ? child.text : "").join("");
         const link = autoLink(target);
         if (!link || link.suffix) return <Fragment key={index}>[url{node.parameter ? `=${node.parameter}` : ""}]{renderNodes(node.children, true)}[/url]</Fragment>;
-        return <a key={index} className="text-primary underline" href={link.href} target="_blank" rel="nofollow ugc noopener noreferrer">{renderNodes(node.children, true)}</a>;
+        return <UserContentLink key={index} href={link.href}>{renderNodes(node.children, true)}</UserContentLink>;
       }
       const children = renderNodes(node.children, literal || node.type === "code");
       switch (node.type) {
@@ -247,7 +234,7 @@ export function ForumBody({
     <Wrapper
       className={`${inline ? "" : "block max-w-[120ch]"} whitespace-pre-wrap text-[15px] leading-[1.7] [overflow-wrap:anywhere]`}
     >
-      {inline ? renderText(body) : renderNodes(parseForumBBCode(body, images.map((image) => image.offset)))}
+      {inline ? <UserContentText text={body} extraTokens={extraTokens} /> : renderNodes(parseForumBBCode(body, images.map((image) => image.offset)))}
     </Wrapper>
   );
 }

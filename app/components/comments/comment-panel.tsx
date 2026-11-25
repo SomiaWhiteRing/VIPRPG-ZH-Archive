@@ -5,7 +5,7 @@ import { scrollElementIntoView } from "@/lib/ui/scroll.js";
 
 
 
-import { MentionText } from "./mention-text";
+import { UserContentText } from "@/app/components/ui/user-content-text";
 import { usePushReply } from "@/app/components/use-push-reply";
 import { useIsPostAuthorHidden } from "@/app/components/use-is-post-author-hidden";
 import { useInboxAutoRead } from "@/app/inbox/use-auto-read";
@@ -690,7 +690,7 @@ function CommentLine({ comment }: { comment: CommentDto }) {
 function CommentBody({ body }: { body: CommentBodySegment[] }) {
   return body.map((segment, index) =>
     segment.type === "text" ? (
-      <MentionText key={index} text={segment.text} />
+      <UserContentText key={index} text={segment.text} />
     ) : (
       <FaceEmojiView emoji={segment.emoji} key={index} />
     ),

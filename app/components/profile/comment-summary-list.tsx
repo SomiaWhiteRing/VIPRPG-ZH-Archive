@@ -3,6 +3,7 @@ import { StatusBadge } from "@/app/components/ui/status-badge";
 import { commentTargetHref } from "@/lib/comment-target";
 import type { UserCommentSummary } from "@/lib/dto/db/work-community";
 import { Timestamp } from "@/app/components/ui/timestamp";
+import { UserContentText } from "@/app/components/ui/user-content-text";
 import { ThumbsUp } from "lucide-react";
 import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 import { useMessages } from "@/lib/i18n/react";
@@ -34,7 +35,7 @@ export function CommentSummaryList({
               ) : null}
             </div>
             <p className="m-0 whitespace-pre-wrap text-[15px]">
-              {comment.body}{comment.imageCount > 0 ? ` ${t("publicProfile.imageCount", { count: comment.imageCount })}` : ""}
+              <UserContentText text={comment.body} />{comment.imageCount > 0 ? ` ${t("publicProfile.imageCount", { count: comment.imageCount })}` : ""}
             </p>
             <div className="flex items-center gap-2 text-xs text-muted">
               <Timestamp value={comment.updatedAt} />
