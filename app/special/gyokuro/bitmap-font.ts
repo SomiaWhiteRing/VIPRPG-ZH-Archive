@@ -1,4 +1,5 @@
 import { gunzipSync } from "fflate";
+import { requestOk } from "@/lib/ui/api-response";
 
 type Glyph = { advance: number; width: number; rows: number[] };
 export type BitmapFont = (char: string) => Glyph;
@@ -33,11 +34,8 @@ export function parseBitmapFont(bytes: Uint8Array): BitmapFont {
 let fontRequest: Promise<BitmapFont> | undefined;
 
 export function loadGyokuroFont() {
-  return fontRequest ??= fetch("/assets/gyokuro-stats/eternal-sea-v1.bin.gz", { cache: "force-cache" })
-    .then(async response => {
-      if (!response.ok) throw new Error("Gyokuro bitmap font request failed");
-      return parseBitmapFont(gunzipSync(new Uint8Array(await response.arrayBuffer())));
-    })
+  return fontRequest ??= requestOk("/assets/gyokuro-stats/eternal-sea-v1.bin.gz", { cache: "force-cache" })
+    .then(async response => parseBitmapFont(gunzipSync(new Uint8Array(await response.arrayBuffer()))))
     .catch(error => {
       fontRequest = undefined;
       throw error;
