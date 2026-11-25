@@ -20,6 +20,7 @@ import { defaultStatsStart, fighters, type Scope } from "./model";
 
 const DAY = 86_400_000;
 const SITE_UTC_OFFSET = 8 * 60 * 60 * 1000;
+const personalUsageBounds = [5, 10, 15, 20, 25, 30, 40, 50, 100];
 const defaultFrom = { value: defaultStatsStart, milliseconds: Date.parse(`${defaultStatsStart}T00:00:00+08:00`) };
 
 export const handle: PageLayoutHandle = {
@@ -123,7 +124,10 @@ export default function GyokuroStatsPage() {
     count: t("gyokuro.count", { count: row.count }),
     record: t("gyokuro.record", { wins: row.wins, losses: row.count - row.wins }),
   }));
-  const usageMax = scope === "mine" ? 100 : Math.max(15, Math.ceil(Math.max(...rows.map(row => row.usage), 0) * 20) * 5);
+  const maxPicks = Math.max(0, ...stats.rows.map(row => row.count));
+  const usageMax = scope === "mine"
+    ? personalUsageBounds.find(bound => bound * (denominator || 1) > maxPicks * 100) ?? 100
+    : Math.max(15, Math.ceil(Math.max(...rows.map(row => row.usage), 0) * 20) * 5);
   const firstDay = filter.from;
   const lastDay = filter.to || (stats.latest === null ? "" : formatDateKey(new Date(stats.latest)));
   const sharedYear = firstDay.slice(0, 4) === lastDay.slice(0, 4);
