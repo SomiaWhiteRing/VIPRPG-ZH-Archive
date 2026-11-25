@@ -1,0 +1,8 @@
+Gyokuro statistics bitmap font
+
+eternal-sea-v1.bin.gz was exported from /assets/eternal-sea/font.png and the
+matching lib/ui/eternal-sea-glyphs.json. It is a fixed asset for the statistics
+page, independent of the daily fonts used by the chat.
+
+Sources, copyright and license notices for WenQuanYi Bitmap Song, Shinonome
+Gothic and Eternal Sea Pixel Symbols: /assets/eternal-sea/font-notices.txt

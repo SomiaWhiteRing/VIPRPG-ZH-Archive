@@ -1,8 +1,9 @@
 import { requestJsonValue } from "@/lib/ui/api-response";
 import { INBOX_CHANGED_EVENT, notifyInboxChanged } from "@/lib/inbox-events";
+import { rootSearchParams } from "@/lib/ui/route-revalidation";
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 
-import { useLocation, useRevalidator, useRouteLoaderData, useSearchParams } from "react-router";
+import { useLocation, useRevalidator, useRouteLoaderData } from "react-router";
 
 const InboxUnreadContext = createContext({ unread: 0, messagesUnread: 0 });
 export function useInboxUnread() { return useContext(InboxUnreadContext); }
@@ -18,7 +19,7 @@ export function InboxIndicator({
   enabled: boolean;
   children: ReactNode;
 }) {
-  const pathname = useLocation().pathname;
+  const { pathname, search } = useLocation();
   const revalidator = useRevalidator();
   useEffect(() => {
     if (!enabled || !("serviceWorker" in navigator)) return;
@@ -30,9 +31,7 @@ export function InboxIndicator({
     navigator.serviceWorker.addEventListener("message", receive);
     return () => navigator.serviceWorker.removeEventListener("message", receive);
   }, [enabled, revalidator]);
-  const navigationParams = new URLSearchParams(useSearchParams()[0]);
-  if (pathname === "/me/permissions") navigationParams.delete("role");
-  const query = navigationParams.toString();
+  const query = rootSearchParams(pathname, search).toString();
   const serverTime = useRouteLoaderData<{ serverTime: number }>("root")?.serverTime;
   const [snapshot, setSnapshot] = useState({
     initial: initialUnread,

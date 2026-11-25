@@ -41,7 +41,7 @@ import { DEFAULT_UI_LOCALE, parseUiLocale, RAKUEN_LOCALE_MESSAGE, UI_LOCALE_PARA
 import { UiLocaleContext, useMessages } from "@/lib/i18n/react";
 import { LocaleLink as Link } from "./components/ui/locale-link";
 import "./globals.css";
-export { shouldRevalidatePermissionPanel as shouldRevalidate } from "@/lib/ui/route-revalidation";
+export { shouldRevalidateRoot as shouldRevalidate } from "@/lib/ui/route-revalidation";
 
 const subscribeFrame = () => () => {};
 const frameSnapshot = () => window.self !== window.top;

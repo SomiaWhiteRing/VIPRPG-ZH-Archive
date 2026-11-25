@@ -46,6 +46,7 @@ export default [
   route("resources", "resources/page.tsx"),
   route("search", "search/page.tsx"),
   route("material-search", "material-search/page.tsx"),
+  route("special/gyokuro", "special/gyokuro/page.tsx"),
   route("sea", "sea/page.tsx"),
   route("tags", "tags/page.tsx"),
   route("upload", "upload/page.tsx"),
