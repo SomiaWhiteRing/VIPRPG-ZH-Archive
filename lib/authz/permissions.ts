@@ -19,7 +19,7 @@ export const PERMISSION_CATEGORIES = {
   genre: { group: "reference", label: "类型整理" },
   catalog: { group: "community", label: "作品目录" },
   comment: { group: "community", label: "评论审核" },
-  forum: { group: "community", label: "讨论区" },
+  forum: { group: "community", label: "讨论版" },
   sea: { group: "community", label: "永恒之海" },
   timeline: { group: "community", label: "时间线" },
   message: { group: "community", label: "短信箱" },

@@ -14,7 +14,7 @@
 - [永恒之海](./eternal-sea.md)：公共聊天室、像素渲染、字体和管理边界
 - [操作反馈](./ui-feedback.md)：全局 toast、表单错误、加载与恢复状态的展示规则
 - [资源与软件托管](./resources.md)：根管理员资源管理、原始包发布、平台推荐、下载与本站 Windy 更新协议
-- [站内讨论区产品与界面设计](./forum-discussion-design.md)：单一帖子流、多 TAG、精品、单级楼中楼、搜索、权限与响应式界面
+- [站内讨论版产品与界面设计](./forum-discussion-design.md)：单一帖子流、多 TAG、精品、单级楼中楼、搜索、权限与响应式界面
 - [提醒产品与界面契约](./inbox-design.md)：评论与讨论互动、申请、已读状态与未读入口
 - [可申请角色配置](./requestable-roles.md)：固定种子的申请组、权限边界与环境差异
 - [认证与权限基线](./authentication-authorization.md)：认证、角色、授权和审计边界
