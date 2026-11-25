@@ -12,4 +12,5 @@
     <string name="check_update">检查更新</string>
     <string name="download_update">下载新版本</string>
     <string name="auto_check_updates">启动时检查更新</string>
+    <string name="generated_file_saved">文件已保存到%1$s</string>
 </resources>

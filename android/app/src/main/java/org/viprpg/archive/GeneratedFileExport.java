@@ -2,12 +2,14 @@ package org.viprpg.archive;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
 import android.webkit.WebView;
+import android.widget.Toast;
 
 import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
@@ -56,9 +58,13 @@ final class GeneratedFileExport {
                     return;
                 }
                 io.execute(() -> {
-                    boolean saved = download.write(command, legacyVideo, stats);
+                    WriteResult result = download.write(command, legacyVideo, stats);
                     activity.runOnUiThread(() -> {
-                        if (!activity.isDestroyed()) reply.postMessage(prefix + (saved ? "saved" : "error"));
+                        if (activity.isDestroyed()) return;
+                        if (result.path() != null) {
+                            Toast.makeText(activity, activity.getString(R.string.generated_file_saved, result.path()), Toast.LENGTH_LONG).show();
+                        }
+                        reply.postMessage(prefix + (result.ok() ? "saved" : "error"));
                     });
                 });
             });
@@ -94,6 +100,11 @@ final class GeneratedFileExport {
         }
     }
 
+    private record WriteResult(boolean ok, String path) {
+        static final WriteResult ACCEPTED = new WriteResult(true, null);
+        static final WriteResult FAILED = new WriteResult(false, null);
+    }
+
     private static final class Download {
         private final ContentResolver resolver;
         private Uri item;
@@ -105,20 +116,20 @@ final class GeneratedFileExport {
             this.resolver = resolver;
         }
 
-        boolean write(String command, boolean legacyVideo, boolean stats) {
+        WriteResult write(String command, boolean legacyVideo, boolean stats) {
             try {
                 if (command.startsWith("open:")) {
                     discard();
                     String name = command.substring(5);
                     if (name.length() > 255 || name.chars().anyMatch(c ->
-                        Character.isISOControl(c) || "/\\:*?\"<>|".indexOf(c) >= 0)) return false;
+                        Character.isISOControl(c) || "/\\:*?\"<>|".indexOf(c) >= 0)) return WriteResult.FAILED;
                     for (Format candidate : Format.values()) {
                         if (name.length() > candidate.extension.length() && name.endsWith(candidate.extension)) {
                             format = candidate;
                             break;
                         }
                     }
-                    if (format == null || (legacyVideo && format != Format.MP4) || (stats && format != Format.PNG)) return false;
+                    if (format == null || (legacyVideo && format != Format.MP4) || (stats && format != Format.PNG)) return WriteResult.FAILED;
                     var values = new ContentValues();
                     values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
                     values.put(MediaStore.MediaColumns.MIME_TYPE, format.mime);
@@ -127,14 +138,14 @@ final class GeneratedFileExport {
                     item = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
                     if (item == null || (stream = resolver.openOutputStream(item)) == null)
                         throw new IOException("Could not open the download");
-                    return true;
+                    return WriteResult.ACCEPTED;
                 }
                 if (stream != null && command.startsWith("data:") && command.length() <= 262149) {
                     byte[] bytes = Base64.decode(command.substring(5), Base64.DEFAULT);
                     if (!hasData && !format.matches(bytes)) throw new IOException("Invalid download header");
                     stream.write(bytes);
                     hasData = true;
-                    return true;
+                    return WriteResult.ACCEPTED;
                 }
                 if (stream != null && hasData && command.equals("close")) {
                     stream.close();
@@ -142,19 +153,36 @@ final class GeneratedFileExport {
                     var values = new ContentValues();
                     values.put(MediaStore.MediaColumns.IS_PENDING, 0);
                     if (resolver.update(item, values, null, null) != 1) throw new IOException("Could not publish the download");
+                    Uri published = item;
                     item = null;
                     hasData = false;
-                    return true;
+                    return new WriteResult(true, savedPath(published));
                 }
                 if (!legacyVideo && command.equals("abort")) {
                     discard();
-                    return true;
+                    return WriteResult.ACCEPTED;
                 }
             } catch (IOException | RuntimeException failure) {
                 Log.w("GeneratedFileExport", "Could not write the download", failure);
             }
             discard();
-            return false;
+            return WriteResult.FAILED;
+        }
+
+        private String savedPath(Uri published) {
+            String downloads = Environment.DIRECTORY_DOWNLOADS + "/";
+            String[] columns = {MediaStore.MediaColumns.RELATIVE_PATH, MediaStore.MediaColumns.DISPLAY_NAME};
+            try (Cursor cursor = resolver.query(published, columns, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    String directory = cursor.getString(0);
+                    String name = cursor.getString(1);
+                    if (directory == null || directory.isEmpty()) directory = downloads;
+                    if (name != null && !name.isEmpty()) return (directory.endsWith("/") ? directory : directory + "/") + name;
+                }
+            } catch (RuntimeException failure) {
+                Log.w("GeneratedFileExport", "Could not read the saved download path", failure);
+            }
+            return downloads;
         }
 
         void discard() {
