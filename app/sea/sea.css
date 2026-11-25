@@ -23,7 +23,7 @@ body:has(.eternal-sea-page) {
   flex-direction: column;
   width: 640px;
   max-width: calc(100vw - 32px);
-  height: min(800px, calc(100dvh - 64px));
+  height: calc(100dvh - 64px);
   min-height: 0;
 }
 
