@@ -1,10 +1,10 @@
 {
-  "version": "2026.11.25-kai-font-language.1",
-  "revision": "236c1c75980c3113668f0e74f0890696a452458b",
-  "build": "nightly-web-45516911992",
+  "version": "2026.11.25-kai-text-picture-font.1",
+  "revision": "2a9fbae076c04948d5842aa11e1652233ba84d36",
+  "build": "nightly-web-45530776809",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
-  "archiveSha256": "8ad96ab3679e139a6d65928e15f957304a04b495c2b147a73c7ccc617210271d",
+  "archiveSha256": "213beecfe7d8ec1daf571269cc8f2e6d9d3d1b3f8ed41e6db3be60e47a66cfe4",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
