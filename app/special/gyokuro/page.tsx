@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/app/.server/auth/current-user";
 import { readGyokuroStats } from "@/app/.server/db/gyokuro-stats";
 import { runtimeContext } from "@/app/.server/router-context";
 import type { PageLayoutHandle } from "@/app/components/use-page-layout";
+import { saveGeneratedFile } from "@/lib/browser/generated-file";
 import { gyokuroStatsPath, productionGyokuroJapaneseWork, productionNetplayHongKongWork, productionNetplaySiteOrigin } from "@/lib/archive/netplay-ingress";
 import { formatDateKey } from "@/lib/format";
 import { translate } from "@/lib/i18n/core";
@@ -190,10 +191,9 @@ export default function GyokuroStatsPage() {
         const ctx = png.getContext("2d");
         if (!ctx) break;
         drawGyokuroChart(ctx, atlas, labels, rows, usageMax, header, avatar, font);
-        const link = document.createElement("a");
-        link.download = `gyokuro-${sort}-${firstDay}-${lastDay}.png`;
-        link.href = png.toDataURL("image/png");
-        link.click();
+        png.toBlob(blob => {
+          if (blob) void saveGeneratedFile(blob, `gyokuro-${sort}-${firstDay}-${lastDay}.png`).catch(console.error);
+        }, "image/png");
         break;
       }
     }

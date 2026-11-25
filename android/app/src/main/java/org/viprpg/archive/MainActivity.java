@@ -76,6 +76,7 @@ public final class MainActivity extends Activity {
     private LinearLayout galleryTab;
     private LinearLayout versionTab;
     private ScreenshotController screenshots;
+    private GeneratedFileExport fileExport;
     private DeviceNotifications deviceNotifications;
     private String pendingNotificationUrl;
     private LocalGames localGames;
@@ -195,8 +196,9 @@ public final class MainActivity extends Activity {
         getSystemService(ConnectivityManager.class).registerDefaultNetworkCallback(gameUpdateNetwork);
         screenshots = new ScreenshotController(this, browser, offlineBrowser);
         FaceImageShare.attach(this, browser);
-        ReplayVideoExport.attach(this, browser);
-        ReplayVideoExport.attach(this, offlineBrowser);
+        fileExport = new GeneratedFileExport(this);
+        fileExport.attach(browser);
+        fileExport.attach(offlineBrowser);
         galleryPanel = new ScreenshotGallery(this, screenshots);
         ((FrameLayout) findViewById(R.id.gallery_panel)).addView(galleryPanel);
         installedVersion.setText("版本 " + BuildConfig.VERSION_NAME);
@@ -448,6 +450,13 @@ public final class MainActivity extends Activity {
         Uri url = Uri.parse(view.getUrl());
         return sameOrigin(url) && ("/_android/index.html".equals(url.getPath())
             || (url.getPath() != null && url.getPath().matches("/play/[0-9]+/?")));
+    }
+
+    boolean isGyokuroStatsPage(WebView view) {
+        if (view != browser || view.getUrl() == null) return false;
+        Uri url = Uri.parse(view.getUrl());
+        String path = url.getPath();
+        return sameOrigin(url) && ("/special/gyokuro".equals(path) || "/special/gyokuro/".equals(path));
     }
 
     void exportLocalSave(long workId, String title, String name, byte[] bytes, java.util.function.Consumer<String> opened) {
@@ -1097,6 +1106,7 @@ public final class MainActivity extends Activity {
         if (saveTransfers != null) saveTransfers.close();
         coverIo.shutdownNow();
         updateExecutor.shutdownNow();
+        if (fileExport != null) fileExport.close();
         browser.destroy();
         offlineBrowser.destroy();
         super.onDestroy();

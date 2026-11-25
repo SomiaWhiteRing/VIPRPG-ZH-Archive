@@ -42,6 +42,8 @@ Player 存在 App 私有目录，与作品和存档分开。相同文件直接�
 
 原生安装的版本信息、ZIP 下载、续传和封面请求均在同源地址校验后，按请求 URL 从 WebView CookieManager 读取当前 Cookie，沿用 App 内网页登录态以访问受限作品；不将 Cookie 写入任务日志，且不自动跟随重定向。
 
+网页生成后需要下载的文件统一用 `lib/browser/generated-file.ts` 的 `saveGeneratedFile`。浏览器使用网页下载，Android App 使用 `VIPRPGFileExport`，由原生分块写入系统「下载」目录，写完后才公开文件。统计页保存 PNG，播放器页面也可导出 ZIP、JSON 和 MP4。现有录像仍可通过 `VIPRPGVideoExport` 使用同一原生写入逻辑。
+
 ## 截图目录与原生图库
 
 截图通过 `VIPRPGScreenshots` 来源受限的消息接口交给 Android 写入 MediaStore；以待发布状态写入并回读，确认完整后才向相册公开。不申请存储或相册读取权限。图库保留缩略图缓存，支持下拉刷新。

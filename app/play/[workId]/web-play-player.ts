@@ -1,4 +1,5 @@
 import { isAndroidClient } from "@/lib/browser/client-environment";
+import { saveGeneratedFile } from "@/lib/browser/generated-file";
 import { UiFeedbackDOMException, UiFeedbackError } from "@/lib/i18n/feedback";
 import { translate } from "@/lib/i18n/core";
 import { DEFAULT_UI_LOCALE, type UiLocale } from "@/lib/i18n/locale";
@@ -287,16 +288,7 @@ export function createPlayerSession(
             await localRequest("exportSave", { url: nativeResources.url, name: saves[0].name, bytes: btoa(binary) });
             return;
           }
-          const url = URL.createObjectURL(saveArchiveBlob(saves));
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = saveArchiveFilename(metadata.title, metadata.workId);
-          document.body.appendChild(link);
-          try { link.click(); }
-          finally {
-            link.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 30_000);
-          }
+          await saveGeneratedFile(saveArchiveBlob(saves), saveArchiveFilename(metadata.title, metadata.workId), lifetime.signal);
         } catch (error) {
           if (!lifetime.signal.aborted) onLog("error", formatPlayerError(error));
         } finally { exporting = false; }

@@ -7,6 +7,7 @@ import {
 import { useToast } from "@/app/components/ui/toast";
 import { formatFeedbackError } from "@/lib/i18n/feedback";
 import { useMessages, useUiLocale } from "@/lib/i18n/react";
+import { saveGeneratedFile } from "@/lib/browser/generated-file";
 import { useEffect, useId, useRef, useState } from "react";
 import { acquireGameSaveTransferLock } from "./web-play-locks";
 import {
@@ -96,16 +97,7 @@ export function WebPlaySaveExport({ workId, playKey, title, active, playerBusy, 
       controller.signal.throwIfAborted();
       setHasSaves(files.length > 0);
       if (!files.length) return;
-      const url = URL.createObjectURL(saveArchiveBlob(files));
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = saveArchiveFilename(title, workId);
-      document.body.appendChild(link);
-      try { link.click(); }
-      finally {
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 30_000);
-      }
+      await saveGeneratedFile(saveArchiveBlob(files), saveArchiveFilename(title, workId), controller.signal);
       toast.success(t("play.save.exported", { count: files.length }));
     } catch (error) {
       if (!controller.signal.aborted) toast.error(formatFeedbackError(error, locale, t("play.save.exportFailed")));

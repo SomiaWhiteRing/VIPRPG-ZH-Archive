@@ -46,6 +46,7 @@ on:
       - 'lib/archive/crc32.ts'
       - 'lib/archive/lsd-save-upgrade.ts'
       - 'lib/browser/client-environment.ts'
+      - 'lib/browser/generated-file.ts'
       - 'lib/browser/android-screenshots.ts'
       - 'lib/browser/android-local.ts'
       - 'lib/browser/work-play.ts'

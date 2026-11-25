@@ -1,4 +1,5 @@
 import { useMessages } from "@/lib/i18n/react";
+import { saveGeneratedFile } from "@/lib/browser/generated-file";
 import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
@@ -143,17 +144,14 @@ export function InstallDiagnosticsPanel() {
   const state = useSyncExternalStore(subscribe, () => snapshot, () => emptySnapshot);
   const [text, setText] = useState("");
   const [notice, setNotice] = useState("");
-  const download = () => {
-    const contents = exportedLog();
-    const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `viprpg-install-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
-    setNotice(t("play.trace.exported"));
+  const download = async () => {
+    try {
+      const blob = new Blob([exportedLog()], { type: "application/json" });
+      await saveGeneratedFile(blob, `viprpg-install-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+      setNotice(t("play.trace.exported"));
+    } catch (error) {
+      console.error(error);
+    }
   };
   const copy = async () => {
     const contents = exportedLog();
@@ -171,7 +169,7 @@ export function InstallDiagnosticsPanel() {
       <p className="my-2">{t("play.trace.counts", { events: state.events, dropped: state.dropped, last: state.last || t("play.trace.idle") })}</p>
       <p className="my-2 text-muted-foreground">{t("play.trace.retention")}</p>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={download}>{t("play.trace.export")}</Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void download()}>{t("play.trace.export")}</Button>
         <Button type="button" size="sm" variant="outline" onClick={() => void copy()}>{t("play.trace.copy")}</Button>
         <Button type="button" size="sm" variant="outline" onClick={() => setText(text ? "" : exportedLog())}>{text ? t("play.trace.hide") : t("play.trace.show")}</Button>
         <Button type="button" size="sm" variant="ghost" disabled={state.active > 0} onClick={() => {

@@ -2,6 +2,7 @@ import { useMessages } from "@/lib/i18n/react";
 import { UiFeedbackError } from "@/lib/i18n/feedback";
 import { useEffect, useRef, useState } from "react";
 import { zipSync, type Zippable } from "fflate";
+import { saveGeneratedFile } from "@/lib/browser/generated-file";
 import { useConfirm } from "@/app/components/ui/confirm-provider";
 import { useToast } from "@/app/components/ui/toast";
 import type { ScreenshotPreview } from "./web-play-screenshots";
@@ -28,14 +29,7 @@ export function useScreenshotActions(onDelete: (ids: string[]) => Promise<void>)
         files[`${index + 1}-${screenshotFilename(screenshot)}`] = bytes;
       }
       const blob = new Blob([new Uint8Array(zipSync(files, { level: 0 }))], { type: "application/zip" });
-      controller.signal.throwIfAborted();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `game-${screenshots[0].workId}-screenshots-${Date.now()}.zip`;
-      document.body.appendChild(link);
-      try { link.click(); }
-      finally { link.remove(); setTimeout(() => URL.revokeObjectURL(url), 30_000); }
+      await saveGeneratedFile(blob, `game-${screenshots[0].workId}-screenshots-${Date.now()}.zip`, controller.signal);
       toast.success(t("play.screenshot.packed", { count: screenshots.length }));
     } catch {
       if (!controller.signal.aborted) toast.error(t("play.screenshot.packFailed"));
