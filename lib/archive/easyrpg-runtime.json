@@ -1,12 +1,12 @@
 {
-  "version": "2026.11.22-kai-audio-profile.1",
-  "revision": "f3b410535249c0adfdc71ac41da7353e9e3eb399",
-  "build": "kai-web-audio-profile",
+  "version": "2026.11.25-kai-font-language.1",
+  "revision": "236c1c75980c3113668f0e74f0890696a452458b",
+  "build": "nightly-web-45516911992",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
-  "archiveSha256": "18488a664710134819ee841e340d2b458ce093b4c2d1d3f75ec89fe9cc3a102e",
+  "archiveSha256": "8ad96ab3679e139a6d65928e15f957304a04b495c2b147a73c7ccc617210271d",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
-  "licenseSha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
+  "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
     "name": "FFmpeg",
     "version": "7.1.5",
@@ -18,7 +18,7 @@
   "pinyinDictionary": {
     "name": "rime-pinyin-simp",
     "source": "https://github.com/rime/rime-pinyin-simp",
-    "licenseSha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"
+    "licenseSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
   },
   "videoExport": true
 }

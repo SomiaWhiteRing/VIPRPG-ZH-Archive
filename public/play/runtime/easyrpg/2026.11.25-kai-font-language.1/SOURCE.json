@@ -1,12 +1,12 @@
 {
   "repository": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai",
-  "revision": "f3b410535249c0adfdc71ac41da7353e9e3eb399",
-  "version": "2026.11.22-kai-audio-profile.1",
-  "build": "kai-web-audio-profile",
-  "artifact": "EasyRPG-Player-Kai-web.zip",
-  "archiveSha256": "18488a664710134819ee841e340d2b458ce093b4c2d1d3f75ec89fe9cc3a102e",
-  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/f3b410535249c0adfdc71ac41da7353e9e3eb399",
-  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/f3b410535249c0adfdc71ac41da7353e9e3eb399/COPYING",
+  "revision": "236c1c75980c3113668f0e74f0890696a452458b",
+  "version": "2026.11.25-kai-font-language.1",
+  "build": "nightly-web-45516911992",
+  "artifact": "EasyRPG-Player-Kai-nightly-web.zip",
+  "archiveSha256": "8ad96ab3679e139a6d65928e15f957304a04b495c2b147a73c7ccc617210271d",
+  "source": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/tree/236c1c75980c3113668f0e74f0890696a452458b",
+  "license": "https://github.com/SomiaWhiteRing/EasyRPG-Player-Kai/blob/236c1c75980c3113668f0e74f0890696a452458b/COPYING",
   "liblcfRevision": "4056dbf533182dd46c0a9b1831da23bc16cc0ae8",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
@@ -20,7 +20,7 @@
   "pinyinDictionary": {
     "name": "rime-pinyin-simp",
     "source": "https://github.com/rime/rime-pinyin-simp",
-    "licenseSha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"
+    "licenseSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
   },
   "delivery": {
     "encoding": "br",
@@ -33,16 +33,16 @@
   },
   "files": {
     "index.js": {
-      "size": 73480,
-      "sha256": "510a100c3909c56dfc331e3b4103d21705119941b51920200331c4ee66d36331"
+      "size": 72039,
+      "sha256": "85328474b00c333aa9ec94f781e92ef3f4309d7fe8d533eb0126d0a895e589a2"
     },
     "easyrpg-player.js": {
       "size": 131624,
-      "sha256": "e967c3cf21003b3704d872b72d62dbccafcdb96a4bcc86ea7287aef2c05fd60d"
+      "sha256": "26fdcc421888436ac614db79927d628d9ef85c32ac643ec60be05302f5d2522e"
     },
     "easyrpg-player.wasm": {
-      "size": 13187274,
-      "sha256": "393dcdd462365186ce4e293a252ab34808c30902e5bd964390000996bd515a27"
+      "size": 13195250,
+      "sha256": "43855ddefdf2b58dcccc03fe9ff32e1203c1294dc7675f1730550399abe143c2"
     },
     "easyrpg-player.data": {
       "size": 7557598,
@@ -50,19 +50,19 @@
     },
     "easyrpg-player-asyncify.js": {
       "size": 137667,
-      "sha256": "1d63ea10df0d2681793f11d10a9114fdb817805b0bcae4563ca82e5a724a4cb9"
+      "sha256": "9e24e469046cf94efb1bd5a7c64b668e6b9c2c70946fdd1f33193b47fe9c56f8"
     },
     "easyrpg-player-asyncify.wasm": {
-      "size": 17385808,
-      "sha256": "f90fd34ad26ec7eafa7763bba44593d32e60036a9a1c54deb7f60e6aca74ea19"
+      "size": 17399419,
+      "sha256": "a872908359c48fabbc6b38155ba7990a376027e171f0ca305840c8e5f44ef6a5"
     },
     "player-worker.js": {
-      "size": 82163,
-      "sha256": "18c2cebafee688af64393bb4f53c4f95eb6e2749e264e90ad0af603adfae0947"
+      "size": 80311,
+      "sha256": "3c5c3aeb326e351294ac8c05a1b25cc7cbb0b89b7fe57e3f4c9a65babea70dd4"
     },
     "player-audio.js": {
-      "size": 2009,
-      "sha256": "8490faa7fbe676335de03b3074766dca9f32eb354328157ff63f22a01f6e11f3"
+      "size": 1956,
+      "sha256": "cc3c4143c094995c5b59e2c7c26ea7b261307fc5db22e08a258d19aaf1c0edc0"
     },
     "player-audio-worker.js": {
       "size": 2891,
@@ -73,8 +73,8 @@
       "sha256": "134d073293b178715e8cfa8c3a8f77d9ffb508c8894e8efe61f460ae94c3b822"
     },
     "web-audio.md": {
-      "size": 3132,
-      "sha256": "0eaa1b4ac428f0eb7f614b2714d7cbdaa649e82bd1b40a5d6705550ceda140e7"
+      "size": 3082,
+      "sha256": "5e6c78f4cd946c914f4a22ca0dfd8ddf3883c0454116f051463e0a2455a4b57c"
     },
     "player-movie.js": {
       "size": 8351,
@@ -97,20 +97,20 @@
       "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
     },
     "web-movies.md": {
-      "size": 4826,
-      "sha256": "838f0f24f0e1eb9413215d843ebd87ae08734768df5441c3e0fa8e28dd5654b8"
+      "size": 4742,
+      "sha256": "efe5fc6d6d0ed0eb386b6fef08f03e17a459beb020c3b6a4bbe42b732596b7b4"
     },
     "LICENSE-rime-pinyin-simp.txt": {
-      "size": 11560,
-      "sha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"
+      "size": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
     },
     "NOTICE-Zfull.txt": {
-      "size": 337,
-      "sha256": "fbcf55a85c74f63e3cc04c6591831c19c5301a87f50ed7d8f89923fa12f54742"
+      "size": 330,
+      "sha256": "9b74fb6701dfe30c5fe6492d425dfcf14d3612a18d43f6577a382f4d1008f27c"
     },
     "LICENSE-smallfonts.txt": {
-      "size": 82837,
-      "sha256": "f69ed3a329876f0f3c77b271583c929672ed97ae20e5139c0cc62512eaa6108c"
+      "size": 81136,
+      "sha256": "e80c6ba77e06cff96f9931f5d53e05fb41e58a907ab40f4390c507160163675d"
     },
     "player-video-export.js": {
       "size": 8795,
@@ -125,20 +125,20 @@
       "sha256": "75c54aae7ef6ad652f684f9dd3b71e4dcef86ccebd88cf441ceed7f5eec037c5"
     },
     "game-services.js": {
-      "size": 7624,
-      "sha256": "7be47c9a955507c250aeb7a4c29192bd2387f18d9a663970bbcdb52420aafbe1"
+      "size": 7732,
+      "sha256": "709670fded6e2893756dde9933906d7cdcbb2ef780bdea6e4cd73b613efd5bdc"
     },
     "easyrpg-player.wasm.br": {
-      "size": 4060501,
-      "sha256": "fa25977eb3e19b3f66c6f69c08cadc24757d77d3328143a2d235e722498314e3"
+      "size": 4064086,
+      "sha256": "dcd80a38d7562495364092751d92368d127ad806b1838f1f349f30ccd88fe7f1"
     },
     "easyrpg-player.data.br": {
       "size": 6311434,
       "sha256": "dfeef2a7cca1aee072450b553c6e372c90c4f4c8b2149e95899b6b4bb634f702"
     },
     "easyrpg-player-asyncify.wasm.br": {
-      "size": 4663717,
-      "sha256": "9375a0eaabfdeb5975d3b8a56a5534fdce563b0f4d829a40490a7fd8c512f7c7"
+      "size": 4670007,
+      "sha256": "8322c6d047b02afe31360f6f5e6c48075c3daa6b39a54da588b3d536d008412c"
     }
   }
 }

@@ -1,5 +1,5 @@
 /* Website services offered to EasyRPG game scripts. */
-self.createEasyRpgGameServices = workId => {
+self.createEasyRpgGameServices = (workId, { endpoint = "/api/account/netplay-replays", token } = {}) => {
   const lists = new Map(), details = new Map(), recordings = new Map(), pending = new Map();
   const favoriteChanges = new Map();
   const lifetime = 60_000, frameBudget = 8 * 1024 * 1024;
@@ -10,9 +10,9 @@ self.createEasyRpgGameServices = workId => {
     lists.clear(); details.clear(); recordings.clear(); favoriteChanges.clear();
   };
   async function fetchReplay(input) {
-    const response = await fetch("/api/account/netplay-replays", {
-      method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
+    const response = await fetch(endpoint, {
+      method: "POST", credentials: token ? "omit" : "same-origin",
+      headers: { "Content-Type": "application/json", ...(token && { Authorization: `Bearer ${token}` }) },
       body: JSON.stringify({ ...input, workId }), signal: AbortSignal.timeout(10000),
       priority: input.priority ?? "auto",
     });
