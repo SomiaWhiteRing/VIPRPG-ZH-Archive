@@ -58,12 +58,11 @@ export function SiteFooter() {
             </a>
           </nav>
         </div>
-        <nav aria-label={t("footer.community")} className="mt-4 flex flex-wrap justify-end gap-4 text-xs text-primary-foreground/60">
+        <nav aria-label={t("footer.community")} className="mt-4 flex justify-end gap-4 text-xs text-primary-foreground/60">
           <a href="https://fes.viprpg.org">祭</a>
           <a href="https://afdian.com/a/whitering" rel="noreferrer" target="_blank">{t("footer.donate")}</a>
           <Link to="/sea">{t("sea.title")}</Link>
           <Link to="/material-search">{t("material.title")}</Link>
-          <Link to="/special/gyokuro">{t("gyokuro.title")}</Link>
         </nav>
       </div>
     </footer>

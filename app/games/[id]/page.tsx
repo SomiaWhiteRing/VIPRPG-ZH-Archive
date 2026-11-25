@@ -17,7 +17,6 @@ import { WorkOverviewSidebar } from "@/app/components/work/work-overview-sidebar
 import { WorkPageHeader } from "@/app/components/work/work-page-header";
 import { WorkViewTracker } from "@/app/components/work/work-view-tracker";
 import { formatNumber } from "@/lib/format";
-import { gyokuroStatsPath, productionGyokuroJapaneseWork, productionNetplayHongKongWork, stagingGyokuroWork, stagingNetplaySiteOrigin } from "@/lib/archive/netplay-ingress";
 import { pageMetaDescriptors, pageMetadataLocale } from "@/lib/ui/page-metadata";
 import { tagHref } from "@/lib/user-tags";
 import { getPublicRelationCards, publicRelationLabel } from "./public-relations";
@@ -52,8 +51,6 @@ export async function loader(args: LoaderFunctionArgs) {
   return {
     work,
     canonical: publicWork ? `${runtime.origin}/games/${work.id}` : undefined,
-    showGyokuroStats: publicWork && (id === productionNetplayHongKongWork || id === productionGyokuroJapaneseWork
-      || (runtime.origin === stagingNetplaySiteOrigin && id === Number(runtime.env.TOY_NETPLAY_WORK_ID || stagingGyokuroWork))),
     locale: runtime.uiLocale,
     sidebar,
     canPinComments,
@@ -79,7 +76,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, error, location,
 export default function GameDetailPage() {
   const t = useMessages();
   const locale = useUiLocale();
-  const { work, sidebar, canPinComments, title, current, primaryMedia, media, tags: initialTags, comments, collections: initialCollections, relationCards, showGyokuroStats } = useLoaderData<typeof loader>();
+  const { work, sidebar, canPinComments, title, current, primaryMedia, media, tags: initialTags, comments, collections: initialCollections, relationCards } = useLoaderData<typeof loader>();
   const { collections, refreshCollections } = useWorkCollections(work.id, initialCollections);
   const favorite = useWorkFavorite(sidebar.community, initialTags);
   const { community, tags } = favorite;
@@ -115,7 +112,6 @@ export default function GameDetailPage() {
                 },
               ]
             : []),
-          ...(showGyokuroStats ? [{ href: gyokuroStatsPath, label: t("gyokuro.title") }] : []),
           ...(media.length
             ? [{ href: "#sec-gallery", label: t("work.gallery"), count: media.length }]
             : []),
