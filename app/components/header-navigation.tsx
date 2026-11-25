@@ -1,12 +1,13 @@
 import { Button } from "@/app/components/ui/button";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import type { ReactNode, Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LocaleLink as Link } from "@/app/components/ui/locale-link";
 
 const desktopNavigationClassName =
   "inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium";
+const desktopGroupClassName = `${desktopNavigationClassName} gap-1`;
 
 export type HeaderNavigationLink = {
   href: string;
@@ -23,25 +24,37 @@ export type HeaderNavigationEntry = HeaderNavigationLink | HeaderNavigationGroup
 
 type HeaderNavigationProps = {
   ariaLabel: string;
-  mobileAriaLabel: string;
+  overflowAriaLabel: string;
   entries: HeaderNavigationEntry[];
   pathname: string;
-  mobileOpen: boolean;
-  onMobileNavigate: () => void;
-  mobileFooter?: ReactNode;
+  overflowOpen: boolean;
+  menuButtonRef: Ref<HTMLButtonElement>;
+  menuButtonLabel: string;
+  onToggleMenu: () => void;
+  onCloseMenu: () => void;
+  overflowFooter?: ReactNode;
 };
 
 export function HeaderNavigation({
   ariaLabel,
-  mobileAriaLabel,
+  overflowAriaLabel,
   entries,
   pathname,
-  mobileOpen,
-  onMobileNavigate,
-  mobileFooter,
+  overflowOpen,
+  menuButtonRef,
+  menuButtonLabel,
+  onToggleMenu,
+  onCloseMenu,
+  overflowFooter,
 }: HeaderNavigationProps) {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [fitsInline, setFitsInline] = useState<boolean | null>(null);
   const openGroupRef = useRef(openGroup);
+  const slotRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const showInline = entries.length > 0 && fitsInline !== false;
+  const showMenu = entries.length > 0 && fitsInline !== true;
+  const groupIsInline = showInline && entries.some((entry) => "links" in entry && entry.label === openGroup);
 
   useEffect(() => {
     openGroupRef.current = openGroup;
@@ -51,16 +64,27 @@ export function HeaderNavigation({
     setOpenGroup(null);
   }, [pathname]);
 
-  useEffect(() => {
-    if (!openGroup) return;
-    const breakpoint = window.matchMedia("(min-width: 80rem)");
-    const closeOnCollapse = () => {
-      if (!breakpoint.matches) setOpenGroup(null);
+  useLayoutEffect(() => {
+    const slot = slotRef.current;
+    const row = measureRef.current;
+    if (!slot || !row) return;
+
+    // Measure the complete row independently of which entries are displayed.
+    const fit = () => {
+      setFitsInline(row.getBoundingClientRect().width <= slot.getBoundingClientRect().width);
     };
-    closeOnCollapse();
-    breakpoint.addEventListener("change", closeOnCollapse);
-    return () => breakpoint.removeEventListener("change", closeOnCollapse);
-  }, [openGroup]);
+
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(slot);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [entries]);
+
+  useEffect(() => {
+    if (openGroup && !groupIsInline) setOpenGroup(null);
+    if (overflowOpen && !showMenu) onCloseMenu();
+  }, [groupIsInline, onCloseMenu, openGroup, overflowOpen, showMenu]);
 
   // Prefer the most specific route, e.g. the trash instead of version management.
   const activeHref = entries
@@ -73,80 +97,109 @@ export function HeaderNavigation({
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
-    <>
-      <nav
-        aria-label={ariaLabel}
-        className="hidden min-w-0 flex-1 items-center gap-1 xl:flex"
-      >
-        {entries.map((entry) =>
-          "links" in entry ? (
-            <DropdownMenu.Root
-              key={entry.label}
-              modal={false}
-              open={openGroup === entry.label}
-              onOpenChange={(open) => {
-                setOpenGroup((current) => {
-                  if (open) return entry.label;
-                  // A previous menu may dismiss after the next one opens.
-                  return current === entry.label ? null : current;
-                });
-              }}
-            >
-              <DropdownMenu.Trigger asChild>
-                <Button
-                  className={`${desktopNavigationClassName} gap-1 ${
-                    entry.links.some((link) => link.href === activeHref)
-                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                      : "data-[state=open]:bg-muted/15"
-                  }`}
-                  type="button"
-                  variant="ghost"
-                >
-                  {entry.label}
-                  <ChevronDown aria-hidden />
-                </Button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content
-                  align="start"
-                  aria-label={entry.label}
-                  className="z-50 hidden max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto rounded-md border border-border bg-card p-1 text-foreground shadow-surface xl:block"
-                  collisionPadding={16}
-                  onCloseAutoFocus={(event) => {
-                    // Radix restores focus asynchronously after unmounting.
-                    if (
-                      openGroupRef.current !== null &&
-                      openGroupRef.current !== entry.label
-                    ) {
-                      event.preventDefault();
-                    }
+    <div className="grid min-w-10 flex-auto grid-cols-[minmax(0,1fr)] items-center" ref={slotRef}>
+      <div aria-hidden className="pointer-events-none invisible col-start-1 row-start-1 overflow-hidden">
+        <div className="flex w-max items-center gap-1" ref={measureRef}>
+          {entries.map((entry) =>
+            "links" in entry ? (
+              <Button asChild className={desktopGroupClassName} key={entry.label} variant="ghost">
+                <span>{entry.label}<ChevronDown aria-hidden /></span>
+              </Button>
+            ) : (
+              <span className={desktopNavigationClassName} key={entry.href}>{entry.label}</span>
+            ),
+          )}
+        </div>
+      </div>
+      <nav aria-label={ariaLabel} className="col-start-1 row-start-1 flex items-center">
+        {showInline && (
+          <div className={`items-center gap-1 ${fitsInline === null ? "hidden xl:flex" : "flex"}`}>
+            {entries.map((entry) =>
+              "links" in entry ? (
+                <DropdownMenu.Root
+                  key={entry.label}
+                  modal={false}
+                  open={openGroup === entry.label}
+                  onOpenChange={(open) => {
+                    setOpenGroup((current) => {
+                      if (open) return entry.label;
+                      // A previous menu may dismiss after the next one opens.
+                      return current === entry.label ? null : current;
+                    });
                   }}
-                  sideOffset={8}
                 >
-                  {entry.links.map((link) => (
-                    <HeaderNavigationItem
-                      key={link.href}
-                      active={link.href === activeHref}
-                      layout="dropdown"
-                      link={link}
-                    />
-                  ))}
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
-          ) : (
-            <HeaderNavigationItem
-              key={entry.href}
-              active={entry.href === activeHref}
-              link={entry}
-            />
-          ),
+                  <DropdownMenu.Trigger asChild>
+                    <Button
+                      className={`${desktopGroupClassName} ${
+                        entry.links.some((link) => link.href === activeHref)
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "data-[state=open]:bg-muted/15"
+                      }`}
+                      type="button"
+                      variant="ghost"
+                    >
+                      {entry.label}
+                      <ChevronDown aria-hidden />
+                    </Button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      align="start"
+                      aria-label={entry.label}
+                      className="z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto rounded-md border border-border bg-card p-1 text-foreground shadow-surface"
+                      collisionPadding={16}
+                      onCloseAutoFocus={(event) => {
+                        // Radix restores focus asynchronously after unmounting.
+                        if (
+                          openGroupRef.current !== null &&
+                          openGroupRef.current !== entry.label
+                        ) {
+                          event.preventDefault();
+                        }
+                      }}
+                      sideOffset={8}
+                    >
+                      {entry.links.map((link) => (
+                        <HeaderNavigationItem
+                          key={link.href}
+                          active={link.href === activeHref}
+                          layout="dropdown"
+                          link={link}
+                        />
+                      ))}
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+              ) : (
+                <HeaderNavigationItem
+                  key={entry.href}
+                  active={entry.href === activeHref}
+                  link={entry}
+                />
+              ),
+            )}
+          </div>
+        )}
+        {showMenu && (
+          <Button
+            className={fitsInline === null ? "xl:hidden" : undefined}
+            size="icon"
+            variant="ghost"
+            type="button"
+            onClick={onToggleMenu}
+            aria-label={menuButtonLabel}
+            aria-controls={overflowOpen ? "mobile-navigation" : undefined}
+            aria-expanded={overflowOpen}
+            ref={menuButtonRef}
+          >
+            {overflowOpen ? <X size={20} /> : <Menu size={20} />}
+          </Button>
         )}
       </nav>
-      {mobileOpen ? (
+      {overflowOpen && showMenu ? (
         <nav
-          aria-label={mobileAriaLabel}
-          className="absolute inset-x-0 top-full z-50 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-border bg-background shadow-lg xl:hidden"
+          aria-label={overflowAriaLabel}
+          className="absolute inset-x-0 top-full z-50 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-border bg-background shadow-lg"
           id="mobile-navigation"
         >
           <div className="mx-auto w-[min(1280px,calc(100vw-2rem))] py-2">
@@ -167,7 +220,7 @@ export function HeaderNavigation({
                         active={link.href === activeHref}
                         layout="mobile"
                         link={link}
-                        onNavigate={onMobileNavigate}
+                        onNavigate={onCloseMenu}
                       />
                     ))}
                   </div>
@@ -178,15 +231,15 @@ export function HeaderNavigation({
                   active={entry.href === activeHref}
                   layout="mobile"
                   link={entry}
-                  onNavigate={onMobileNavigate}
+                  onNavigate={onCloseMenu}
                 />
               ),
             )}
-            {mobileFooter}
+            {overflowFooter}
           </div>
         </nav>
       ) : null}
-    </>
+    </div>
   );
 }
 

@@ -20,7 +20,7 @@ import {
   CHARACTER_ADMIN_PERMISSIONS,
   hasPermissionKey,
 } from "@/lib/authz/permissions";
-import { ChevronDown, Menu, Search, X } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -181,7 +181,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
   const headerRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const searchButtonRef = useRef<HTMLButtonElement>(null);
-  const mobileMenuOpen = openPanel === "menu";
+  const menuOpen = openPanel === "menu";
   const mobileSearchOpen = openPanel === "search";
   const visibleAdminEntries = getAdminNavigation(session, t);
   const publicLinks = PUBLIC_LINKS.map((link) =>
@@ -213,11 +213,9 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
   useEffect(() => {
     if (!openPanel) return;
 
-    const breakpoint = window.matchMedia(
-      openPanel === "menu" ? "(min-width: 80rem)" : "(min-width: 48rem)",
-    );
+    const breakpoint = openPanel === "search" ? window.matchMedia("(min-width: 48rem)") : null;
     const closeAtBreakpoint = () => {
-      if (breakpoint.matches) setOpenPanel(null);
+      if (breakpoint?.matches) setOpenPanel(null);
     };
     const closeOutside = (event: PointerEvent) => {
       if (
@@ -228,10 +226,10 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
       }
     };
     closeAtBreakpoint();
-    breakpoint.addEventListener("change", closeAtBreakpoint);
+    breakpoint?.addEventListener("change", closeAtBreakpoint);
     document.addEventListener("pointerdown", closeOutside);
     return () => {
-      breakpoint.removeEventListener("change", closeAtBreakpoint);
+      breakpoint?.removeEventListener("change", closeAtBreakpoint);
       document.removeEventListener("pointerdown", closeOutside);
     };
   }, [openPanel]);
@@ -244,11 +242,11 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
       onKeyDown={(event) => {
         if (event.key !== "Escape" || event.defaultPrevented || !openPanel) return;
         event.preventDefault();
-        (mobileMenuOpen ? menuButtonRef : searchButtonRef).current?.focus();
+        (menuOpen ? menuButtonRef : searchButtonRef).current?.focus();
         setOpenPanel(null);
       }}
     >
-      <div className="mx-auto flex min-h-14 w-[min(1280px,calc(100vw-2rem))] items-center gap-2 py-1.5 sm:gap-4">
+      <div className="mx-auto flex min-h-14 w-max min-w-[min(1280px,calc(100%-2rem))] max-w-[calc(100%-2rem)] items-center gap-2 py-1.5 sm:gap-4">
         <Link
           className="inline-flex shrink-0 items-center gap-2 font-extrabold tracking-wide"
           to={inAdmin ? (getAdminLandingHref(visibleAdminEntries) ?? "/") : "/"}
@@ -268,29 +266,17 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
           </span>
         </Link>
 
-        {/* 折叠菜单按钮放在导航前，展开后可直接按 Tab 进入导航。 */}
-        <Button
-          className="xl:hidden"
-          size="icon"
-          variant="ghost"
-          type="button"
-          onClick={() => setOpenPanel(mobileMenuOpen ? null : "menu")}
-          aria-label={mobileMenuOpen ? t("header.closeMenu") : t("header.openMenu")}
-          aria-controls={mobileMenuOpen ? "mobile-navigation" : undefined}
-          aria-expanded={mobileMenuOpen}
-          ref={menuButtonRef}
-        >
-          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-        </Button>
-
         <HeaderNavigation
           ariaLabel={inAdmin ? t("header.adminNav") : t("header.siteNav")}
           entries={inAdmin ? visibleAdminEntries : publicLinks}
-          mobileAriaLabel={inAdmin ? t("header.mobileAdminNav") : t("header.mobileNav")}
-          mobileOpen={mobileMenuOpen}
-          onMobileNavigate={() => setOpenPanel(null)}
+          overflowAriaLabel={inAdmin ? t("header.overflowAdminNav") : t("header.overflowNav")}
+          overflowOpen={menuOpen}
+          menuButtonRef={menuButtonRef}
+          menuButtonLabel={menuOpen ? t("header.closeMenu") : t("header.openMenu")}
+          onToggleMenu={() => setOpenPanel(menuOpen ? null : "menu")}
+          onCloseMenu={() => setOpenPanel(null)}
           pathname={pathname}
-          mobileFooter={
+          overflowFooter={
             !session ? (
               <Link
                 className="block border-t border-border/50 px-3 py-2.5 text-sm font-semibold hover:bg-muted/15 sm:hidden"
@@ -306,7 +292,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
         {/* 中等宽度起保留完整搜索框。 */}
         {!inAdmin ? (
           <form
-            className="hidden h-10 w-[clamp(170px,18vw,260px)] shrink-0 overflow-hidden rounded-full border border-border bg-card focus-within:border-primary md:flex"
+            className="hidden h-10 w-[260px] shrink-0 overflow-hidden rounded-full border border-border bg-card focus-within:border-primary md:flex"
             action="/search"
             method="get"
             role="search"
@@ -334,7 +320,7 @@ export function SiteHeaderNav({ session, loginLink }: Props) {
           </form>
         ) : null}
 
-        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {/* 移动端搜索按钮 */}
           {!inAdmin ? (
             <Button
