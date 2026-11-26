@@ -926,7 +926,7 @@ export function UploadClient({
               <section className="p-4 sm:p-5">
                 {archiveMode ? (
                   <ArchiveSourcePicker
-                    additionalActions={!initialWork && upload.task?.sourceReady && !upload.task.commitStarted && !upload.task.result ? (
+                    additionalActions={upload.task?.sourceReady && !upload.task.commitStarted && !upload.task.result ? (
                       <ArchiveExtrasPicker task={upload.task} candidates={upload.extraCandidates}
                         sourceAvailable={upload.extraSourceAvailable} onConfirm={upload.selectExtras}
                         onReloadSource={upload.reloadExtraSource} />
