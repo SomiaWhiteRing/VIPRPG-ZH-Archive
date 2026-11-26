@@ -8,6 +8,7 @@ import { Input } from "@/app/components/ui/input";
 import { TreeIndent } from "@/app/components/ui/tree-layout";
 import { Label } from "@/app/components/ui/label";
 import { Notice } from "@/app/components/ui/notice";
+import { isArchiveSave } from "@/lib/archive/save-name";
 import { resourceMediaDirectories } from "@/lib/archive/resource-cleanup";
 import { useMessages, useUiLocale } from "@/lib/i18n/react";
 import { formatBytes } from "@/lib/format";
@@ -47,7 +48,7 @@ export function ArchiveExtrasPicker({ task, candidates, sourceAvailable, onConfi
     for (const file of matching) {
       const parts = file.path.split("/");
       let branch = children;
-      const region = /\.lsd$/i.test(file.path) ? saves
+      const region = isArchiveSave(file.path) ? saves
         : parts.length > 1 && resourceMediaDirectories.has(parts[0].toLowerCase()) ? unused : null;
       if (region) {
         region.paths.push(file.path);

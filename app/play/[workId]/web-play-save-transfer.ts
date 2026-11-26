@@ -1,4 +1,5 @@
 import { UiFeedbackDOMException, UiFeedbackError } from "@/lib/i18n/feedback";
+import { saveName } from "@/lib/archive/save-name";
 import { Crc32 } from "@/lib/archive/crc32";
 import { zipSync, type Zippable } from "fflate";
 
@@ -17,15 +18,6 @@ const encoder = new TextEncoder();
 const lsdSignature = encoder.encode("\u000bLcfSaveData");
 const lgsSignature = encoder.encode("\u000dLcfGlobalSave");
 const dynSignature = encoder.encode("DYNSAVE1");
-
-function saveName(name: string, allowDownloadSuffix = false): string | null {
-  if (allowDownloadSuffix) name = name.replace(/ \([0-9]+\)(?=\.[^.]+$)/, "");
-  const slot = /^Save([0-9]{2,6})\.(lsd|dyn)$/i.exec(name);
-  if (slot) return `Save${slot[1]}.${slot[2].toLowerCase()}`;
-  if (/^Save\.lgs$/i.test(name)) return "Save.lgs";
-  if (!allowDownloadSuffix && /^SaveData\/Save\.lgs$/i.test(name)) return "SaveData/Save.lgs";
-  return null;
-}
 
 function validateSave(file: SaveFile): void {
   const name = saveName(file.name);

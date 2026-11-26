@@ -210,7 +210,9 @@ final class LocalStorage {
             for (int i = 0; i < gameFiles.length(); i++) {
                 JSONObject entry = gameFiles.getJSONObject(i);
                 String name = entry.getString("filename");
-                if (!name.matches("(?i)[^/\\\\]+\\.lsd")) continue;
+                String canonical = SaveTransfers.saveName(name, false);
+                if (canonical != null) name = canonical;
+                else if (!name.matches("(?i)[^/\\\\]+\\.lsd")) continue;
                 String path = "/work-saves/" + workId + "/" + name;
                 if (!paths.add(Normalizer.normalize(path, Normalizer.Form.NFC).toLowerCase(Locale.ROOT))) continue;
                 if (encodedSize < 0) encodedSize = saves.toString().getBytes(StandardCharsets.UTF_8).length;
@@ -218,7 +220,7 @@ final class LocalStorage {
                 if (start < 0 || end < start || end > zip.length() || size > 64 * 1024 * 1024) throw new IOException("随包存档读取范围无效。");
                 byte[] bytes = new byte[(int)size];
                 zip.seek(start); zip.readFully(bytes);
-                bytes = LsdSaveUpgrade.compact(bytes);
+                if (name.toLowerCase(Locale.ROOT).endsWith(".lsd")) bytes = LsdSaveUpgrade.compact(bytes);
                 encodedSize += 4 * ((bytes.length + 2L) / 3);
                 if (encodedSize > 64 * 1024 * 1024) throw new IOException("存档及播放器配置超过 64 MiB。");
                 saves.put(path, android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP));

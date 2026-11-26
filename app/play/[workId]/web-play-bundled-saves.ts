@@ -1,4 +1,5 @@
 import type { WebPlayPackage } from "./web-play-opfs";
+import { saveName } from "@/lib/archive/save-name";
 import { compactLsdSave } from "@/lib/archive/lsd-save-upgrade";
 
 /** Seed the player's writable IDBFS directory without replacing existing saves. */
@@ -7,9 +8,11 @@ export async function seedBundledWebPlaySaves(
   packages: WebPlayPackage[],
   signal: AbortSignal,
 ): Promise<void> {
-  const bundled = packages.flatMap(({ blob, metadata }) => metadata.files
-    .filter(({ filename }) => /^\/[^/\\]+\.lsd$/i.test(filename))
-    .map(({ filename, start, end }) => ({ name: filename.slice(1), blob: blob.slice(start, end) })));
+  const bundled = packages.flatMap(({ blob, metadata }) => metadata.files.flatMap(({ filename, start, end }) => {
+    const path = filename.slice(1);
+    const name = saveName(path) ?? (/^[^/\\]+\.lsd$/i.test(path) ? path : null);
+    return name ? [{ name, blob: blob.slice(start, end) }] : [];
+  }));
   if (!bundled.length) return;
 
   const directory = `/work-saves/${workId}`;
@@ -42,7 +45,8 @@ export async function seedBundledWebPlaySaves(
       const path = `${directory}/${file.name}`.normalize("NFC").toLowerCase();
       if (existing.has(path)) continue;
       existing.add(path);
-      saves.push({ name: file.name, contents: compactLsdSave(new Uint8Array(await file.blob.arrayBuffer())) });
+      const bytes = new Uint8Array(await file.blob.arrayBuffer());
+      saves.push({ name: file.name, contents: /\.lsd$/i.test(file.name) ? compactLsdSave(bytes) : bytes });
     }
     signal.throwIfAborted();
     if (!saves.length) return;
@@ -55,7 +59,13 @@ export async function seedBundledWebPlaySaves(
       request.onsuccess = () => {
         const paths = new Set(request.result.map((key) => String(key).normalize("NFC").toLowerCase()));
         for (const { name, contents } of saves) {
-          const path = `${directory}/${name}`;
+          let path = `${directory}/${name}`;
+          if (name === "SaveData/Save.lgs") {
+            const parent = `${directory}/SaveData`;
+            const actual = request.result.find(key => String(key).toLowerCase() === parent.toLowerCase());
+            if (actual === undefined) store.add({ timestamp: new Date(), mode: 0o40777 }, parent);
+            else path = `${actual}/Save.lgs`;
+          }
           const normalized = path.normalize("NFC").toLowerCase();
           if (paths.has(normalized)) continue;
           // Match IDBFS's timestamp, regular-file mode and byte representation.

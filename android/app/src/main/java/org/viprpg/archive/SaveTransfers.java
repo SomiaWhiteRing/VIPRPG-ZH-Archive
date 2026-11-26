@@ -52,7 +52,7 @@ final class SaveTransfers {
         } catch (Exception e) { fail(e); }
     }
     private String prefix() { return "/work-saves/" + workId + "/"; }
-    private static String saveName(String name, boolean allowDownloadSuffix) {
+    static String saveName(String name, boolean allowDownloadSuffix) {
         if (allowDownloadSuffix) name = name.replaceFirst(" \\([0-9]+\\)(?=\\.[^.]+$)", "");
         Matcher slot = SLOT_SAVE.matcher(name);
         if (slot.matches()) return "Save" + slot.group(1) + "." + slot.group(2).toLowerCase(Locale.ROOT);

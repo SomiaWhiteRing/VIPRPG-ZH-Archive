@@ -9,6 +9,8 @@ import { sha256Hex } from "@/lib/sha256";
 import { zip } from "fflate";
 import { classifyArchivePath, contentTypeForArchivePath, FILE_POLICY_VERSION, PACKER_VERSION } from "@/lib/archive/file-policy";
 import { enumerateUploadSourceFiles, inspectUploadSource, type UploadSourceEntry as SourceFile } from "@/app/upload/archive-source";
+import { isArchiveSave } from "@/lib/archive/save-name";
+import { includeSelectedSaves, remainingExcludedTypes } from "@/lib/archive/bundled-saves";
 import { crc32 } from "@/lib/archive/crc32";
 import { ResourceReferenceScan } from "@/lib/archive/resource-cleanup";
 import { MissingResourceScan } from "@/lib/archive/missing-resources";
@@ -613,7 +615,8 @@ async function tryJoin(runtime: UploadRuntime): Promise<void> {
       manifestResult.manifestSha256,
       manifestResult.manifestJson,
       metadata,
-      preparedSource.stats.excludedFileTypes,
+      remainingExcludedTypes(preparedSource.stats.excludedFileTypes,
+        preparedSource.extras?.filter(file => isArchiveSave(file.path)) ?? []),
     );
     await settleRuntime(runtime, {
       ...runtime.task,
@@ -1070,7 +1073,7 @@ async function buildManifest(
 function buildSourceManifest(
   source: PreparedArchiveSource,
 ): ArchiveSourceManifest {
-  return {
+  const manifest: ArchiveSourceManifest = {
     schema: "viprpg-archive.manifest.v1",
     archiveVersion: {
       filePolicyVersion: FILE_POLICY_VERSION,
@@ -1100,6 +1103,8 @@ function buildSourceManifest(
     files: source.files,
     ...(source.extras?.length ? { extras: source.extras } : {}),
   };
+  includeSelectedSaves(manifest);
+  return manifest;
 }
 
 function toManifestFiles(includedFiles: IncludedFile[]): ArchiveManifestFile[] {

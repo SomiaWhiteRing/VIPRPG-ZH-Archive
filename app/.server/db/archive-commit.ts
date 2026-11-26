@@ -29,6 +29,7 @@ import { type CorePackMetadata, validateCorePackMetadata, validateCorePackRefere
 
 import { FILE_POLICY_VERSION, PACKER_VERSION } from "@/lib/archive/file-policy";
 import { ResourceReferenceScan, validateResourceCleanupReport } from "@/lib/archive/resource-cleanup";
+import { includeSelectedSaves, remainingExcludedTypes } from "@/lib/archive/bundled-saves";
 import { isSharedPlayerPath } from "@/lib/archive/shared-player";
 import { assertSharedPlayerObject, getSharedArchivePlayer } from "@/app/.server/resources/archive-player";
 import type {
@@ -228,7 +229,10 @@ export async function commitArchiveImport(
       };
     }
   }
+  // Preserve the verified source digest from older clients and normalize their published manifest.
+  const promotedSaves = includeSelectedSaves(manifest);
   if (
+    promotedSaves.length ||
     manifest.game.originalTitle !== metadata.game.originalTitle ||
     manifest.game.chineseTitle !== metadata.game.chineseTitle ||
     manifest.game.language !== metadata.game.language ||
@@ -288,7 +292,7 @@ export async function commitArchiveImport(
     metadata,
     missingBlobCount: missingBlobs.length,
     missingCorePackCount: missingCorePacks.length,
-    excludedFileTypes: input.excludedFileTypes,
+    excludedFileTypes: remainingExcludedTypes(input.excludedFileTypes, promotedSaves),
     user: input.user,
   });
 

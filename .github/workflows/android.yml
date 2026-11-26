@@ -45,6 +45,7 @@ on:
       - 'lib/archive/download.ts'
       - 'lib/archive/crc32.ts'
       - 'lib/archive/lsd-save-upgrade.ts'
+      - 'lib/archive/save-name.ts'
       - 'lib/browser/client-environment.ts'
       - 'lib/browser/generated-file.ts'
       - 'lib/browser/android-screenshots.ts'
