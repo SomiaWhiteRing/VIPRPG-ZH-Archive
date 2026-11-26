@@ -14,6 +14,7 @@ import { BrowserElement } from "./browser-element";
 import { TokenPicker } from "@/app/components/pickers/token-picker";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
+import { Table } from "@/app/components/ui/table";
 import { TextSize } from "@/app/components/ui/text-size";
 import { Dice5 } from "lucide-react";
 import * as Dialog from "@/app/components/ui/dialog";
@@ -210,7 +211,11 @@ export function ForumBody({
         if (!link || link.suffix) return <Fragment key={index}>[url{node.parameter ? `=${node.parameter}` : ""}]{renderNodes(node.children, true)}[/url]</Fragment>;
         return <UserContentLink key={index} href={link.href}>{renderNodes(node.children, true)}</UserContentLink>;
       }
-      const children = renderNodes(node.children, literal || node.type === "code");
+      // Indentation between rows or cells is source formatting.
+      const visibleChildren = node.type === "table" || node.type === "tr"
+        ? node.children.filter((child) => child.type !== "text")
+        : node.children;
+      const children = renderNodes(visibleChildren, literal || node.type === "code");
       switch (node.type) {
         case "b": return <strong key={index}>{children}</strong>;
         case "i": return <em key={index}>{children}</em>;
@@ -223,6 +228,16 @@ export function ForumBody({
         case "list": return <ul key={index} className="my-2 list-disc pl-6">{renderNodes(node.children.filter((child) => child.type !== "text" || child.text.trim()))}</ul>;
         case "item": return <li key={index} className="whitespace-normal">{children}</li>;
         case "hr": return <hr key={index} className="my-3 border-border" />;
+        case "table": return (
+          <div key={index} className="my-2 min-w-0 overflow-x-auto">
+            <Table className="border-collapse text-left [&_tbody>tr:nth-child(even)]:bg-muted/5 [&_th]:bg-muted/10 [&_:is(th,td)]:wrap-anywhere [&_:is(th,td)]:border-b [&_:is(th,td)]:border-border [&_:is(th,td)]:px-3 [&_:is(th,td)]:py-2 [&_:is(th,td)]:align-top">
+              <tbody>{children}</tbody>
+            </Table>
+          </div>
+        );
+        case "tr": return <tr key={index}>{children}</tr>;
+        case "th": return <th key={index}>{children}</th>;
+        case "td": return <td key={index}>{children}</td>;
         case "spoiler":
         case "collapse": return <details key={index} className="my-2 rounded-md border border-border px-3 py-2"><summary className="cursor-pointer font-semibold focus-visible:outline-2 focus-visible:outline-primary">{node.parameter || t("forum.bbcode.expandContent")}</summary><div className="pt-2">{children}</div></details>;
       }

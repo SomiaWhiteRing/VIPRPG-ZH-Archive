@@ -11,16 +11,29 @@ export const FORUM_BBCODES = [
   { tag: "collapse", label: "折叠" },
   { tag: "dice", label: "骰子", sample: "d100", sampleSelectionStart: 1 },
 ] as const;
-export type ForumBBCodeTag = (typeof FORUM_BBCODES)[number]["tag"] | "i" | "u" | "s" | "spoiler" | "url" | "list" | "item" | "hr";
+export type ForumBBCodeTag = (typeof FORUM_BBCODES)[number]["tag"] | "i" | "u" | "s" | "spoiler" | "url" | "list" | "item" | "hr" | "table" | "tr" | "td" | "th";
 export type ForumBBCodeNode =
   | { type: "text"; text: string }
   | { type: "image"; index: number }
   | { type: ForumBBCodeTag; parameter?: string; children: ForumBBCodeNode[] };
 
+const bbcodeTag = /\[(\/?)(b|i|u|del|s|size|quote|code|collapse|spoiler|dice|url|list|hr|table|tr|td|th|\*)(?:=([^\]\r\n]{1,120}))?\]/;
+const bbcodeTagOnly = new RegExp(`^${bbcodeTag.source}$`, "i");
+
+function validTable(children: ForumBBCodeNode[]) {
+  const significant = (node: ForumBBCodeNode) => node.type !== "text" || node.text.trim() !== "";
+  const rows = children.filter(significant);
+  return rows.length > 0 && rows.every((row) => {
+    if (row.type !== "tr") return false;
+    const cells = row.children.filter(significant);
+    return cells.length > 0 && cells.every((cell) => cell.type === "td" || cell.type === "th");
+  });
+}
+
 // Parse once across image boundaries, keeping mentions and executable-element
 // tokens opaque. Unknown, mismatched and unclosed tags remain readable text.
 export function parseForumBBCode(body: string, imageOffsets: number[] = []): ForumBBCodeNode[] {
-  type Frame = { type: ForumBBCodeTag; parameter?: string; opening: string; children: ForumBBCodeNode[] };
+  type Frame = { type: ForumBBCodeTag; parameter?: string; opening: string; children: ForumBBCodeNode[]; tableStart?: { offset: number; imageIndex: number } };
   const root: ForumBBCodeNode[] = [];
   const stack: Frame[] = [];
   const current = () => stack.at(-1)?.children ?? root;
@@ -41,18 +54,20 @@ export function parseForumBBCode(body: string, imageOffsets: number[] = []): For
     }
     text(body.slice(start, end));
   }
-  const tokens = new RegExp(`${MENTION_PATTERN.source}|${FACE_EMOJI_PATTERN.source}|${FORUM_ELEMENT_PATTERN.source}|\\[(/?)(b|i|u|del|s|size|quote|code|collapse|spoiler|dice|url|list|hr|\\*)(?:=([^\\]\\r\\n]{1,120}))?\\]`, "gi");
+  const tokens = new RegExp(`${MENTION_PATTERN.source}|${FACE_EMOJI_PATTERN.source}|${FORUM_ELEMENT_PATTERN.source}|${bbcodeTag.source}`, "gi");
   let cursor = 0;
   for (const match of body.matchAll(tokens)) {
     plain(cursor, match.index);
     const end = match.index + match[0].length;
-    const tag = /^\[(\/?)(b|i|u|del|s|size|quote|code|collapse|spoiler|dice|url|list|hr|\*)(?:=([^\]\r\n]{1,120}))?\]$/i.exec(match[0]);
+    const tag = bbcodeTagOnly.exec(match[0]);
     const type = (tag?.[2] === "*" ? "item" : tag?.[2].toLowerCase()) as ForumBBCodeTag | undefined;
     const closing = tag?.[1] === "/";
+    const parent = stack.at(-1)?.type;
     const literal = !type || (tag?.[3] !== undefined && (!["collapse", "spoiler", "size", "url"].includes(type) || closing)) ||
       (type === "size" && !closing && !/^(?:[5-9]\d|1\d\d|200)%$/.test(tag?.[3] ?? "")) ||
       (type === "url" && !closing && stack.some((frame) => frame.type === "url")) ||
-      (["code", "dice"].includes(stack.at(-1)?.type ?? "") && !(type === stack.at(-1)?.type && closing)) ||
+      (!closing && ((type === "tr" && parent !== "table") || ((type === "td" || type === "th") && parent !== "tr"))) ||
+      (["code", "dice"].includes(parent ?? "") && !(type === parent && closing)) ||
       imageOffsets.some((offset) => offset > match.index && offset < end);
     if (literal) plain(match.index, end);
     else if (type === "hr" && !closing && tag?.[3] === undefined) current().push({ type, children: [] });
@@ -71,14 +86,27 @@ export function parseForumBBCode(body: string, imageOffsets: number[] = []): For
     else if (closing) {
       if (stack.at(-1)?.type === type) {
         const node = stack.pop()!;
-        current().push({ type: node.type, parameter: node.parameter, children: node.children });
+        if (node.tableStart && !validTable(node.children)) {
+          imageIndex = node.tableStart.imageIndex;
+          plain(node.tableStart.offset, end);
+        } else current().push({ type: node.type, parameter: node.parameter, children: node.children });
       } else text(match[0]);
     } else if (stack.length < 24) {
-      stack.push({ type, parameter: tag?.[3], opening: match[0], children: [] });
+      stack.push({
+        type, parameter: tag?.[3], opening: match[0], children: [],
+        ...(type === "table" ? { tableStart: { offset: match.index, imageIndex } } : {}),
+      });
     } else text(match[0]);
     cursor = end;
   }
   plain(cursor, body.length);
+  const unclosedTable = stack.findIndex((node) => node.tableStart);
+  if (unclosedTable !== -1) {
+    const { offset, imageIndex: firstImage } = stack[unclosedTable].tableStart!;
+    stack.length = unclosedTable;
+    imageIndex = firstImage;
+    plain(offset, body.length);
+  }
   while (stack.length) {
     const node = stack.pop()!;
     text(node.opening);

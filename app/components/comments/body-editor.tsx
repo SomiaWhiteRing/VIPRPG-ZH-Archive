@@ -219,6 +219,7 @@ export function BodyEditor({
   const [assets] = useState(
     () => new Map(images.map((image) => [image.key, image])),
   );
+  const [imageLimit] = useState(() => Math.max(FORUM_IMAGE_COUNT, images.filter((image) => image.uploaded).length));
   const processor = useRef<ReturnType<typeof createImageProcessor> | null>(
     null,
   );
@@ -259,7 +260,7 @@ export function BodyEditor({
                 return (
                   (!enforceMaxLength || contentLength(value.body) <= limit) &&
                   (!forumElements || (value.body.match(/:html_/g)?.length ?? 0) <= FORUM_ELEMENT_COUNT) &&
-                  value.images.length <= FORUM_IMAGE_COUNT &&
+                  value.images.length <= imageLimit &&
                   new Set(value.images.map((image) => image.key)).size ===
                     value.images.length
                 );

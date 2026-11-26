@@ -9,7 +9,7 @@ import { forumBodyLength } from "@/lib/face-emojis";
 import { canInsertForumElements, FORUM_ELEMENT_COUNT, FORUM_ELEMENT_PATTERN, readForumElement } from "@/lib/forum-elements";
 import { type PermissionKey, hasPermission } from "@/lib/authz/permissions";
 
-import { type ForumAction, type ForumTarget, FORUM_BODY_LENGTH, FORUM_COMMENT_LENGTH, FORUM_POST_BODY_LENGTH, FORUM_REPORT_REASONS, FORUM_TITLE_LENGTH, FORUM_WRITES_PER_MINUTE, forumTagError, forumTagKey, normalizeForumTag } from "@/lib/forum";
+import { type ForumAction, type ForumTarget, FORUM_BODY_LENGTH, FORUM_COMMENT_LENGTH, FORUM_IMAGE_COUNT, FORUM_POST_BODY_LENGTH, FORUM_REPORT_REASONS, FORUM_TITLE_LENGTH, FORUM_WRITES_PER_MINUTE, forumTagError, forumTagKey, normalizeForumTag } from "@/lib/forum";
 
 import { imageGuard, imageIds, imageOffsets, imageStatements } from "./images";
 import {
@@ -536,7 +536,12 @@ export async function editForum(
   if (actor.id !== row.user_id)
     throw new HttpError(403, translate(locale, "forum.write.editOwn"));
   if (topic.locked) throw new HttpError(409, translate(locale, "forum.write.editLocked"));
-  const images = imageIds(input.images, target.kind === "comment", locale);
+  // An imported post can retain its existing attachments when edited.
+  const existingImageCount = target.kind !== "comment" && Array.isArray(input.images) && input.images.length > FORUM_IMAGE_COUNT
+    ? await ctx.db.prepare("SELECT COUNT(*) AS count FROM forum_images WHERE post_id=? AND status='ready'")
+      .bind(row.id).first<number>("count")
+    : null;
+  const images = imageIds(input.images, target.kind === "comment", locale, Math.max(FORUM_IMAGE_COUNT, existingImageCount ?? 0));
   const body = mixedBody(input.body, images, target.kind, locale);
   const attachments = contentGuard(images, actor, body, target.kind, locale, row.id);
   await validateBodyEmojis(ctx.db, body, row.body ?? "");

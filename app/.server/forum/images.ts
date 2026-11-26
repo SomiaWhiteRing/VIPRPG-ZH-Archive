@@ -10,11 +10,11 @@ import { FORUM_ELEMENT_PATTERN } from "@/lib/forum-elements";
 export const imageColumns =
   "id,('/api/discussions/images/' || id) AS url,('/api/discussions/images/' || id) AS thumb,width,height,size,format,body_offset AS offset";
 export const imageJsonSql = `(SELECT COALESCE(json_group_array(json_object('id',id,'url',url,'thumb',thumb,'width',width,'height',height,'size',size,'format',format,'offset',offset)),'[]') FROM (SELECT ${imageColumns} FROM forum_images WHERE post_id=p.id AND status='ready' ORDER BY position))`;
-export function imageIds(value: unknown, comment = false, locale: UiLocale = DEFAULT_UI_LOCALE): string[] {
+export function imageIds(value: unknown, comment = false, locale: UiLocale = DEFAULT_UI_LOCALE, limit = FORUM_IMAGE_COUNT): string[] {
   if (value === undefined) return [];
   if (
     !Array.isArray(value) ||
-    value.length > FORUM_IMAGE_COUNT ||
+    value.length > limit ||
     (comment && value.length > 0) ||
     value.some(
       (id) => typeof id !== "string" || !/^[a-zA-Z0-9-]{16,100}$/.test(id),
