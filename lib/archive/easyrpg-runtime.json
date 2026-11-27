@@ -1,10 +1,10 @@
 {
-  "version": "2026.11.27-kai-extended-choices.1",
-  "revision": "c3e26ec3b0c7b3e12f6875566bfbf599339f7484",
-  "build": "nightly-web-45946572606",
+  "version": "2026.11.28-kai-move-route.1",
+  "revision": "341e5c9f5a5fa560bafba9f5c6832ed8fa01a2bf",
+  "build": "nightly-web-46052141678",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
-  "archiveSha256": "67736c8527d515970a9ebe85a138bc011a016433aa7b47e675e322d720de5256",
+  "archiveSha256": "9c6bff8dfb18ba70025558e32652e7bbb1dce9b036f825773b4328e57ae5ee5b",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
