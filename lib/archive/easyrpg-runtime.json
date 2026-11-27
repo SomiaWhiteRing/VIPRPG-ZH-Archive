@@ -1,10 +1,10 @@
 {
-  "version": "2026.11.28-kai-move-route.1",
-  "revision": "341e5c9f5a5fa560bafba9f5c6832ed8fa01a2bf",
-  "build": "nightly-web-46052141678",
+  "version": "2026.11.28-kai-viplazma-rendering.1",
+  "revision": "aa16448a08c889ee04bb74e591365f2eab028ac5",
+  "build": "nightly-web-46056619651",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
-  "archiveSha256": "9c6bff8dfb18ba70025558e32652e7bbb1dce9b036f825773b4328e57ae5ee5b",
+  "archiveSha256": "435add1ee8d4797a3e9602967a32eb059c3f0dcf97621d55efc133abba999135",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
