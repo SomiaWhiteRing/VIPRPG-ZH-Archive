@@ -4,12 +4,11 @@ import { HttpError, json as jsonResponse } from "../lib/http.ts";
 import { unzipSync } from "fflate";
 import { downloadCacheMaxBytes, downloadZipBuilderVersion, downloadSubrequestLimit, downloadSubrequestReserve } from "../lib/archive/download.ts";
 import { artifactCrc32, assertSharedPlayerObject, getSharedArchivePlayer } from "../app/.server/resources/archive-player.ts";
-import { isSharedPlayerPath } from "../lib/archive/shared-player.ts";
 import {
   shouldSkipWebPlayLocalWrite,
 } from "../lib/archive/web-play-local-policy.ts";
 import { webPlayDownloadProfile, legacyWebPlayDownloadProfile, downloadWithoutPlayerProfile, shouldSkipWebPlayDownloadFile } from "../lib/archive/web-play-download-policy.ts";
-import { hotDownloadCache, readDownloadCache, createCachedDownloadStream } from "./download-cache.mjs";
+import { hotDownloadCache, readDownloadCache, createCachedDownloadStream, webPlayCacheSource } from "./download-cache.mjs";
 import { loadRequestSession } from "../app/.server/auth/request-auth.ts";
 import { workReadCondition } from "../app/.server/db/work-visibility.ts";
 
@@ -252,6 +251,11 @@ async function handleArchiveDownload(request, env, ctx, access) {
       - Math.floor((range?.start ?? 0) / downloadCacheMaxBytes) + 1 : 0;
     // Allow for segment boundary reopens plus HEAD/GET/PUT and their race guards.
     const storage = prepareZipRead(layout, bucket, player, range, parts * 5);
+    if (layout.webSize && !bypassDownloadCache) {
+      const webRequest = downloadCacheRequest(request, { ...record, playerSha256: null }, webPlayDownloadProfile);
+      storage.webCache = await webPlayCacheSource(bucket, webRequest, layout, range, storage.cacheBudget,
+        downloadEtag({ ...record, playerSha256: null }, webPlayDownloadProfile), metrics);
+    }
     const zipStream = sharedCache
       ? await createCachedDownloadStream(env.ARCHIVE_BUCKET, bucket, sharedCache, zipSizeBytes, range,
           (part) => createFixedLengthZipStream(layout, storage, part),
@@ -476,23 +480,37 @@ async function downloadLayout(request, bucket, record, profile, player, ctx, key
     cache.layouts.set(key, layout);
   } else {
     const manifest = await loadManifest(bucket, record.manifestSha256);
-    const downloadableFiles = [...manifest.files, ...(manifest.extras ?? [])];
-    const files = profile === downloadWithoutPlayerProfile
-      ? downloadableFiles.filter((file) => !shouldSkipWebPlayDownloadFile(file.path))
-      : profile === webPlayDownloadProfile
-      ? manifest.files.filter((file) => !shouldSkipWebPlayDownloadFile(file.path))
-      : profile === legacyWebPlayDownloadProfile
-        ? manifest.files.filter((file) => !shouldSkipWebPlayLocalWrite(file.path))
-        : downloadableFiles;
+    const ordinary = profile === null || profile === downloadWithoutPlayerProfile;
+    const webFiles = manifest.files.filter(file => !shouldSkipWebPlayDownloadFile(file.path));
+    const root = ordinary ? manifest.archiveVersion.gameRoot : null;
+    const mainFiles = profile === legacyWebPlayDownloadProfile
+      ? manifest.files.filter(file => !shouldSkipWebPlayLocalWrite(file.path))
+      : profile === null ? manifest.files : webFiles;
+    const files = root ? mainFiles.map(file => ({
+      ...file, path: root + "/" + file.path, pathSortKey: root.toLowerCase() + "/" + file.pathSortKey,
+    })) : [...mainFiles];
+    const playerPath = (root ? root + "/" : "") + "Player.exe";
+    if (ordinary) {
+      for (const extra of manifest.extras ?? []) {
+        if (profile !== downloadWithoutPlayerProfile || extra.path.toLowerCase() !== playerPath.toLowerCase()) files.push(extra);
+      }
+    }
     const entries = buildZipEntries(files);
     if (player) {
-      if (files.some((file) => isSharedPlayerPath(file.path))) throw new Error("Shared player path conflicts with archive files");
-      entries.push({ path: "Player.exe", size: player.size_bytes,
+      if (files.some(file => file.path.toLowerCase() === playerPath.toLowerCase())) throw new Error("Shared player path conflicts with archive files");
+      entries.push({ path: playerPath, size: player.size_bytes,
         crc32: await sharedPlayerCrc32(request, bucket, player, ctx), mtimeMs: Date.UTC(1980, 0, 1),
         storage: { kind: "shared_player" } });
       entries.sort(compareManifestFiles);
     }
-    layout = { ...prepareZipLayout(entries),
+    let webSize = 0;
+    if (ordinary) {
+      const web = prepareZipLayout(buildZipEntries(webFiles));
+      const offsets = new Map(web.entries.map(entry => [(root ? root + "/" : "") + entry.path, entry.dataStart]));
+      for (const entry of entries) entry.webOffset = offsets.get(entry.path);
+      webSize = web.size;
+    }
+    layout = { ...prepareZipLayout(entries), webSize,
       usesSharedPlayer: Boolean(manifest.archiveVersion.sharedPlayer),
       corePacks: new Map(manifest.corePacks.map(({ id, sha256 }) => [id, { sha256 }])),
       estimatedR2GetCount: estimateR2GetCount(manifest, files) + (player ? 1 : 0) };
@@ -689,6 +707,7 @@ function prepareZipRead(layout, bucket, player, range, cacheOperations = 0) {
   if (sourceReadUpperBound + downloadSubrequestReserve + cacheOperations > downloadSubrequestLimit) {
     throw new HttpError(503, "此归档需要分段下载，当前下载范围过大。请缩小下载范围后重试。", "download_requires_range");
   }
+  storage.cacheBudget = downloadSubrequestLimit - downloadSubrequestReserve - cacheOperations - sourceReadUpperBound;
   return storage;
 }
 
@@ -842,7 +861,12 @@ async function writeZip(writer, layout, storage, range, firstLocal, lastLocal) {
 }
 
 async function openZipEntry(entry, storage, range) {
-  if (entry.storage.kind !== "shared_player") return openManifestFile(entry, storage, range);
+  if (entry.storage.kind !== "shared_player") {
+    if (storage.webCache && entry.webOffset !== undefined && entry.size) {
+      return storage.webCache.open(entry.webOffset, entry.size, range, part => openManifestFile(entry, storage, part));
+    }
+    return openManifestFile(entry, storage, range);
+  }
   const object = await storage.bucket.get(storage.player.object_key, range ? { range } : undefined);
   assertSharedPlayerObject(storage.player, object);
   return object.body;

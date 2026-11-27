@@ -127,6 +127,7 @@ export type UploadTaxonomySuggestion = {
 };
 
 export type PreparedArchiveSource = {
+  gameRoot?: string;
   easyRpg?: EasyRpgConfig;
   useSharedPlayer?: boolean;
   sourceKind: UploadSourceKind;
@@ -167,6 +168,7 @@ export type BrowserUploadTaskSnapshot = {
   phase: UploadTaskPhase;
   sourceKind: UploadSourceKind;
   sourceName: string;
+  gameRoot?: string;
   sourceReady: boolean;
   metadataConfirmed: boolean;
   commitStarted: boolean;

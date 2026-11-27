@@ -9,8 +9,7 @@ import { sha256Hex } from "@/lib/sha256";
 import { zip } from "fflate";
 import { classifyArchivePath, contentTypeForArchivePath, FILE_POLICY_VERSION, PACKER_VERSION } from "@/lib/archive/file-policy";
 import { enumerateUploadSourceFiles, inspectUploadSource, type UploadSourceEntry as SourceFile } from "@/app/upload/archive-source";
-import { isArchiveSave } from "@/lib/archive/save-name";
-import { includeSelectedSaves, remainingExcludedTypes } from "@/lib/archive/bundled-saves";
+import { includeSelectedSaves, remainingExcludedTypes, selectedGameSaves } from "@/lib/archive/bundled-saves";
 import { crc32 } from "@/lib/archive/crc32";
 import { ResourceReferenceScan } from "@/lib/archive/resource-cleanup";
 import { MissingResourceScan } from "@/lib/archive/missing-resources";
@@ -173,11 +172,12 @@ async function startSource(
   try {
     task = setPhase(task, "enumerating", 0, null);
     runtime.task = task = emitTask(task, true);
-    const sourceFiles = await enumerateUploadSourceFiles(
+    const source = await enumerateUploadSourceFiles(
       message.files,
       message.sourceKind,
     );
     await waitForCancellation(runtime);
+    const sourceFiles = source.files;
     const easyRpg = await detectEasyRpgConfig(sourceFiles);
     if (easyRpg.patches.maniac > 0) {
       const executable = sourceFiles.find(file => file.path.toLowerCase() === "rpg_rt.exe");
@@ -199,6 +199,7 @@ async function startSource(
     task = {
       ...task,
       sourceName: message.sourceName,
+      gameRoot: source.gameRoot,
       stats: {
         ...task.stats,
         sourceFileCount: sourceFiles.length,
@@ -328,6 +329,7 @@ async function startSource(
     await waitForCancellation(runtime);
     const preparedSource: PreparedArchiveSource = {
       easyRpg,
+      gameRoot: source.gameRoot,
       useSharedPlayer: message.useSharedPlayer,
       sourceKind: message.sourceKind,
       sourceName: task.sourceName,
@@ -340,8 +342,7 @@ async function startSource(
       },
       stats: task.stats,
     };
-    const includedPaths = new Set(preparedSource.files.map(file => file.path.normalize("NFC").toLowerCase()));
-    runtime.extraSources = sourceFiles.filter(file => !includedPaths.has(file.path.normalize("NFC").toLowerCase()) && !isSharedPlayerPath(file.path));
+    runtime.extraSources = extraSourceFiles(source, preparedSource);
     publishExtraCandidates(runtime);
     await markSourceReady(task.serverImportJobId, preparedSource);
     await waitForCancellation(runtime);
@@ -368,6 +369,16 @@ function publishExtraCandidates(runtime: UploadRuntime): void {
     available: runtime.extraSources !== undefined } satisfies UploadWorkerOutput);
 }
 
+function extraSourceFiles(source: Awaited<ReturnType<typeof enumerateUploadSourceFiles>>, prepared: PreparedArchiveSource) {
+  // Older drafts from wrapped archives kept only files below the LMT, with its prefix removed.
+  const root = prepared.gameRoot;
+  if (root !== undefined && root !== source.gameRoot) throw new UiFeedbackError("upload.extras.reloadError");
+  const included = new Set(prepared.files.map(file => file.path.normalize("NFC").toLowerCase()));
+  const extras = source.files.filter(file =>
+    !included.has(file.path.normalize("NFC").toLowerCase()) && !isSharedPlayerPath(file.path));
+  return root ? [...source.outside, ...extras.map(file => ({ ...file, path: root + "/" + file.path }))] : extras;
+}
+
 async function reloadExtraSource(message: Extract<UploadWorkerInput, { type: "extras_source" }>): Promise<void> {
   const runtime = runtimeFor(message.localTaskId);
   if (!runtime?.preparedSource || runtime.task.commitStarted || runtime.task.extrasBusy || runtime.settled) return;
@@ -375,8 +386,7 @@ async function reloadExtraSource(message: Extract<UploadWorkerInput, { type: "ex
   try {
     const files = await enumerateUploadSourceFiles(message.files, message.sourceKind);
     await waitForCancellation(runtime);
-    const included = new Set(runtime.preparedSource.files.map(file => file.path.normalize("NFC").toLowerCase()));
-    runtime.extraSources = files.filter(file => !included.has(file.path.normalize("NFC").toLowerCase()) && !isSharedPlayerPath(file.path));
+    runtime.extraSources = extraSourceFiles(files, runtime.preparedSource);
     runtime.task = { ...runtime.task, ...extraSourceError(runtime) };
     publishExtraCandidates(runtime);
   } catch (error) {
@@ -506,6 +516,7 @@ async function restoreDraft(draft: UploadRecoveryDraft): Promise<void> {
       phase: "awaiting_metadata",
       sourceReady: true,
       metadataConfirmed: false,
+      gameRoot: draft.preparedSource.gameRoot,
       stats: draft.preparedSource.stats,
       extras: draft.selectedExtras ?? draft.preparedSource.extras?.map(({ path, size }) => ({ path, size })),
       progress: { ...task.progress, percent: 100 },
@@ -616,7 +627,7 @@ async function tryJoin(runtime: UploadRuntime): Promise<void> {
       manifestResult.manifestJson,
       metadata,
       remainingExcludedTypes(preparedSource.stats.excludedFileTypes,
-        preparedSource.extras?.filter(file => isArchiveSave(file.path)) ?? []),
+        selectedGameSaves(preparedSource.extras, preparedSource.gameRoot)),
     );
     await settleRuntime(runtime, {
       ...runtime.task,
@@ -1079,6 +1090,7 @@ function buildSourceManifest(
       filePolicyVersion: FILE_POLICY_VERSION,
       packerVersion: PACKER_VERSION,
       sourceType: `browser_${source.sourceKind}`,
+      ...(source.gameRoot ? { gameRoot: source.gameRoot } : {}),
       sourceFileCount: source.stats.sourceFileCount,
       sourceSize: source.stats.sourceSizeBytes,
       includedFileCount: source.stats.includedFileCount,

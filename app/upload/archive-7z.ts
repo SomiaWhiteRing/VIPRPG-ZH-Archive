@@ -1,8 +1,7 @@
 import { UiFeedbackError } from "@/lib/i18n/feedback";
 import SevenZip from "7z-wasm";
 import sevenZipWasmUrl from "7z-wasm/7zz.wasm?url";
-import { filesWithinArchiveGameRoot } from "./archive-game-root";
-import type { UploadSourceEntry } from "./archive-source";
+import { splitArchiveGameRoot } from "./archive-game-root";
 import {
   contentTypeForArchivePath,
   normalizeArchivePath,
@@ -16,7 +15,7 @@ type SevenZipEntry = {
 
 export async function enumerateSevenZipSourceFiles(
   file: File,
-): Promise<UploadSourceEntry[]> {
+) {
   const signature = new Uint8Array(await file.slice(0, 6).arrayBuffer());
   if ([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c].some((byte, i) => signature[i] !== byte)) {
     throw new UiFeedbackError("upload.archive.error.sevenZipInvalid");
@@ -52,14 +51,15 @@ export async function enumerateSevenZipSourceFiles(
     const listing = run([
       "l", "-t7z", "-slt", "-ba", "-bd", "-bsp0", "-sccUTF-8", "--", "/input/source.7z",
     ]);
-    const entries = filesWithinArchiveGameRoot(parseSevenZipEntries(listing), "7z");
+    const entries = parseSevenZipEntries(listing);
+    const source = splitArchiveGameRoot(entries, "7z");
     fs.writeFile("/selected.txt", entries.map((entry) => entry.archivePath).join("\n"));
     // Extract a solid archive once. Reading individual members repeatedly would decode its blocks again.
     run([
       "x", "-t7z", "-y", "-bd", "-bsp0", "-bb0", "-bso0", "-bse1", "-spd",
       "-scsUTF-8", "-i@/selected.txt", "-o/output", "--", "/input/source.7z",
     ]);
-    return entries.map((entry) => {
+    function readEntry(entry: SevenZipEntry) {
       const outputPath = `/output/${entry.archivePath}`;
       const stat = fs.lstat(outputPath);
       if (!fs.isFile(stat.mode) || stat.size !== entry.size) {
@@ -80,7 +80,8 @@ export async function enumerateSevenZipSourceFiles(
         contentType,
         bytes: async () => new Uint8Array(await extracted.arrayBuffer()),
       };
-    });
+    }
+    return { gameRoot: source.gameRoot, files: source.files.map(readEntry), outside: source.outside.map(readEntry) };
   } catch (error) {
     if (error instanceof RangeError || error instanceof WebAssembly.RuntimeError) {
       throw new UiFeedbackError("upload.archive.error.sevenZipExtract", undefined, { cause: error });

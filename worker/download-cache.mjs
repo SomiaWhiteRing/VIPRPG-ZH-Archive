@@ -78,6 +78,131 @@ async function readSlot(bucket, cache, method, rangeHeader, parseRange, prepared
     estimatedR2GetCount: Number(object.customMetadata.estimatedR2GetCount) };
 }
 
+// Share game file bodies across ZIP layouts. Headers and ZIP offsets always belong to the target.
+export async function webPlayCacheSource(bucket, request, layout, range, budget, etag, metrics) {
+  const windowBytes = 2 * 1024 * 1024;
+  const windows = new Map();
+  for (const entry of layout.entries) {
+    if (entry.webOffset === undefined || !entry.size) continue;
+    const from = entry.webOffset + Math.max(0, (range?.start ?? 0) - entry.dataStart);
+    const end = entry.webOffset + Math.min(entry.size, (range?.end ?? layout.size) + 1 - entry.dataStart);
+    for (let pos = from; pos < end;) {
+      const index = Math.floor(pos / windowBytes);
+      const next = Math.min(end, (index + 1) * windowBytes);
+      const prior = windows.get(index);
+      windows.set(index, { start: Math.min(pos, prior?.start ?? pos), end: Math.max(next, prior?.end ?? next) });
+      pos = next;
+    }
+  }
+  // Keep the original source-read budget available for a fully cold fallback.
+  // A split at a donor boundary can require an extra source read as well as the cache lookup.
+  if (!windows.size || budget < 8) return null;
+  const cache = { digest: await sha256Hex(new TextEncoder().encode(new URL(request.url).pathname)) };
+  const slots = new Map();
+  const buffers = new Map();
+  let edgeAvailable;
+
+  async function edgeRange(start, end) {
+    const response = await caches.default.match(new Request(request, { headers: { Range: `bytes=${start}-${end - 1}` } }));
+    if (response?.status === 206 && response.headers.get("ETag") === etag &&
+        response.headers.get("Content-Range") === `bytes ${start}-${end - 1}/${layout.webSize}`) return response;
+    await response?.body?.cancel();
+    return null;
+  }
+
+  async function locate(offset) {
+    // Ordinary ZIP cache hits never enter this path. Probe the local edge only once on first use.
+    edgeAvailable ??= edgeRange(offset, offset + 1).then(async response => {
+      await response?.body?.cancel();
+      return Boolean(response);
+    }).catch(() => false);
+    if (await edgeAvailable) return { start: 0, end: layout.webSize };
+    const slot = downloadCacheSegment(cache, offset);
+    const index = Math.floor(offset / downloadCacheMaxBytes);
+    if (!slots.has(index)) {
+      if (--budget < 1) return null;
+      slots.set(index, bucket.head(slot.objectKey).then(object => {
+        const interval = cachedInterval(object, cache, slot.maxBytes);
+        return interval?.size === layout.webSize && Math.floor(interval.start / downloadCacheMaxBytes) === index
+          ? { start: interval.start, end: interval.end + 1, slot, object } : null;
+      }).catch(() => null));
+    }
+    return slots.get(index);
+  }
+
+  async function load(index, donor) {
+    if (buffers.has(index)) return buffers.get(index);
+    if (--budget < 1) return null;
+    const window = windows.get(index);
+    const start = Math.max(window.start, donor.start), end = Math.min(window.end, donor.end);
+    const pending = (async () => {
+      const object = donor.slot ? await bucket.get(donor.slot.objectKey, {
+        range: { offset: start - donor.start, length: end - start }, onlyIf: { etagMatches: donor.object.etag },
+      }) : await edgeRange(start, end);
+      if (!object?.body) return null;
+      if (donor.slot) {
+        const interval = cachedInterval(object, cache, donor.slot.maxBytes);
+        if (interval?.size !== layout.webSize || interval.start !== donor.start || interval.end + 1 < end) {
+          await object.body.cancel();
+          return null;
+        }
+      }
+      const bytes = new Uint8Array(await new Response(object.body).arrayBuffer());
+      return bytes.length === end - start ? { start, bytes } : null;
+    })().catch(() => null);
+    buffers.set(index, pending);
+    if (buffers.size > 2) buffers.delete(buffers.keys().next().value);
+    return pending;
+  }
+
+  return { async open(offset, size, part, original) {
+    const start = offset + (part?.offset ?? 0), end = start + (part?.length ?? size);
+    const pieces = [];
+    for (let pos = start; pos < end;) {
+      const slotEnd = Math.min(end, (Math.floor(pos / downloadCacheMaxBytes) + 1) * downloadCacheMaxBytes);
+      const donor = await locate(pos);
+      const lo = Math.max(pos, donor?.start ?? slotEnd), hi = Math.min(slotEnd, donor?.end ?? pos);
+      if (lo < hi) {
+        if (pos < lo) pieces.push({ start: pos, end: lo });
+        for (let at = lo; at < hi;) {
+          const index = Math.floor(at / windowBytes);
+          const next = Math.min(hi, (index + 1) * windowBytes);
+          pieces.push({ start: at, end: next, index, donor });
+          at = next;
+        }
+        if (hi < slotEnd) pieces.push({ start: hi, end: slotEnd });
+      } else pieces.push({ start: pos, end: slotEnd });
+      pos = slotEnd;
+    }
+    if (!pieces.some(piece => piece.donor) || budget < pieces.length + 1) return original(part);
+    budget -= pieces.length - 1;
+    let i = 0, reader;
+    return new ReadableStream({
+      async pull(controller) {
+        while (i < pieces.length || reader) {
+          if (reader) {
+            const chunk = await reader.read();
+            if (!chunk.done) { controller.enqueue(chunk.value); return; }
+            reader.releaseLock();
+            reader = null;
+            continue;
+          }
+          const piece = pieces[i++], length = piece.end - piece.start;
+          const window = piece.donor && await load(piece.index, piece.donor);
+          if (window) {
+            metrics.cachedBytes += length;
+            controller.enqueue(window.bytes.subarray(piece.start - window.start, piece.end - window.start));
+            return;
+          }
+          reader = (await original(length === size ? null : { offset: piece.start - offset, length })).getReader();
+        }
+        controller.close();
+      },
+      async cancel(reason) { await reader?.cancel(reason); },
+    }, { highWaterMark: 0 });
+  } };
+}
+
 export async function createCachedDownloadStream(bucket, readBucket, cache, zipSize, range, build, estimatedR2GetCount, ctx, metrics) {
   const start = range?.start ?? 0;
   const end = range?.end ?? zipSize - 1;

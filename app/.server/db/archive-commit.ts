@@ -29,6 +29,7 @@ import { type CorePackMetadata, validateCorePackMetadata, validateCorePackRefere
 
 import { FILE_POLICY_VERSION, PACKER_VERSION } from "@/lib/archive/file-policy";
 import { ResourceReferenceScan, validateResourceCleanupReport } from "@/lib/archive/resource-cleanup";
+import { gameRelativePath } from "@/lib/archive/manifest";
 import { includeSelectedSaves, remainingExcludedTypes } from "@/lib/archive/bundled-saves";
 import { isSharedPlayerPath } from "@/lib/archive/shared-player";
 import { assertSharedPlayerObject, getSharedArchivePlayer } from "@/app/.server/resources/archive-player";
@@ -396,6 +397,7 @@ function sourceManifestFromArchive(
       filePolicyVersion: manifest.archiveVersion.filePolicyVersion,
       packerVersion: manifest.archiveVersion.packerVersion,
       sourceType: manifest.archiveVersion.sourceType,
+      ...(manifest.archiveVersion.gameRoot ? { gameRoot: manifest.archiveVersion.gameRoot } : {}),
       sourceFileCount: manifest.archiveVersion.sourceFileCount,
       sourceSize: manifest.archiveVersion.sourceSize,
       includedFileCount: manifest.archiveVersion.includedFileCount,
@@ -671,12 +673,15 @@ function validateArchiveSourceManifest(manifest: ArchiveSourceManifest): void {
     throw new Error("Manifest core pack size does not match files");
   }
 
+  const root = manifest.archiveVersion.gameRoot;
   const paths = new Set<string>();
+  const main = root ? new Set(manifest.files) : null;
   for (const file of [...manifest.files, ...(manifest.extras ?? [])]) {
     validateManifestPath(file.path);
     assertCanonicalSha256(file.sha256, `file hash: ${file.path}`);
     validateCrc32(file.crc32, file.path);
-    const pathKey = file.path.normalize("NFC").toLowerCase();
+    const releasePath = main?.has(file) ? root + "/" + file.path : file.path;
+    const pathKey = releasePath.normalize("NFC").toLowerCase();
     if (paths.has(pathKey)) {
       throw new Error(`Duplicate file path: ${file.path}`);
     }
@@ -698,7 +703,7 @@ function validateArchiveSourceManifest(manifest: ArchiveSourceManifest): void {
   }
 
   for (const file of manifest.extras ?? []) {
-    if (file.storage.kind !== "blob" || isSharedPlayerPath(file.path)) {
+    if (file.storage.kind !== "blob" || isSharedPlayerPath(gameRelativePath(file.path.normalize("NFC"), root?.normalize("NFC")) ?? "")) {
       throw new Error(`附赠内容不能使用核心包或覆盖共享播放器：${file.path}`);
     }
   }
@@ -753,6 +758,13 @@ export function parseArchiveSourceManifest(
   }
 
   const archiveVersion = value.archiveVersion;
+  if (archiveVersion.gameRoot !== undefined) {
+    if (typeof archiveVersion.gameRoot !== "string" || /[:\p{Cc}]/u.test(archiveVersion.gameRoot) ||
+        !["browser_zip", "browser_7z"].includes(String(archiveVersion.sourceType))) {
+      throw new HttpError(400, "Invalid archive game root", undefined, "upload.error.sourceManifest");
+    }
+    validateManifestPath(archiveVersion.gameRoot);
+  }
   if (archiveVersion.easyRpg !== undefined) {
     try { parseEasyRpgConfig(archiveVersion.easyRpg); }
     catch { throw new HttpError(400, "EasyRPG 运行配置无效", undefined, "upload.error.engineConfig"); }

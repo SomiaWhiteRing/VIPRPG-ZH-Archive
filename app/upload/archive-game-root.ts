@@ -1,9 +1,9 @@
 import { UiFeedbackError } from "@/lib/i18n/feedback";
 
-export function filesWithinArchiveGameRoot<T extends { path: string }>(
+export function splitArchiveGameRoot<T extends { path: string }>(
   entries: T[],
   format: string,
-): T[] {
+) {
   const roots = entries.filter((entry) =>
     /(?:^|\/)rpg_rt\.lmt$/i.test(entry.path),
   );
@@ -15,10 +15,15 @@ export function filesWithinArchiveGameRoot<T extends { path: string }>(
   }
   const rootPath = roots[0].path;
   const prefix = rootPath.slice(0, rootPath.lastIndexOf("/") + 1);
-  return entries
-    .filter((entry) => entry.path.toLowerCase().startsWith(prefix.toLowerCase()))
-    .map((entry) => ({ ...entry, path: entry.path.slice(prefix.length) }))
-    .sort((left, right) =>
-      left.path.toLowerCase().localeCompare(right.path.toLowerCase()),
-    );
+  const files: T[] = [];
+  const outside: T[] = [];
+  for (const entry of entries) {
+    if (entry.path.toLowerCase().startsWith(prefix.toLowerCase())) {
+      files.push({ ...entry, path: entry.path.slice(prefix.length) });
+    } else {
+      outside.push(entry);
+    }
+  }
+  files.sort((left, right) => left.path.toLowerCase().localeCompare(right.path.toLowerCase()));
+  return { gameRoot: prefix.slice(0, -1), files, outside };
 }

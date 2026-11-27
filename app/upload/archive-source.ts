@@ -1,7 +1,8 @@
 import { UiFeedbackError } from "@/lib/i18n/feedback";
 import { inflate } from "fflate";
+import { crc32 } from "@/lib/archive/crc32";
 import { enumerateSevenZipSourceFiles } from "./archive-7z";
-import { filesWithinArchiveGameRoot } from "./archive-game-root";
+import { splitArchiveGameRoot } from "./archive-game-root";
 import { inspectCharacterFaceSheetFile } from "@/lib/ui/character-face-sheet";
 import { detectSourceEngine } from "@/lib/archive/source-engine";
 import {
@@ -51,7 +52,7 @@ const zipEncryptedFlag = 0x0001;
 export async function enumerateUploadSourceFiles(
   files: UploadSourceFile[],
   sourceKind: UploadSourceKind,
-): Promise<UploadSourceEntry[]> {
+) {
   if (sourceKind === "7z") {
     const file = files[0]?.file;
     if (!file) throw new UiFeedbackError("upload.archive.error.sevenZipMissing");
@@ -61,7 +62,7 @@ export async function enumerateUploadSourceFiles(
     return enumerateZipSourceFiles(files);
   }
 
-  return files
+  const entries = files
     .map((source) => {
       const path = normalizeArchivePath(source.relativePath);
       const file = source.file;
@@ -77,6 +78,7 @@ export async function enumerateUploadSourceFiles(
     .sort((left, right) =>
       left.path.toLowerCase().localeCompare(right.path.toLowerCase()),
     );
+  return { gameRoot: "", files: entries, outside: [] as UploadSourceEntry[] };
 }
 
 export async function inspectUploadSource(
@@ -226,12 +228,12 @@ function scoreIni(value: string): number {
 
 async function enumerateZipSourceFiles(
   files: UploadSourceFile[],
-): Promise<UploadSourceEntry[]> {
+) {
   const zipFile = files[0]?.file;
   if (!zipFile) throw new UiFeedbackError("upload.archive.error.zipMissing");
 
   const entries = await readZipCentralDirectory(zipFile);
-  return filesWithinArchiveGameRoot(
+  return splitArchiveGameRoot(
     entries.map((entry) => ({
       path: entry.normalizedPath,
       size: entry.uncompressedSize,
@@ -318,6 +320,7 @@ async function readZipCentralDirectory(
       central.subarray(nameStart, nameEnd),
       flags,
       legacyEncoding,
+      central.subarray(nameEnd, nameEnd + extraLength),
     );
     const normalizedPath = normalizeArchivePath(name);
     if (normalizedPath && !normalizedPath.endsWith("/")) {
@@ -446,8 +449,20 @@ function decodeZipPath(
   bytes: Uint8Array,
   flags: number,
   legacyEncoding: LegacyZipEncoding,
+  extra: Uint8Array,
 ): string {
   if ((flags & zipUtf8Flag) !== 0) return utf8TextDecoder.decode(bytes);
+  // Info-ZIP Unicode Path (0x7075) binds the original name to its UTF-8 spelling.
+  for (let offset = 0; offset + 4 <= extra.length;) {
+    const id = readUint16(extra, offset), size = readUint16(extra, offset + 2);
+    offset += 4;
+    if (offset + size > extra.length) break;
+    if (id === 0x7075 && size > 5 && extra[offset] === 1 && readUint32(extra, offset + 1) === crc32(bytes)) {
+      const name = tryDecodeUtf8(extra.subarray(offset + 5, offset + size));
+      if (name) return name;
+    }
+    offset += size;
+  }
   switch (legacyEncoding) {
     case "utf-8":
       return utf8TextDecoder.decode(bytes);

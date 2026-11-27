@@ -1,14 +1,21 @@
-import type { ArchiveSourceManifest, ExcludedFileTypeSummary } from "./manifest";
+import { gameRelativePath, type ArchiveSourceManifest, type ExcludedFileTypeSummary } from "./manifest";
 import { isArchiveSave } from "./save-name";
 import { classifyArchivePath } from "./file-policy";
+
+export function selectedGameSaves(extras: ArchiveSourceManifest["extras"], gameRoot?: string) {
+  return (extras ?? []).flatMap(file => {
+    const path = gameRelativePath(file.path, gameRoot);
+    return path && isArchiveSave(path) ? [{ ...file, path, pathSortKey: gameRoot ? path.toLowerCase() : file.pathSortKey }] : [];
+  });
+}
 
 // Classify the selected files when serializing a manifest. Drafts keep their
 // original selection so a resumed upload can still deselect an uploaded save.
 export function includeSelectedSaves(manifest: ArchiveSourceManifest) {
-  const saves = manifest.extras?.filter(file => isArchiveSave(file.path)) ?? [];
+  const saves = selectedGameSaves(manifest.extras, manifest.archiveVersion.gameRoot);
   if (!saves.length) return saves;
   manifest.files = [...manifest.files, ...saves].sort((a, b) => a.pathSortKey.localeCompare(b.pathSortKey));
-  manifest.extras = manifest.extras!.filter(file => !isArchiveSave(file.path));
+  manifest.extras = manifest.extras!.filter(file => !isArchiveSave(gameRelativePath(file.path, manifest.archiveVersion.gameRoot) ?? ""));
   if (!manifest.extras.length) delete manifest.extras;
   const bytes = saves.reduce((total, file) => total + file.size, 0);
   manifest.archiveVersion.includedFileCount += saves.length;

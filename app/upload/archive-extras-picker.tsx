@@ -8,6 +8,7 @@ import { Input } from "@/app/components/ui/input";
 import { TreeIndent } from "@/app/components/ui/tree-layout";
 import { Label } from "@/app/components/ui/label";
 import { Notice } from "@/app/components/ui/notice";
+import { gameRelativePath } from "@/lib/archive/manifest";
 import { isArchiveSave } from "@/lib/archive/save-name";
 import { resourceMediaDirectories } from "@/lib/archive/resource-cleanup";
 import { useMessages, useUiLocale } from "@/lib/i18n/react";
@@ -48,8 +49,9 @@ export function ArchiveExtrasPicker({ task, candidates, sourceAvailable, onConfi
     for (const file of matching) {
       const parts = file.path.split("/");
       let branch = children;
-      const region = isArchiveSave(file.path) ? saves
-        : parts.length > 1 && resourceMediaDirectories.has(parts[0].toLowerCase()) ? unused : null;
+      const gamePath = gameRelativePath(file.path, task.gameRoot);
+      const region = gamePath && isArchiveSave(gamePath) ? saves
+        : gamePath?.includes("/") && resourceMediaDirectories.has(gamePath.split("/")[0].toLowerCase()) ? unused : null;
       if (region) {
         region.paths.push(file.path);
         region.size += file.size;
@@ -75,7 +77,7 @@ export function ArchiveExtrasPicker({ task, candidates, sourceAvailable, onConfi
       directories.push(region.path);
     }
     return { children, directories, matching };
-  }, [candidates, query, t]);
+  }, [candidates, query, t, task.gameRoot]);
   const selectedFiles = candidates.filter(file => selected.has(file.path));
   function toggle(paths: string[], checked: boolean) {
     setSelected(current => {

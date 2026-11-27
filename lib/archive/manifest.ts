@@ -26,6 +26,7 @@ export type ArchiveManifest = {
     filePolicyVersion: string;
     packerVersion: string;
     sourceType: "browser_folder" | "browser_zip" | "browser_7z" | "preindexed_manifest";
+    gameRoot?: string;
     sourceFileCount: number;
     sourceSize: number;
     includedFileCount: number;
@@ -49,6 +50,7 @@ export type ArchiveSourceManifest = {
     | "filePolicyVersion"
     | "packerVersion"
     | "sourceType"
+    | "gameRoot"
     | "sourceFileCount"
     | "sourceSize"
     | "includedFileCount"
@@ -180,3 +182,9 @@ export type ExcludedFileTypeSummary = {
   totalSizeBytes: number;
   examplePath: string;
 };
+
+// Extras use release paths. Game files and installation always use game-relative paths.
+export function gameRelativePath(path: string, gameRoot?: string): string | null {
+  if (!gameRoot) return path;
+  return path.toLowerCase().startsWith(gameRoot.toLowerCase() + "/") ? path.slice(gameRoot.length + 1) : null;
+}
