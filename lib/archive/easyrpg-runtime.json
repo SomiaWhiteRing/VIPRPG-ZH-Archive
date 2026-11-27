@@ -1,10 +1,10 @@
 {
-  "version": "2026.11.28-kai-viplazma-rendering.1",
-  "revision": "aa16448a08c889ee04bb74e591365f2eab028ac5",
-  "build": "nightly-web-46056619651",
+  "version": "2026.11.28-kai-maniac-input.1",
+  "revision": "10e29fe4e39e94b054126980024134a85c231fb7",
+  "build": "nightly-web-46062160728",
   "emscriptenVersion": "5.0.5",
   "buildscriptsRevision": "e32f89b02864dbbca81d317575839668f18e7f57",
-  "archiveSha256": "435add1ee8d4797a3e9602967a32eb059c3f0dcf97621d55efc133abba999135",
+  "archiveSha256": "66e26f663d38319b92738075a4e8afd5ba141a5479c2d5b1c4dbd397a5c16d66",
   "soundfontSha256": "6c2ff6e9219989e0a2d39e633cbdc7d8f8a575903985160495aeab5d01cc48e6",
   "licenseSha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
   "movieDecoder": {
