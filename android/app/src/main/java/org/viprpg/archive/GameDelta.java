@@ -6,6 +6,7 @@ import android.os.SystemClock;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
@@ -43,18 +44,38 @@ final class GameDelta {
             || zipSize <= 0 || !etag.matches("\"[^\"\\r\\n]+\"") || files.length() != metadata.getInt("installTotalFiles"))
             throw new IOException("游戏索引无效，请重新安装。");
         Set<String> paths = new HashSet<>();
-        long total = 0;
+        long total = 0, outputBytes = GameInstallSize.ZIP_END_BYTES;
         for (int i = 0; i < files.length(); i++) {
             JSONObject file = files.getJSONObject(i);
             String path = file.getString("path");
             List<String> parts = Arrays.asList(path.split("/", -1));
             long size = file.getLong("size"), offset = file.getLong("offset"), crc = file.getLong("crc32");
             if (parts.contains("") || parts.contains(".") || parts.contains("..") || path.contains("\\") || path.contains(":") || path.indexOf('\0') >= 0
-                || !paths.add(path.toLowerCase(Locale.ROOT)) || size < 0 || size > 1024L * 1024 * 1024 || offset < 0 || offset > zipSize - size
+                || !paths.add(path.toLowerCase(Locale.ROOT)) || size < 0 || offset < 0 || offset > zipSize - size
                 || crc < 0 || crc > 0xffffffffL) throw new IOException("游戏索引无效，请重新安装。");
+            if (size > metadata.getLong("installTotalSizeBytes") - total)
+                throw new IOException("差量更新索引的文件大小超过版本声明。");
             total += size;
+            outputBytes = Math.addExact(outputBytes, GameInstallSize.storedEntryBytes(path, size));
         }
         if (total != metadata.getLong("installTotalSizeBytes")) throw new IOException("游戏文件数量或大小与版本信息不一致。");
+        // ZipOutputStream would add ZIP64 structures not included in the STORE layout below.
+        if (outputBytes >= GameInstallSize.ZIP32_ENTRY_LIMIT) return false;
+        // This intermediate file cannot be resumed. A prior interrupted rebuild is safe to discard.
+        Files.deleteIfExists(output.toPath());
+        store.checkStagingSpace(output, outputBytes, 0);
+        try {
+            rebuild(store, task, metadata, output, oldZip, oldFiles, files, zipSize, etag);
+            if (output.length() != outputBytes) throw new IOException("差量更新生成的 ZIP 大小与文件索引不一致。");
+        } catch (Exception failure) {
+            try { Files.deleteIfExists(output.toPath()); } catch (IOException cleanup) { failure.addSuppressed(cleanup); }
+            throw failure;
+        }
+        return true;
+    }
+
+    private static void rebuild(GameStore store, JSONObject task, JSONObject metadata, File output, Uri oldZip,
+        JSONArray oldFiles, JSONArray files, long zipSize, String etag) throws Exception {
         Map<String, JSONObject> old = new HashMap<>(), reusable = new HashMap<>();
         for (int i = 0; i < oldFiles.length(); i++) {
             JSONObject file = oldFiles.getJSONObject(i); old.put(file.getString("filename").toLowerCase(Locale.ROOT), file);
@@ -88,7 +109,7 @@ final class GameDelta {
                     JSONObject file = files.getJSONObject(i), previous = reusable.get(file.getString("path"));
                     long size = file.getLong("size"), offset = file.getLong("offset");
                     ZipEntry entry = new ZipEntry(file.getString("path"));
-                    entry.setMethod(ZipEntry.STORED); entry.setSize(size); entry.setCompressedSize(size); entry.setCrc(file.getLong("crc32")); entry.setTime(0);
+                    entry.setMethod(ZipEntry.STORED); entry.setSize(size); entry.setCompressedSize(size); entry.setCrc(file.getLong("crc32")); entry.setTime(GameInstallSize.ZIP_TIME);
                     zip.putNextEntry(entry);
                     if (previous != null) {
                         local.getChannel().position(previous.getLong("start"));
@@ -138,6 +159,5 @@ final class GameDelta {
                 zip.finish(); zip.flush(); raw.getFD().sync();
             }
         }
-        return true;
     }
 }

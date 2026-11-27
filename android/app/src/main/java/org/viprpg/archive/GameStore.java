@@ -5,6 +5,9 @@ import android.net.Uri;
 import android.net.ConnectivityManager;
 import android.net.NetworkCapabilities;
 import android.provider.DocumentsContract;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
 import android.util.AtomicFile;
 import java.io.*;
 import java.net.*;
@@ -359,19 +362,63 @@ final class GameStore {
         ByteArrayOutputStream out = new ByteArrayOutputStream(); byte[] buffer = new byte[65536]; int n;
         while ((n = in.read(buffer)) != -1) { if (out.size() + n > limit) throw new IOException("响应过大。"); out.write(buffer, 0, n); } return out.toByteArray();
     }
+    void checkStagingSpace(File candidate, long zipBytes, long stagedBytes) throws IOException {
+        File cache = candidate.getParentFile();
+        File installed = storage.file(storage.root());
+        final boolean sameVolume;
+        try {
+            sameVolume = Os.stat(cache.getAbsolutePath()).st_dev == Os.stat(installed.getAbsolutePath()).st_dev;
+        } catch (ErrnoException failure) {
+            throw new IOException("无法检查下载缓存或游戏安装目录的可用空间。", failure);
+        }
+        long required = GameInstallSize.stagingBytes(zipBytes, stagedBytes, sameVolume);
+        GameInstallSize.requireSpace(sameVolume ? "下载和安装" : "下载缓存", required, cache.getUsableSpace());
+        if (!sameVolume) GameInstallSize.requireSpace("游戏安装目录", zipBytes, installed.getUsableSpace());
+    }
+
+    private static boolean isSpaceError(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ErrnoException) {
+                int errno = ((ErrnoException) cause).errno;
+                if (errno == OsConstants.ENOSPC || errno == OsConstants.EDQUOT) return true;
+            }
+            String message = cause.getMessage();
+            if (message != null && (message.contains("ENOSPC") || message.contains("EDQUOT")
+                || message.contains("No space left on device") || message.contains("Disk quota exceeded"))) return true;
+        }
+        return false;
+    }
+
     void install(JSONObject task) throws Exception {
+        try {
+            installArchive(task);
+        } catch (IOException failure) {
+            if (!isSpaceError(failure)) throw failure;
+            throw new IOException("设备存储空间在下载或安装期间用尽，请清理空间后重试。", failure);
+        }
+    }
+
+    private void installArchive(JSONObject task) throws Exception {
         long id = task.getLong("archiveVersionId");
         HttpURLConnection metadataRequest = connect("/api/archive-versions/" + id + "/web-play", 0);
         JSONObject metadata;
         try { if (metadataRequest.getResponseCode() != 200) throw new IOException("读取版本信息失败（" + metadataRequest.getResponseCode() + "）。");
             try (InputStream in = metadataRequest.getInputStream()) { metadata = new JSONObject(new String(readStream(in, 1048576), StandardCharsets.UTF_8)); }
         } finally { metadataRequest.disconnect(); }
-        if (metadata.getLong("archiveVersionId") != id || metadata.getLong("workId") <= 0 || !metadata.getString("manifestSha256").matches("[a-f0-9]{64}")
-            || !Arrays.asList("rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac").contains(metadata.optString("engineFamily"))
-            || metadata.getLong("installTotalSizeBytes") < 1 || metadata.getLong("installTotalSizeBytes") > 1024L * 1024 * 1024
-            || metadata.getInt("installTotalFiles") < 1 || metadata.getInt("installTotalFiles") > 50000) throw new IOException("此版本不支持本地安装。");
+        if (metadata.optLong("archiveVersionId") != id || metadata.optLong("workId") <= 0
+            || !metadata.optString("manifestSha256").matches("[a-f0-9]{64}"))
+            throw new IOException("服务器返回的游戏版本信息无效。");
+        if (!Arrays.asList("rpg_maker_2000", "rpg_maker_2003", "rpg_maker_2003_maniac").contains(metadata.optString("engineFamily")))
+            throw new IOException("这个游戏引擎不支持在本客户端本地游玩。");
+        long contentBytes = metadata.optLong("installTotalSizeBytes");
+        int fileCount = metadata.optInt("installTotalFiles");
+        if (contentBytes < 1 || fileCount < 1) throw new IOException("服务器未提供有效的安装文件数量或大小。");
+        if (fileCount > GameInstallSize.MAX_FILES)
+            throw new IOException("安装包包含 " + fileCount + " 个文件，超过客户端支持的 " + GameInstallSize.MAX_FILES + " 个。");
         File partial = new File(context.getCacheDir(), "game-" + id + ".part");
-        if (!metadata.optString("manifestSha256").equals(task.optString("manifestSha256")) || !metadata.optString("downloadUrl").equals(task.optString("downloadUrl"))) partial.delete();
+        if ((!metadata.optString("manifestSha256").equals(task.optString("manifestSha256"))
+            || !metadata.optString("downloadUrl").equals(task.optString("downloadUrl")))
+            && partial.exists() && !partial.delete()) throw new IOException("无法清理上一版本的下载缓存。");
         synchronized (this) {
             check(task);
             for (String field : new String[]{"workId", "title", "manifestSha256", "coverBlobSha256", "engineFamily", "easyRpg", "downloadUrl", "installTotalSizeBytes", "installTotalFiles"}) task.put(field, metadata.opt(field));
@@ -379,34 +426,17 @@ final class GameStore {
         }
         File delta = new File(context.getCacheDir(), "game-" + id + ".delta");
         File candidate = partial;
-        if (GameDelta.install(this, task, metadata, delta)) candidate = delta;
-        else {
-        long offset = partial.length(); HttpURLConnection download = connect(metadata.getString("downloadUrl"), offset);
-        try {
-            int code = download.getResponseCode();
-            if (offset > 0 && code != 206) { download.disconnect(); offset = 0; download = connect(metadata.getString("downloadUrl"), 0); code = download.getResponseCode(); }
-            if (code != 200 && code != 206) throw new IOException("游戏下载失败（" + code + "）。");
-            if (code == 206 && (download.getHeaderField("Content-Range") == null || !download.getHeaderField("Content-Range").startsWith("bytes " + offset + "-"))) throw new IOException("续传范围无效。");
-            long length = download.getContentLengthLong(); long total = length < 0 ? metadata.getLong("installTotalSizeBytes") : offset + length;
-            synchronized (this) { check(task); task.put("downloadedBytes", offset).put("downloadBytesTotal", total).put("bytesPerSecond", 0); persist(); }
-            try (InputStream in = download.getInputStream(); FileOutputStream out = new FileOutputStream(partial, offset > 0)) {
-                byte[] bytes = new byte[262144]; int n; long count = offset, emitted = android.os.SystemClock.elapsedRealtime(), previousCount = offset;
-                while ((n = in.read(bytes)) != -1) { check(task); out.write(bytes, 0, n); count += n;
-                    if (count > 1200L * 1024 * 1024) throw new IOException("下载文件超出大小限制。");
-                    long now = android.os.SystemClock.elapsedRealtime();
-                    if (now - emitted >= 500) { synchronized(this) { check(task); task.put("downloadedBytes", count).put("downloadBytesTotal", total).put("bytesPerSecond", (count - previousCount) * 1000 / (now - emitted)); persist(); } emitted = now; previousCount = count; }
-                }
-                out.getFD().sync(); if (length >= 0 && count != offset + length) throw new IOException("下载文件不完整。");
-                synchronized (this) { check(task); task.put("bytesPerSecond", 0).put("downloadedBytes", count).put("downloadBytesTotal", count); persist(); }
-            }
-        } finally { download.disconnect(); }
-        }
+        if (partial.length() == 0 && GameDelta.install(this, task, metadata, delta)) candidate = delta;
+        else downloadArchive(task, metadata.getString("downloadUrl"), partial, contentBytes);
 
         check(task);
         JSONArray index;
         try { index = indexZip(candidate, task); } catch (Exception invalid) { check(task); candidate.delete(); throw invalid; }
+        byte[] indexBytes = new JSONObject().put("files", index).toString().getBytes(StandardCharsets.UTF_8);
         Uri folder = folder(task, true);
         requireManaged(folder, task);
+        GameInstallSize.requireSpace("写入游戏", Math.addExact(candidate.length(), indexBytes.length),
+            storage.file(folder).getUsableSpace());
         storage.write(storage.child(folder, ".viprpg-install.json", "application/json", true), new JSONObject()
             .put("archiveVersionId", id).put("playKey", task.getString("playKey")).toString().getBytes(StandardCharsets.UTF_8));
         Uri marker = storage.child(folder, "installation.json", "application/json", false);
@@ -421,7 +451,7 @@ final class GameStore {
         byte[] expected = digest.digest(); digest.reset();
         try (InputStream in = storage.input(zip)) { byte[] bytes = new byte[262144]; int n; while ((n = in.read(bytes)) != -1) { check(task); digest.update(bytes, 0, n); } }
         if (!Arrays.equals(expected, digest.digest())) throw new IOException("目录写入校验失败。");
-        storage.write(storage.child(folder, "index.json", "application/json", true), new JSONObject().put("files", index).toString().getBytes(StandardCharsets.UTF_8));
+        storage.write(storage.child(folder, "index.json", "application/json", true), indexBytes);
         synchronized (this) {
             check(task); task.put("bytesPerSecond", 0).put("installedBytes", metadata.getLong("installTotalSizeBytes")).put("readyAt", Instant.now().toString()).put("status", "ready");
             try { storage.write(storage.child(folder, "installation.json", "application/json", true), task.toString().getBytes(StandardCharsets.UTF_8)); persist(); }
@@ -435,6 +465,43 @@ final class GameStore {
         if (!task.has("updateFrom")) reportInstalledPlay(task.getLong("workId"));
         removeUpdatedSource(task);
     }
+    private void downloadArchive(JSONObject task, String url, File partial, long contentBytes) throws Exception {
+        long offset = partial.length();
+        HttpURLConnection download = connect(url, offset);
+        try {
+            int code = download.getResponseCode();
+            // Only reached for a partial file matching the current manifest and download URL.
+            if (code == 416 && GameInstallSize.completeOnRangeEnd(offset, download.getHeaderField("Content-Range"), contentBytes)) {
+                // The normal ZIP index, CRC and copy checks still run before publishing the install.
+                return;
+            }
+            if (offset > 0 && (code == 200 || code == 416)) {
+                download.disconnect();
+                if (!partial.delete() && partial.exists()) throw new IOException("无法重置未完成的下载文件。");
+                offset = 0;
+                download = connect(url, 0);
+                code = download.getResponseCode();
+            }
+            if (code != 200 && code != 206) throw new IOException("游戏下载失败（HTTP " + code + "）。");
+            long total = GameInstallSize.downloadSize(download, code, offset, contentBytes);
+            checkStagingSpace(partial, total, offset);
+            synchronized (this) { check(task); task.put("downloadedBytes", offset).put("downloadBytesTotal", total).put("bytesPerSecond", 0); persist(); }
+            try (InputStream in = download.getInputStream(); FileOutputStream out = new FileOutputStream(partial, offset > 0)) {
+                byte[] bytes = new byte[262144]; int n; long count = offset, emitted = android.os.SystemClock.elapsedRealtime(), previousCount = offset;
+                while ((n = in.read(bytes)) != -1) {
+                    check(task);
+                    if (n > total - count) throw new IOException("服务器发送的文件超过声明的安装包大小。");
+                    out.write(bytes, 0, n); count += n;
+                    long now = android.os.SystemClock.elapsedRealtime();
+                    if (now - emitted >= 500) { synchronized(this) { check(task); task.put("downloadedBytes", count).put("downloadBytesTotal", total).put("bytesPerSecond", (count - previousCount) * 1000 / (now - emitted)); persist(); } emitted = now; previousCount = count; }
+                }
+                if (count != total) throw new IOException("下载文件不完整，已保留进度，可重试续传。");
+                out.getFD().sync();
+                synchronized (this) { check(task); task.put("bytesPerSecond", 0).put("downloadedBytes", count).put("downloadBytesTotal", count); persist(); }
+            }
+        } finally { download.disconnect(); }
+    }
+
     private void reportInstalledPlay(long workId) {
         try {
             HttpURLConnection request = connect("/api/works/" + workId + "/played", 0);
@@ -491,7 +558,7 @@ final class GameStore {
         }
     }
     private JSONArray indexZip(File source, JSONObject metadata) throws Exception {
-        JSONArray files = new JSONArray(); Set<String> paths = new HashSet<>(); long total = 0, archiveTotal = 0;
+        JSONArray files = new JSONArray(); Set<String> paths = new HashSet<>(); long total = 0;
         try (RandomAccessFile zip = new RandomAccessFile(source, "r")) {
             while (true) {
                 check(metadata); long signature = Integer.toUnsignedLong(Integer.reverseBytes(zip.readInt()));
@@ -500,7 +567,7 @@ final class GameStore {
                 zip.skipBytes(2); int flags = Short.toUnsignedInt(Short.reverseBytes(zip.readShort())); int method = Short.toUnsignedInt(Short.reverseBytes(zip.readShort())); zip.skipBytes(4);
                 long crc = Integer.toUnsignedLong(Integer.reverseBytes(zip.readInt())); long size = Integer.toUnsignedLong(Integer.reverseBytes(zip.readInt())); long unpacked = Integer.toUnsignedLong(Integer.reverseBytes(zip.readInt()));
                 int nameSize = Short.toUnsignedInt(Short.reverseBytes(zip.readShort())), extra = Short.toUnsignedInt(Short.reverseBytes(zip.readShort()));
-                if ((flags & 9) != 0 || method != 0 || size != unpacked) throw new IOException("ZIP 格式不受支持。");
+                if ((flags & 9) != 0 || method != 0 || size != unpacked || size == GameInstallSize.ZIP32_ENTRY_LIMIT) throw new IOException("ZIP 格式不受支持。");
                 byte[] name = new byte[nameSize]; zip.readFully(name); zip.skipBytes(extra); String path = new String(name, StandardCharsets.UTF_8).replace('\\', '/');
                 String checkedPath = path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
                 List<String> segments = Arrays.asList(checkedPath.split("/", -1));
@@ -510,8 +577,7 @@ final class GameStore {
                 if (sum.getValue() != crc) throw new IOException("游戏文件校验失败：" + path);
                 if (path.endsWith("/")) continue;
                 if (!paths.add(path.toLowerCase(Locale.ROOT))) throw new IOException("游戏文件路径重复。");
-                archiveTotal += size;
-                if (paths.size() > 50000 || archiveTotal > 1024L * 1024 * 1024) throw new IOException("游戏过大。");
+                if (paths.size() > GameInstallSize.MAX_FILES) throw new IOException("ZIP 文件数超过 " + GameInstallSize.MAX_FILES + " 个。");
                 if (shouldSkipLocalInstallFile(path)) continue;
                 files.put(new JSONObject().put("filename", path).put("start", start).put("end", start + size)); total += size;
             }
