@@ -15,7 +15,7 @@ export type WebPlayPackage = {
 export async function readGamePackages(
   installation: WebPlayInstallation,
   archiveVersionId: number,
-  manifestSha256: string,
+  expectedRevision: string,
   signal: AbortSignal,
 ): Promise<WebPlayPackage[]> {
   const root = await getGameRootDirectory(installation, false);
@@ -24,7 +24,7 @@ export async function readGamePackages(
   const index: unknown = JSON.parse(await indexFile.text());
   if (!index || typeof index !== "object" || !("version" in index) || index.version !== 1 ||
       !("archiveVersionId" in index) || index.archiveVersionId !== archiveVersionId ||
-      !("manifestSha256" in index) || index.manifestSha256 !== manifestSha256 ||
+      !("manifestSha256" in index) || (("webPlayRevision" in index && index.webPlayRevision) || index.manifestSha256) !== expectedRevision ||
       !("packs" in index) || !Array.isArray(index.packs) ||
       !("files" in index) || !index.files || typeof index.files !== "object" || Array.isArray(index.files)) {
     throw new UiFeedbackError("play.diagnostic.indexMismatch");

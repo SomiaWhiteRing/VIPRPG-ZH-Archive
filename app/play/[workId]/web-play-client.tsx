@@ -37,6 +37,7 @@ import { WorkSidebar } from "@/app/components/work/work-page-layout";
 import {
   getWebPlayInstallation,
   listWebPlayInstallations,
+  preferInstalledRevision,
 } from "@/app/play/[workId]/web-play-db";
 import { canManageGameResources, cleanupExpiredGameResources, cleanupObsoleteGameResources, deleteLocalGame } from "./web-play-cleanup";
 import { chooseGameStorage } from "./web-play-storage";
@@ -189,10 +190,12 @@ export function WebPlayClient({
 
   const checkForUpdate = useCallback(async () => {
     if (!navigator.onLine) return null;
+    const options = new URLSearchParams(window.location.search);
+    options.set("installation", "revision");
     const next = await requestJson<WebPlayMetadata>(
-      `/api/works/${metadata.workId}/web-play${window.location.search}`,
+      `/api/works/${metadata.workId}/web-play?${options}`,
       { cache: "no-store", signal: AbortSignal.timeout(10_000) },
-    ).catch(() => null);
+    ).then(preferInstalledRevision).catch(() => null);
     if (next && !lifetimeRef.current?.signal.aborted) setAvailableMetadata(next);
     return next;
   }, [metadata.workId]);
@@ -316,6 +319,12 @@ export function WebPlayClient({
         await cleanupExpiredGameResources().catch(error => {
           if (mounted) addLog("warning", formatFeedbackError(error, locale, t("play.diagnostic.localCleanup")));
         });
+        const local = await preferInstalledRevision(metadata);
+        if (!mounted) return;
+        if (local.playKey !== metadata.playKey) {
+          setAvailableMetadata(local);
+          return;
+        }
         const value = await getWebPlayInstallation(metadata.playKey);
         const previous = value?.status === "ready" ? false : (await listWebPlayInstallations()).some(
           row => row.workId === metadata.workId && row.playKey !== metadata.playKey && row.status === "ready",
@@ -344,7 +353,7 @@ export function WebPlayClient({
       unsubscribe();
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [addLog, metadata.playKey, metadata.workId, installSessionActive, playerBusy, locale, t]);
+  }, [addLog, metadata, installSessionActive, playerBusy, locale, t]);
 
 
   useEffect(() => {

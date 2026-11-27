@@ -17,6 +17,8 @@ type DownloadRow = {
   netplay_external_endpoint: string | null;
   work_id: number;
   manifest_sha256: string;
+  web_play_revision: string | null;
+  previous_manifest_sha256: string | null;
   packer_version: string;
   total_files: number;
   web_play_file_count: number;
@@ -35,6 +37,8 @@ export type ArchiveDownloadRecord = {
   netplaySpaceId: number | null;
   netplayExternalEndpoint: string | null;
   manifestSha256: string;
+  webPlayRevision: string | null;
+  previousManifest: string | null;
   packerVersion: string;
   totalFiles: number;
   installTotalFiles: number;
@@ -110,7 +114,7 @@ export async function getPublishedArchiveDownloadRecord(
           w.netplay_space_id,
           s.external_endpoint AS netplay_external_endpoint,
           av.work_id,
-          av.manifest_sha256,
+          av.manifest_sha256, revision.web_play_revision, revision.previous_manifest_sha256,
           av.packer_version,
           av.total_files,
           av.web_play_file_count,
@@ -123,6 +127,7 @@ export async function getPublishedArchiveDownloadRecord(
            WHERE wma.work_id=w.id AND wma.role='cover' ORDER BY wma.sort_order LIMIT 1) AS work_cover_blob_sha256,
           w.engine_family
        FROM archive_versions av
+       LEFT JOIN archive_web_play_revisions revision ON revision.archive_version_id=av.id AND revision.manifest_sha256=av.manifest_sha256
        JOIN works w ON w.id = av.work_id
        LEFT JOIN netplay_spaces s ON s.id = w.netplay_space_id
        WHERE av.id = ?
@@ -141,6 +146,8 @@ export async function getPublishedArchiveDownloadRecord(
     netplaySpaceId: row.netplay_space_id,
     netplayExternalEndpoint: row.netplay_external_endpoint,
     manifestSha256: row.manifest_sha256,
+    webPlayRevision: row.web_play_revision,
+    previousManifest: row.previous_manifest_sha256,
     packerVersion: row.packer_version,
     totalFiles: row.total_files,
     installTotalFiles: row.web_play_file_count ?? 0,

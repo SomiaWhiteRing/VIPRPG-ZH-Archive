@@ -27,7 +27,7 @@ export function GameLibraryListRow({
   };
   const download = work.currentArchiveVersionId
     ? {
-        href: downloadUrl(work.currentArchiveVersionId),
+        href: downloadUrl(work.currentArchiveVersionId, work.currentArchiveManifest),
         label: t("work.download.zip"),
         detail: sizeBytes === null ? t("work.download.unavailable") : formatBytes(sizeBytes),
         external: false,

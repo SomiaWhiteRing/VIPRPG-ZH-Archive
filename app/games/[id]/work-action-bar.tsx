@@ -19,6 +19,7 @@ type Props = {
   engineFamily: string;
   archive: {
     id: number;
+    manifestSha256: string;
     totalFiles: number;
     totalSizeBytes: number;
     embeddedPlayerSizeBytes: number;
@@ -52,7 +53,7 @@ export function WorkActionBar({
             <LocalInstallButton id={archive.id} bytes={archive.webPlaySizeBytes} title={title} workId={workId} coverBlobSha256={coverBlobSha256} />
             {!native && <a
               className={`${buttonVariants({ variant: "outline" })} min-h-11 w-full`}
-              href={downloadUrl(archive.id)}
+              href={downloadUrl(archive.id, archive.manifestSha256)}
               onClick={reportDownload}
               onAuxClick={(event) => { if (event.button === 1) reportDownload(); }}
             >

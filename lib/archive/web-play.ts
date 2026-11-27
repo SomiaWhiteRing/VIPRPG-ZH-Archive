@@ -12,18 +12,18 @@ export function easyRpgRuntimeAssetBasePath(origin: string): string {
   return `${assetOrigin}${easyRpgRuntimeBasePath}`;
 }
 
-export function buildArchiveDownloadUrl(archiveVersionId: number): string {
+export function buildArchiveDownloadUrl(archiveVersionId: number, manifestSha256?: string | null): string {
   return `/api/archive-versions/${archiveVersionId}/download?zip_builder=${encodeURIComponent(
     downloadZipBuilderVersion,
-  )}`;
+  )}${manifestSha256 ? `&manifest=${manifestSha256}` : ""}`;
 }
 
-export function buildWebPlayDownloadUrl(archiveVersionId: number): string {
-  return `${buildArchiveDownloadUrl(archiveVersionId)}&profile=${encodeURIComponent(webPlayDownloadProfile)}`;
+export function buildWebPlayDownloadUrl(archiveVersionId: number, manifestSha256?: string | null): string {
+  return `${buildArchiveDownloadUrl(archiveVersionId, manifestSha256)}&profile=${encodeURIComponent(webPlayDownloadProfile)}`;
 }
 
-export function buildDownloadWithoutPlayerUrl(archiveVersionId: number): string {
-  return `${buildArchiveDownloadUrl(archiveVersionId)}&profile=${encodeURIComponent(downloadWithoutPlayerProfile)}`;
+export function buildDownloadWithoutPlayerUrl(archiveVersionId: number, manifestSha256?: string | null): string {
+  return `${buildArchiveDownloadUrl(archiveVersionId, manifestSha256)}&profile=${encodeURIComponent(downloadWithoutPlayerProfile)}`;
 }
 
 export function buildWebPlayKey(input: {

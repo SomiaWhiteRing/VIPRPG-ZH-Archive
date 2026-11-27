@@ -99,6 +99,7 @@ export function WorkOverviewSidebar({ work, data, onFavoriteSaved, favoriteSumma
           engineFamily={work.engineFamily}
           archive={current ? {
             id: current.id,
+            manifestSha256: current.manifestSha256,
             totalFiles: current.totalFiles,
             totalSizeBytes: current.totalSizeBytes,
             embeddedPlayerSizeBytes: current.embeddedPlayerSizeBytes,

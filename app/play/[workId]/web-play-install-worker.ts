@@ -32,6 +32,7 @@ type WebPlayPackIndex = {
   version: 1;
   archiveVersionId: number;
   manifestSha256: string;
+  webPlayRevision?: string;
   webPlayInstallerVersion: string;
   packs: Array<{
     name: string;
@@ -292,7 +293,7 @@ async function tryDeltaInstall(input: {
     let packages;
     try {
       release = await acquireGameResourceReadLock(base.playKey, signal);
-      packages = await readGamePackages(base, base.archiveVersionId, base.manifestSha256, signal);
+      packages = await readGamePackages(base, base.archiveVersionId, base.webPlayRevision ?? base.manifestSha256, signal);
     } catch {
       signal.throwIfAborted();
       return null;
@@ -338,7 +339,7 @@ async function tryDeltaInstall(input: {
     }, true);
     const writer = new PackWriter(installation), records: WebPlayFileRecord[] = [];
     const packIndex: WebPlayPackIndex = { version: 1, archiveVersionId: metadata.archiveVersionId,
-      manifestSha256: metadata.manifestSha256, webPlayInstallerVersion: metadata.webPlayInstallerVersion,
+      manifestSha256: metadata.manifestSha256, webPlayRevision: metadata.webPlayRevision, webPlayInstallerVersion: metadata.webPlayInstallerVersion,
       packs: writer.packs, files: {} };
     let damagedLocalFile = false;
     try {
@@ -452,7 +453,7 @@ async function streamZipToPacks(input: {
   const packIndex: WebPlayPackIndex = {
     version: 1,
     archiveVersionId: input.metadata.archiveVersionId,
-    manifestSha256: input.metadata.manifestSha256,
+    manifestSha256: input.metadata.manifestSha256, webPlayRevision: input.metadata.webPlayRevision,
     webPlayInstallerVersion: input.metadata.webPlayInstallerVersion,
     packs: packWriter.packs,
     files: {},
@@ -882,7 +883,7 @@ function createInitialInstallation(metadata: WebPlayMetadata): WebPlayInstallati
     workId: metadata.workId,
     playKey: metadata.playKey,
     archiveVersionId: metadata.archiveVersionId,
-    manifestSha256: metadata.manifestSha256,
+    manifestSha256: metadata.manifestSha256, webPlayRevision: metadata.webPlayRevision,
     webPlayInstallerVersion: metadata.webPlayInstallerVersion,
     title: metadata.title,
     originalTitle: metadata.originalTitle,

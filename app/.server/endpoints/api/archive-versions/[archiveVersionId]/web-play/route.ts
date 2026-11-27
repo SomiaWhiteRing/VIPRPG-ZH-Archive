@@ -40,7 +40,7 @@ export async function GET(
       return json({ ok: true, netplayEndpoint: await getArchiveNetplayEndpoint(runtime, record, options.get("netplayExternal") === "1") });
     }
 
-    return json(await readWebPlayMetadata(runtime, record));
+    return json(await readWebPlayMetadata(runtime, record, options.get("installation") === "revision"));
   } catch (error) {
     return jsonError("Web Play metadata failed", error);
   }

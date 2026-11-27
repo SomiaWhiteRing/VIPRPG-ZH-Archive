@@ -1,6 +1,7 @@
 import type {
   WebPlayFileRecord,
   WebPlayInstallation,
+  WebPlayMetadata,
 } from "@/app/play/[workId]/web-play-types";
 import { installObserver, observeInstallTask } from "./web-play-install-observer";
 
@@ -280,4 +281,14 @@ function deleteByIndex(
     tx.onerror = () => reject(tx.error);
     tx.oncomplete = () => resolve();
   });
+}
+
+// A browser may have installed the intermediate manifest before its equivalence was registered.
+export async function preferInstalledRevision(metadata: WebPlayMetadata): Promise<WebPlayMetadata> {
+  if (!metadata.equivalentManifests?.length) return metadata;
+  const installs = await listWebPlayInstallations().catch(() => []);
+  if (installs.some(row => row.playKey === metadata.playKey && row.status === "ready")) return metadata;
+  const alias = installs.find(row => row.status === "ready" && row.archiveVersionId === metadata.archiveVersionId &&
+    row.webPlayInstallerVersion === metadata.webPlayInstallerVersion && metadata.equivalentManifests?.includes(row.manifestSha256));
+  return alias ? { ...metadata, playKey: alias.playKey } : metadata;
 }

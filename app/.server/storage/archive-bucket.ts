@@ -1,7 +1,7 @@
 import { getCloudflareEnv } from "@/app/.server/cloudflare/env";
 import type { AppRuntime } from "@/app/.server/runtime";
 import { parseEasyRpgConfig, type EasyRpgConfig } from "@/lib/archive/easyrpg-config";
-import { sha256Hex } from "@/lib/sha256";
+import { loadManifest } from "./web-play-revision";
 import {
   blobKey,
   corePackKey,
@@ -13,12 +13,7 @@ export function getArchiveBucket(runtime: AppRuntime): R2Bucket {
 }
 
 export async function readArchiveEasyRpgConfig(runtime: AppRuntime, manifestSha256: string): Promise<EasyRpgConfig | undefined> {
-  const object = await getArchiveBucket(runtime).get(manifestKey(manifestSha256));
-  if (!object) throw new Error(`Missing manifest object: ${manifestSha256}`);
-  const text = await object.text();
-  if (await sha256Hex(new TextEncoder().encode(text).buffer) !== manifestSha256) throw new Error("Manifest SHA-256 mismatch");
-  const manifest = JSON.parse(text);
-  if (manifest?.schema !== "viprpg-archive.manifest.v1" || !manifest.archiveVersion) throw new Error("Invalid archive manifest");
+  const manifest = await loadManifest(getArchiveBucket(runtime), manifestSha256);
   return manifest.archiveVersion.easyRpg === undefined ? undefined : parseEasyRpgConfig(manifest.archiveVersion.easyRpg);
 }
 

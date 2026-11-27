@@ -53,6 +53,7 @@ export type GameExternalLink = {
 };
 
 export type GameArchiveVersionDetail = {
+  manifestSha256: string;
   sourceUrl: string | null;
   embeddedPlayerSizeBytes: number;
   usesSharedPlayer: boolean;
@@ -116,6 +117,7 @@ export type GameWorkSummary = {
   status: string;
   coverBlobSha256: string | null;
   currentArchiveVersionId: number | null;
+  currentArchiveManifest: string | null;
   externalDownloadUrl: string | null;
   archiveVersionCount: number;
   totalSizeBytes: number;
@@ -193,7 +195,7 @@ export type GameCardSummary = Pick<GameWorkSummary,
 >;
 
 export type GameLibrarySummary = GameCardSummary & Pick<GameWorkSummary,
-  "currentArchiveVersionId" | "externalDownloadUrl"
+  "currentArchiveVersionId" | "currentArchiveManifest" | "externalDownloadUrl"
 > & {
   creators: Pick<GameCreatorCredit, "displayName" | "roleKey">[];
 };

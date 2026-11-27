@@ -78,7 +78,7 @@ export type PlayerScreenshot = {
 };
 
 type PlayerMetadata = Pick<WebPlayMetadata,
-  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "playKey" | "runtimeAssetBasePath" | "engineFamily" | "easyRpg"
+  "title" | "workId" | "archiveVersionId" | "manifestSha256" | "webPlayRevision" | "equivalentManifests" | "playKey" | "runtimeAssetBasePath" | "engineFamily" | "easyRpg"
 > & { runtimeBasePath?: string; netplayEndpoint?: string | Promise<string | undefined> };
 
 /** EasyRPG owns document-wide input, audio and timers. Destroy that document on exit. */
@@ -208,8 +208,11 @@ export function createPlayerSession(
       if (installation?.status !== "ready" || (expires != null && expires <= Date.now())) {
         throw new UiFeedbackError("play.diagnostic.resourcesChanged");
       }
+      const localRevision = installation.webPlayRevision ?? installation.manifestSha256;
+      if (localRevision !== (metadata.webPlayRevision ?? metadata.manifestSha256) &&
+          !metadata.equivalentManifests?.includes(localRevision)) throw new UiFeedbackError("play.diagnostic.indexMismatch");
       packages = await readGamePackages(
-        installation, metadata.archiveVersionId, metadata.manifestSha256, lifetime.signal,
+        installation, metadata.archiveVersionId, localRevision, lifetime.signal,
       );
       await seedBundledWebPlaySaves(metadata.workId, packages, lifetime.signal);
       await upgradeWebPlaySaves(metadata.workId, lifetime.signal);

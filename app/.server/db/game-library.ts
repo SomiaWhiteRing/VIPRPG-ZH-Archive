@@ -129,6 +129,7 @@ type SummaryRow = {
   status: string;
   cover_blob_sha256: string | null;
   current_archive_version_id: number | null;
+  current_archive_manifest: string | null;
   uses_shared_player: number | null;
   embedded_player_size_bytes: number | null;
   external_download_url: string | null;
@@ -141,7 +142,7 @@ type SummaryRow = {
   favorite_count: number;
 };
 type CardRow = Pick<SummaryRow, "id" | "original_title" | "chinese_title" | "original_release_date" |
-  "engine_family" | "language" | "current_archive_version_id" | "uses_shared_player" |
+  "engine_family" | "language" | "current_archive_version_id" | "current_archive_manifest" | "uses_shared_player" |
   "embedded_player_size_bytes" | "total_size_bytes" | "cover_blob_sha256" |
   "download_link_count" | "legacy_player_count" | "comment_count" | "favorite_count">;
 type LibraryRow = CardRow & Pick<SummaryRow, "external_download_url">;
@@ -1555,7 +1556,7 @@ function workCountsSql(): string {
 
 function cardColumnsSql(): string {
   return `w.id,w.original_title,w.chinese_title,w.original_release_date,
-    w.engine_family,w.language,av.id AS current_archive_version_id,
+    w.engine_family,w.language,av.id AS current_archive_version_id,av.manifest_sha256 AS current_archive_manifest,
     av.uses_shared_player,av.embedded_player_size_bytes,av.total_size_bytes,
     ${workCountsSql()},
     (SELECT ma.blob_sha256 FROM work_media_assets wma
@@ -1591,7 +1592,7 @@ function summarySql(): string {
       ORDER BY wma.sort_order
       LIMIT 1
     ) AS cover_blob_sha256,
-    av.id AS current_archive_version_id,
+    av.id AS current_archive_version_id,av.manifest_sha256 AS current_archive_manifest,
     av.uses_shared_player,
     av.embedded_player_size_bytes,
     (
@@ -1834,6 +1835,7 @@ async function hydrateLibrary(
   return rows.map((row) => ({
     ...mapCardRow(row, playerSize, counts[row.id], plays[row.id]),
     currentArchiveVersionId: row.current_archive_version_id,
+    currentArchiveManifest: row.current_archive_manifest,
     externalDownloadUrl: isHttpUrl(row.external_download_url) ? row.external_download_url : null,
     creators: byWork.get(row.id) ?? [],
   }));
@@ -2033,6 +2035,7 @@ function mapSummaryRow(
     status: row.status,
     coverBlobSha256: row.cover_blob_sha256,
     currentArchiveVersionId: row.current_archive_version_id,
+    currentArchiveManifest: row.current_archive_manifest,
     externalDownloadUrl: isHttpUrl(row.external_download_url)
       ? row.external_download_url
       : null,
@@ -2132,7 +2135,7 @@ async function loadWorkCollections(
       .bind(workId),
     database
       .prepare(
-        `SELECT av.id,w.language,av.is_current,av.total_files,av.total_size_bytes,av.source_url,
+        `SELECT av.id,av.manifest_sha256,w.language,av.is_current,av.total_files,av.total_size_bytes,av.source_url,
                 av.uses_shared_player,av.embedded_player_size_bytes,av.web_play_file_count,av.web_play_size_bytes,
                 av.estimated_r2_get_count,av.published_at,av.uploader_id,u.display_name AS uploader_name,
                 u.avatar_blob_sha256 AS uploader_avatar_blob_sha256
@@ -2231,6 +2234,7 @@ async function loadWorkCollections(
         linkType: row.link_type,
       })),
     archives: batchRows<{
+      manifest_sha256: string;
       source_url: string | null;
       uses_shared_player: number;
       embedded_player_size_bytes: number;
@@ -2247,6 +2251,7 @@ async function loadWorkCollections(
       uploader_name: string | null;
       uploader_avatar_blob_sha256: string | null;
     }>(results[6]).map((row) => ({
+      manifestSha256: row.manifest_sha256,
       sourceUrl: row.source_url && isHttpUrl(row.source_url) ? row.source_url : null,
       usesSharedPlayer: row.uses_shared_player === 1,
       embeddedPlayerSizeBytes: row.embedded_player_size_bytes,

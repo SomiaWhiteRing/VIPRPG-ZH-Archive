@@ -12,6 +12,8 @@ export type WebPlayMetadata = {
   chineseTitle: string | null;
   coverBlobSha256: string | null;
   manifestSha256: string;
+  webPlayRevision?: string;
+  equivalentManifests?: string[];
   downloadZipBuilderVersion: string;
   webPlayInstallerVersion: string;
   easyRpgRuntimeVersion: string;
@@ -54,6 +56,7 @@ export type WebPlayInstallation = {
   workId?: number;
   archiveVersionId: number;
   manifestSha256: string;
+  webPlayRevision?: string;
   webPlayInstallerVersion: string;
   title: string;
   originalTitle?: string;

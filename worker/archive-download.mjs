@@ -1,5 +1,6 @@
-import { blobKey, corePackKey, manifestKey } from "../lib/archive/object-keys.ts";
-import { sha256Hex } from "../lib/sha256.ts";
+import { blobKey, corePackKey } from "../lib/archive/object-keys.ts";
+import { compareManifestFiles, toDosDateTime } from "../lib/archive/web-play-zip.ts";
+import { loadManifest, resolveWebPlayRevision } from "../app/.server/storage/web-play-revision.ts";
 import { HttpError, json as jsonResponse } from "../lib/http.ts";
 import { unzipSync } from "fflate";
 import { downloadCacheMaxBytes, downloadZipBuilderVersion, downloadSubrequestLimit, downloadSubrequestReserve } from "../lib/archive/download.ts";
@@ -12,7 +13,6 @@ import { hotDownloadCache, readDownloadCache, createCachedDownloadStream, webPla
 import { loadRequestSession } from "../app/.server/auth/request-auth.ts";
 import { workReadCondition } from "../app/.server/db/work-visibility.ts";
 
-const manifestSchema = "viprpg-archive.manifest.v1";
 const textEncoder = new TextEncoder();
 const localFileHeaderSignature = 0x04034b50;
 const centralDirectorySignature = 0x02014b50;
@@ -103,6 +103,15 @@ async function handleArchiveDownload(request, env, ctx, access) {
         : jsonResponse({ ok: false, error: "Archive version not found" }, { status: 404, headers: importHeaders });
     }
 
+    record.webPlayRevision = await resolveWebPlayRevision(env.DB, bucket, record.id, record.manifestSha256,
+      record.previousManifest, record.webPlayRevision);
+    const requestedManifest = url.searchParams.get("manifest");
+    if (requestedManifest && requestedManifest !== record.manifestSha256) {
+      const equivalent = profile === webPlayDownloadProfile && (requestedManifest === record.webPlayRevision ||
+        await env.DB.prepare("SELECT 1 FROM archive_web_play_revisions WHERE archive_version_id=? AND manifest_sha256=? AND web_play_revision=?")
+          .bind(record.id, requestedManifest, record.webPlayRevision).first());
+      if (!equivalent) return new Response(null, { status: 409, headers: importHeaders });
+    }
     if (match[2] === "kai-import") {
       return await kaiImportMetadata(request, env.ARCHIVE_BUCKET, record);
     }
@@ -187,6 +196,8 @@ async function handleArchiveDownload(request, env, ctx, access) {
           responseSizeBytes, isRange: Boolean(range), metrics, startedAt, stage: "cache-read",
         });
         const response = new Response(stream.readable, { status: cached.status, headers: cached.headers });
+        response.headers.set("X-Manifest-SHA256", record.manifestSha256);
+        response.headers.set("Content-Disposition", contentDisposition(downloadFileName(record)));
         response.headers.set("X-Download-Cache-Tier", "workers");
         return player || rangeHeader ? withDownloadCacheHeader(response, "HIT", "no-store, no-transform") : response;
       }
@@ -224,7 +235,7 @@ async function handleArchiveDownload(request, env, ctx, access) {
       }
     }
 
-    const layout = await downloadLayout(request, bucket, record, profile, player, ctx, cacheKey, env.ARCHIVE_BUCKET);
+    const layout = await downloadLayout(request, bucket, record, profile, player, ctx, cacheKey + "/" + record.manifestSha256, env.ARCHIVE_BUCKET);
     const zipSizeBytes = layout.size;
     if (profile || player) record = { ...record, estimatedR2GetCount: layout.estimatedR2GetCount };
     const cacheStatus =
@@ -326,7 +337,7 @@ async function getDownloadRecord(db, archiveVersionId, request) {
     .prepare(
       `SELECT
         av.id,
-        av.manifest_sha256,
+        av.manifest_sha256, revision.web_play_revision, revision.previous_manifest_sha256,
         av.packer_version,
         av.total_files,
         av.total_size_bytes,
@@ -341,6 +352,7 @@ async function getDownloadRecord(db, archiveVersionId, request) {
          JOIN media_assets ma ON ma.id = wma.media_asset_id
          WHERE wma.work_id = w.id AND wma.role = 'cover' LIMIT 1) AS cover_blob_sha256
       FROM archive_versions av
+      LEFT JOIN archive_web_play_revisions revision ON revision.archive_version_id=av.id AND revision.manifest_sha256=av.manifest_sha256
       JOIN works w ON w.id = av.work_id
       WHERE av.id = ?
         AND av.status = 'published'
@@ -369,6 +381,8 @@ async function getDownloadRecord(db, archiveVersionId, request) {
     workId: row.work_id,
     coverBlobSha256: row.cover_blob_sha256,
     manifestSha256: row.manifest_sha256,
+    webPlayRevision: row.web_play_revision,
+    previousManifest: row.previous_manifest_sha256,
     packerVersion: row.packer_version,
     totalSizeBytes: row.total_size_bytes,
     estimatedR2GetCount: row.estimated_r2_get_count,
@@ -395,6 +409,7 @@ async function kaiImportMetadata(request, bucket, record) {
   const downloadUrl = new URL(`/api/archive-versions/${record.id}/download`, request.url);
   downloadUrl.searchParams.set("zip_builder", downloadZipBuilderVersion);
   downloadUrl.searchParams.set("profile", webPlayDownloadProfile);
+  if (record.previousManifest || record.webPlayRevision !== record.manifestSha256) downloadUrl.searchParams.set("manifest", record.manifestSha256);
   const body = JSON.stringify({
     schema: "viprpg-kai.import.v1",
     archiveVersionId: record.id,
@@ -415,29 +430,6 @@ async function kaiImportMetadata(request, bucket, record) {
   return new Response(request.method === "HEAD" ? null : body, {
     headers: { ...headers, "Content-Type": "application/json; charset=utf-8" },
   });
-}
-
-async function loadManifest(bucket, manifestSha256) {
-  const object = await bucket.get(manifestKey(manifestSha256));
-
-  if (!object) {
-    throw new Error(`Missing manifest object: ${manifestSha256}`);
-  }
-
-  const jsonText = await object.text();
-  const actualSha256 = await sha256Hex(new TextEncoder().encode(jsonText).buffer);
-
-  if (actualSha256 !== manifestSha256) {
-    throw new Error(`Manifest SHA-256 mismatch: ${manifestSha256}`);
-  }
-
-  const manifest = JSON.parse(jsonText);
-
-  if (manifest.schema !== manifestSchema) {
-    throw new Error(`Unsupported manifest schema: ${manifest.schema}`);
-  }
-
-  return manifest;
 }
 
 function estimateR2GetCount(manifest, files) {
@@ -535,12 +527,6 @@ async function downloadLayout(request, bucket, record, profile, player, ctx, key
     throw new Error("Shared player policy does not match archive record");
   }
   return layout;
-}
-
-function compareManifestFiles(left, right) {
-  return (left.pathSortKey || left.path.toLowerCase()).localeCompare(
-    right.pathSortKey || right.path.toLowerCase(),
-  );
 }
 
 async function openManifestFile(file, context, range) {
@@ -993,21 +979,6 @@ function validateZipPath(path) {
   }
 }
 
-function toDosDateTime(mtimeMs) {
-  const date = mtimeMs === null ? new Date(Date.UTC(2026, 0, 1)) : new Date(mtimeMs);
-  const year = Math.min(2107, Math.max(1980, date.getUTCFullYear()));
-  const month = date.getUTCMonth() + 1;
-  const day = date.getUTCDate();
-  const hours = date.getUTCHours();
-  const minutes = date.getUTCMinutes();
-  const seconds = Math.floor(date.getUTCSeconds() / 2);
-
-  return {
-    dosTime: (hours << 11) | (minutes << 5) | seconds,
-    dosDate: ((year - 1980) << 9) | (month << 5) | day,
-  };
-}
-
 function normalizeChunk(value) {
   if (value.byteOffset === 0 && value.byteLength === value.buffer.byteLength) {
     return value;
@@ -1026,7 +997,7 @@ function streamBytes(bytes) {
 }
 
 function downloadEtag(record, profile) {
-  return `"archive-${record.id}-${record.manifestSha256}-${downloadZipBuilderVersion}${profile ? `-${profile}` : ""}${record.playerSha256 ? `-${record.playerSha256}` : ""}"`;
+  return `"archive-${record.id}-${profile === webPlayDownloadProfile ? record.webPlayRevision : record.manifestSha256}-${downloadZipBuilderVersion}${profile ? `-${profile}` : ""}${record.playerSha256 ? `-${record.playerSha256}` : ""}"`;
 }
 
 function downloadHeaders(record, cacheStatus, contentLength, profile) {
@@ -1073,7 +1044,7 @@ function downloadCacheRequest(request, record, profile) {
   const url = new URL(request.url);
 
   url.search = "";
-  url.pathname = `/api/archive-versions/${record.id}/download/cache/${record.manifestSha256}/${record.packerVersion}/${downloadZipBuilderVersion}`;
+  url.pathname = `/api/archive-versions/${record.id}/download/cache/${profile === webPlayDownloadProfile ? record.webPlayRevision : record.manifestSha256}/${record.packerVersion}/${downloadZipBuilderVersion}`;
   if (profile) url.pathname += `/${profile}`;
   if (record.playerSha256) url.pathname += `/player/${record.playerSha256}`;
 
