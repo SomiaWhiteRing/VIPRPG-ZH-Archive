@@ -39,6 +39,11 @@ final class GameInstallSize {
         return total;
     }
 
+    // For bytes=N-, a 416 with bytes */N confirms that the staging file already has the full length.
+    static boolean completeOnRangeEnd(long offset, String range, long contentBytes) {
+        return offset > 0 && offset >= contentBytes && ("bytes */" + offset).equals(range);
+    }
+
     // STORE entries written with ZIP_TIME have no extra fields or data descriptors.
     static long storedEntryBytes(String path, long bytes) throws IOException {
         int nameBytes = path.getBytes(StandardCharsets.UTF_8).length;

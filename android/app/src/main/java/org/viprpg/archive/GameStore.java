@@ -426,7 +426,7 @@ final class GameStore {
         }
         File delta = new File(context.getCacheDir(), "game-" + id + ".delta");
         File candidate = partial;
-        if (GameDelta.install(this, task, metadata, delta)) candidate = delta;
+        if (partial.length() == 0 && GameDelta.install(this, task, metadata, delta)) candidate = delta;
         else downloadArchive(task, metadata.getString("downloadUrl"), partial, contentBytes);
 
         check(task);
@@ -470,7 +470,12 @@ final class GameStore {
         HttpURLConnection download = connect(url, offset);
         try {
             int code = download.getResponseCode();
-            if (offset > 0 && code != 206 && (code == 200 || code == 416)) {
+            // Only reached for a partial file matching the current manifest and download URL.
+            if (code == 416 && GameInstallSize.completeOnRangeEnd(offset, download.getHeaderField("Content-Range"), contentBytes)) {
+                // The normal ZIP index, CRC and copy checks still run before publishing the install.
+                return;
+            }
+            if (offset > 0 && (code == 200 || code == 416)) {
                 download.disconnect();
                 if (!partial.delete() && partial.exists()) throw new IOException("无法重置未完成的下载文件。");
                 offset = 0;

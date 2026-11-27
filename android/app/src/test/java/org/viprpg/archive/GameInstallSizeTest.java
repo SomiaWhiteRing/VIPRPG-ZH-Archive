@@ -48,6 +48,15 @@ public class GameInstallSizeTest {
         assertThrows(IOException.class, () -> GameInstallSize.downloadSize(200, 0, SDW_BYTES - 1, null, SDW_BYTES));
     }
 
+    @Test public void completedDownloadIsReusableOnlyAtConfirmedEndOfRange() {
+        String end = "bytes */1134611638";
+        assertTrue(GameInstallSize.completeOnRangeEnd(SDW_ZIP, end, SDW_BYTES));
+        assertFalse(GameInstallSize.completeOnRangeEnd(SDW_ZIP + 1, end, SDW_BYTES));
+        assertFalse(GameInstallSize.completeOnRangeEnd(SDW_ZIP - 1, end, SDW_BYTES));
+        assertFalse(GameInstallSize.completeOnRangeEnd(SDW_ZIP, null, SDW_BYTES));
+        assertFalse(GameInstallSize.completeOnRangeEnd(SDW_BYTES - 1, "bytes */1130960067", SDW_BYTES));
+    }
+
     @Test public void deltaSizeMatchesStoredZipIncludingMultibyteNames() throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         long expected = GameInstallSize.ZIP_END_BYTES;
